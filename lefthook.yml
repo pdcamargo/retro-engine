@@ -1,0 +1,16 @@
+pre-commit:
+  parallel: true
+  commands:
+    oxlint:
+      glob: "*.{ts,tsx,js,jsx,mjs,cjs}"
+      run: bunx oxlint {staged_files}
+
+pre-push:
+  parallel: false
+  commands:
+    lint:
+      run: bunx turbo run lint
+    typecheck:
+      run: bunx turbo run typecheck
+    test:
+      run: bunx turbo run test

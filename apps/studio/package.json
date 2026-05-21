@@ -1,0 +1,27 @@
+{
+  "name": "@retro-engine/studio",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Retro Engine desktop studio — Tauri 2.x + Bun + jsimgui.",
+  "type": "module",
+  "scripts": {
+    "dev": "bun index.html --port 1420",
+    "build": "bun build index.html --outdir dist --minify --target=browser",
+    "lint": "oxlint .",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build"
+  },
+  "dependencies": {
+    "@mori2003/jsimgui": "latest",
+    "@retro-engine/engine": "workspace:*",
+    "@retro-engine/renderer-webgpu": "workspace:*",
+    "@tauri-apps/api": "^2.0.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0",
+    "@webgpu/types": "latest"
+  }
+}
