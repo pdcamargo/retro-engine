@@ -85,6 +85,22 @@ Non-negotiable. They flow from [ADR-0001](docs/adr/ADR-0001-architecture-foundat
 
 `renderer-core` exposes a `RendererCapabilities` struct (compute shaders, timestamp queries, indirect draw, storage textures, etc.). Engine code that needs an optional capability checks the flag and falls back. This exists from day 1 so WebGL2-incompatible features cannot sneak in unflagged.
 
+### 5.5 Within-package file layout
+
+`packages/*/src/index.ts` is the package's **public re-export entry point**, not its implementation. Implementations live in concern-named sibling files (`world.ts`, `query.ts`, `archetype.ts`, `time.ts`, `system-param.ts`, `log.ts`, etc.). One file = one logical concern: public types, storage primitives, read-only views, write APIs, lifecycle helpers, markers.
+
+**Default to splitting.** Do not pile everything into one big `index.ts` "because it's easier." When in doubt:
+
+- New concern that forces a reader to scroll through unrelated code to follow it? → New file.
+- File past ~300 LOC with multiple distinct classes / closures / factories? → Look for the natural seam and split.
+- Internal class (not re-exported from `index.ts`) doesn't escape this rule — it still lives in its concern-named file.
+
+Cycles between sibling files are fine when one direction is `import type` only (a runtime `import` paired with a `import type` back-reference does not create a runtime cycle). Use that pattern when a class and its read-only view need to know about each other.
+
+The existing layout to mirror:
+- `packages/engine/src/{index.ts, system-param.ts, log.ts, time.ts}` — entry + each concern in its own file.
+- `packages/ecs/src/{index.ts, types.ts, archetype.ts, query.ts, world.ts}` — same pattern.
+
 ## 6. Versioning and publishing
 
 - **Semver.** Major = breaking, minor = additive, patch = bugfix.
