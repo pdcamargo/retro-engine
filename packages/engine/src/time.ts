@@ -34,6 +34,33 @@ export interface RealClock {
 }
 
 /**
+ * Fixed-timestep clock driven by the engine's `RunFixedMainLoop` accumulator.
+ * Systems registered against the `fixed*` stages read `delta` to advance
+ * deterministic logic (physics, network ticks, AI step) at a frame-rate-
+ * independent rate.
+ *
+ * - `delta` — seconds advanced this substep. Equals `timestep` while a
+ *   `fixedFirst`/`fixedPreUpdate`/`fixedUpdate`/`fixedPostUpdate`/`fixedLast`
+ *   system is executing; `0` outside the FixedMain loop. Reading from a
+ *   non-fixed stage therefore observes `0`.
+ * - `elapsed` — running total of `delta` since construction. Advances by
+ *   `timestep` per substep.
+ * - `timestep` — substep duration. Defaults to `1/60` seconds (60 Hz);
+ *   mutate via `ResMut(Time)` to change the rate at runtime.
+ * - `overstep` — accumulated virtual time not yet consumed by a substep,
+ *   in seconds. After the FixedMain loop completes for the frame,
+ *   `0 ≤ overstep < timestep`. Useful for render-side interpolation
+ *   (`overstep / timestep` is the fractional progress toward the next
+ *   substep).
+ */
+export interface FixedClock {
+  delta: number;
+  elapsed: number;
+  timestep: number;
+  overstep: number;
+}
+
+/**
  * Engine clock resource. Auto-registered on `App` construction; gameplay
  * code reads it via `Res(Time)` and writes (pause / scale) via `ResMut(Time)`.
  *
@@ -60,6 +87,8 @@ export class Time {
   readonly virtual: VirtualClock = { delta: 0, elapsed: 0, paused: false, scale: 1 };
   /** Wall-clock game time. Never paused, never scaled. */
   readonly real: RealClock = { delta: 0, elapsed: 0 };
+  /** Fixed-timestep clock driven by `RunFixedMainLoop`. See {@link FixedClock}. */
+  readonly fixed: FixedClock = { delta: 0, elapsed: 0, timestep: 1 / 60, overstep: 0 };
   /**
    * Monotonic frame counter. Increments every {@link Time.tick} call,
    * including across pauses. `0` before the first frame; `1` after the first

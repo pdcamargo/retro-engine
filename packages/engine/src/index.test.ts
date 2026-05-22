@@ -16,13 +16,17 @@ import type {
 import {
   App,
   createConsoleLogger,
+  inState,
   type Logger,
+  NextState,
   Query,
   RenderCtx,
   type RenderContext,
   Res,
   ResMut,
   RunCondition,
+  State,
+  Time,
 } from './index';
 
 const fail = (msg: string): never => {
@@ -439,5 +443,97 @@ describe('Engine logger', () => {
     app.insertResource(new Counter());
     app.insertResource(new Counter());
     expect(spy.calls.devWarn).toHaveLength(1);
+  });
+});
+
+describe('M2 phase 5 integration', () => {
+  class GameState {
+    static readonly Boot = new GameState('Boot');
+    static readonly MainMenu = new GameState('MainMenu');
+    static readonly Loading = new GameState('Loading');
+    static readonly Playing = new GameState('Playing');
+    constructor(public readonly name: string) {}
+  }
+
+  class FixedCounter {
+    ticks = 0;
+  }
+
+  it('exercises the full Main + StateTransition + FixedMain + ordering surface end-to-end', () => {
+    const app = new App({ renderer: makeHeadlessRenderer() });
+    const enters: string[] = [];
+    const exits: string[] = [];
+    const updateOrder: string[] = [];
+
+    app.initState(GameState, GameState.Boot);
+    app.insertResource(new FixedCounter());
+
+    app.onEnter(GameState.Boot, [], () => enters.push('Boot'));
+    app.onExit(GameState.Boot, [], () => exits.push('Boot'));
+    app.onEnter(GameState.MainMenu, [], () => enters.push('MainMenu'));
+    app.onExit(GameState.MainMenu, [], () => exits.push('MainMenu'));
+    app.onEnter(GameState.Loading, [], () => enters.push('Loading'));
+    app.onExit(GameState.Loading, [], () => exits.push('Loading'));
+    app.onEnter(GameState.Playing, [], () => enters.push('Playing'));
+
+    // Ordering within `update`: input → physics → ai.
+    app.addSystem('update', [], () => updateOrder.push('ai'), { after: ['physics'] });
+    app.addSystem('update', [], () => updateOrder.push('input'), { label: 'input' });
+    app.addSystem('update', [], () => updateOrder.push('physics'), {
+      label: 'physics',
+      after: ['input'],
+    });
+
+    // Drive the state machine deterministically frame-by-frame.
+    let nextTarget: GameState | undefined = undefined;
+    app.addSystem('preUpdate', [ResMut(NextState(GameState))], (next) => {
+      if (nextTarget !== undefined) {
+        next.set(nextTarget);
+        nextTarget = undefined;
+      }
+    });
+
+    // FixedUpdate increments only while Playing — runIf gating across stages.
+    app.addSystem('fixedUpdate', [ResMut(FixedCounter)], (c) => c.ticks++, {
+      runIf: inState(GameState.Playing),
+    });
+
+    // Frame 1: initial transition fires OnEnter(Boot).
+    app.advanceFrame(0);
+    expect(enters).toEqual(['Boot']);
+    expect(exits).toEqual([]);
+    expect(updateOrder).toEqual(['input', 'physics', 'ai']);
+    expect(app.getResource(FixedCounter)!.ticks).toBe(0);
+
+    // Frame 2: queue MainMenu, advance to MainMenu.
+    nextTarget = GameState.MainMenu;
+    updateOrder.length = 0;
+    app.advanceFrame(16);
+    expect(enters).toEqual(['Boot', 'MainMenu']);
+    expect(exits).toEqual(['Boot']);
+    expect(app.getResource(State(GameState))!.current).toBe(GameState.MainMenu);
+
+    // Frame 3: MainMenu → Loading.
+    nextTarget = GameState.Loading;
+    app.advanceFrame(32);
+    expect(enters[enters.length - 1]).toBe('Loading');
+    expect(exits[exits.length - 1]).toBe('MainMenu');
+
+    // Frame 4: Loading → Playing. Wall-delta = 50ms = 3 fixed substeps at 1/60Hz.
+    nextTarget = GameState.Playing;
+    app.advanceFrame(82);
+    expect(enters[enters.length - 1]).toBe('Playing');
+    expect(exits[exits.length - 1]).toBe('Loading');
+    // Three fixed substeps accumulated this frame (post-transition, runIf
+    // sees Playing, fixedUpdate ticks the counter).
+    expect(app.getResource(FixedCounter)!.ticks).toBe(3);
+
+    // Frame 5: stay in Playing, advance ~16ms = 1 substep.
+    app.advanceFrame(82 + 17);
+    expect(app.getResource(FixedCounter)!.ticks).toBe(4);
+
+    // Render systems didn't register; no errors from the empty render stage.
+    // Time monotonic across all advances:
+    expect(app.getResource(Time)!.frame).toBe(5);
   });
 });

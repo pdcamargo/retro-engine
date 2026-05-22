@@ -9,6 +9,18 @@ import { World } from '@retro-engine/ecs';
 
 import type { Logger } from './log';
 import { engineLogger } from './log';
+import { runFixedMainLoop } from './fixed-time';
+import type { RegisteredSystem } from './schedule';
+import { runStage, StageSystems } from './schedule';
+import {
+  initStateImpl,
+  registerOnEnter,
+  registerOnExit,
+  registerOnTransition,
+  registerStateScopedResource,
+  runStateTransition,
+  StateRegistry,
+} from './state';
 import type { Param, ParamValues, ResolveCtx, SystemId } from './system-param';
 import { ResMut, RunCondition } from './system-param';
 import { Time } from './time';
@@ -17,24 +29,53 @@ export type { Logger } from './log';
 export { createConsoleLogger, engineLogger } from './log';
 export type { Param, ParamValues, ResolveCtx, SystemId } from './system-param';
 export { Query, RenderCtx, Res, ResMut, RunCondition } from './system-param';
-export type { RealClock, VirtualClock } from './time';
+export { anyWithComponent, inState, resourceChanged, resourceExists } from './run-conditions';
+export type { NextStateInstance, StateInstance } from './state';
+export { NextState, State } from './state';
+export type { FixedClock, RealClock, VirtualClock } from './time';
 export { Time } from './time';
 
 /** A plugin extends an `App` by registering systems, resources, and component types. */
 export type Plugin = (app: App) => void;
 
 /**
- * Named stage in the schedule — when a system runs within a frame. Within a
- * frame, stages run in this order: `'first'` → `'preUpdate'` → `'update'` →
- * `'postUpdate'` → `'render'`. `'startup'` runs once during `App.run`, before
- * the first frame.
+ * Named stage in the schedule — when a system runs within a frame.
+ *
+ * **Main schedule (per frame, in order):** `'first'` → `'startup'` (first
+ * frame only) → `'preUpdate'` → *internal* `StateTransition` →
+ * *internal* `RunFixedMainLoop` → `'update'` → `'postUpdate'` → `'last'` →
+ * `'render'`.
+ *
+ * **FixedMain sub-schedule (zero or more times per frame, driven by the fixed
+ * accumulator):** `'fixedFirst'` → `'fixedPreUpdate'` → `'fixedUpdate'` →
+ * `'fixedPostUpdate'` → `'fixedLast'`.
  *
  * `'first'` is reserved for engine bookkeeping that must precede everything
  * else — most notably the engine's internal `Time` tick. User systems may
  * register on `'first'` to run "before everything"; they run after the
  * engine's internal systems in registration order.
+ *
+ * `'last'` is the symmetric stage at the bottom of `Main`, for cleanup that
+ * must run after every gameplay system in the frame.
+ *
+ * State-transition schedules (`OnExit` / `OnTransition` / `OnEnter`) are not
+ * stages — register against them through `App.onExit` / `onTransition` /
+ * `onEnter`. The fixed-loop driver runs internally; users register against
+ * the `'fixed*'` sub-stages above.
  */
-export type Stage = 'startup' | 'first' | 'preUpdate' | 'update' | 'postUpdate' | 'render';
+export type Stage =
+  | 'startup'
+  | 'first'
+  | 'preUpdate'
+  | 'update'
+  | 'postUpdate'
+  | 'last'
+  | 'render'
+  | 'fixedFirst'
+  | 'fixedPreUpdate'
+  | 'fixedUpdate'
+  | 'fixedPostUpdate'
+  | 'fixedLast';
 
 /**
  * Per-frame context handed to render-stage systems via the `RenderCtx` param.
@@ -71,13 +112,28 @@ export interface AppOptions {
 export interface AddSystemOptions {
   /** Composable predicate. If present and `test(app)` returns false, the system is skipped on that tick. */
   readonly runIf?: RunCondition;
-}
-
-interface RegisteredSystem {
-  readonly id: SystemId;
-  readonly params: ReadonlyArray<Param<unknown>>;
-  readonly fn: (...args: unknown[]) => void;
-  readonly runIf?: RunCondition;
+  /**
+   * Free-form label for this system within its stage. Other systems in the
+   * same stage can reference the label via `before` / `after`. Labels do
+   * **not** cross stages — `before: 'input'` only matches `input`-labelled
+   * systems in the same stage.
+   *
+   * Labels need not be unique; `after: 'physics'` means "after every system
+   * in this stage whose label is `'physics'`".
+   */
+  readonly label?: string;
+  /**
+   * Run this system before every same-stage system whose `label` matches one
+   * of these. Forward references are allowed — the constraint activates as
+   * soon as a matching label registers. Labels with no match are silently
+   * ignored.
+   */
+  readonly before?: readonly string[];
+  /**
+   * Run this system after every same-stage system whose `label` matches one
+   * of these. Forward references and unmatched labels behave like `before`.
+   */
+  readonly after?: readonly string[];
 }
 
 /**
@@ -85,8 +141,8 @@ interface RegisteredSystem {
  *
  * Systems register through a single signature — a stage name, a tuple of param
  * tokens declaring what the system reads or writes, the function itself, and
- * optional run conditions. The function receives one value per param, in
- * order; no implicit world argument.
+ * optional run conditions / ordering. The function receives one value per
+ * param, in order; no implicit world argument.
  *
  * When a canvas is provided, the render stage drives a single main render pass
  * per frame: the engine acquires the swapchain view, begins a pass that clears
@@ -106,22 +162,23 @@ export class App {
    * via {@link AppOptions.logger}.
    */
   readonly logger: Logger;
-  private readonly systems: {
-    startup: RegisteredSystem[];
-    first: RegisteredSystem[];
-    preUpdate: RegisteredSystem[];
-    update: RegisteredSystem[];
-    postUpdate: RegisteredSystem[];
-    render: RegisteredSystem[];
-  } = {
-    startup: [],
-    first: [],
-    preUpdate: [],
-    update: [],
-    postUpdate: [],
-    render: [],
+  private readonly stages: Readonly<Record<Stage, StageSystems>> = {
+    startup: new StageSystems(),
+    first: new StageSystems(),
+    preUpdate: new StageSystems(),
+    update: new StageSystems(),
+    postUpdate: new StageSystems(),
+    last: new StageSystems(),
+    render: new StageSystems(),
+    fixedFirst: new StageSystems(),
+    fixedPreUpdate: new StageSystems(),
+    fixedUpdate: new StageSystems(),
+    fixedPostUpdate: new StageSystems(),
+    fixedLast: new StageSystems(),
   };
   private readonly resources = new Map<object, object>();
+  private readonly resourceChangeFrames = new Map<object, number>();
+  private readonly stateRegistry = new StateRegistry();
   private readonly canvas: HTMLCanvasElement | undefined;
   private readonly clearColor: { r: number; g: number; b: number; a: number };
   private surface: Surface | undefined;
@@ -130,6 +187,7 @@ export class App {
   private rafHandle: number | undefined;
   private nextSystemId = 1;
   private currentFrameTimestampMs = 0;
+  private hasRunStartup = false;
 
   constructor(options: AppOptions) {
     this.renderer = options.renderer;
@@ -148,12 +206,111 @@ export class App {
   }
 
   /**
+   * Mint a fresh {@link SystemId}. Used internally by state-transition
+   * registration helpers (`onEnter`/`onExit`/`onTransition`) so their systems
+   * carry an identity from the same numbering domain as stage-registered
+   * systems. Not part of the public API.
+   *
+   * @internal
+   */
+  mintSystemId(): SystemId {
+    return this.nextSystemId++ as SystemId;
+  }
+
+  /**
+   * Initialise a state type and seed its initial value. The first frame after
+   * this call fires `OnEnter(initial)` during `StateTransition`, between
+   * `Startup` and `PreUpdate`'s downstream effects. `initState` may be called
+   * once per state type — a second call for the same `ctor` throws.
+   *
+   * Registers two resources keyed off `State(ctor)` and `NextState(ctor)`:
+   * the current-value slot and the pending-transition slot.
+   *
+   * @example
+   * ```ts
+   * class GameState {
+   *   static readonly Boot    = new GameState('Boot');
+   *   static readonly Playing = new GameState('Playing');
+   *   constructor(public readonly name: string) {}
+   * }
+   * app.initState(GameState, GameState.Boot);
+   * ```
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  initState<S extends object>(ctor: new (...args: any[]) => S, initial: S): this {
+    initStateImpl(this, this.stateRegistry, ctor, initial);
+    return this;
+  }
+
+  /**
+   * Register a system to run when the state exits `value`. The system runs
+   * during the `StateTransition` phase, **before** state-scoped resources
+   * for `value` are removed and before `State.current` updates — so it can
+   * still read both.
+   */
+  onExit<S extends object, const Ps extends readonly Param<unknown>[]>(
+    value: S,
+    params: Ps,
+    fn: (...args: ParamValues<Ps>) => void,
+    options?: { runIf?: RunCondition },
+  ): this {
+    registerOnExit(this, this.stateRegistry, value, params, fn, options);
+    return this;
+  }
+
+  /**
+   * Register a system to run when the state transitions specifically from
+   * `from` to `to`. Per-pair only — there is no any-to-any helper in v1.
+   * Runs after `State.current` has updated and before `OnEnter(to)`.
+   */
+  onTransition<S extends object, const Ps extends readonly Param<unknown>[]>(
+    from: S,
+    to: S,
+    params: Ps,
+    fn: (...args: ParamValues<Ps>) => void,
+    options?: { runIf?: RunCondition },
+  ): this {
+    registerOnTransition(this, this.stateRegistry, from, to, params, fn, options);
+    return this;
+  }
+
+  /**
+   * Register a system to run when the state enters `value`. The system runs
+   * during the `StateTransition` phase, **after** state-scoped resources for
+   * `value` are inserted — so `OnEnter` code can read them.
+   */
+  onEnter<S extends object, const Ps extends readonly Param<unknown>[]>(
+    value: S,
+    params: Ps,
+    fn: (...args: ParamValues<Ps>) => void,
+    options?: { runIf?: RunCondition },
+  ): this {
+    registerOnEnter(this, this.stateRegistry, value, params, fn, options);
+    return this;
+  }
+
+  /**
+   * Register a resource that lives only while the state is `value`. Inserted
+   * before `OnEnter(value)` runs and removed after `OnExit(value)` completes
+   * — so user `OnExit` code can read the resource one last time.
+   *
+   * Calling more than once for the same `value` queues additional resources;
+   * all are inserted on enter and removed on exit, in registration order.
+   */
+  insertStateScopedResource<S extends object>(value: S, resource: object): this {
+    registerStateScopedResource(this.stateRegistry, value, resource);
+    return this;
+  }
+
+  /**
    * Register a system at `stage`. The function receives one argument per param
    * in `params`, in order; pass `[]` for a zero-param system. The optional
-   * `runIf` condition gates execution per tick.
+   * `runIf` condition gates execution per tick; `label` / `before` / `after`
+   * declare ordering constraints within the stage.
    *
    * Stage-scoped params (e.g. `RenderCtx`) throw at registration if used in
-   * the wrong stage.
+   * the wrong stage. Introducing an ordering cycle via `before` / `after`
+   * also throws at registration, naming the systems involved.
    */
   addSystem<const Ps extends readonly Param<unknown>[]>(
     stage: Stage,
@@ -174,8 +331,14 @@ export class App {
       params,
       fn: fn as (...args: unknown[]) => void,
       ...(options?.runIf !== undefined ? { runIf: options.runIf } : {}),
+      ...(options?.label !== undefined ? { label: options.label } : {}),
+      ...(options?.before !== undefined ? { before: options.before } : {}),
+      ...(options?.after !== undefined ? { after: options.after } : {}),
     };
-    this.systems[stage].push(entry);
+    this.stages[stage].push(entry);
+    // A newly added label may resolve a forward-reference constraint in a
+    // sibling stage — labels are stage-local, so no cross-stage invalidation
+    // is needed.
     return this;
   }
 
@@ -193,6 +356,7 @@ export class App {
       );
     }
     this.resources.set(key, value);
+    this.resourceChangeFrames.set(key, this.currentFrameNumber());
     return this;
   }
 
@@ -204,8 +368,28 @@ export class App {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   removeResource<T>(ctor: new (...a: any[]) => T): T | undefined {
     const value = this.resources.get(ctor) as T | undefined;
-    this.resources.delete(ctor);
+    if (this.resources.delete(ctor)) {
+      this.resourceChangeFrames.set(ctor, this.currentFrameNumber());
+    }
     return value;
+  }
+
+  /**
+   * Frame number on which the resource keyed by `ctor` was most recently
+   * inserted, replaced, or removed. Returns `undefined` if no insertion or
+   * removal has ever been recorded for this resource key. Used by the
+   * `resourceChanged` run-condition helper; in-place mutations are not
+   * tracked in v1 — see ADR-0008 §9 and `docs/roadmap/change-detection.md`.
+   *
+   * @internal
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  getResourceChangeFrame<T>(ctor: new (...a: any[]) => T): number | undefined {
+    return this.resourceChangeFrames.get(ctor);
+  }
+
+  private currentFrameNumber(): number {
+    return (this.resources.get(Time) as Time | undefined)?.frame ?? 0;
   }
 
   /**
@@ -223,7 +407,6 @@ export class App {
   async run(): Promise<void> {
     await this.renderer.init();
     if (this.canvas) this.initSurface(this.canvas);
-    this.runStage('startup');
     this.running = true;
     this.advanceFrame(performance.now());
     if (typeof requestAnimationFrame === 'function') {
@@ -237,11 +420,15 @@ export class App {
   }
 
   /**
-   * Drive a single frame: `'first'` → `'preUpdate'` → `'update'` →
-   * `'postUpdate'` → render. The optional `timestampMs` is a
-   * `performance.now()`-style `DOMHighResTimeStamp`; the engine's internal
-   * time-tick system reads it via the same pathway `requestAnimationFrame`
-   * uses in `run`. Omit it to read `performance.now()` at call time.
+   * Drive a single Main-schedule frame:
+   * `'first'` → `'startup'` (first frame only) → `'preUpdate'` →
+   * *StateTransition* → *RunFixedMainLoop* → `'update'` → `'postUpdate'` →
+   * `'last'` → render.
+   *
+   * The optional `timestampMs` is a `performance.now()`-style
+   * `DOMHighResTimeStamp`; the engine's internal time-tick system reads it
+   * via the same pathway `requestAnimationFrame` uses in `run`. Omit it to
+   * read `performance.now()` at call time.
    *
    * `run` calls this once on startup and again from each `requestAnimationFrame`
    * callback. Tests step the loop synchronously by calling it directly with
@@ -249,10 +436,24 @@ export class App {
    */
   advanceFrame(timestampMs?: number): void {
     this.currentFrameTimestampMs = timestampMs ?? performance.now();
-    this.runStage('first');
-    this.runStage('preUpdate');
-    this.runStage('update');
-    this.runStage('postUpdate');
+    runStage(this.stages.first, this, 'first');
+    if (!this.hasRunStartup) {
+      runStage(this.stages.startup, this, 'startup');
+      this.hasRunStartup = true;
+    }
+    runStage(this.stages.preUpdate, this, 'preUpdate');
+    runStateTransition(this, this.stateRegistry);
+    runFixedMainLoop(
+      this,
+      this.stages.fixedFirst,
+      this.stages.fixedPreUpdate,
+      this.stages.fixedUpdate,
+      this.stages.fixedPostUpdate,
+      this.stages.fixedLast,
+    );
+    runStage(this.stages.update, this, 'update');
+    runStage(this.stages.postUpdate, this, 'postUpdate');
+    runStage(this.stages.last, this, 'last');
     this.renderFrame();
   }
 
@@ -287,21 +488,6 @@ export class App {
     }
   }
 
-  private runStage(stage: Exclude<Stage, 'render'>): void {
-    const list = this.systems[stage];
-    if (list.length === 0) return;
-    for (const sys of list) {
-      if (sys.runIf && !sys.runIf.test(this)) continue;
-      const ctx: ResolveCtx = {
-        app: this,
-        world: this.world,
-        stage,
-        systemId: sys.id,
-      };
-      this.invokeSystem(sys, ctx);
-    }
-  }
-
   private renderFrame(): void {
     if (!this.surface) return;
     const surfaceView = this.surface.getCurrentTextureView();
@@ -317,7 +503,7 @@ export class App {
       ],
     });
     const render: RenderContext = { encoder, pass, surfaceView };
-    for (const sys of this.systems.render) {
+    for (const sys of this.stages.render.ordered()) {
       if (sys.runIf && !sys.runIf.test(this)) continue;
       const ctx: ResolveCtx = {
         app: this,
@@ -326,15 +512,11 @@ export class App {
         systemId: sys.id,
         render,
       };
-      this.invokeSystem(sys, ctx);
+      const values = sys.params.map((p) => p.resolve(ctx));
+      sys.fn(...values);
     }
     pass.end();
     this.renderer.submit([encoder.finish()]);
-  }
-
-  private invokeSystem(sys: RegisteredSystem, ctx: ResolveCtx): void {
-    const values = sys.params.map((p) => p.resolve(ctx));
-    sys.fn(...values);
   }
 }
 
