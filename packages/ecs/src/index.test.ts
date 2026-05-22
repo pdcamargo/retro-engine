@@ -256,3 +256,35 @@ describe('Query class identity from World', () => {
     expect(typeof q[Symbol.iterator]).toBe('function');
   });
 });
+
+describe('Query.entries — yields entity id alongside row', () => {
+  it('returns the same component values as the iterator, prefixed by the entity id', () => {
+    const world = new World();
+    const a = world.spawn(new Position(1, 2));
+    const b = world.spawn(new Position(3, 4));
+    const entries = [...world.query([Position]).entries()];
+    expect(entries).toHaveLength(2);
+    const byEntity = new Map(entries.map(([e, p]) => [e, p]));
+    expect(byEntity.get(a)).toEqual({ x: 1, y: 2 });
+    expect(byEntity.get(b)).toEqual({ x: 3, y: 4 });
+  });
+
+  it('respects without filter (Disabled is hidden by default)', () => {
+    const world = new World();
+    const visible = world.spawn(new Position(1, 1));
+    const hidden = world.spawn(new Position(2, 2));
+    world.entity(hidden).insert(new Disabled());
+    const ids = [...world.query([Position]).entries()].map(([e]) => e);
+    expect(ids).toEqual([visible]);
+  });
+
+  it('propagates the has-flag tail alongside the entity prefix', () => {
+    const world = new World();
+    const plain = world.spawn(new Position(1, 1));
+    const tagged = world.spawn(new Position(2, 2), new Marker());
+    const entries = [...world.query([Position], { has: [Marker] }).entries()];
+    const byEntity = new Map(entries.map(([e, p, flag]) => [e, { p, flag }]));
+    expect(byEntity.get(plain)!.flag).toBe(false);
+    expect(byEntity.get(tagged)!.flag).toBe(true);
+  });
+});

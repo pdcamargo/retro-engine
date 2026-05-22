@@ -20,8 +20,8 @@ Each phase is a `docs/backlog/*.md` item with its own acceptance criteria. Order
 3. **Time resource** — `Time` with `virtual` / `real` clocks; first real consumer of the registry. → `docs/backlog/engine-time-resource.md`
 4. **Archetype World + queries** — real archetype graph + column storage + multi-component `Query`; folds in Required Components and the `Disabled` marker. → `docs/backlog/ecs-archetype-world.md`
 5. **Schedule + States + run conditions** — full Main + FixedMain + state schedules; `States` enum, `NextState<S>`, `runIf(inState(S))`, state-scoped resources first-class. → `docs/backlog/engine-schedule-and-states.md`
-6. **Commands buffer** — `Commands` system param for deferred structural mutations; deterministic flush at stage boundaries. → `docs/backlog/engine-commands-buffer.md`
-7. **Transform + Hierarchy** — `Transform` (one component, `Vec3 + Quat + Vec3`), `GlobalTransform`, `Parent`, `Children`, propagation in `PostUpdate`. First end-to-end exercise of every prior phase. → `docs/backlog/transform-hierarchy.md`
+6. **Commands buffer** — `Commands` system param for deferred structural mutations; deterministic flush at stage boundaries. → ADR-0009. ✅ Done.
+7. **Transform + Hierarchy** — `Transform` (one component, `Vec3 + Quat + Vec3`), `GlobalTransform`, `Parent`, `Children`, propagation in `PostUpdate`. First end-to-end exercise of every prior phase. → ADR-0010. ✅ Done.
 8. **Plugin lifecycle** — `Plugin` interface with `build` / `ready` / `finish` / `cleanup` / `isUnique` / `name`; `PluginGroup` with ordered `add` / `disable` / `set`. → `docs/backlog/engine-plugin-lifecycle.md`
 
 ## Open questions

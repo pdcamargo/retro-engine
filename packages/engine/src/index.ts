@@ -9,6 +9,7 @@ import { World } from '@retro-engine/ecs';
 
 import type { CommandOp } from './commands';
 import { applyCommandOp } from './commands';
+import { propagateTransforms } from './hierarchy';
 import type { Logger } from './log';
 import { engineLogger } from './log';
 import { runFixedMainLoop } from './fixed-time';
@@ -38,6 +39,9 @@ export type { NextStateInstance, StateInstance } from './state';
 export { NextState, State } from './state';
 export type { FixedClock, RealClock, VirtualClock } from './time';
 export { Time } from './time';
+export { GlobalTransform, Transform } from './transform';
+export type { ChildBuilder } from './hierarchy';
+export { Children, Parent } from './hierarchy';
 
 /** A plugin extends an `App` by registering systems, resources, and component types. */
 export type Plugin = (app: App) => void;
@@ -202,6 +206,9 @@ export class App {
     this.insertResource(new Time());
     this.addSystem('first', [ResMut(Time)], (time) => {
       time.tick(this.currentFrameTimestampMs);
+    });
+    this.addSystem('postUpdate', [], () => {
+      propagateTransforms(this.world, this.logger);
     });
   }
 

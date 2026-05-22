@@ -17,7 +17,9 @@
       "name": "@retro-engine/playground",
       "version": "0.0.0",
       "dependencies": {
+        "@retro-engine/ecs": "workspace:*",
         "@retro-engine/engine": "workspace:*",
+        "@retro-engine/math": "workspace:*",
         "@retro-engine/renderer-core": "workspace:*",
         "@retro-engine/renderer-webgpu": "workspace:*",
       },

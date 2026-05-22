@@ -1,4 +1,4 @@
-import type { ComponentType } from './types';
+import type { ComponentType, Entity } from './types';
 import type { World } from './world';
 
 /**
@@ -32,6 +32,12 @@ export type QueryRow<
   F extends QueryFilters | undefined,
 > = [...InstancesOf<Ts>, ...HasFlagsOf<F>];
 
+/** Tuple yielded by {@link Query.entries} — the row prefixed with its entity id. */
+export type QueryEntry<
+  Ts extends readonly ComponentType[],
+  F extends QueryFilters | undefined,
+> = [Entity, ...QueryRow<Ts, F>];
+
 /**
  * Read-only handle over the rows matching a query. Iterate with `for...of`,
  * or call {@link Query.first}, {@link Query.single}, {@link Query.count}.
@@ -53,6 +59,27 @@ export class Query<
 
   *[Symbol.iterator](): IterableIterator<QueryRow<Ts, F>> {
     yield* this.world.iterateQuery(this.types, this.filters);
+  }
+
+  /**
+   * Iterate matching rows together with their entity ids. Each yielded tuple
+   * starts with the row's `Entity`, followed by the same components and
+   * `has`-flag booleans `for...of` on this query would yield.
+   *
+   * Use this when the system needs the entity id — for example to look up an
+   * adjacent component, schedule a deferred mutation through `Commands`, or
+   * key auxiliary state by entity. The standard iterator stays component-only
+   * so most call sites do not pay for an extra tuple slot they would not use.
+   *
+   * @example
+   * ```ts
+   * for (const [entity, transform] of world.query([Transform]).entries()) {
+   *   cmd.entity(entity).insert(new Marker());
+   * }
+   * ```
+   */
+  *entries(): IterableIterator<QueryEntry<Ts, F>> {
+    yield* this.world.iterateQueryEntries(this.types, this.filters);
   }
 
   /** First matching row, or `undefined` if no rows match. */

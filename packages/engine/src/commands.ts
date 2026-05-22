@@ -1,5 +1,7 @@
 import type { ComponentType, Entity } from '@retro-engine/ecs';
 
+import type { ChildBuilder } from './hierarchy';
+import { Children, Parent } from './hierarchy';
 import type { App } from './index';
 import type { Param, ResolveCtx, SystemId } from './system-param';
 
@@ -16,7 +18,10 @@ export type CommandOp =
   | { kind: 'insert'; entity: Entity; components: readonly object[] }
   | { kind: 'remove'; entity: Entity; type: ComponentType }
   | { kind: 'insertResource'; value: object }
-  | { kind: 'removeResource'; type: ComponentType };
+  | { kind: 'removeResource'; type: ComponentType }
+  | { kind: 'appendChild'; parent: Entity; child: Entity }
+  | { kind: 'detachChild'; parent: Entity; child: Entity }
+  | { kind: 'despawnSubtree'; root: Entity };
 
 const flattenComponents = (
   parts: ReadonlyArray<object | readonly object[]>,
@@ -33,12 +38,7 @@ const flattenComponents = (
  * Apply one queued command to the world / resources. Routes through the same
  * public `World` / `App` methods user code calls directly — so resource
  * change-frame stamps, archetype transitions, and tick columns behave the
- * same as direct mutations. Two carve-outs:
- *
- * - `insert` against a dead entity emits a `devWarn` and is skipped, rather
- *   than throwing as `World.insertBundle` would.
- * - `removeResource` on a missing resource is a silent no-op (already the
- *   behaviour of `App.removeResource`).
+ * same as direct mutations. Carve-outs documented per-arm.
  *
  * @internal
  */
@@ -79,16 +79,103 @@ export const applyCommandOp = (op: CommandOp, app: App): void => {
       app.removeResource(op.type as new (...a: any[]) => object);
       return;
     }
+    case 'appendChild': {
+      if (!app.world.hasEntity(op.parent)) {
+        app.logger.devWarn(
+          `Commands.addChild: parent ${op.parent} is not live at flush — child ${op.child} not parented`,
+        );
+        return;
+      }
+      if (!app.world.hasEntity(op.child)) {
+        app.logger.devWarn(
+          `Commands.addChild: child ${op.child} is not live at flush — not parented to ${op.parent}`,
+        );
+        return;
+      }
+      // If child currently has a different parent, detach from that parent's Children list.
+      const existingParent = app.world.getComponent(op.child, Parent);
+      if (existingParent && existingParent.entity !== op.parent) {
+        const oldChildren = app.world.getComponent(existingParent.entity, Children);
+        if (oldChildren) {
+          const idx = oldChildren.entities.indexOf(op.child);
+          if (idx >= 0) oldChildren.entities.splice(idx, 1);
+        }
+      }
+      // Wire child.Parent = parent.
+      if (existingParent) {
+        existingParent.entity = op.parent;
+      } else {
+        app.world.insertBundle(op.child, [new Parent(op.parent)]);
+      }
+      // Append child to parent.Children (creating the component if absent).
+      const children = app.world.getComponent(op.parent, Children);
+      if (children) {
+        if (!children.entities.includes(op.child)) {
+          children.entities.push(op.child);
+        }
+      } else {
+        app.world.insertBundle(op.parent, [new Children([op.child])]);
+      }
+      return;
+    }
+    case 'detachChild': {
+      const parentChildren = app.world.getComponent(op.parent, Children);
+      if (parentChildren) {
+        const idx = parentChildren.entities.indexOf(op.child);
+        if (idx >= 0) parentChildren.entities.splice(idx, 1);
+      }
+      // Only clear child.Parent if it still points to op.parent (defends against races
+      // where the child was reparented elsewhere between enqueue and flush).
+      const childParent = app.world.getComponent(op.child, Parent);
+      if (childParent && childParent.entity === op.parent) {
+        app.world.removeComponent(op.child, Parent);
+      }
+      return;
+    }
+    case 'despawnSubtree': {
+      if (!app.world.hasEntity(op.root)) return;
+      // Detach the root from its own parent's Children list, if any.
+      const rootParent = app.world.getComponent(op.root, Parent);
+      if (rootParent) {
+        const parentChildren = app.world.getComponent(rootParent.entity, Children);
+        if (parentChildren) {
+          const idx = parentChildren.entities.indexOf(op.root);
+          if (idx >= 0) parentChildren.entities.splice(idx, 1);
+        }
+      }
+      // Walk the subtree via Children. Use a stack; despawn order doesn't matter.
+      const stack: Entity[] = [op.root];
+      const toDespawn: Entity[] = [];
+      while (stack.length > 0) {
+        const e = stack.pop()!;
+        if (!app.world.hasEntity(e)) continue;
+        toDespawn.push(e);
+        const children = app.world.getComponent(e, Children);
+        if (children) {
+          for (const child of children.entities) {
+            if (app.world.hasEntity(child)) stack.push(child);
+          }
+        }
+      }
+      for (const e of toDespawn) app.world.despawn(e);
+      return;
+    }
   }
 };
 
 /**
- * Builder returned by {@link CommandsHandle.entity}. Chained calls enqueue
- * operations on the bound entity; the operations apply at the next flush, not
- * when the chain method returns. Use it to queue insert / remove / despawn
- * against an existing entity (or against a freshly-reserved id from
- * `cmd.spawn(...)` whose row has not yet been allocated — the spawn op
- * applies before the chained ops because it was enqueued first).
+ * Builder returned by {@link CommandsHandle.entity} and by
+ * {@link CommandsHandle.spawn}. Chained calls enqueue operations on the bound
+ * entity; the operations apply at the next flush, not when the chain method
+ * returns. Use it to queue insert / remove / despawn against an existing
+ * entity (or against a freshly-reserved id from `cmd.spawn(...)` whose row
+ * has not yet been allocated — the spawn op applies before the chained ops
+ * because it was enqueued first).
+ *
+ * Hierarchy-building methods (`withChildren`, `addChild`, `removeChild`,
+ * `despawnRecursive`) maintain the `Parent` and `Children` components
+ * automatically; consumers do not need to import those classes to wire
+ * hierarchies.
  */
 export interface EntityCommands {
   /** The entity id this builder targets. */
@@ -101,8 +188,35 @@ export interface EntityCommands {
   insert(...components: ReadonlyArray<object | readonly object[]>): EntityCommands;
   /** Enqueue removal of one or more components by class. */
   remove(...types: ComponentType[]): EntityCommands;
-  /** Enqueue despawn of this entity. */
+  /** Enqueue despawn of this entity. Does **not** cascade to children — use {@link despawnRecursive}. */
   despawn(): void;
+  /**
+   * Build a hierarchy of children under this entity. Inside the callback,
+   * each `parent.spawn(...)` reserves a fresh child entity, attaches it via
+   * a `Parent` component, and appends it to this entity's `Children` list.
+   *
+   * The `ChildBuilder.spawn(...)` returns an `EntityCommands` for the new
+   * child, so nested `withChildren` calls build grandchildren naturally.
+   */
+  withChildren(cb: (parent: ChildBuilder) => void): EntityCommands;
+  /**
+   * Attach an existing entity as a child of this entity. If the child
+   * already has a parent, it is detached from the previous parent's
+   * `Children` list before being appended here.
+   */
+  addChild(child: Entity): EntityCommands;
+  /**
+   * Detach a child entity from this entity. Removes the child from this
+   * entity's `Children` list and clears the child's `Parent` component
+   * (only if it still points at this entity).
+   */
+  removeChild(child: Entity): EntityCommands;
+  /**
+   * Despawn this entity along with every descendant reachable through
+   * `Children`. Detaches the root from its own parent's `Children` list, if
+   * any. Dead descendants are skipped silently.
+   */
+  despawnRecursive(): void;
 }
 
 /**
@@ -116,21 +230,23 @@ export interface EntityCommands {
  * with `before` / `after` ordering. For orchestration callers (tests, plugin
  * lifecycle hooks), use {@link App.flushCommands}.
  *
- * `spawn` returns an `Entity` synchronously: the id is reserved at enqueue
- * time, the row is allocated at flush. The id can be passed to subsequent
- * commands in the same buffer.
+ * `spawn` returns an {@link EntityCommands} synchronously: the entity id is
+ * reserved at enqueue time (available via `.id`), the row is allocated at
+ * flush. The id can be passed to subsequent commands in the same buffer; the
+ * returned builder can chain `.insert(...)`, `.withChildren(...)`, etc.
  */
 export interface CommandsHandle {
   /**
-   * Enqueue spawn of a new entity with zero or more components. Returns the
-   * freshly-reserved entity id immediately; the row is allocated at flush.
-   * Accepts components as variadic instances or as a single array bundle,
-   * mirroring `World.spawn`.
+   * Enqueue spawn of a new entity with zero or more components. Returns an
+   * {@link EntityCommands} bound to the freshly-reserved entity id (the id
+   * is accessible via `.id`); the row is allocated at flush. Accepts
+   * components as variadic instances or as a single array bundle, mirroring
+   * `World.spawn`.
    */
-  spawn(...components: ReadonlyArray<object | readonly object[]>): Entity;
+  spawn(...components: ReadonlyArray<object | readonly object[]>): EntityCommands;
   /** Enqueue despawn of an entity. Silent at flush if the entity is already gone. */
   despawn(entity: Entity): void;
-  /** Bind a builder to an entity for chained insert / remove / despawn. */
+  /** Bind a builder to an entity for chained insert / remove / despawn / hierarchy ops. */
   entity(entity: Entity): EntityCommands;
   /**
    * Enqueue insertion (or replacement) of a resource. Applied at flush via
@@ -165,6 +281,35 @@ class EntityCommandsImpl implements EntityCommands {
   despawn(): void {
     this.handle.enqueue({ kind: 'despawn', entity: this.id });
   }
+
+  withChildren(cb: (parent: ChildBuilder) => void): EntityCommands {
+    const parentId = this.id;
+    const handle = this.handle;
+    const builder: ChildBuilder = {
+      parent: parentId,
+      spawn(...components: ReadonlyArray<object | readonly object[]>): EntityCommands {
+        const child = handle.spawn(...components);
+        handle.enqueue({ kind: 'appendChild', parent: parentId, child: child.id });
+        return child;
+      },
+    };
+    cb(builder);
+    return this;
+  }
+
+  addChild(child: Entity): EntityCommands {
+    this.handle.enqueue({ kind: 'appendChild', parent: this.id, child });
+    return this;
+  }
+
+  removeChild(child: Entity): EntityCommands {
+    this.handle.enqueue({ kind: 'detachChild', parent: this.id, child });
+    return this;
+  }
+
+  despawnRecursive(): void {
+    this.handle.enqueue({ kind: 'despawnSubtree', root: this.id });
+  }
 }
 
 class CommandsHandleImpl implements CommandsHandle {
@@ -177,11 +322,11 @@ class CommandsHandleImpl implements CommandsHandle {
     this.app.getCommandsBuffer(this.systemId).push(op);
   }
 
-  spawn(...components: ReadonlyArray<object | readonly object[]>): Entity {
+  spawn(...components: ReadonlyArray<object | readonly object[]>): EntityCommands {
     const flat = flattenComponents(components);
     const entity = this.app.world.reserveEntity();
     this.enqueue({ kind: 'spawn', entity, components: flat });
-    return entity;
+    return new EntityCommandsImpl(this, entity);
   }
 
   despawn(entity: Entity): void {

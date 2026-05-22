@@ -1,5 +1,5 @@
 import { Archetype, archetypeKeyOf, resolveBundle } from './archetype';
-import { Query, type QueryFilters, type QueryRow } from './query';
+import { Query, type QueryEntry, type QueryFilters, type QueryRow } from './query';
 import { Disabled, type ComponentType, type Entity } from './types';
 
 interface EntityLocation {
@@ -348,6 +348,68 @@ export class World {
         for (let i = 0; i < ncols; i++) row.push(cols[i]![r]);
         for (let j = 0; j < nflags; j++) row.push(hasFlags[j]);
         yield row as QueryRow<Ts, F>;
+      }
+    }
+  }
+
+  /**
+   * @internal Entity-augmented iterator backend used by {@link Query.entries}.
+   * Mirrors {@link World.iterateQuery} but prefixes each yielded tuple with
+   * the row's `Entity`.
+   */
+  *iterateQueryEntries<
+    const Ts extends readonly ComponentType[],
+    F extends QueryFilters | undefined,
+  >(types: Ts, filters: F | undefined): IterableIterator<QueryEntry<Ts, F>> {
+    const withFilter = filters?.with;
+    const withoutFilter = filters?.without;
+    const hasFilter = filters?.has;
+    const explicitDisabled = withFilter?.includes(Disabled) ?? false;
+
+    for (const archetype of this.archetypeByKey.values()) {
+      if (archetype.entities.length === 0) continue;
+      if (!explicitDisabled && archetype.typeSet.has(Disabled)) continue;
+
+      let matches = true;
+      for (const t of types) {
+        if (!archetype.typeSet.has(t)) {
+          matches = false;
+          break;
+        }
+      }
+      if (!matches) continue;
+
+      if (withFilter) {
+        for (const t of withFilter) {
+          if (!archetype.typeSet.has(t)) {
+            matches = false;
+            break;
+          }
+        }
+        if (!matches) continue;
+      }
+
+      if (withoutFilter) {
+        for (const t of withoutFilter) {
+          if (archetype.typeSet.has(t)) {
+            matches = false;
+            break;
+          }
+        }
+        if (!matches) continue;
+      }
+
+      const cols: unknown[][] = types.map((t) => archetype.columns.get(t)!);
+      const hasFlags = hasFilter ? hasFilter.map((t) => archetype.typeSet.has(t)) : [];
+      const entities = archetype.entities;
+      const rowCount = entities.length;
+      const ncols = cols.length;
+      const nflags = hasFlags.length;
+      for (let r = 0; r < rowCount; r++) {
+        const row: unknown[] = [entities[r]!];
+        for (let i = 0; i < ncols; i++) row.push(cols[i]![r]);
+        for (let j = 0; j < nflags; j++) row.push(hasFlags[j]);
+        yield row as QueryEntry<Ts, F>;
       }
     }
   }

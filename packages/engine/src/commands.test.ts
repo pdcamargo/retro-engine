@@ -16,9 +16,11 @@ import type { Entity } from '@retro-engine/ecs';
 
 import {
   App,
+  Children,
   Commands,
   type CommandsHandle,
   type Logger,
+  Parent,
   Query,
   RunCondition,
   Time,
@@ -138,9 +140,9 @@ describe('cmd.spawn', () => {
     let spawnedDuringSystem: Entity | undefined;
     let visibleDuringSystem: boolean | undefined;
     app.addSystem('update', [Commands], (cmd) => {
-      const id = cmd.spawn(new Pos(1, 2));
-      spawnedDuringSystem = id;
-      visibleDuringSystem = app.world.hasEntity(id);
+      const ec = cmd.spawn(new Pos(1, 2));
+      spawnedDuringSystem = ec.id;
+      visibleDuringSystem = app.world.hasEntity(ec.id);
     });
     app.advanceFrame(0);
     expect(typeof spawnedDuringSystem).toBe('number');
@@ -156,14 +158,27 @@ describe('cmd.spawn', () => {
     let variadicId: Entity | undefined;
     let bundledId: Entity | undefined;
     app.addSystem('update', [Commands], (cmd) => {
-      variadicId = cmd.spawn(new Pos(), new Vel());
-      bundledId = cmd.spawn([new Pos(), new Vel()]);
+      variadicId = cmd.spawn(new Pos(), new Vel()).id;
+      bundledId = cmd.spawn([new Pos(), new Vel()]).id;
     });
     app.advanceFrame(0);
     expect(app.world.has(variadicId as Entity, Pos)).toBe(true);
     expect(app.world.has(variadicId as Entity, Vel)).toBe(true);
     expect(app.world.has(bundledId as Entity, Pos)).toBe(true);
     expect(app.world.has(bundledId as Entity, Vel)).toBe(true);
+  });
+
+  it('returns an EntityCommands the caller can chain off (.insert / .withChildren)', () => {
+    const app = new App({ renderer: makeHeadlessRenderer() });
+    let chainedId: Entity | undefined;
+    app.addSystem('update', [Commands], (cmd) => {
+      const ec = cmd.spawn(new Pos(5, 6)).insert(new Vel(1, 0));
+      chainedId = ec.id;
+    });
+    app.advanceFrame(0);
+    expect(app.world.has(chainedId as Entity, Pos)).toBe(true);
+    expect(app.world.has(chainedId as Entity, Vel)).toBe(true);
+    expect(app.world.getComponent(chainedId as Entity, Vel)?.vx).toBe(1);
   });
 
   it('does not break query iteration when called mid-loop', () => {
@@ -339,10 +354,10 @@ describe('Per-system flush ordering', () => {
     let entityFromA: Entity | undefined;
     let entityFromB: Entity | undefined;
     app.addSystem('update', [Commands], (cmd) => {
-      entityFromA = cmd.spawn(new Pos());
+      entityFromA = cmd.spawn(new Pos()).id;
     });
     app.addSystem('update', [Commands], (cmd) => {
-      entityFromB = cmd.spawn(new Vel());
+      entityFromB = cmd.spawn(new Vel()).id;
     });
     app.advanceFrame(0);
     expect(entityFromA).not.toBe(entityFromB);
@@ -383,7 +398,7 @@ describe('Render-stage flush', () => {
     const app = new App({ renderer, canvas });
     let entityFromRender: Entity | undefined;
     app.addSystem('render', [Commands], (cmd) => {
-      entityFromRender = cmd.spawn(new Pos());
+      entityFromRender = cmd.spawn(new Pos()).id;
     });
     let observed = -1;
     app.addSystem('first', [Query([Pos])], (q) => {
@@ -427,7 +442,7 @@ describe('Spawn-then-despawn within a single buffer', () => {
     const app = new App({ renderer: makeHeadlessRenderer() });
     let captured: Entity | undefined;
     app.addSystem('update', [Commands], (cmd) => {
-      const id = cmd.spawn(new Pos());
+      const id = cmd.spawn(new Pos()).id;
       captured = id;
       cmd.despawn(id);
     });
@@ -495,6 +510,215 @@ describe('Discard-on-throw', () => {
   });
 });
 
+describe('cmd.entity(...).withChildren', () => {
+  it('wires Parent on each child and appends to the parent\'s Children list', () => {
+    const app = new App({ renderer: makeHeadlessRenderer() });
+    let parentId: Entity | undefined;
+    let childIds: Entity[] = [];
+    app.addSystem('update', [Commands], (cmd) => {
+      const parent = cmd.spawn(new Pos(0, 0));
+      parent.withChildren((p) => {
+        childIds.push(p.spawn(new Pos(1, 1)).id);
+        childIds.push(p.spawn(new Pos(2, 2)).id);
+      });
+      parentId = parent.id;
+    });
+    app.advanceFrame(0);
+    expect(app.world.has(parentId as Entity, Children)).toBe(true);
+    const children = app.world.getComponent(parentId as Entity, Children)!;
+    expect(children.entities).toEqual(childIds);
+    for (const c of childIds) {
+      expect(app.world.has(c, Parent)).toBe(true);
+      expect(app.world.getComponent(c, Parent)?.entity).toBe(parentId as Entity);
+    }
+  });
+
+  it('returns the parent EntityCommands so callers can keep chaining', () => {
+    const app = new App({ renderer: makeHeadlessRenderer() });
+    let parentId: Entity | undefined;
+    app.addSystem('update', [Commands], (cmd) => {
+      const parent = cmd.spawn(new Pos());
+      parent.withChildren(() => undefined).insert(new Vel(7, 0));
+      parentId = parent.id;
+    });
+    app.advanceFrame(0);
+    expect(app.world.getComponent(parentId as Entity, Vel)?.vx).toBe(7);
+  });
+
+  it('supports nested withChildren for grandchildren', () => {
+    const app = new App({ renderer: makeHeadlessRenderer() });
+    let grandchildId: Entity | undefined;
+    let childId: Entity | undefined;
+    let parentId: Entity | undefined;
+    app.addSystem('update', [Commands], (cmd) => {
+      const parent = cmd.spawn(new Pos());
+      parent.withChildren((p) => {
+        const child = p.spawn(new Pos());
+        childId = child.id;
+        child.withChildren((c) => {
+          grandchildId = c.spawn(new Pos()).id;
+        });
+      });
+      parentId = parent.id;
+    });
+    app.advanceFrame(0);
+    expect(app.world.getComponent(childId as Entity, Parent)?.entity).toBe(parentId as Entity);
+    expect(app.world.getComponent(grandchildId as Entity, Parent)?.entity).toBe(
+      childId as Entity,
+    );
+    expect(app.world.getComponent(childId as Entity, Children)?.entities).toEqual([
+      grandchildId as Entity,
+    ]);
+  });
+});
+
+describe('cmd.entity(...).addChild', () => {
+  it('wires Parent on the child and appends to the parent\'s Children list', () => {
+    const app = new App({ renderer: makeHeadlessRenderer() });
+    const parent = app.world.spawn(new Pos());
+    const child = app.world.spawn(new Pos());
+    app.addSystem('update', [Commands], (cmd) => {
+      cmd.entity(parent).addChild(child);
+    });
+    app.advanceFrame(0);
+    expect(app.world.getComponent(child, Parent)?.entity).toBe(parent);
+    expect(app.world.getComponent(parent, Children)?.entities).toEqual([child]);
+  });
+
+  it('reparenting detaches the child from the previous parent\'s Children list', () => {
+    const app = new App({ renderer: makeHeadlessRenderer() });
+    const oldParent = app.world.spawn(new Pos());
+    const newParent = app.world.spawn(new Pos());
+    const child = app.world.spawn(new Pos());
+    app.addSystem('update', [Commands], (cmd) => {
+      cmd.entity(oldParent).addChild(child);
+    });
+    app.advanceFrame(0);
+    expect(app.world.getComponent(oldParent, Children)?.entities).toEqual([child]);
+
+    app.addSystem('update', [Commands], (cmd) => {
+      cmd.entity(newParent).addChild(child);
+    });
+    app.advanceFrame(16);
+    expect(app.world.getComponent(child, Parent)?.entity).toBe(newParent);
+    expect(app.world.getComponent(oldParent, Children)?.entities).toEqual([]);
+    expect(app.world.getComponent(newParent, Children)?.entities).toEqual([child]);
+  });
+
+  it('appending the same child twice does not duplicate the entry', () => {
+    const app = new App({ renderer: makeHeadlessRenderer() });
+    const parent = app.world.spawn(new Pos());
+    const child = app.world.spawn(new Pos());
+    app.addSystem('update', [Commands], (cmd) => {
+      cmd.entity(parent).addChild(child).addChild(child);
+    });
+    app.advanceFrame(0);
+    expect(app.world.getComponent(parent, Children)?.entities).toEqual([child]);
+  });
+});
+
+describe('cmd.entity(...).removeChild', () => {
+  it('detaches the child from this parent\'s Children list and clears its Parent', () => {
+    const app = new App({ renderer: makeHeadlessRenderer() });
+    const parent = app.world.spawn(new Pos());
+    const child = app.world.spawn(new Pos());
+    app.addSystem('update', [Commands], (cmd) => {
+      cmd.entity(parent).addChild(child);
+    });
+    app.advanceFrame(0);
+
+    app.addSystem('update', [Commands], (cmd) => {
+      cmd.entity(parent).removeChild(child);
+    });
+    app.advanceFrame(16);
+    expect(app.world.getComponent(parent, Children)?.entities).toEqual([]);
+    expect(app.world.has(child, Parent)).toBe(false);
+  });
+
+  it('does not clear Parent if it points to a different parent (race-safe)', () => {
+    const app = new App({ renderer: makeHeadlessRenderer() });
+    const oldParent = app.world.spawn(new Pos());
+    const realParent = app.world.spawn(new Pos());
+    const child = app.world.spawn(new Pos());
+    // Wire child to realParent directly.
+    app.world.insertBundle(child, [new Parent(realParent)]);
+    // Try to detach via the old parent: should not clear child.Parent.
+    app.addSystem('update', [Commands], (cmd) => {
+      cmd.entity(oldParent).removeChild(child);
+    });
+    app.advanceFrame(0);
+    expect(app.world.getComponent(child, Parent)?.entity).toBe(realParent);
+  });
+});
+
+describe('cmd.entity(...).despawnRecursive', () => {
+  it('despawns root + every descendant reachable through Children', () => {
+    const app = new App({ renderer: makeHeadlessRenderer() });
+    let rootId: Entity | undefined;
+    const ids: Entity[] = [];
+    // Spawn the hierarchy in 'startup' so it runs exactly once — using 'update'
+    // would re-spawn the structure on every advanceFrame and orphan the originals.
+    app.addSystem('startup', [Commands], (cmd) => {
+      const root = cmd.spawn(new Pos());
+      rootId = root.id;
+      root.withChildren((p) => {
+        const a = p.spawn(new Pos());
+        ids.push(a.id);
+        a.withChildren((q) => {
+          ids.push(q.spawn(new Pos()).id);
+          ids.push(q.spawn(new Pos()).id);
+        });
+        ids.push(p.spawn(new Pos()).id);
+      });
+    });
+    app.advanceFrame(0);
+    // Sanity: all entities exist.
+    expect(app.world.hasEntity(rootId as Entity)).toBe(true);
+    for (const id of ids) expect(app.world.hasEntity(id)).toBe(true);
+
+    app.addSystem('update', [Commands], (cmd) => {
+      cmd.entity(rootId as Entity).despawnRecursive();
+    });
+    app.advanceFrame(16);
+    expect(app.world.hasEntity(rootId as Entity)).toBe(false);
+    for (const id of ids) expect(app.world.hasEntity(id)).toBe(false);
+  });
+
+  it('detaches the root from its own parent\'s Children list', () => {
+    const app = new App({ renderer: makeHeadlessRenderer() });
+    let parentId: Entity | undefined;
+    let childId: Entity | undefined;
+    app.addSystem('startup', [Commands], (cmd) => {
+      const parent = cmd.spawn(new Pos());
+      parentId = parent.id;
+      parent.withChildren((p) => {
+        childId = p.spawn(new Pos()).id;
+      });
+    });
+    app.advanceFrame(0);
+    expect(app.world.getComponent(parentId as Entity, Children)?.entities).toEqual([
+      childId as Entity,
+    ]);
+
+    app.addSystem('update', [Commands], (cmd) => {
+      cmd.entity(childId as Entity).despawnRecursive();
+    });
+    app.advanceFrame(16);
+    expect(app.world.hasEntity(childId as Entity)).toBe(false);
+    expect(app.world.getComponent(parentId as Entity, Children)?.entities).toEqual([]);
+  });
+
+  it('is silent on already-dead entity', () => {
+    const app = new App({ renderer: makeHeadlessRenderer() });
+    const e = app.world.spawn();
+    app.world.despawn(e);
+    app.addSystem('update', [Commands], (cmd) => {
+      cmd.entity(e).despawnRecursive();
+    });
+    expect(() => app.advanceFrame(0)).not.toThrow();
+  });
+});
+
 describe('App.flushCommands', () => {
   it('drains buffers populated by direct handle use outside the runner', () => {
     const app = new App({ renderer: makeHeadlessRenderer() });
@@ -505,7 +729,7 @@ describe('App.flushCommands', () => {
       stage: 'update',
       systemId: id,
     }) as CommandsHandle;
-    const e = handle.spawn(new Pos(3, 4));
+    const e = handle.spawn(new Pos(3, 4)).id;
     expect(app.world.hasEntity(e)).toBe(false);
     app.flushCommands();
     expect(app.world.hasEntity(e)).toBe(true);
@@ -538,8 +762,8 @@ describe('App.flushCommands', () => {
     // Enqueue spawns from both handles; the spawn ids are reserved at enqueue
     // (so e1 < e2 by mint order), but the order in which the ROWS appear in
     // entityIndex is decided by the flush order across buffers.
-    const e1 = h1.spawn(new Pos(1, 0));
-    const e2 = h2.spawn(new Pos(2, 0));
+    const e1 = h1.spawn(new Pos(1, 0)).id;
+    const e2 = h2.spawn(new Pos(2, 0)).id;
     expect(app.world.hasEntity(e1)).toBe(false);
     expect(app.world.hasEntity(e2)).toBe(false);
     app.flushCommands();
