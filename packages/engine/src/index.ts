@@ -7,28 +7,28 @@ import type {
 } from '@retro-engine/renderer-core';
 import { World } from '@retro-engine/ecs';
 
+import type { Param, ParamValues, ResolveCtx, SystemId } from './system-param';
+import { RunCondition } from './system-param';
+
+export type { Param, ParamValues, ResolveCtx, SystemId } from './system-param';
+export { RenderCtx, Res, RunCondition } from './system-param';
+
 /** A plugin extends an `App` by registering systems, resources, and component types. */
 export type Plugin = (app: App) => void;
 
 /** Named stage in the schedule — when a system runs within a frame. */
 export type Stage = 'startup' | 'preUpdate' | 'update' | 'postUpdate' | 'render';
 
-/** Non-render-stage systems operate on the world only. */
-export type SystemFn = (world: World) => void;
-
 /**
- * Per-frame context handed to render-stage systems. The encoder and pass
- * are scoped to the current frame and become invalid once the frame ends —
- * do not retain them across systems or across ticks.
+ * Per-frame context handed to render-stage systems via the `RenderCtx` param.
+ * The encoder and pass are scoped to the current frame and become invalid once
+ * the frame ends — do not retain them across systems or across ticks.
  */
 export interface RenderContext {
   readonly encoder: CommandEncoder;
   readonly pass: RenderPassEncoder;
   readonly surfaceView: TextureView;
 }
-
-/** Render-stage systems read the world and record draws into the frame's pass. */
-export type RenderSystemFn = (world: World, ctx: RenderContext) => void;
 
 export interface AppOptions {
   readonly renderer: Renderer;
@@ -44,15 +44,31 @@ export interface AppOptions {
   readonly clearColor?: { r: number; g: number; b: number; a: number };
 }
 
+/** Options that gate or order a registered system. */
+export interface AddSystemOptions {
+  /** Composable predicate. If present and `test(app)` returns false, the system is skipped on that tick. */
+  readonly runIf?: RunCondition;
+}
+
+interface RegisteredSystem {
+  readonly id: SystemId;
+  readonly params: ReadonlyArray<Param<unknown>>;
+  readonly fn: (...args: unknown[]) => void;
+  readonly runIf?: RunCondition;
+}
+
 /**
- * Day-1 `App`: holds a `World`, accepts plugins, and runs a stop-able frame
- * loop. Bevy-shaped, but tiny — real scheduling and resource management land
- * later.
+ * Holds a `World`, accepts plugins, and runs a stop-able frame loop.
  *
- * When a canvas is provided, the render stage drives a single main render
- * pass per frame: the engine acquires the swapchain view, begins a pass
- * that clears to {@link AppOptions.clearColor}, invokes each registered
- * render system with the encoder, ends the pass, and submits. A future
+ * Systems register through a single signature — a stage name, a tuple of param
+ * tokens declaring what the system reads or writes, the function itself, and
+ * optional run conditions. The function receives one value per param, in
+ * order; no implicit world argument.
+ *
+ * When a canvas is provided, the render stage drives a single main render pass
+ * per frame: the engine acquires the swapchain view, begins a pass that clears
+ * to {@link AppOptions.clearColor}, invokes each registered render system with
+ * the `RenderCtx`-resolved frame context, ends the pass, and submits. A future
  * render-graph layer supersedes this one-pass-per-frame model once multiple
  * passes exist.
  */
@@ -60,14 +76,27 @@ export class App {
   readonly world = new World();
   /** Backend renderer the app drives. Plugins use this to build shader modules, pipelines, and other GPU resources. */
   readonly renderer: Renderer;
-  private readonly systems = new Map<Exclude<Stage, 'render'>, SystemFn[]>();
-  private readonly renderSystems: RenderSystemFn[] = [];
+  private readonly systems: {
+    startup: RegisteredSystem[];
+    preUpdate: RegisteredSystem[];
+    update: RegisteredSystem[];
+    postUpdate: RegisteredSystem[];
+    render: RegisteredSystem[];
+  } = {
+    startup: [],
+    preUpdate: [],
+    update: [],
+    postUpdate: [],
+    render: [],
+  };
+  private readonly resources = new Map<object, object>();
   private readonly canvas: HTMLCanvasElement | undefined;
   private readonly clearColor: { r: number; g: number; b: number; a: number };
   private surface: Surface | undefined;
   private resizeObserver: ResizeObserver | undefined;
   private running = false;
   private rafHandle: number | undefined;
+  private nextSystemId = 1;
 
   constructor(options: AppOptions) {
     this.renderer = options.renderer;
@@ -80,17 +109,56 @@ export class App {
     return this;
   }
 
-  addSystem(stage: 'render', system: RenderSystemFn): this;
-  addSystem(stage: Exclude<Stage, 'render'>, system: SystemFn): this;
-  addSystem(stage: Stage, system: SystemFn | RenderSystemFn): this {
-    if (stage === 'render') {
-      this.renderSystems.push(system as RenderSystemFn);
-    } else {
-      const list = this.systems.get(stage) ?? [];
-      list.push(system as SystemFn);
-      this.systems.set(stage, list);
+  /**
+   * Register a system at `stage`. The function receives one argument per param
+   * in `params`, in order; pass `[]` for a zero-param system. The optional
+   * `runIf` condition gates execution per tick.
+   *
+   * Stage-scoped params (e.g. `RenderCtx`) throw at registration if used in
+   * the wrong stage.
+   */
+  addSystem<const Ps extends readonly Param<unknown>[]>(
+    stage: Stage,
+    params: Ps,
+    fn: (...args: ParamValues<Ps>) => void,
+    options?: AddSystemOptions,
+  ): this {
+    for (const p of params) {
+      if (p.scope !== undefined && p.scope !== stage) {
+        throw new Error(
+          `App.addSystem: param scoped to stage '${p.scope}' cannot be used in stage '${stage}'`,
+        );
+      }
     }
+    const id = this.nextSystemId++ as SystemId;
+    const entry: RegisteredSystem = {
+      id,
+      params,
+      fn: fn as (...args: unknown[]) => void,
+      ...(options?.runIf !== undefined ? { runIf: options.runIf } : {}),
+    };
+    this.systems[stage].push(entry);
     return this;
+  }
+
+  /**
+   * Register a resource instance, keyed by its constructor. Systems read it
+   * via the `Res(ctor)` param. Inserting a second value of the same class
+   * replaces the prior instance.
+   */
+  insertResource<T extends object>(value: T): this {
+    this.resources.set(value.constructor, value);
+    return this;
+  }
+
+  /**
+   * Look up a resource by constructor. Returns `undefined` if no resource of
+   * that class was inserted. Most code should use the `Res(ctor)` param
+   * instead; this is the escape hatch the param resolver itself relies on.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  getResource<T>(ctor: new (...a: any[]) => T): T | undefined {
+    return this.resources.get(ctor) as T | undefined;
   }
 
   /** Start the frame loop. Resolves once startup is complete; the loop runs until {@link App.stop}. */
@@ -144,6 +212,21 @@ export class App {
     }
   }
 
+  private runStage(stage: Exclude<Stage, 'render'>): void {
+    const list = this.systems[stage];
+    if (list.length === 0) return;
+    for (const sys of list) {
+      if (sys.runIf && !sys.runIf.test(this)) continue;
+      const ctx: ResolveCtx = {
+        app: this,
+        world: this.world,
+        stage,
+        systemId: sys.id,
+      };
+      this.invokeSystem(sys, ctx);
+    }
+  }
+
   private renderFrame(): void {
     if (!this.surface) return;
     const surfaceView = this.surface.getCurrentTextureView();
@@ -158,16 +241,25 @@ export class App {
         },
       ],
     });
-    const ctx: RenderContext = { encoder, pass, surfaceView };
-    for (const system of this.renderSystems) system(this.world, ctx);
+    const render: RenderContext = { encoder, pass, surfaceView };
+    for (const sys of this.systems.render) {
+      if (sys.runIf && !sys.runIf.test(this)) continue;
+      const ctx: ResolveCtx = {
+        app: this,
+        world: this.world,
+        stage: 'render',
+        systemId: sys.id,
+        render,
+      };
+      this.invokeSystem(sys, ctx);
+    }
     pass.end();
     this.renderer.submit([encoder.finish()]);
   }
 
-  private runStage(stage: Exclude<Stage, 'render'>): void {
-    const list = this.systems.get(stage);
-    if (!list) return;
-    for (const system of list) system(this.world);
+  private invokeSystem(sys: RegisteredSystem, ctx: ResolveCtx): void {
+    const values = sys.params.map((p) => p.resolve(ctx));
+    sys.fn(...values);
   }
 }
 

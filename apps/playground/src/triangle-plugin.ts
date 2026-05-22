@@ -1,4 +1,5 @@
-import type { Plugin, RenderSystemFn } from '@retro-engine/engine';
+import type { Plugin } from '@retro-engine/engine';
+import { RenderCtx } from '@retro-engine/engine';
 import type { RenderPipeline } from '@retro-engine/renderer-core';
 
 const TRIANGLE_WGSL = /* wgsl */ `
@@ -22,7 +23,7 @@ fn fs_main() -> @location(0) vec4<f32> {
 export const trianglePlugin: Plugin = (app) => {
   let pipeline: RenderPipeline | undefined;
 
-  app.addSystem('startup', () => {
+  app.addSystem('startup', [], () => {
     const { renderer } = app;
     const module = renderer.createShaderModule({ code: TRIANGLE_WGSL, label: 'triangle' });
     pipeline = renderer.createRenderPipeline({
@@ -37,10 +38,9 @@ export const trianglePlugin: Plugin = (app) => {
     });
   });
 
-  const drawTriangle: RenderSystemFn = (_world, ctx) => {
+  app.addSystem('render', [RenderCtx], (ctx) => {
     if (!pipeline) return;
     ctx.pass.setPipeline(pipeline);
     ctx.pass.draw(3);
-  };
-  app.addSystem('render', drawTriangle);
+  });
 };

@@ -4,9 +4,6 @@ export type Entity = number & { readonly __brand: 'Entity' };
 /** Component type marker — a `Symbol` or class constructor that uniquely identifies a component type. */
 export type ComponentType<T = unknown> = symbol | (new (...args: never[]) => T);
 
-/** A system is a function invoked each frame against the world. */
-export type System = (world: World) => void;
-
 /**
  * Day-1 stub `World`. The real archetype storage and query planner land in a
  * future release; the surface here is the contract systems target.

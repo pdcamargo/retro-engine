@@ -16,7 +16,7 @@ const renderer = createWebGPURenderer(canvas);
 const app = new App({ renderer });
 
 app.addPlugin((a) => {
-  a.addSystem('startup', () => {
+  a.addSystem('startup', [], () => {
     console.log('[studio] startup');
   });
 });
