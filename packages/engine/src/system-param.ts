@@ -68,41 +68,97 @@ export const RenderCtx: Param<RenderContext> = {
   },
 };
 
+type DeepReadonly<T> = T extends (...args: never) => unknown
+  ? T
+  : T extends ReadonlyArray<infer U>
+    ? ReadonlyArray<DeepReadonly<U>>
+    : T extends ReadonlyMap<infer K, infer V>
+      ? ReadonlyMap<DeepReadonly<K>, DeepReadonly<V>>
+      : T extends ReadonlySet<infer U>
+        ? ReadonlySet<DeepReadonly<U>>
+        : T extends object
+          ? { readonly [K in keyof T]: DeepReadonly<T[K]> }
+          : T;
+
 const resCache = new WeakMap<object, Param<unknown>>();
+const resMutCache = new WeakMap<object, Param<unknown>>();
+
+const missingResourceError = (label: 'Res' | 'ResMut', ctorName: string): Error => {
+  const name = ctorName || '<anonymous>';
+  return new Error(
+    `${label}(${name}): resource not registered — did you forget app.insertResource(new ${name}())?`,
+  );
+};
 
 /**
- * Declares a read-only dependency on a resource of type `T`. The system
- * receives the live instance previously registered via `App.insertResource`;
- * resolution throws if no matching resource is present.
+ * Declares a **read-only** dependency on a resource of type `T`. The system
+ * receives the live instance previously registered via `App.insertResource`,
+ * typed as {@link DeepReadonly} so mutations are a compile error; resolution
+ * throws if no matching resource is present.
  *
  * Tokens are cached per constructor — `Res(Foo) === Res(Foo)` — so identity
- * checks against the returned `Param` are stable across calls.
+ * checks against the returned `Param` are stable across calls. The cache is
+ * distinct from `ResMut`'s, so `Res(Foo) !== ResMut(Foo)` — a future schedule
+ * graph can distinguish read and write intent by token identity.
+ *
+ * Pair with {@link ResMut} when the system needs to write.
  *
  * @example
  * ```ts
  * class Score { value = 0; }
  * app.insertResource(new Score());
  * app.addSystem('update', [Res(Score)], (score) => {
+ *   console.log(score.value);
+ *   // score.value = 1;  // compile error — use ResMut(Score) to write
+ * });
+ * ```
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function Res<T extends object>(ctor: new (...a: any[]) => T): Param<DeepReadonly<T>> {
+  const cached = resCache.get(ctor);
+  if (cached) return cached as Param<DeepReadonly<T>>;
+  const param: Param<DeepReadonly<T>> = {
+    resolve(ctx) {
+      const value = ctx.app.getResource(ctor);
+      if (value === undefined) throw missingResourceError('Res', ctor.name);
+      return value as DeepReadonly<T>;
+    },
+  };
+  resCache.set(ctor, param);
+  return param;
+}
+
+/**
+ * Declares a **mutable** dependency on a resource of type `T`. Runtime
+ * behaviour is identical to {@link Res} — the system receives the same live
+ * instance previously registered via `App.insertResource` — but the value is
+ * typed as `T` rather than `DeepReadonly<T>`, so writes (`score.value = 1`)
+ * typecheck. Resolution throws if no matching resource is present.
+ *
+ * Tokens are cached per constructor and are distinct from `Res`'s cache, so
+ * `ResMut(Foo) === ResMut(Foo)` and `Res(Foo) !== ResMut(Foo)`.
+ *
+ * @example
+ * ```ts
+ * class Score { value = 0; }
+ * app.insertResource(new Score());
+ * app.addSystem('update', [ResMut(Score)], (score) => {
  *   score.value += 1;
  * });
  * ```
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function Res<T extends object>(ctor: new (...a: any[]) => T): Param<T> {
-  const cached = resCache.get(ctor);
+export function ResMut<T extends object>(ctor: new (...a: any[]) => T): Param<T> {
+  const cached = resMutCache.get(ctor);
   if (cached) return cached as Param<T>;
   const param: Param<T> = {
     resolve(ctx) {
       const value = ctx.app.getResource(ctor);
-      if (value === undefined) {
-        throw new Error(
-          `Res(${ctor.name || '<anonymous>'}): resource not inserted — call app.insertResource(...) before run()`,
-        );
-      }
+      if (value === undefined) throw missingResourceError('ResMut', ctor.name);
       return value;
     },
   };
-  resCache.set(ctor, param);
+  resMutCache.set(ctor, param);
   return param;
 }
 

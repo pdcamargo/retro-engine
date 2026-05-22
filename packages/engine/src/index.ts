@@ -7,11 +7,15 @@ import type {
 } from '@retro-engine/renderer-core';
 import { World } from '@retro-engine/ecs';
 
+import type { Logger } from './log';
+import { engineLogger } from './log';
 import type { Param, ParamValues, ResolveCtx, SystemId } from './system-param';
 import { RunCondition } from './system-param';
 
+export type { Logger } from './log';
+export { createConsoleLogger, engineLogger } from './log';
 export type { Param, ParamValues, ResolveCtx, SystemId } from './system-param';
-export { RenderCtx, Res, RunCondition } from './system-param';
+export { RenderCtx, Res, ResMut, RunCondition } from './system-param';
 
 /** A plugin extends an `App` by registering systems, resources, and component types. */
 export type Plugin = (app: App) => void;
@@ -42,6 +46,12 @@ export interface AppOptions {
    * Defaults to opaque black.
    */
   readonly clearColor?: { r: number; g: number; b: number; a: number };
+  /**
+   * Override the App's diagnostic sink. Defaults to the shared `engineLogger`,
+   * which writes to `console.*`. Pass a custom `Logger` to route engine and
+   * plugin output to a studio panel, telemetry pipeline, or test buffer.
+   */
+  readonly logger?: Logger;
 }
 
 /** Options that gate or order a registered system. */
@@ -76,6 +86,13 @@ export class App {
   readonly world = new World();
   /** Backend renderer the app drives. Plugins use this to build shader modules, pipelines, and other GPU resources. */
   readonly renderer: Renderer;
+  /**
+   * Diagnostic sink for this App. Plugins and engine subsystems emit through
+   * this logger (typically capturing a child view via `logger.child('name')`
+   * at plugin-build time). Defaults to the shared `engineLogger`; override
+   * via {@link AppOptions.logger}.
+   */
+  readonly logger: Logger;
   private readonly systems: {
     startup: RegisteredSystem[];
     preUpdate: RegisteredSystem[];
@@ -102,6 +119,7 @@ export class App {
     this.renderer = options.renderer;
     this.canvas = options.canvas;
     this.clearColor = options.clearColor ?? { r: 0, g: 0, b: 0, a: 1 };
+    this.logger = options.logger ?? engineLogger;
   }
 
   addPlugin(plugin: Plugin): this {
@@ -143,18 +161,38 @@ export class App {
 
   /**
    * Register a resource instance, keyed by its constructor. Systems read it
-   * via the `Res(ctor)` param. Inserting a second value of the same class
-   * replaces the prior instance.
+   * through the `Res(ctor)` / `ResMut(ctor)` params. Inserting a second value
+   * of the same class replaces the prior instance; a `devWarn` is emitted on
+   * replace, silent in production builds.
    */
   insertResource<T extends object>(value: T): this {
-    this.resources.set(value.constructor, value);
+    const key = value.constructor;
+    if (this.resources.has(key)) {
+      this.logger.devWarn(
+        `App.insertResource: replacing existing resource of type ${(key as { name?: string }).name || '<anonymous>'}`,
+      );
+    }
+    this.resources.set(key, value);
     return this;
   }
 
   /**
+   * Remove a resource by constructor key. Returns the removed instance, or
+   * `undefined` if no resource of that class was registered. Idempotent — a
+   * second call with the same key returns `undefined` without throwing.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  removeResource<T>(ctor: new (...a: any[]) => T): T | undefined {
+    const value = this.resources.get(ctor) as T | undefined;
+    this.resources.delete(ctor);
+    return value;
+  }
+
+  /**
    * Look up a resource by constructor. Returns `undefined` if no resource of
-   * that class was inserted. Most code should use the `Res(ctor)` param
-   * instead; this is the escape hatch the param resolver itself relies on.
+   * that class was inserted. Most code should use the `Res(ctor)` (read) or
+   * `ResMut(ctor)` (write) params instead; this is the escape hatch the param
+   * resolvers themselves rely on.
    */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   getResource<T>(ctor: new (...a: any[]) => T): T | undefined {
