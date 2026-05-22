@@ -13,10 +13,11 @@
 2. **Asset store** — runtime map ID → loaded asset; ref-counted for unload.
 3. **Importer registry** — strategy pattern; each file extension or asset kind registers an importer function `(bytes) => Asset`. Hot-reload friendly.
 4. **Serializer registry** — symmetric to importers for save.
-5. **Project format** — directory layout for `.retro-project`, manifest file, asset metadata, scene files. JSON or binary? Probably JSON for v1; binary later if perf demands.
-6. **Scene system on top** — entities + components serialized to/from project files.
-7. **Reference resolution** — handles in serialized scenes reference assets by GUID; loader resolves to in-memory handles.
-8. **Studio integration** — asset browser, drag-drop into scene, rename without breaking references.
+5. **Project format** — directory layout for `.retro-project`, manifest file, asset metadata. JSON or binary? Probably JSON for v1; binary later if perf demands.
+6. **Reference resolution** — handles in serialized data reference assets by GUID; loader resolves to in-memory handles.
+7. **Studio integration** — asset browser, drag-drop into scene, rename without breaking references.
+
+(Scene system moved to its own roadmap: `docs/roadmap/scenes-and-prefabs.md`.)
 
 ## Open questions
 
