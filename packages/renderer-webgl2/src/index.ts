@@ -1,6 +1,18 @@
-import type { Renderer, RendererCapabilities } from '@retro-engine/renderer-core';
+import type {
+  CommandBuffer,
+  CommandEncoder,
+  Renderer,
+  RendererCapabilities,
+  RenderPipeline,
+  ShaderModule,
+  Surface,
+  TextureFormat,
+} from '@retro-engine/renderer-core';
 
 const NOT_IMPLEMENTED = 'WebGL2 backend is not implemented yet.';
+const fail = (): never => {
+  throw new Error(NOT_IMPLEMENTED);
+};
 
 /**
  * Create a WebGL2-backed renderer. Stub: every method throws. The package
@@ -23,7 +35,25 @@ export const createWebGL2Renderer = (_canvas: HTMLCanvasElement): Renderer => {
       return Promise.reject(new Error(NOT_IMPLEMENTED));
     },
     destroy(): void {
-      throw new Error(NOT_IMPLEMENTED);
+      fail();
+    },
+    getPreferredSurfaceFormat(): TextureFormat {
+      return fail();
+    },
+    createSurface(): Surface {
+      return fail();
+    },
+    createShaderModule(): ShaderModule {
+      return fail();
+    },
+    createRenderPipeline(): RenderPipeline {
+      return fail();
+    },
+    createCommandEncoder(): CommandEncoder {
+      return fail();
+    },
+    submit(_buffers: CommandBuffer[]): void {
+      fail();
     },
   };
 };

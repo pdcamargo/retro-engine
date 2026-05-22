@@ -1,0 +1,21 @@
+{
+  "name": "@retro-engine/playground",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Browser-only smoke-test app that hosts the engine without Tauri. Used to validate end-to-end engine features quickly.",
+  "type": "module",
+  "scripts": {
+    "dev": "bun index.html --port 5173",
+    "build": "bun build index.html --outdir dist --minify --target=browser",
+    "lint": "oxlint .",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@retro-engine/engine": "workspace:*",
+    "@retro-engine/renderer-core": "workspace:*",
+    "@retro-engine/renderer-webgpu": "workspace:*"
+  },
+  "devDependencies": {
+    "@webgpu/types": "latest"
+  }
+}

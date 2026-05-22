@@ -23,3 +23,4 @@
 ## Links
 
 - ADR-0001 — engine never depends on studio; playground proves it.
+- `docs/roadmap/first-render-path.md` — bootstraps Phase 1 (scaffold + dev server) of this initiative as part of standing up the first end-to-end render path.

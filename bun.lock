@@ -1,6 +1,5 @@
 {
   "lockfileVersion": 1,
-  "configVersion": 1,
   "workspaces": {
     "": {
       "name": "retro-engine",
@@ -12,6 +11,18 @@
         "oxlint": "latest",
         "turbo": "^2.3.0",
         "typescript": "^5.7.0",
+      },
+    },
+    "apps/playground": {
+      "name": "@retro-engine/playground",
+      "version": "0.0.0",
+      "dependencies": {
+        "@retro-engine/engine": "workspace:*",
+        "@retro-engine/renderer-core": "workspace:*",
+        "@retro-engine/renderer-webgpu": "workspace:*",
+      },
+      "devDependencies": {
+        "@webgpu/types": "latest",
       },
     },
     "apps/studio": {
@@ -164,6 +175,8 @@
     "@retro-engine/engine": ["@retro-engine/engine@workspace:packages/engine"],
 
     "@retro-engine/math": ["@retro-engine/math@workspace:packages/math"],
+
+    "@retro-engine/playground": ["@retro-engine/playground@workspace:apps/playground"],
 
     "@retro-engine/renderer-core": ["@retro-engine/renderer-core@workspace:packages/renderer-core"],
 
