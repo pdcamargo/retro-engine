@@ -17,6 +17,7 @@ import {
   App,
   createConsoleLogger,
   type Logger,
+  Query,
   RenderCtx,
   type RenderContext,
   Res,
@@ -104,9 +105,10 @@ describe('App', () => {
   });
 
   it('exposes a `World` for systems', () => {
+    class NotAttached {}
     const app = new App({ renderer: makeHeadlessRenderer() });
     const e = app.world.spawn();
-    expect(app.world.has(e, Symbol.for('any'))).toBe(false);
+    expect(app.world.has(e, NotAttached)).toBe(false);
   });
 
   it('skips the render stage when no canvas is provided', async () => {
@@ -180,6 +182,48 @@ describe('System param protocol', () => {
   it('throws when a stage-scoped param is registered in the wrong stage', () => {
     const app = new App({ renderer: makeHeadlessRenderer() });
     expect(() => app.addSystem('update', [RenderCtx], () => undefined)).toThrow();
+  });
+});
+
+describe('Query system param', () => {
+  it('resolves to an iterable query handle and mutates component data', async () => {
+    class A {
+      constructor(public x = 0) {}
+    }
+    class B {
+      constructor(public v = 0) {}
+    }
+    const app = new App({ renderer: makeHeadlessRenderer() });
+    app.world.spawn(new A(0), new B(1));
+    app.world.spawn(new A(10), new B(2));
+    let total = 0;
+    app.addSystem('update', [Query([A, B])], (q) => {
+      for (const [a, b] of q) {
+        a.x += b.v;
+        total += a.x;
+      }
+    });
+    await app.run();
+    app.stop();
+    // First entity: 0+1 = 1; second: 10+2 = 12; sum = 13.
+    expect(total).toBe(13);
+    // Mutations persist on the underlying instances.
+    const rows = [...app.world.query([A])];
+    const xs = rows.map(([a]) => a.x).sort((p, q) => p - q);
+    expect(xs).toEqual([1, 12]);
+  });
+
+  it('caches param tokens per (types-order, filter-shape)', () => {
+    class A {}
+    class B {}
+    class C {}
+    expect(Query([A, B])).toBe(Query([A, B]));
+    expect(Query([A, B])).not.toBe(Query([B, A]));
+    expect(Query([A, B])).not.toBe(Query([A]));
+    expect(Query([A], { with: [B] })).toBe(Query([A], { with: [B] }));
+    expect(Query([A], { with: [B] })).not.toBe(Query([A], { with: [C] }));
+    // `with` is set-semantic — order doesn't matter.
+    expect(Query([A], { with: [B, C] })).toBe(Query([A], { with: [C, B] }));
   });
 });
 

@@ -16,7 +16,7 @@ import { Time } from './time';
 export type { Logger } from './log';
 export { createConsoleLogger, engineLogger } from './log';
 export type { Param, ParamValues, ResolveCtx, SystemId } from './system-param';
-export { RenderCtx, Res, ResMut, RunCondition } from './system-param';
+export { Query, RenderCtx, Res, ResMut, RunCondition } from './system-param';
 export type { RealClock, VirtualClock } from './time';
 export { Time } from './time';
 

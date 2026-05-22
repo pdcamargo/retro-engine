@@ -1,4 +1,10 @@
-import type { World } from '@retro-engine/ecs';
+import type {
+  ComponentType,
+  Query as QueryHandle,
+  QueryFilters,
+  World,
+} from '@retro-engine/ecs';
+import { componentId } from '@retro-engine/ecs';
 
 import type { App, RenderContext, Stage } from './index';
 
@@ -202,3 +208,58 @@ export class RunCondition {
 export type ParamValues<Ps extends readonly Param<unknown>[]> = {
   -readonly [K in keyof Ps]: Ps[K] extends Param<infer T> ? T : never;
 };
+
+const queryCache = new Map<string, Param<unknown>>();
+
+const queryKey = (types: readonly ComponentType[], filters?: QueryFilters): string => {
+  const t = types.map(componentId).join(',');
+  if (!filters) return `t:${t}`;
+  const sortedIds = (cs: readonly ComponentType[] | undefined): string =>
+    cs
+      ? cs
+          .map(componentId)
+          .sort((a, b) => a - b)
+          .join(',')
+      : '';
+  const orderedIds = (cs: readonly ComponentType[] | undefined): string =>
+    cs ? cs.map(componentId).join(',') : '';
+  // `with` and `without` are set-semantic; `has` order affects row shape.
+  return `t:${t}|w:${sortedIds(filters.with)}|wo:${sortedIds(filters.without)}|h:${orderedIds(filters.has)}`;
+};
+
+/**
+ * Declares a dependency on a multi-component query. The system receives a
+ * {@link QueryHandle} over rows matching the listed component types (and any
+ * optional `with` / `without` / `has` filter clauses). Iterate with
+ * `for...of`, or call `.first()`, `.single()`, `.count()` on the handle.
+ *
+ * Tokens are cached per (types-array-order, filter-shape) so
+ * `Query([A, B]) === Query([A, B])` and a future schedule planner can dedup
+ * read/write sets by token identity. `with` / `without` are normalized (set
+ * semantics); `has` preserves declaration order because it affects the
+ * yielded row shape.
+ *
+ * @example
+ * ```ts
+ * class Position { constructor(public x = 0, public y = 0) {} }
+ * class Velocity { constructor(public vx = 0, public vy = 0) {} }
+ * app.addSystem('update', [Query([Position, Velocity])], (q) => {
+ *   for (const [pos, vel] of q) pos.x += vel.vx;
+ * });
+ * ```
+ */
+export function Query<
+  const Ts extends readonly ComponentType[],
+  F extends QueryFilters | undefined = undefined,
+>(types: Ts, filters?: F): Param<QueryHandle<Ts, F>> {
+  const key = queryKey(types, filters);
+  const cached = queryCache.get(key);
+  if (cached) return cached as Param<QueryHandle<Ts, F>>;
+  const param: Param<QueryHandle<Ts, F>> = {
+    resolve(ctx) {
+      return ctx.world.query(types, filters);
+    },
+  };
+  queryCache.set(key, param as Param<unknown>);
+  return param;
+}
