@@ -10,18 +10,31 @@ import { World } from '@retro-engine/ecs';
 import type { Logger } from './log';
 import { engineLogger } from './log';
 import type { Param, ParamValues, ResolveCtx, SystemId } from './system-param';
-import { RunCondition } from './system-param';
+import { ResMut, RunCondition } from './system-param';
+import { Time } from './time';
 
 export type { Logger } from './log';
 export { createConsoleLogger, engineLogger } from './log';
 export type { Param, ParamValues, ResolveCtx, SystemId } from './system-param';
 export { RenderCtx, Res, ResMut, RunCondition } from './system-param';
+export type { RealClock, VirtualClock } from './time';
+export { Time } from './time';
 
 /** A plugin extends an `App` by registering systems, resources, and component types. */
 export type Plugin = (app: App) => void;
 
-/** Named stage in the schedule — when a system runs within a frame. */
-export type Stage = 'startup' | 'preUpdate' | 'update' | 'postUpdate' | 'render';
+/**
+ * Named stage in the schedule — when a system runs within a frame. Within a
+ * frame, stages run in this order: `'first'` → `'preUpdate'` → `'update'` →
+ * `'postUpdate'` → `'render'`. `'startup'` runs once during `App.run`, before
+ * the first frame.
+ *
+ * `'first'` is reserved for engine bookkeeping that must precede everything
+ * else — most notably the engine's internal `Time` tick. User systems may
+ * register on `'first'` to run "before everything"; they run after the
+ * engine's internal systems in registration order.
+ */
+export type Stage = 'startup' | 'first' | 'preUpdate' | 'update' | 'postUpdate' | 'render';
 
 /**
  * Per-frame context handed to render-stage systems via the `RenderCtx` param.
@@ -95,12 +108,14 @@ export class App {
   readonly logger: Logger;
   private readonly systems: {
     startup: RegisteredSystem[];
+    first: RegisteredSystem[];
     preUpdate: RegisteredSystem[];
     update: RegisteredSystem[];
     postUpdate: RegisteredSystem[];
     render: RegisteredSystem[];
   } = {
     startup: [],
+    first: [],
     preUpdate: [],
     update: [],
     postUpdate: [],
@@ -114,12 +129,17 @@ export class App {
   private running = false;
   private rafHandle: number | undefined;
   private nextSystemId = 1;
+  private currentFrameTimestampMs = 0;
 
   constructor(options: AppOptions) {
     this.renderer = options.renderer;
     this.canvas = options.canvas;
     this.clearColor = options.clearColor ?? { r: 0, g: 0, b: 0, a: 1 };
     this.logger = options.logger ?? engineLogger;
+    this.insertResource(new Time());
+    this.addSystem('first', [ResMut(Time)], (time) => {
+      time.tick(this.currentFrameTimestampMs);
+    });
   }
 
   addPlugin(plugin: Plugin): this {
@@ -205,18 +225,35 @@ export class App {
     if (this.canvas) this.initSurface(this.canvas);
     this.runStage('startup');
     this.running = true;
+    this.advanceFrame(performance.now());
+    if (typeof requestAnimationFrame === 'function') {
+      const loop = (t: number): void => {
+        if (!this.running) return;
+        this.advanceFrame(t);
+        this.rafHandle = requestAnimationFrame(loop);
+      };
+      this.rafHandle = requestAnimationFrame(loop);
+    }
+  }
 
-    const tick = (): void => {
-      if (!this.running) return;
-      this.runStage('preUpdate');
-      this.runStage('update');
-      this.runStage('postUpdate');
-      this.renderFrame();
-      this.rafHandle =
-        typeof requestAnimationFrame === 'function' ? requestAnimationFrame(tick) : undefined;
-    };
-
-    tick();
+  /**
+   * Drive a single frame: `'first'` → `'preUpdate'` → `'update'` →
+   * `'postUpdate'` → render. The optional `timestampMs` is a
+   * `performance.now()`-style `DOMHighResTimeStamp`; the engine's internal
+   * time-tick system reads it via the same pathway `requestAnimationFrame`
+   * uses in `run`. Omit it to read `performance.now()` at call time.
+   *
+   * `run` calls this once on startup and again from each `requestAnimationFrame`
+   * callback. Tests step the loop synchronously by calling it directly with
+   * explicit timestamps, side-stepping `requestAnimationFrame` entirely.
+   */
+  advanceFrame(timestampMs?: number): void {
+    this.currentFrameTimestampMs = timestampMs ?? performance.now();
+    this.runStage('first');
+    this.runStage('preUpdate');
+    this.runStage('update');
+    this.runStage('postUpdate');
+    this.renderFrame();
   }
 
   stop(): void {
