@@ -7,6 +7,8 @@ import type {
 } from '@retro-engine/renderer-core';
 import { World } from '@retro-engine/ecs';
 
+import type { CommandOp } from './commands';
+import { applyCommandOp } from './commands';
 import type { Logger } from './log';
 import { engineLogger } from './log';
 import { runFixedMainLoop } from './fixed-time';
@@ -27,6 +29,8 @@ import { Time } from './time';
 
 export type { Logger } from './log';
 export { createConsoleLogger, engineLogger } from './log';
+export type { CommandsHandle, EntityCommands } from './commands';
+export { Commands } from './commands';
 export type { Param, ParamValues, ResolveCtx, SystemId } from './system-param';
 export { Query, RenderCtx, Res, ResMut, RunCondition } from './system-param';
 export { anyWithComponent, inState, resourceChanged, resourceExists } from './run-conditions';
@@ -178,6 +182,7 @@ export class App {
   };
   private readonly resources = new Map<object, object>();
   private readonly resourceChangeFrames = new Map<object, number>();
+  private readonly commandsBuffers = new Map<SystemId, CommandOp[]>();
   private readonly stateRegistry = new StateRegistry();
   private readonly canvas: HTMLCanvasElement | undefined;
   private readonly clearColor: { r: number; g: number; b: number; a: number };
@@ -215,6 +220,68 @@ export class App {
    */
   mintSystemId(): SystemId {
     return this.nextSystemId++ as SystemId;
+  }
+
+  /**
+   * Lazily fetch or create the command buffer for a system id. Used by the
+   * `Commands` param's resolved handle to enqueue ops; not part of the public
+   * API.
+   *
+   * @internal
+   */
+  getCommandsBuffer(id: SystemId): CommandOp[] {
+    let buf = this.commandsBuffers.get(id);
+    if (!buf) {
+      buf = [];
+      this.commandsBuffers.set(id, buf);
+    }
+    return buf;
+  }
+
+  /**
+   * Drain one system's command buffer, applying each enqueued op in order.
+   * Deletes the buffer entry before iterating, so an op that re-enqueues into
+   * the same system's buffer starts a fresh array (no recursive replay).
+   * Called by the stage runners after each system's function returns;
+   * no-op when no commands were enqueued.
+   *
+   * @internal
+   */
+  flushSystemCommands(id: SystemId): void {
+    const buf = this.commandsBuffers.get(id);
+    if (!buf || buf.length === 0) return;
+    this.commandsBuffers.delete(id);
+    for (const op of buf) applyCommandOp(op, this);
+  }
+
+  /**
+   * Discard one system's command buffer without applying any ops. Called by
+   * the stage runners when a system's function throws — applying a partial
+   * buffer is more error-prone than dropping it, and stale buffers leaking
+   * into the next invocation of the same system id is a latent correctness
+   * bug.
+   *
+   * @internal
+   */
+  discardSystemCommands(id: SystemId): void {
+    this.commandsBuffers.delete(id);
+  }
+
+  /**
+   * Drain every pending command buffer, in system-id registration order.
+   * Intended for orchestration code, tests, and plugin lifecycle hooks that
+   * need to materialise queued mutations at a known point outside the
+   * per-system flush hooks.
+   *
+   * Calling this from within a system's function while a `Query` iterator
+   * over the same world is live is undefined behavior — structural mutations
+   * applied here can invalidate the iterator. Split into two systems with
+   * `before` / `after` ordering instead.
+   */
+  flushCommands(): void {
+    if (this.commandsBuffers.size === 0) return;
+    const ids = Array.from(this.commandsBuffers.keys());
+    for (const id of ids) this.flushSystemCommands(id);
   }
 
   /**
@@ -513,7 +580,13 @@ export class App {
         render,
       };
       const values = sys.params.map((p) => p.resolve(ctx));
-      sys.fn(...values);
+      try {
+        sys.fn(...values);
+      } catch (err) {
+        this.discardSystemCommands(sys.id);
+        throw err;
+      }
+      this.flushSystemCommands(sys.id);
     }
     pass.end();
     this.renderer.submit([encoder.finish()]);

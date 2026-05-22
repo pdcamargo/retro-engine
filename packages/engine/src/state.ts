@@ -318,7 +318,13 @@ const invokeStateSystem = (rec: StateSystemRecord, app: App): void => {
     systemId: rec.id,
   };
   const values = rec.params.map((p) => p.resolve(ctx));
-  rec.fn(...values);
+  try {
+    rec.fn(...values);
+  } catch (err) {
+    app.discardSystemCommands(rec.id);
+    throw err;
+  }
+  app.flushSystemCommands(rec.id);
 };
 
 const runRecords = (recs: readonly StateSystemRecord[], app: App): void => {

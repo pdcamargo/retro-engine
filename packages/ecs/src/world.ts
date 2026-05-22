@@ -95,18 +95,53 @@ export class World {
       if (Array.isArray(c)) flat.push(...c);
       else flat.push(c as object);
     }
-    const id = this.nextEntityId++ as Entity;
-    if (flat.length === 0) {
-      const empty = this.archetypeByKey.get(EMPTY_ARCHETYPE_KEY)!;
-      const row = empty.push(id, new Map(), this.bumpTick());
-      this.entityIndex.set(id, { archetype: empty, row });
-      return id;
-    }
-    const resolved = resolveBundle(flat);
-    const archetype = this.getOrCreateArchetype(new Set(resolved.keys()));
-    const row = archetype.push(id, resolved, this.bumpTick());
-    this.entityIndex.set(id, { archetype, row });
+    const id = this.reserveEntity();
+    this.spawnReserved(id, flat);
     return id;
+  }
+
+  /**
+   * Mint a fresh entity id without allocating storage. The returned id is not
+   * yet known to queries or to `has` / `getComponent` — pair with
+   * {@link World.spawnReserved} to allocate the row at a later, possibly
+   * non-adjacent, call site.
+   *
+   * Intended for deferred-spawn buffers that need an entity id at enqueue time
+   * so subsequent enqueued mutations can target it. Most code should call
+   * {@link World.spawn} instead, which composes `reserveEntity` and
+   * `spawnReserved` and returns the id ready to use.
+   *
+   * A reserved id that is never passed to `spawnReserved` simply leaks — entity
+   * ids are not recycled.
+   */
+  reserveEntity(): Entity {
+    return this.nextEntityId++ as Entity;
+  }
+
+  /**
+   * Allocate archetype storage for a previously-reserved entity id and insert
+   * the bundle. Throws if the id is already live (i.e. has storage). The
+   * bundle accepts a flat readonly array of component instances; callers that
+   * need the variadic-or-array surface should use {@link World.spawn}.
+   *
+   * Components declared on `static requires` are resolved transitively and
+   * auto-inserted with their default constructor before the archetype is
+   * looked up — same semantics as `spawn`.
+   */
+  spawnReserved(entity: Entity, components: readonly object[]): void {
+    if (this.entityIndex.has(entity)) {
+      throw new Error(`ecs: cannot spawn already-live entity ${entity}`);
+    }
+    if (components.length === 0) {
+      const empty = this.archetypeByKey.get(EMPTY_ARCHETYPE_KEY)!;
+      const row = empty.push(entity, new Map(), this.bumpTick());
+      this.entityIndex.set(entity, { archetype: empty, row });
+      return;
+    }
+    const resolved = resolveBundle(components);
+    const archetype = this.getOrCreateArchetype(new Set(resolved.keys()));
+    const row = archetype.push(entity, resolved, this.bumpTick());
+    this.entityIndex.set(entity, { archetype, row });
   }
 
   /** Despawn an entity. Silent if the entity is already gone. */
@@ -223,6 +258,15 @@ export class World {
     const loc = this.entityIndex.get(entity);
     if (!loc) return false;
     return loc.archetype.typeSet.has(type);
+  }
+
+  /**
+   * Whether the entity is currently live — spawned and not yet despawned. A
+   * reserved id that has not yet been allocated via {@link World.spawnReserved}
+   * is not live and returns `false`.
+   */
+  hasEntity(entity: Entity): boolean {
+    return this.entityIndex.has(entity);
   }
 
   /** Iterate every live entity ID. Order is not specified. */

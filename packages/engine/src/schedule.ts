@@ -176,6 +176,12 @@ export const runStage = (stageSystems: StageSystems, app: App, stage: Stage): vo
       systemId: sys.id,
     };
     const values = sys.params.map((p) => p.resolve(ctx));
-    sys.fn(...values);
+    try {
+      sys.fn(...values);
+    } catch (err) {
+      app.discardSystemCommands(sys.id);
+      throw err;
+    }
+    app.flushSystemCommands(sys.id);
   }
 };
