@@ -1,4 +1,5 @@
 import type { App, Stage } from './index';
+import type { RenderSetName } from './render-set';
 import type { Param, ResolveCtx, SystemId } from './system-param';
 import type { RunCondition } from './system-param';
 
@@ -19,6 +20,13 @@ export interface RegisteredSystem {
   readonly label?: string;
   readonly before?: readonly string[];
   readonly after?: readonly string[];
+  /**
+   * Render sub-set this system belongs to. Set only for `'render'`-stage
+   * systems; ignored elsewhere. `undefined` on render-stage systems defaults
+   * to {@link RenderSet.Render} at frame-loop time, preserving the
+   * single-pass shape that predates ADR-0019.
+   */
+  readonly set?: RenderSetName;
 }
 
 /**

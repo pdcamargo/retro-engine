@@ -8,6 +8,7 @@ import type {
 import { componentId } from '@retro-engine/ecs';
 
 import type { App, RenderContext, Stage } from './index';
+import type { RenderSetName } from './render-set';
 
 /**
  * Opaque identity of a registered system. Minted by `App.addSystem` and used
@@ -48,6 +49,13 @@ export interface ResolveCtx {
   /** Present only during render-stage system invocation. */
   readonly render?: RenderContext;
   /**
+   * Render sub-set currently driving the call. Set during render-stage
+   * system resolution; `undefined` for every other stage. Read by
+   * {@link RenderCtx} so it can produce a more useful error when a system
+   * outside the {@link RenderSet.Render} set asks for the pass encoder.
+   */
+  readonly renderSet?: RenderSetName;
+  /**
    * Set when an observer is being dispatched in response to a triggered
    * event. The `Trigger<E>` param reads it to expose `trigger.event()` to
    * the observer body. `undefined` in every non-observer context.
@@ -83,8 +91,11 @@ export interface Param<out T = unknown> {
 
 /**
  * Stage-scoped param that resolves to the active frame's {@link RenderContext}.
- * Valid only in `'render'`-stage systems; throws at app construction if used
- * anywhere else.
+ * Valid only inside the {@link RenderSet.Render} sub-set of the `'render'`
+ * stage — the only set where the pass encoder is open. Registration throws
+ * if used in another stage; resolution throws if a render-stage system uses
+ * it in any set other than `Render` (i.e. `Extract`, `Prepare`, `Queue`,
+ * `PhaseSort`, `Cleanup`).
  *
  * @example
  * ```ts
@@ -98,13 +109,54 @@ export const RenderCtx: Param<RenderContext> = {
   scope: 'render',
   resolve(ctx) {
     if (!ctx.render) {
+      const setSuffix = ctx.renderSet !== undefined ? ` (set '${ctx.renderSet}')` : '';
       throw new Error(
-        `RenderCtx: no render context available in stage '${ctx.stage}' — RenderCtx is render-stage only`,
+        `RenderCtx: no render context available in stage '${ctx.stage}'${setSuffix} — RenderCtx is valid only inside the Render sub-set of the 'render' stage`,
       );
     }
     return ctx.render;
   },
 };
+
+/**
+ * Wraps a {@link Param} so it resolves against the main `World`
+ * (`app.world`) even when the calling system runs against the render
+ * world. Used inside render-stage systems — typically Extract-set systems —
+ * to read gameplay data without coupling the render world's schema to it.
+ *
+ * The inner param's `scope` is preserved unchanged, so `Extract(RenderCtx)`
+ * is still a render-stage param. The inner param's `lastSeenTick` /
+ * `lastSeenFrame` are inherited from the outer context — change-detection
+ * across worlds is a known sharp edge in Phase 1; prefer plain
+ * `Extract(Query([T]))` over `Extract(Query([T], { changed: [T] }))` until
+ * cross-world ticks are addressed in a follow-up.
+ *
+ * Read-only by convention — Extract systems should not mutate main-world
+ * state. The HAL does not enforce this; pair with `Res(...)` (not
+ * `ResMut(...)`) at call sites.
+ *
+ * @example
+ * ```ts
+ * app.addSystem(
+ *   'render',
+ *   [Extract(Query([GlobalTransform]))],
+ *   (q) => {
+ *     for (const [g] of q) app.renderWorld.spawn(new ExtractedTransform(g.matrix));
+ *   },
+ *   { set: RenderSet.Extract },
+ * );
+ * ```
+ */
+export function Extract<T>(inner: Param<T>): Param<T> {
+  const wrapped: Param<T> = {
+    resolve(ctx) {
+      const swapped: ResolveCtx = { ...ctx, world: ctx.app.world };
+      return inner.resolve(swapped);
+    },
+    ...(inner.scope !== undefined ? { scope: inner.scope } : {}),
+  };
+  return wrapped;
+}
 
 type DeepReadonly<T> = T extends (...args: never) => unknown
   ? T

@@ -23,6 +23,8 @@ import type { PluginGroup } from './plugin-group';
 import { PluginGroupBuilder } from './plugin-group';
 import type { RegisteredSystem } from './schedule';
 import { runStage, StageSystems } from './schedule';
+import type { RenderSetName } from './render-set';
+import { RenderSet } from './render-set';
 import {
   initStateImpl,
   registerOnEnter,
@@ -50,7 +52,9 @@ export type { Plugin, PluginFn, PluginObject, PluginsState } from './plugin';
 export type { PluginGroup } from './plugin-group';
 export { PluginGroupBuilder } from './plugin-group';
 export type { Param, ParamValues, ResolveCtx, SystemId } from './system-param';
-export { ChangedRes, Query, RenderCtx, Res, ResAdded, ResMut, RunCondition } from './system-param';
+export { ChangedRes, Extract, Query, RenderCtx, Res, ResAdded, ResMut, RunCondition } from './system-param';
+export type { RenderSetName } from './render-set';
+export { RenderSet } from './render-set';
 export { RemovedComponents } from './change-detection';
 export { anyWithComponent, inState, resourceChanged, resourceExists } from './run-conditions';
 export type { NextStateInstance, StateInstance } from './state';
@@ -157,6 +161,14 @@ export interface AddSystemOptions {
    * of these. Forward references and unmatched labels behave like `before`.
    */
   readonly after?: readonly string[];
+  /**
+   * Render sub-set this system belongs to. Valid only when registering
+   * against the `'render'` stage; passing it for any other stage throws at
+   * registration. Omitting it on a render-stage system defaults to
+   * {@link RenderSet.Render}, which preserves the single-pass shape that
+   * predates ADR-0019.
+   */
+  readonly set?: RenderSetName;
 }
 
 /**
@@ -176,6 +188,14 @@ export interface AddSystemOptions {
  */
 export class App {
   readonly world = new World();
+  /**
+   * Per-frame render world. Render-stage systems run against this world by
+   * default; main-world data is read through the {@link Extract} param
+   * wrapper. Cleared at the start of every {@link App.renderFrame} call —
+   * persistent render-side state lives in *resources* (which {@link App}
+   * owns globally) rather than entities. See ADR-0019.
+   */
+  readonly renderWorld = new World();
   /** Backend renderer the app drives. Plugins use this to build shader modules, pipelines, and other GPU resources. */
   readonly renderer: Renderer;
   /**
@@ -614,6 +634,11 @@ export class App {
         );
       }
     }
+    if (options?.set !== undefined && stage !== 'render') {
+      throw new Error(
+        `App.addSystem: the 'set' option is only valid for the 'render' stage — got stage '${stage}'`,
+      );
+    }
     const id = this.nextSystemId++ as SystemId;
     const entry: RegisteredSystem = {
       id,
@@ -623,6 +648,7 @@ export class App {
       ...(options?.label !== undefined ? { label: options.label } : {}),
       ...(options?.before !== undefined ? { before: options.before } : {}),
       ...(options?.after !== undefined ? { after: options.after } : {}),
+      ...(options?.set !== undefined ? { set: options.set } : {}),
     };
     this.stages[stage].push(entry);
     // A newly added label may resolve a forward-reference constraint in a
@@ -922,6 +948,7 @@ export class App {
     runStage(this.stages.last, this, 'last');
     this.renderFrame();
     this.world.drainRemovedBuffer();
+    this.renderWorld.drainRemovedBuffer();
     this.messageRegistry.drainAll();
   }
 
@@ -957,34 +984,86 @@ export class App {
   }
 
   private renderFrame(): void {
-    if (!this.surface) return;
-    const surfaceView = this.surface.getCurrentTextureView();
-    const encoder = this.renderer.createCommandEncoder('frame');
-    const pass = encoder.beginRenderPass({
-      colorAttachments: [
-        {
-          view: surfaceView,
-          loadOp: 'clear',
-          storeOp: 'store',
-          clearValue: this.clearColor,
-        },
-      ],
-    });
-    const render: RenderContext = { encoder, pass, surfaceView };
+    // ADR-0019: clear render-world entities at the start of every frame so
+    // Extract systems repopulate from main-world state without leakage.
+    // Render-world resources persist across frames; entities do not.
+    this.renderWorld.clearAllEntities();
+
+    const bySet = this.groupRenderSystemsBySet();
+    const renderSystems = bySet.get(RenderSet.Render);
+
+    // Pre-pass sets: Extract → Prepare → Queue → PhaseSort. No encoder yet —
+    // these systems prepare data only, no command recording.
+    this.runRenderSet(bySet.get(RenderSet.Extract), RenderSet.Extract, undefined);
+    this.runRenderSet(bySet.get(RenderSet.Prepare), RenderSet.Prepare, undefined);
+    this.runRenderSet(bySet.get(RenderSet.Queue), RenderSet.Queue, undefined);
+    this.runRenderSet(bySet.get(RenderSet.PhaseSort), RenderSet.PhaseSort, undefined);
+
+    // The render pass opens here and stays open through the Render set.
+    // Headless apps (no canvas / no surface) skip the pass but still run
+    // Cleanup so per-frame teardown systems fire.
+    if (this.surface) {
+      const surfaceView = this.surface.getCurrentTextureView();
+      const encoder = this.renderer.createCommandEncoder('frame');
+      const pass = encoder.beginRenderPass({
+        colorAttachments: [
+          {
+            view: surfaceView,
+            loadOp: 'clear',
+            storeOp: 'store',
+            clearValue: this.clearColor,
+          },
+        ],
+      });
+      const render: RenderContext = { encoder, pass, surfaceView };
+      this.runRenderSet(renderSystems, RenderSet.Render, render);
+      pass.end();
+      this.renderer.submit([encoder.finish()]);
+    }
+
+    // Post-pass set: Cleanup. The encoder is finished; no RenderCtx here.
+    this.runRenderSet(bySet.get(RenderSet.Cleanup), RenderSet.Cleanup, undefined);
+  }
+
+  /**
+   * Bucket the topologically-ordered render-stage systems by their
+   * {@link RenderSet}. Systems without an explicit `set` default to
+   * {@link RenderSet.Render} — preserves the pre-ADR-0019 behaviour where
+   * `addSystem('render', ...)` registered a draw call inside the active
+   * pass.
+   */
+  private groupRenderSystemsBySet(): ReadonlyMap<RenderSetName, RegisteredSystem[]> {
+    const bySet = new Map<RenderSetName, RegisteredSystem[]>();
     for (const sys of this.stages.render.ordered()) {
+      const set = sys.set ?? RenderSet.Render;
+      const arr = bySet.get(set);
+      if (arr) arr.push(sys);
+      else bySet.set(set, [sys]);
+    }
+    return bySet;
+  }
+
+  private runRenderSet(
+    systems: readonly RegisteredSystem[] | undefined,
+    setName: RenderSetName,
+    render: RenderContext | undefined,
+  ): void {
+    if (!systems || systems.length === 0) return;
+    for (const sys of systems) {
       if (sys.runIf && !sys.runIf.test(this)) continue;
       const lastSeenTick = this.lastSeenTickOf(sys.id);
       const lastSeenFrame = this.lastSeenFrameOf(sys.id);
-      const tickAtRunStart = this.world.changeTick;
+      const tickAtRunStart = this.renderWorld.changeTick;
       const frameAtRunStart = this.currentFrameNumber();
       const ctx: ResolveCtx = {
         app: this,
-        world: this.world,
+        world: this.renderWorld,
         stage: 'render',
         systemId: sys.id,
         lastSeenTick,
         lastSeenFrame,
-        render,
+        renderSet: setName,
+        ...(render !== undefined ? { render } : {}),
       };
       const values = sys.params.map((p) => p.resolve(ctx));
       try {
@@ -993,14 +1072,16 @@ export class App {
         this.discardSystemCommands(sys.id);
         throw err;
       }
+      // Commands enqueued by render-stage systems flush against the render
+      // world via the standard per-system flush path. Cross-world commands
+      // are not supported in Phase 1.
       this.flushSystemCommands(sys.id, 'render');
       this.recordSystemLastSeenTick(sys.id, tickAtRunStart);
       this.recordSystemLastSeenFrame(sys.id, frameAtRunStart);
     }
-    pass.end();
-    this.renderer.submit([encoder.finish()]);
   }
 }
+
 
 const syncCanvasBackingSize = (canvas: HTMLCanvasElement): { width: number; height: number } => {
   const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;

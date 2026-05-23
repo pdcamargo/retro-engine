@@ -473,6 +473,27 @@ export class World {
   }
 
   /**
+   * Despawn every live entity, drain the removed-component buffer, and reset
+   * the entity-id counter to 1.
+   *
+   * Intended for ephemeral worlds that are rebuilt each frame from external
+   * data — most notably the render world (ADR-0019). Per-component
+   * lifecycle hooks and entity-targeted observers DO fire for each cleared
+   * row, mirroring `despawn`; the `removedBuffer` is drained at the end so
+   * the next frame starts with a clean slate.
+   *
+   * Main `World` instances normally do not call this — gameplay code relies
+   * on entity ids persisting across frames. Calling it on the main world is
+   * the explicit equivalent of "tear down the game and start over."
+   */
+  clearAllEntities(): void {
+    const entities = Array.from(this.entityIndex.keys());
+    for (const entity of entities) this.despawn(entity);
+    this.drainRemovedBuffer();
+    this.nextEntityId = 1;
+  }
+
+  /**
    * @internal Iterator backend used by {@link Query.[Symbol.iterator]}.
    */
   *iterateQuery<
