@@ -26,11 +26,17 @@ export type SystemId = number & { readonly __brand: 'SystemId' };
  *
  * `lastSeenTick` is the calling system's pre-run snapshot of
  * `World.changeTick`, captured by the scheduler before any param resolves.
- * Change-detection params (`Query` with `changed`/`added` filters,
+ * Component change-detection params (`Query` with `changed`/`added` filters,
  * `RemovedComponents`) use it as their per-system observation threshold; a
  * row or removed entry matches iff its tick is strictly greater than
  * `lastSeenTick`. Systems on their first invocation see `0`, which means "no
  * scoping — observe everything."
+ *
+ * `lastSeenFrame` is the analogous per-system snapshot for the resource
+ * frame counter (driven by `Time.frame`). Resource change-detection params
+ * (`ChangedRes`, `ResAdded`) use it as their per-system observation
+ * threshold; a stamp matches iff it is strictly greater than
+ * `lastSeenFrame`. First-run value is `-1` so any stamp ≥ 0 fires.
  */
 export interface ResolveCtx {
   readonly app: App;
@@ -38,6 +44,7 @@ export interface ResolveCtx {
   readonly stage: Stage;
   readonly systemId: SystemId;
   readonly lastSeenTick: number;
+  readonly lastSeenFrame: number;
   /** Present only during render-stage system invocation. */
   readonly render?: RenderContext;
   /**
@@ -287,5 +294,97 @@ export function Query<
     },
   };
   queryCache.set(key, param as Param<unknown>);
+  return param;
+}
+
+const changedResCache = new WeakMap<object, Param<boolean>>();
+const resAddedCache = new WeakMap<object, Param<boolean>>();
+
+/**
+ * Declares a dependency on the change status of a resource. Resolves to
+ * `true` iff the resource keyed by `ctor` has been inserted, replaced,
+ * removed, or `markResourceChanged`-stamped since the calling system last
+ * ran (or has ever been stamped, for a system's first invocation).
+ *
+ * Declared alongside `Res(T)` / `ResMut(T)` in a system signature when the
+ * system needs both the resource value and a "did it change?" gate inside
+ * its body. For all-or-nothing skipping, pair `resourceChanged(T)` with
+ * `runIf` instead.
+ *
+ * Cross-frame accumulation comes for free: a `runIf`-gated system that
+ * doesn't run in frame F still sees frame F's changes on its next actual
+ * run, because `lastSeenFrame` only advances when the system actually
+ * runs.
+ *
+ * Tokens are cached per constructor — `ChangedRes(Foo) === ChangedRes(Foo)`.
+ *
+ * In-place field writes (`resource.value = 1`) do not auto-bump the
+ * change stamp; call `app.markResourceChanged(Foo)` or
+ * `cmd.markResourceChanged(Foo)` after the mutation to fire `ChangedRes`.
+ *
+ * @example
+ * ```ts
+ * app.addSystem('update', [ResMut(Counter), ChangedRes(Counter)], (counter, didChange) => {
+ *   if (didChange) recomputeExpensiveThing(counter);
+ *   counter.value += 1;
+ * });
+ * ```
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function ChangedRes<T>(ctor: new (...a: any[]) => T): Param<boolean> {
+  const cached = changedResCache.get(ctor);
+  if (cached) return cached;
+  const param: Param<boolean> = {
+    resolve(ctx) {
+      const stamp = ctx.app.getResourceChangeFrame(ctor);
+      if (stamp === undefined) return false;
+      // `>=` not `>`: frame stamps are per-frame (not per-mutation like
+      // component ticks), so a mark inside a system's body lands on the
+      // same frame the system itself observed as `frameAtRunStart`. Using
+      // `>=` preserves the contract that a system observes its own
+      // prior-run writes on next run, matching the pre-run-snapshot model
+      // already used by component change detection.
+      return stamp >= ctx.lastSeenFrame;
+    },
+  };
+  changedResCache.set(ctor, param);
+  return param;
+}
+
+/**
+ * Declares a dependency on the added status of a resource. Resolves to
+ * `true` iff the resource keyed by `ctor` was inserted fresh (against a
+ * key that was not currently registered) since the calling system last
+ * ran. Replacements of an already-registered resource do not fire — only
+ * the first insert against a clean slot, mirroring the component-side
+ * `Added<T>` filter.
+ *
+ * Removing the resource clears its added-frame slot, so a future
+ * re-insertion counts as a fresh add again — useful for systems doing
+ * one-time setup work whenever a resource appears (e.g. priming caches
+ * for an `AudioMixer` that may be teardown/recreated across scenes).
+ *
+ * Tokens are cached per constructor — `ResAdded(Foo) === ResAdded(Foo)`.
+ *
+ * @example
+ * ```ts
+ * app.addSystem('update', [ResAdded(AudioMixer)], (justAppeared) => {
+ *   if (justAppeared) primeMixerVoices();
+ * });
+ * ```
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function ResAdded<T>(ctor: new (...a: any[]) => T): Param<boolean> {
+  const cached = resAddedCache.get(ctor);
+  if (cached) return cached;
+  const param: Param<boolean> = {
+    resolve(ctx) {
+      const stamp = ctx.app.getResourceAddedFrame(ctor);
+      if (stamp === undefined) return false;
+      // `>=`: see the comparison-rule comment on `ChangedRes`.
+      return stamp >= ctx.lastSeenFrame;
+    },
+  };
+  resAddedCache.set(ctor, param);
   return param;
 }

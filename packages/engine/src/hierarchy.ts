@@ -1,4 +1,4 @@
-import type { Entity, World } from '@retro-engine/ecs';
+import type { Entity, Query as QueryHandle, World } from '@retro-engine/ecs';
 import { mat4, type Mat4 } from '@retro-engine/math';
 
 import type { EntityCommands } from './commands';
@@ -167,5 +167,153 @@ export const propagateTransforms = (world: World, logger: Logger): void => {
       row.transform.scale,
     );
     mat4.multiply(parentGlobal.matrix, tmpLocalMatrix, row.global.matrix);
+  }
+};
+
+type ChangedTransformsQuery = QueryHandle<readonly [typeof Transform], { readonly changed: readonly (typeof Transform)[] }>;
+type ChangedParentsQuery = QueryHandle<readonly [typeof Parent], { readonly changed: readonly (typeof Parent)[] }>;
+
+/**
+ * Engine-driven gated propagation. Same composition math as
+ * {@link propagateTransforms}, but only touches subtrees whose `Transform`
+ * or `Parent` actually moved this frame, and only those entities' descendants.
+ *
+ * The dirty set is the union of three orthogonal sources, then expanded via
+ * BFS over `Children` to cover every descendant of every root:
+ *
+ * 1. Entities whose `Transform` is `Changed` (local mutations and spawn-frame
+ *    entities — spawn-tick stamps both `addedTick` and `changedTick`).
+ * 2. Entities whose `Parent` is `Changed` (initial parent assignment via
+ *    archetype transition, plus in-place reparenting which calls
+ *    `world.markChanged(child, Parent)` from the commands flush).
+ * 3. Entities whose `Parent` was just removed — they shift from
+ *    `parent_global × local` to `local` and their global is stale even
+ *    though their `Transform.changedTick` did not move.
+ *
+ * Every entity whose `GlobalTransform` is recomputed is reported via
+ * `world.markChanged(entity, GlobalTransform)` so downstream consumers can
+ * filter on `{ changed: [GlobalTransform] }` (canonical use: a renderer
+ * uploading only dirty world matrices to the GPU).
+ *
+ * On a frame with no dirty roots, returns immediately without scanning rows.
+ *
+ * @internal Engine-private; registered by `CorePlugin` in `'postUpdate'`.
+ */
+export const propagateTransformsGated = (
+  world: World,
+  logger: Logger,
+  changedTransforms: ChangedTransformsQuery,
+  changedParents: ChangedParentsQuery,
+  removedParents: Iterable<Entity>,
+): void => {
+  const dirty = new Set<Entity>();
+
+  for (const [entity] of changedTransforms.entries()) dirty.add(entity);
+  for (const [entity] of changedParents.entries()) dirty.add(entity);
+  for (const entity of removedParents) {
+    if (world.hasEntity(entity)) dirty.add(entity);
+  }
+
+  if (dirty.size === 0) return;
+
+  // BFS-expand the dirty set to include every descendant via Children lists.
+  // Conservative — non-Transform intermediates are visited so their Transform
+  // descendants are reached; the compose loop filters by Transform presence.
+  const stack = [...dirty];
+  while (stack.length > 0) {
+    const e = stack.pop()!;
+    const children = world.getComponent(e, Children);
+    if (!children) continue;
+    for (const c of children.entities) {
+      if (!world.hasEntity(c)) continue;
+      if (dirty.has(c)) continue;
+      dirty.add(c);
+      stack.push(c);
+    }
+  }
+
+  const depthByEntity = new Map<Entity, number>();
+  const warnedDeadParent = new Set<Entity>();
+  const warnedCycle = new Set<Entity>();
+
+  const computeDepth = (entity: Entity, visiting: Set<Entity>): number => {
+    const cached = depthByEntity.get(entity);
+    if (cached !== undefined) return cached;
+    if (visiting.has(entity)) {
+      if (!warnedCycle.has(entity)) {
+        logger.devWarn(
+          `transform: cycle detected in Parent chain at entity ${entity} — treating it as a root`,
+        );
+        warnedCycle.add(entity);
+      }
+      depthByEntity.set(entity, 0);
+      return 0;
+    }
+    const parent = world.getComponent(entity, Parent);
+    if (!parent) {
+      depthByEntity.set(entity, 0);
+      return 0;
+    }
+    const parentAlive = world.hasEntity(parent.entity);
+    const parentHasTransform =
+      parentAlive && world.getComponent(parent.entity, Transform) !== undefined;
+    const parentHasGlobal =
+      parentAlive && world.getComponent(parent.entity, GlobalTransform) !== undefined;
+    if (!parentAlive || !parentHasTransform || !parentHasGlobal) {
+      if (!warnedDeadParent.has(entity)) {
+        logger.devWarn(
+          `transform: entity ${entity} has Parent ${parent.entity}, but the parent is not a live Transform entity — treating ${entity} as a root`,
+        );
+        warnedDeadParent.add(entity);
+      }
+      depthByEntity.set(entity, 0);
+      return 0;
+    }
+    visiting.add(entity);
+    const parentDepth = computeDepth(parent.entity, visiting);
+    visiting.delete(entity);
+    const depth = parentDepth + 1;
+    depthByEntity.set(entity, depth);
+    return depth;
+  };
+
+  const rows: PropagateRow[] = [];
+  const visiting = new Set<Entity>();
+  for (const entity of dirty) {
+    const transform = world.getComponent(entity, Transform);
+    if (!transform) continue;
+    const global = world.getComponent(entity, GlobalTransform);
+    if (!global) continue;
+    visiting.clear();
+    const depth = computeDepth(entity, visiting);
+    const parent = world.getComponent(entity, Parent);
+    rows.push({ entity, transform, global, parent, depth });
+  }
+  if (rows.length === 0) return;
+  rows.sort((a, b) => a.depth - b.depth);
+
+  for (const row of rows) {
+    if (row.depth === 0) {
+      composeTransformInto(
+        row.global.matrix,
+        row.transform.translation,
+        row.transform.rotation,
+        row.transform.scale,
+      );
+    } else {
+      // depth > 0 ⇒ Parent exists and its GlobalTransform was validated by computeDepth.
+      // If the parent is in the dirty set its global was already composed earlier
+      // in this pass (depth-ascending sort); otherwise we read its prior value,
+      // which is up-to-date because nothing in the parent's chain was dirty.
+      const parentGlobal = world.getComponent(row.parent!.entity, GlobalTransform)!;
+      composeTransformInto(
+        tmpLocalMatrix,
+        row.transform.translation,
+        row.transform.rotation,
+        row.transform.scale,
+      );
+      mat4.multiply(parentGlobal.matrix, tmpLocalMatrix, row.global.matrix);
+    }
+    world.markChanged(row.entity, GlobalTransform);
   }
 };

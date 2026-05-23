@@ -13,7 +13,9 @@ import type {
 import {
   anyWithComponent,
   App,
+  Commands,
   inState,
+  type Logger,
   NextState,
   resourceChanged,
   resourceExists,
@@ -244,7 +246,7 @@ describe('resourceChanged', () => {
     expect(fired).toBe(1);
   });
 
-  it('does NOT fire on in-place mutations (documented v1 limitation)', () => {
+  it('does NOT fire on in-place mutations without an explicit markResourceChanged', () => {
     const app = new App({ renderer: makeHeadlessRenderer() });
     class Counter {
       value = 0;
@@ -263,13 +265,114 @@ describe('resourceChanged', () => {
       },
       { runIf: resourceChanged(Counter) },
     );
-    // In-place mutation — not detected.
+    // In-place mutation — not detected without a follow-up
+    // markResourceChanged (the explicit-mark discipline).
     app.addSystem('update', [ResMut(Counter)], (c) => {
       c.value += 1;
     });
     app.advanceFrame(32);
     app.advanceFrame(48);
     expect(fired).toBe(0);
+  });
+
+  it('app.markResourceChanged fires resourceChanged on the same frame', () => {
+    const app = new App({ renderer: makeHeadlessRenderer() });
+    class Counter {
+      value = 0;
+    }
+    app.insertResource(new Counter());
+    app.advanceFrame(0);
+    app.advanceFrame(16);
+
+    let fired = 0;
+    app.addSystem(
+      'last',
+      [],
+      () => {
+        fired += 1;
+      },
+      { runIf: resourceChanged(Counter) },
+    );
+
+    let markedOnce = false;
+    app.addSystem('first', [ResMut(Counter)], (c) => {
+      if (markedOnce) return;
+      c.value += 1;
+      app.markResourceChanged(Counter);
+      markedOnce = true;
+    });
+
+    app.advanceFrame(32);
+    expect(fired).toBe(1);
+    // No further mark → condition stops firing.
+    app.advanceFrame(48);
+    expect(fired).toBe(1);
+  });
+
+  it('cmd.markResourceChanged fires resourceChanged for downstream systems in the same frame', () => {
+    const app = new App({ renderer: makeHeadlessRenderer() });
+    class Counter {
+      value = 0;
+    }
+    app.insertResource(new Counter());
+    app.advanceFrame(0);
+    app.advanceFrame(16);
+
+    let fired = 0;
+    app.addSystem(
+      'last',
+      [],
+      () => {
+        fired += 1;
+      },
+      { runIf: resourceChanged(Counter) },
+    );
+
+    let markedOnce = false;
+    app.addSystem('update', [Commands, ResMut(Counter)], (cmd, c) => {
+      if (markedOnce) return;
+      c.value += 1;
+      cmd.markResourceChanged(Counter);
+      markedOnce = true;
+    });
+
+    app.advanceFrame(32);
+    expect(fired).toBe(1);
+    app.advanceFrame(48);
+    expect(fired).toBe(1);
+  });
+
+  it('app.markResourceChanged devWarns and is a no-op when the resource is not registered', () => {
+    const devWarns: string[] = [];
+    const logger: Logger = {
+      error: () => undefined,
+      warn: () => undefined,
+      info: () => undefined,
+      debug: () => undefined,
+      devWarn: (m) => {
+        devWarns.push(m);
+      },
+      child: () => logger,
+    };
+    const app = new App({ renderer: makeHeadlessRenderer(), logger });
+    class Missing {}
+    app.markResourceChanged(Missing);
+    expect(devWarns.some((m) => m.includes('Missing'))).toBe(true);
+    expect(app.getResourceChangeFrame(Missing)).toBeUndefined();
+    expect(app.getResourceAddedFrame(Missing)).toBeUndefined();
+  });
+
+  it('app.markResourceChanged does not bump the added-frame stamp', () => {
+    const app = new App({ renderer: makeHeadlessRenderer() });
+    class Foo {}
+    app.insertResource(new Foo());
+    app.advanceFrame(0);
+    app.advanceFrame(16);
+    const addedBefore = app.getResourceAddedFrame(Foo);
+    app.markResourceChanged(Foo);
+    expect(app.getResourceAddedFrame(Foo)).toBe(addedBefore);
+    // Sanity: the change-frame moved.
+    expect(app.getResourceChangeFrame(Foo)).not.toBe(addedBefore);
   });
 });
 

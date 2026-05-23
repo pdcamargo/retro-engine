@@ -185,6 +185,7 @@ export function invokeObserver(
       stage: triggeringStage,
       systemId: triggeringSystemId as ResolveCtx['systemId'],
       lastSeenTick: 0,
+      lastSeenFrame: -1,
       triggerEvent: event,
       ...(target !== undefined ? { triggerEntity: target } : {}),
     };

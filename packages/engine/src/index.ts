@@ -50,7 +50,7 @@ export type { Plugin, PluginFn, PluginObject, PluginsState } from './plugin';
 export type { PluginGroup } from './plugin-group';
 export { PluginGroupBuilder } from './plugin-group';
 export type { Param, ParamValues, ResolveCtx, SystemId } from './system-param';
-export { Query, RenderCtx, Res, ResMut, RunCondition } from './system-param';
+export { ChangedRes, Query, RenderCtx, Res, ResAdded, ResMut, RunCondition } from './system-param';
 export { RemovedComponents } from './change-detection';
 export { anyWithComponent, inState, resourceChanged, resourceExists } from './run-conditions';
 export type { NextStateInstance, StateInstance } from './state';
@@ -201,8 +201,10 @@ export class App {
   };
   private readonly resources = new Map<object, object>();
   private readonly resourceChangeFrames = new Map<object, number>();
+  private readonly resourceAddedFrames = new Map<object, number>();
   private readonly commandsBuffers = new Map<SystemId, CommandOp[]>();
   private readonly lastSeenTickMap = new Map<SystemId, number>();
+  private readonly lastSeenFrameMap = new Map<SystemId, number>();
   private readonly stateRegistry = new StateRegistry();
   /** @internal Frame-buffered message channels. Drained at the end of `advanceFrame`. */
   readonly messageRegistry: MessageRegistry = new MessageRegistry();
@@ -458,6 +460,36 @@ export class App {
   }
 
   /**
+   * Read the pre-run frame snapshot previously recorded for system `id`,
+   * or `-1` if the system has not run yet (so any frame-stamped change is
+   * strictly greater and visible on the first invocation). Called by the
+   * scheduler before resolving params to seed `ResolveCtx.lastSeenFrame`.
+   *
+   * The frame counter is per-frame (driven by {@link Time.frame}) and
+   * distinct from `lastSeenTick`, which is per-mutation. The two coexist:
+   * components use the tick, resources use the frame.
+   *
+   * @internal
+   */
+  lastSeenFrameOf(id: SystemId): number {
+    return this.lastSeenFrameMap.get(id) ?? -1;
+  }
+
+  /**
+   * Store the pre-run frame snapshot for system `id`. Called by the
+   * scheduler after a system's body returns and its command buffer
+   * flushes. Mirrors {@link recordSystemLastSeenTick} for the resource
+   * frame counter — pre-run snapshot semantics so a system that *causes*
+   * a resource change can re-observe it on its own next invocation via
+   * `ChangedRes(ctor)`.
+   *
+   * @internal
+   */
+  recordSystemLastSeenFrame(id: SystemId, frame: number): void {
+    this.lastSeenFrameMap.set(id, frame);
+  }
+
+  /**
    * Drain every pending command buffer, in system-id registration order.
    * Intended for orchestration code, tests, and plugin lifecycle hooks that
    * need to materialise queued mutations at a known point outside the
@@ -604,16 +636,24 @@ export class App {
    * through the `Res(ctor)` / `ResMut(ctor)` params. Inserting a second value
    * of the same class replaces the prior instance; a `devWarn` is emitted on
    * replace, silent in production builds.
+   *
+   * Stamps the resource's change-frame on every call so `resourceChanged`
+   * fires for both fresh inserts and replacements. The added-frame slot
+   * (read by `ResAdded`) is stamped only on fresh inserts — replacing an
+   * already-registered resource bumps "changed" but not "added."
    */
   insertResource<T extends object>(value: T): this {
     const key = value.constructor;
-    if (this.resources.has(key)) {
+    const wasPresent = this.resources.has(key);
+    if (wasPresent) {
       this.logger.devWarn(
         `App.insertResource: replacing existing resource of type ${(key as { name?: string }).name || '<anonymous>'}`,
       );
     }
     this.resources.set(key, value);
-    this.resourceChangeFrames.set(key, this.currentFrameNumber());
+    const frame = this.currentFrameNumber();
+    this.resourceChangeFrames.set(key, frame);
+    if (!wasPresent) this.resourceAddedFrames.set(key, frame);
     return this;
   }
 
@@ -621,22 +661,62 @@ export class App {
    * Remove a resource by constructor key. Returns the removed instance, or
    * `undefined` if no resource of that class was registered. Idempotent — a
    * second call with the same key returns `undefined` without throwing.
+   *
+   * Clears the resource's added-frame slot so a subsequent re-insertion
+   * counts as a fresh "added" again from the next reader's perspective.
    */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   removeResource<T>(ctor: new (...a: any[]) => T): T | undefined {
     const value = this.resources.get(ctor) as T | undefined;
     if (this.resources.delete(ctor)) {
       this.resourceChangeFrames.set(ctor, this.currentFrameNumber());
+      this.resourceAddedFrames.delete(ctor);
     }
     return value;
   }
 
   /**
+   * Record that a resource has been mutated in place. Bumps the resource's
+   * change-frame so `resourceChanged(ctor)` (run-condition) and
+   * `ChangedRes(ctor)` (param) observe the mutation on the current frame.
+   *
+   * Symmetric writer-side counterpart to `World.markChanged(entity, type)`
+   * for components. The added-frame slot is not touched — mark-changed is
+   * for in-place mutations, not insertions.
+   *
+   * Emits a `devWarn` and is otherwise a no-op when no resource of the
+   * given class is currently registered; rejecting the call would force
+   * callers to guard every mark behind a `resourceExists` check.
+   *
+   * @example
+   * ```ts
+   * app.addSystem('update', [ResMut(Counter)], (c) => {
+   *   c.value += 1;
+   *   app.markResourceChanged(Counter);
+   * });
+   * ```
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  markResourceChanged<T>(ctor: new (...a: any[]) => T): this {
+    if (!this.resources.has(ctor)) {
+      this.logger.devWarn(
+        `App.markResourceChanged: no resource of type ${(ctor as { name?: string }).name || '<anonymous>'} is registered — call has no effect`,
+      );
+      return this;
+    }
+    this.resourceChangeFrames.set(ctor, this.currentFrameNumber());
+    return this;
+  }
+
+  /**
    * Frame number on which the resource keyed by `ctor` was most recently
-   * inserted, replaced, or removed. Returns `undefined` if no insertion or
-   * removal has ever been recorded for this resource key. Used by the
-   * `resourceChanged` run-condition helper; in-place mutations are not
-   * tracked in v1 — see ADR-0008 §9 and `docs/roadmap/change-detection.md`.
+   * inserted, replaced, removed, or {@link markResourceChanged}-stamped.
+   * Returns `undefined` if no such operation has ever been recorded for
+   * this key. Used by the `resourceChanged` run-condition and the
+   * `ChangedRes` param.
+   *
+   * In-place field writes (`resource.value = 1`) do not auto-bump the
+   * stamp — call `markResourceChanged` to mark them visible.
    *
    * @internal
    */
@@ -645,7 +725,32 @@ export class App {
     return this.resourceChangeFrames.get(ctor);
   }
 
-  private currentFrameNumber(): number {
+  /**
+   * Frame number on which the resource keyed by `ctor` was most recently
+   * **inserted fresh** (i.e. an `insertResource` call against a key that
+   * was not currently registered). Re-inserts that replace an existing
+   * resource do not bump this stamp. Removing the resource clears the
+   * slot, so a future re-insert counts as a fresh add again.
+   *
+   * Returns `undefined` if the resource has never been inserted, or has
+   * been removed and not yet re-inserted. Used by the `ResAdded` param.
+   *
+   * @internal
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  getResourceAddedFrame<T>(ctor: new (...a: any[]) => T): number | undefined {
+    return this.resourceAddedFrames.get(ctor);
+  }
+
+  /**
+   * Current frame counter — `Time.frame` if the {@link Time} resource is
+   * registered, otherwise `0`. The engine stamps this onto each resource's
+   * change-frame slot on insert/replace/remove/mark, and the scheduler
+   * snapshots it pre-system to seed `ResolveCtx.lastSeenFrame`.
+   *
+   * @internal
+   */
+  currentFrameNumber(): number {
     return (this.resources.get(Time) as Time | undefined)?.frame ?? 0;
   }
 
@@ -869,13 +974,16 @@ export class App {
     for (const sys of this.stages.render.ordered()) {
       if (sys.runIf && !sys.runIf.test(this)) continue;
       const lastSeenTick = this.lastSeenTickOf(sys.id);
+      const lastSeenFrame = this.lastSeenFrameOf(sys.id);
       const tickAtRunStart = this.world.changeTick;
+      const frameAtRunStart = this.currentFrameNumber();
       const ctx: ResolveCtx = {
         app: this,
         world: this.world,
         stage: 'render',
         systemId: sys.id,
         lastSeenTick,
+        lastSeenFrame,
         render,
       };
       const values = sys.params.map((p) => p.resolve(ctx));
@@ -887,6 +995,7 @@ export class App {
       }
       this.flushSystemCommands(sys.id, 'render');
       this.recordSystemLastSeenTick(sys.id, tickAtRunStart);
+      this.recordSystemLastSeenFrame(sys.id, frameAtRunStart);
     }
     pass.end();
     this.renderer.submit([encoder.finish()]);

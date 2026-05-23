@@ -308,7 +308,9 @@ export const initStateImpl = <S extends object>(
 const invokeStateSystem = (rec: StateSystemRecord, app: App): void => {
   if (rec.runIf && !rec.runIf.test(app)) return;
   const lastSeenTick = app.lastSeenTickOf(rec.id);
+  const lastSeenFrame = app.lastSeenFrameOf(rec.id);
   const tickAtRunStart = app.world.changeTick;
+  const frameAtRunStart = app.currentFrameNumber();
   const ctx: ResolveCtx = {
     app,
     world: app.world,
@@ -319,6 +321,7 @@ const invokeStateSystem = (rec: StateSystemRecord, app: App): void => {
     stage: 'stateTransition' as Stage,
     systemId: rec.id,
     lastSeenTick,
+    lastSeenFrame,
   };
   const values = rec.params.map((p) => p.resolve(ctx));
   try {
@@ -329,6 +332,7 @@ const invokeStateSystem = (rec: StateSystemRecord, app: App): void => {
   }
   app.flushSystemCommands(rec.id);
   app.recordSystemLastSeenTick(rec.id, tickAtRunStart);
+  app.recordSystemLastSeenFrame(rec.id, frameAtRunStart);
 };
 
 const runRecords = (recs: readonly StateSystemRecord[], app: App): void => {

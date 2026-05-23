@@ -51,16 +51,18 @@ export const resourceExists = <T>(ctor: new (...args: any[]) => T): RunCondition
 
 /**
  * Run only on the **frame** during which a resource of type `ctor` was
- * inserted, replaced, or removed.
+ * inserted, replaced, removed, or marked changed via
+ * {@link App.markResourceChanged} / `cmd.markResourceChanged`.
  *
- * Coarse v1 semantics — see ADR-0008 §9. **In-place mutations** (e.g. a
- * system writing through `ResMut(Foo).value = 1`) are **not** detected here;
- * the resource instance is unchanged from the App's perspective. Only the
- * insert / replace / remove operations bump the change frame.
+ * **In-place mutations** (e.g. a system writing through `ResMut(Foo).value
+ * = 1`) without a follow-up `markResourceChanged` are **not** detected
+ * here — the explicit-mark discipline that applies to components also
+ * applies to resources. Call `app.markResourceChanged(Foo)` or
+ * `cmd.markResourceChanged(Foo)` after the mutation to fire this gate.
  *
- * Same condition produces the same answer for every system in the frame —
- * there is no per-system change tick. Per-component change detection lands
- * in M3 with `Changed<T>` (`docs/roadmap/change-detection.md`).
+ * Same condition produces the same answer for every system in the frame.
+ * For a per-system "since I last ran" check inside a system body, declare
+ * the `ChangedRes(ctor)` param instead.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const resourceChanged = <T>(ctor: new (...args: any[]) => T): RunCondition =>

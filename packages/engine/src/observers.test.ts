@@ -83,6 +83,7 @@ describe('Trigger param identity', () => {
         stage: 'update',
         systemId: 1 as never,
         lastSeenTick: 0,
+        lastSeenFrame: -1,
       }),
     ).toThrow(/observer context/);
   });

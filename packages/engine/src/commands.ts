@@ -22,6 +22,7 @@ export type CommandOp =
   | { kind: 'remove'; entity: Entity; type: ComponentType }
   | { kind: 'insertResource'; value: object }
   | { kind: 'removeResource'; type: ComponentType }
+  | { kind: 'markResourceChanged'; type: ComponentType }
   | { kind: 'appendChild'; parent: Entity; child: Entity }
   | { kind: 'detachChild'; parent: Entity; child: Entity }
   | { kind: 'triggerGlobal'; event: object; depth: number }
@@ -253,6 +254,11 @@ export const applyCommandOp = (op: CommandOp, app: App, triggeringSystemId: Syst
       app.removeResource(op.type as new (...a: any[]) => object);
       return;
     }
+    case 'markResourceChanged': {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      app.markResourceChanged(op.type as new (...a: any[]) => object);
+      return;
+    }
     case 'appendChild': {
       if (!app.world.hasEntity(op.parent)) {
         app.logger.devWarn(
@@ -275,9 +281,13 @@ export const applyCommandOp = (op: CommandOp, app: App, triggeringSystemId: Syst
           if (idx >= 0) oldChildren.entities.splice(idx, 1);
         }
       }
-      // Wire child.Parent = parent.
+      // Wire child.Parent = parent. The archetype-transition path (else
+      // branch) bumps Parent.changedTick automatically; the in-place
+      // mutation path needs an explicit markChanged so Changed<Parent>
+      // filters and transform propagation's dirty-set see reparenting.
       if (existingParent) {
         existingParent.entity = op.parent;
+        app.world.markChanged(op.child, Parent);
       } else {
         applyInsertWithHooks(app, op.child, [new Parent(op.parent)], triggeringSystemId);
       }
@@ -467,6 +477,18 @@ export interface CommandsHandle {
   /** Enqueue removal of a resource by class. Silent at flush if the resource is absent. */
   removeResource(type: ComponentType): void;
   /**
+   * Enqueue a `markResourceChanged` against the resource keyed by `type`.
+   * At flush, the resource's change-frame is stamped with the current
+   * frame so `resourceChanged(type)` (run-condition) and `ChangedRes(type)`
+   * (param) observe the change. Use this after mutating a resource in
+   * place via `ResMut(T)` so downstream readers can react.
+   *
+   * If the resource is not registered at flush time, a `devWarn` fires
+   * and the op is a no-op (rejecting the call would force callers to
+   * guard every mark behind a `resourceExists` check).
+   */
+  markResourceChanged(type: ComponentType): void;
+  /**
    * Enqueue a global trigger of `event`. Every global observer registered
    * against the event's class fires synchronously during the flush, in
    * registration order. To target a specific entity, use
@@ -606,6 +628,10 @@ class CommandsHandleImpl implements CommandsHandle {
 
   removeResource(type: ComponentType): void {
     this.enqueue({ kind: 'removeResource', type });
+  }
+
+  markResourceChanged(type: ComponentType): void {
+    this.enqueue({ kind: 'markResourceChanged', type });
   }
 
   trigger<E extends object>(event: E): void {

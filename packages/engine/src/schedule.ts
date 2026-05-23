@@ -170,13 +170,16 @@ export const runStage = (stageSystems: StageSystems, app: App, stage: Stage): vo
   for (const sys of stageSystems.ordered()) {
     if (sys.runIf && !sys.runIf.test(app)) continue;
     const lastSeenTick = app.lastSeenTickOf(sys.id);
+    const lastSeenFrame = app.lastSeenFrameOf(sys.id);
     const tickAtRunStart = app.world.changeTick;
+    const frameAtRunStart = app.currentFrameNumber();
     const ctx: ResolveCtx = {
       app,
       world: app.world,
       stage,
       systemId: sys.id,
       lastSeenTick,
+      lastSeenFrame,
     };
     const values = sys.params.map((p) => p.resolve(ctx));
     try {
@@ -187,5 +190,6 @@ export const runStage = (stageSystems: StageSystems, app: App, stage: Stage): vo
     }
     app.flushSystemCommands(sys.id, stage);
     app.recordSystemLastSeenTick(sys.id, tickAtRunStart);
+    app.recordSystemLastSeenFrame(sys.id, frameAtRunStart);
   }
 };

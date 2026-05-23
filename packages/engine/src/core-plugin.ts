@@ -1,8 +1,10 @@
-import { Children, Parent, propagateTransforms } from './hierarchy';
+import { RemovedComponents } from './change-detection';
+import { Children, Parent, propagateTransformsGated } from './hierarchy';
 import type { App } from './index';
 import type { PluginObject } from './plugin';
-import { ResMut } from './system-param';
+import { Query, ResMut } from './system-param';
 import { Time } from './time';
+import { Transform } from './transform';
 
 /**
  * Engine-internal plugin that wires every framework-essential system the
@@ -42,9 +44,23 @@ export class CorePlugin implements PluginObject {
     app.addSystem('first', [ResMut(Time)], (time) => {
       time.tick(app.currentFrameTimestamp());
     });
-    app.addSystem('postUpdate', [], () => {
-      propagateTransforms(app.world, app.logger);
-    });
+    app.addSystem(
+      'postUpdate',
+      [
+        Query([Transform], { changed: [Transform] }),
+        Query([Parent], { changed: [Parent] }),
+        RemovedComponents(Parent),
+      ],
+      (changedTransforms, changedParents, removedParents) => {
+        propagateTransformsGated(
+          app.world,
+          app.logger,
+          changedTransforms,
+          changedParents,
+          removedParents,
+        );
+      },
+    );
     app.registerComponentHook(Children, 'onRemove', (ctx) => {
       for (const child of ctx.value.entities) {
         if (ctx.world.hasEntity(child)) ctx.commands.despawn(child);

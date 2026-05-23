@@ -781,6 +781,7 @@ describe('App.flushCommands', () => {
       stage: 'update',
       systemId: id,
       lastSeenTick: 0,
+      lastSeenFrame: -1,
     }) as CommandsHandle;
     const e = handle.spawn(new Pos(3, 4)).id;
     expect(app.world.hasEntity(e)).toBe(false);
@@ -806,6 +807,7 @@ describe('App.flushCommands', () => {
       stage: 'update',
       systemId: id1,
       lastSeenTick: 0,
+      lastSeenFrame: -1,
     }) as CommandsHandle;
     const h2 = Commands.resolve({
       app,
@@ -813,6 +815,7 @@ describe('App.flushCommands', () => {
       stage: 'update',
       systemId: id2,
       lastSeenTick: 0,
+      lastSeenFrame: -1,
     }) as CommandsHandle;
     // Enqueue spawns from both handles; the spawn ids are reserved at enqueue
     // (so e1 < e2 by mint order), but the order in which the ROWS appear in
