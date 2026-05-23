@@ -38,13 +38,12 @@ Each link below is a sketch. Some are tightly scoped, some are speculative. None
 - `change-detection.md` — `Changed<T>` / `Added<T>` query filters, generation counters. Designed alongside M2; impl deferred until a real consumer.
 - `ecs-storage.md` — perf + ergonomics beyond the M2 archetype baseline (sparse-set sidecar, fragmentation under thousands of archetypes, benchmarks).
 - `editor-sdk.md` — extension surface for the studio (custom windows, inspectors, asset importers).
-- `first-render-path.md` — M1, completed. Kept as historical context until it's deleted on user confirmation.
 - `input-system.md` — platform-agnostic input HAL, action bindings, gamepad, touch.
 - `observers-and-events.md` — observer + hook system, `Message<T>` vs `Event<T>` naming, `Trigger<E>` param.
 - `playground-app.md` — beyond the M1 scaffolding: example scenes, production build target.
 - `reflection-and-serialization.md` — decorator-based component reflection, `TypeRegistry` equivalent, scene format. Foundation for scenes/prefabs.
 - `release-automation.md` — provenance, code signing, auto-update. Gated on the first 0.1.0 publish.
-- `renderer-graph.md` — Bevy-style render graph. Gated on having ≥2 render passes.
+- `renderer.md` — consolidated long-horizon renderer roadmap (foundations → sprites/materials → lights/glTF → post → GPU-driven → WebGL2 → tooling). Supersedes the earlier `first-render-path.md`, `renderer-graph.md`, and `webgl2-backend.md` sketches.
 - `scenes-and-prefabs.md` — our scene + prefab system, BSN-inspired but designed in-house.
 - `studio-imgui.md` — jsimgui integration with the engine's WebGPU canvas.
 - `studio-mcp.md` — MCP server exposing studio internals to AI agents.
@@ -52,7 +51,6 @@ Each link below is a sketch. Some are tightly scoped, some are speculative. None
 - `transform-and-hierarchy.md` — extensions beyond the M2 base (Z-ordering, hierarchy ergonomics, optimization passes).
 - `ui-system.md` — in-game UI separate from studio ImGui; headless widgets + theming.
 - `web-build-target.md` — bundle a project into a deployable static web build.
-- `webgl2-backend.md` — second renderer backend conforming to the HAL.
 
 ## Update rule
 
