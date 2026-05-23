@@ -1,11 +1,18 @@
 import type {
+  BindGroup,
+  BindGroupLayout,
+  Buffer,
   CommandBuffer,
   CommandEncoder,
+  PipelineLayout,
   Renderer,
   RendererCapabilities,
   RenderPipeline,
+  ResolvedRenderTarget,
+  Sampler,
   ShaderModule,
   Surface,
+  Texture,
   TextureFormat,
 } from '@retro-engine/renderer-core';
 
@@ -46,13 +53,40 @@ export const createWebGL2Renderer = (_canvas: HTMLCanvasElement): Renderer => {
     createShaderModule(): ShaderModule {
       return fail();
     },
+    createBuffer(): Buffer {
+      return fail();
+    },
+    createTexture(): Texture {
+      return fail();
+    },
+    createSampler(): Sampler {
+      return fail();
+    },
+    writeBuffer(): void {
+      fail();
+    },
+    writeTexture(): void {
+      fail();
+    },
+    createBindGroupLayout(): BindGroupLayout {
+      return fail();
+    },
+    createPipelineLayout(): PipelineLayout {
+      return fail();
+    },
+    createBindGroup(): BindGroup {
+      return fail();
+    },
     createRenderPipeline(): RenderPipeline {
       return fail();
     },
     createCommandEncoder(): CommandEncoder {
       return fail();
     },
-    submit(_buffers: CommandBuffer[]): void {
+    resolveRenderTarget(): ResolvedRenderTarget {
+      return fail();
+    },
+    submit(_buffers: readonly CommandBuffer[]): void {
       fail();
     },
   };

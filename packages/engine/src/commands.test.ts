@@ -1,17 +1,5 @@
 import { describe, expect, it } from 'bun:test';
 
-import type {
-  CommandBuffer,
-  CommandEncoder,
-  Renderer,
-  RendererCapabilities,
-  RenderPassEncoder,
-  RenderPipeline,
-  ShaderModule,
-  Surface,
-  TextureFormat,
-  TextureView,
-} from '@retro-engine/renderer-core';
 import type { Entity } from '@retro-engine/ecs';
 
 import {
@@ -25,70 +13,7 @@ import {
   RunCondition,
   Time,
 } from './index';
-
-const fail = (msg: string): never => {
-  throw new Error(`stub renderer: ${msg} not implemented`);
-};
-
-const baseCapabilities: RendererCapabilities = {
-  computeShaders: false,
-  storageTextures: false,
-  timestampQueries: false,
-  indirectDraw: false,
-  bgra8UnormStorage: false,
-};
-
-const makeHeadlessRenderer = (): Renderer => ({
-  capabilities: baseCapabilities,
-  init: () => Promise.resolve(),
-  destroy: () => undefined,
-  getPreferredSurfaceFormat: (): TextureFormat => 'rgba8unorm',
-  createSurface: (): Surface => fail('createSurface'),
-  createShaderModule: (): ShaderModule => fail('createShaderModule'),
-  createRenderPipeline: (): RenderPipeline => fail('createRenderPipeline'),
-  createCommandEncoder: (): CommandEncoder => fail('createCommandEncoder'),
-  submit: (): void => fail('submit'),
-});
-
-const makeRenderingRenderer = (): Renderer => {
-  const view: TextureView = { destroy: () => undefined };
-  const pass: RenderPassEncoder = {
-    setPipeline: () => undefined,
-    setBindGroup: () => undefined,
-    draw: () => undefined,
-    end: () => undefined,
-  };
-  const commandBuffer: CommandBuffer = { destroy: () => undefined };
-  const encoder: CommandEncoder = {
-    beginRenderPass: () => pass,
-    finish: () => commandBuffer,
-  };
-  const surface: Surface = {
-    configure: () => undefined,
-    resize: () => undefined,
-    getCurrentTextureView: () => view,
-    destroy: () => undefined,
-  };
-  return {
-    capabilities: baseCapabilities,
-    init: () => Promise.resolve(),
-    destroy: () => undefined,
-    getPreferredSurfaceFormat: (): TextureFormat => 'rgba8unorm',
-    createSurface: () => surface,
-    createShaderModule: (): ShaderModule => fail('createShaderModule'),
-    createRenderPipeline: (): RenderPipeline => fail('createRenderPipeline'),
-    createCommandEncoder: () => encoder,
-    submit: () => undefined,
-  };
-};
-
-const makeStubCanvas = (): HTMLCanvasElement =>
-  ({
-    clientWidth: 640,
-    clientHeight: 480,
-    width: 0,
-    height: 0,
-  }) as unknown as HTMLCanvasElement;
+import { makeHeadlessRenderer, makeRenderingRenderer, makeStubCanvas } from './test-utils';
 
 interface SpyLogger {
   readonly logger: Logger;

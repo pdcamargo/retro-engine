@@ -2,42 +2,51 @@
 
 import type {
   BindGroup,
-  ColorAttachment,
+  BindGroupDescriptor,
+  BindGroupLayout,
+  BindGroupLayoutDescriptor,
+  Buffer,
+  BufferDescriptor,
   CommandBuffer,
   CommandEncoder,
-  RenderPassDescriptor,
-  RenderPassEncoder,
+  Extent3D,
+  ImageCopyTexture,
+  ImageDataLayout,
+  PipelineLayout,
+  PipelineLayoutDescriptor,
   RenderPipeline,
   RenderPipelineDescriptor,
+  RenderTarget,
   Renderer,
   RendererCapabilities,
+  ResolvedRenderTarget,
+  Sampler,
+  SamplerDescriptor,
   ShaderModule,
   ShaderModuleDescriptor,
   Surface,
-  SurfaceConfiguration,
+  Texture,
+  TextureDescriptor,
   TextureFormat,
-  TextureView,
 } from '@retro-engine/renderer-core';
 
-// Internal symbol keys used to hide concrete GPU* handles behind the HAL types.
-// `GPU*` types must never leak past this package (CLAUDE.md §10).
-const GPU_MODULE = Symbol('webgpu.shaderModule');
-const GPU_PIPELINE = Symbol('webgpu.renderPipeline');
-const GPU_VIEW = Symbol('webgpu.textureView');
-const GPU_COMMAND_BUFFER = Symbol('webgpu.commandBuffer');
-
-interface InternalShaderModule extends ShaderModule {
-  readonly [GPU_MODULE]: GPUShaderModule;
-}
-interface InternalRenderPipeline extends RenderPipeline {
-  readonly [GPU_PIPELINE]: GPURenderPipeline;
-}
-interface InternalTextureView extends TextureView {
-  readonly [GPU_VIEW]: GPUTextureView;
-}
-interface InternalCommandBuffer extends CommandBuffer {
-  readonly [GPU_COMMAND_BUFFER]: GPUCommandBuffer;
-}
+import {
+  createBindGroupImpl,
+  createBindGroupLayoutImpl,
+  createPipelineLayoutImpl,
+} from './binding';
+import { makeCommandEncoder } from './encoder';
+import { createRenderPipelineImpl, createShaderModuleImpl } from './pipeline';
+import { resolveRenderTargetImpl } from './render-target';
+import {
+  createBufferImpl,
+  createSamplerImpl,
+  createTextureImpl,
+  writeBufferImpl,
+  writeTextureImpl,
+} from './resources';
+import { makeSurface } from './surface';
+import { GPU_COMMAND_BUFFER, type InternalCommandBuffer } from './symbols';
 
 /**
  * Create a WebGPU-backed renderer.
@@ -89,157 +98,68 @@ export const createWebGPURenderer = (_canvas: HTMLCanvasElement): Renderer => {
     },
 
     createSurface(targetCanvas: HTMLCanvasElement): Surface {
-      const dev = requireDevice();
-      return makeSurface(dev, targetCanvas);
+      return makeSurface(requireDevice(), targetCanvas);
     },
 
     createShaderModule(descriptor: ShaderModuleDescriptor): ShaderModule {
-      const dev = requireDevice();
-      const moduleDesc: GPUShaderModuleDescriptor = { code: descriptor.code };
-      if (descriptor.label !== undefined) moduleDesc.label = descriptor.label;
-      const module = dev.createShaderModule(moduleDesc);
-      const handle: InternalShaderModule = {
-        [GPU_MODULE]: module,
-        destroy(): void {
-          // GPUShaderModule has no destroy(); rely on GC.
-        },
-      };
-      return handle;
+      return createShaderModuleImpl(requireDevice(), descriptor);
+    },
+
+    createBuffer(descriptor: BufferDescriptor): Buffer {
+      return createBufferImpl(requireDevice(), descriptor);
+    },
+
+    createTexture(descriptor: TextureDescriptor): Texture {
+      return createTextureImpl(requireDevice(), descriptor);
+    },
+
+    createSampler(descriptor?: SamplerDescriptor): Sampler {
+      return createSamplerImpl(requireDevice(), descriptor);
+    },
+
+    writeBuffer(buffer: Buffer, bufferOffset: number, data: BufferSource): void {
+      writeBufferImpl(requireDevice(), buffer, bufferOffset, data);
+    },
+
+    writeTexture(
+      destination: ImageCopyTexture,
+      data: BufferSource,
+      dataLayout: ImageDataLayout,
+      size: Extent3D,
+    ): void {
+      writeTextureImpl(requireDevice(), destination, data, dataLayout, size);
+    },
+
+    createBindGroupLayout(descriptor: BindGroupLayoutDescriptor): BindGroupLayout {
+      return createBindGroupLayoutImpl(requireDevice(), descriptor);
+    },
+
+    createPipelineLayout(descriptor: PipelineLayoutDescriptor): PipelineLayout {
+      return createPipelineLayoutImpl(requireDevice(), descriptor);
+    },
+
+    createBindGroup(descriptor: BindGroupDescriptor): BindGroup {
+      return createBindGroupImpl(requireDevice(), descriptor);
     },
 
     createRenderPipeline(descriptor: RenderPipelineDescriptor): RenderPipeline {
-      const dev = requireDevice();
-      const vertexModule = (descriptor.vertex.module as InternalShaderModule)[GPU_MODULE];
-      const pipelineDesc: GPURenderPipelineDescriptor = {
-        layout: descriptor.layout ?? 'auto',
-        vertex: {
-          module: vertexModule,
-          entryPoint: descriptor.vertex.entryPoint,
-        },
-      };
-      if (descriptor.label !== undefined) pipelineDesc.label = descriptor.label;
-      if (descriptor.fragment) {
-        pipelineDesc.fragment = {
-          module: (descriptor.fragment.module as InternalShaderModule)[GPU_MODULE],
-          entryPoint: descriptor.fragment.entryPoint,
-          targets: descriptor.fragment.targets.map((t) => ({ format: t.format })),
-        };
-      }
-      if (descriptor.primitive?.topology) {
-        pipelineDesc.primitive = { topology: descriptor.primitive.topology };
-      }
-      const pipeline = dev.createRenderPipeline(pipelineDesc);
-      const handle: InternalRenderPipeline = {
-        [GPU_PIPELINE]: pipeline,
-        destroy(): void {
-          // GPURenderPipeline has no destroy(); rely on GC.
-        },
-      };
-      return handle;
+      return createRenderPipelineImpl(requireDevice(), descriptor);
     },
 
     createCommandEncoder(label?: string): CommandEncoder {
       const dev = requireDevice();
       const encoderDesc: GPUCommandEncoderDescriptor = {};
       if (label !== undefined) encoderDesc.label = label;
-      const encoder = dev.createCommandEncoder(encoderDesc);
-      return makeCommandEncoder(encoder);
+      return makeCommandEncoder(dev.createCommandEncoder(encoderDesc));
     },
 
-    submit(buffers: CommandBuffer[]): void {
+    resolveRenderTarget(target: RenderTarget): ResolvedRenderTarget {
+      return resolveRenderTargetImpl(target);
+    },
+
+    submit(buffers: readonly CommandBuffer[]): void {
       const dev = requireDevice();
       dev.queue.submit(buffers.map((b) => (b as InternalCommandBuffer)[GPU_COMMAND_BUFFER]));
-    },
-  };
-};
-
-const makeSurface = (device: GPUDevice, canvas: HTMLCanvasElement): Surface => {
-  const context = canvas.getContext('webgpu');
-  if (!context) throw new Error('Canvas does not support a WebGPU context');
-
-  return {
-    configure(descriptor: SurfaceConfiguration): void {
-      context.configure({
-        device,
-        format: descriptor.format,
-        alphaMode: descriptor.alphaMode ?? 'opaque',
-      });
-    },
-    resize(width: number, height: number): void {
-      if (canvas.width !== width) canvas.width = width;
-      if (canvas.height !== height) canvas.height = height;
-    },
-    getCurrentTextureView(): TextureView {
-      const view = context.getCurrentTexture().createView();
-      const handle: InternalTextureView = {
-        [GPU_VIEW]: view,
-        destroy(): void {
-          // GPUTextureView has no destroy(); rely on GC.
-        },
-      };
-      return handle;
-    },
-    destroy(): void {
-      context.unconfigure();
-    },
-  };
-};
-
-const makeCommandEncoder = (encoder: GPUCommandEncoder): CommandEncoder => {
-  return {
-    beginRenderPass(descriptor: RenderPassDescriptor): RenderPassEncoder {
-      const colorAttachments: GPURenderPassColorAttachment[] = descriptor.colorAttachments.map(
-        toColorAttachment,
-      );
-      const passDesc: GPURenderPassDescriptor = { colorAttachments };
-      if (descriptor.label !== undefined) passDesc.label = descriptor.label;
-      const pass = encoder.beginRenderPass(passDesc);
-      return makeRenderPassEncoder(pass);
-    },
-    finish(): CommandBuffer {
-      const cb = encoder.finish();
-      const handle: InternalCommandBuffer = {
-        [GPU_COMMAND_BUFFER]: cb,
-        destroy(): void {
-          // GPUCommandBuffer has no destroy(); rely on GC.
-        },
-      };
-      return handle;
-    },
-  };
-};
-
-const toColorAttachment = (att: ColorAttachment): GPURenderPassColorAttachment => {
-  const view = (att.view as InternalTextureView)[GPU_VIEW];
-  const out: GPURenderPassColorAttachment = {
-    view,
-    loadOp: att.loadOp,
-    storeOp: att.storeOp,
-  };
-  if (att.clearValue) {
-    out.clearValue = {
-      r: att.clearValue.r,
-      g: att.clearValue.g,
-      b: att.clearValue.b,
-      a: att.clearValue.a,
-    };
-  }
-  return out;
-};
-
-const makeRenderPassEncoder = (pass: GPURenderPassEncoder): RenderPassEncoder => {
-  return {
-    setPipeline(pipeline: RenderPipeline): void {
-      pass.setPipeline((pipeline as InternalRenderPipeline)[GPU_PIPELINE]);
-    },
-    setBindGroup(_index: number, _group: BindGroup): void {
-      throw new Error('setBindGroup not implemented yet — bind groups arrive with sprite rendering');
-    },
-    draw(vertexCount: number, instanceCount?: number): void {
-      pass.draw(vertexCount, instanceCount);
-    },
-    end(): void {
-      pass.end();
     },
   };
 };

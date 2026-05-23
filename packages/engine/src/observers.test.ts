@@ -1,41 +1,10 @@
 import { describe, expect, it } from 'bun:test';
 
-import type {
-  CommandEncoder,
-  Renderer,
-  RendererCapabilities,
-  RenderPipeline,
-  ShaderModule,
-  Surface,
-  TextureFormat,
-} from '@retro-engine/renderer-core';
 import type { Entity } from '@retro-engine/ecs';
 
 import { App, Commands, type Logger, Trigger } from './index';
 
-const fail = (msg: string): never => {
-  throw new Error(`stub renderer: ${msg} not implemented`);
-};
-
-const baseCapabilities: RendererCapabilities = {
-  computeShaders: false,
-  storageTextures: false,
-  timestampQueries: false,
-  indirectDraw: false,
-  bgra8UnormStorage: false,
-};
-
-const makeHeadlessRenderer = (): Renderer => ({
-  capabilities: baseCapabilities,
-  init: () => Promise.resolve(),
-  destroy: () => undefined,
-  getPreferredSurfaceFormat: (): TextureFormat => 'rgba8unorm',
-  createSurface: (): Surface => fail('createSurface'),
-  createShaderModule: (): ShaderModule => fail('createShaderModule'),
-  createRenderPipeline: (): RenderPipeline => fail('createRenderPipeline'),
-  createCommandEncoder: (): CommandEncoder => fail('createCommandEncoder'),
-  submit: (): void => fail('submit'),
-});
+import { makeHeadlessRenderer } from './test-utils';
 
 interface SpyLogger {
   readonly logger: Logger;

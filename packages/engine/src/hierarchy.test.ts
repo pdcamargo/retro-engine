@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'bun:test';
 
-import type { Renderer, RendererCapabilities } from '@retro-engine/renderer-core';
 import type { Entity } from '@retro-engine/ecs';
 import { World } from '@retro-engine/ecs';
 import { quat, vec3 } from '@retro-engine/math';
@@ -16,30 +15,7 @@ import {
   Transform,
 } from './index';
 import { propagateTransforms } from './hierarchy';
-
-const baseCapabilities: RendererCapabilities = {
-  computeShaders: false,
-  storageTextures: false,
-  timestampQueries: false,
-  indirectDraw: false,
-  bgra8UnormStorage: false,
-};
-
-const fail = (msg: string): never => {
-  throw new Error(`stub renderer: ${msg} not implemented`);
-};
-
-const makeHeadlessRenderer = (): Renderer => ({
-  capabilities: baseCapabilities,
-  init: () => Promise.resolve(),
-  destroy: () => undefined,
-  getPreferredSurfaceFormat: () => 'rgba8unorm',
-  createSurface: () => fail('createSurface'),
-  createShaderModule: () => fail('createShaderModule'),
-  createRenderPipeline: () => fail('createRenderPipeline'),
-  createCommandEncoder: () => fail('createCommandEncoder'),
-  submit: () => fail('submit'),
-});
+import { makeHeadlessRenderer } from './test-utils';
 
 interface SpyLogger {
   readonly logger: Logger;

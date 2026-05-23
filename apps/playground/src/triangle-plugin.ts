@@ -6,12 +6,21 @@ import {
   Parent,
   Query,
   RenderCtx,
+  Res,
+  Time,
   Transform,
 } from '@retro-engine/engine';
 import { vec3 } from '@retro-engine/math';
-import type { RenderPipeline } from '@retro-engine/renderer-core';
+import type { BindGroup, Buffer, RenderPipeline } from '@retro-engine/renderer-core';
+import { BufferUsage, ShaderStage } from '@retro-engine/renderer-core';
 
 const TRIANGLE_WGSL = /* wgsl */ `
+struct ColorUniforms {
+  color: vec4<f32>,
+};
+
+@group(0) @binding(0) var<uniform> u: ColorUniforms;
+
 @vertex
 fn vs_main(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
   var positions = array<vec2<f32>, 3>(
@@ -24,32 +33,80 @@ fn vs_main(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
 
 @fragment
 fn fs_main() -> @location(0) vec4<f32> {
-  return vec4<f32>(1.0, 0.4, 0.7, 1.0);
+  return u.color;
 }
 `;
+
+// vec4<f32> aligned to 16 bytes — the smallest legal uniform binding size in WGSL.
+const COLOR_BUFFER_SIZE = 16;
 
 // Period (ms) for the debug log so the console doesn't drown in frame spam.
 const TRANSFORM_LOG_PERIOD_MS = 1000;
 
+// HSL → RGB in [0, 1]. Standard hue-rotation math; saturated colors with mid lightness.
+const hslToRgb = (h: number, s: number, l: number): [number, number, number] => {
+  if (s === 0) return [l, l, l];
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p = 2 * l - q;
+  const hue2rgb = (t0: number): number => {
+    let t = t0;
+    if (t < 0) t += 1;
+    if (t > 1) t -= 1;
+    if (t < 1 / 6) return p + (q - p) * 6 * t;
+    if (t < 1 / 2) return q;
+    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+    return p;
+  };
+  return [hue2rgb(h + 1 / 3), hue2rgb(h), hue2rgb(h - 1 / 3)];
+};
+
 /**
- * Draws one hardcoded triangle per frame and exercises M2 phase 7's transform
- * stack alongside it. The rendered triangle's vertex positions stay encoded in
- * WGSL because the renderer HAL does not expose uniform buffers yet — Mat4
- * uniforms land with sprite rendering. The witness here is component-level:
- * one triangle entity carries a `Transform`, a child entity demonstrates
- * propagation, and a debug system logs the computed `GlobalTransform.matrix`
- * once per second so the operator can verify propagation is alive.
+ * Draws one triangle per frame whose color cycles through the hue wheel.
+ *
+ * Witnesses the HAL surface added in milestone A: uniform buffer with
+ * `BufferUsage.UNIFORM | COPY_DST`, an explicit `BindGroupLayout` +
+ * `PipelineLayout`, a `BindGroup` referencing the buffer, and a per-frame
+ * `writeBuffer` + `setBindGroup` before the draw.
+ *
+ * The triangle still spawns as a transform-hierarchy witness — a parent with
+ * a child offset, propagated each frame by `'postUpdate'`, and logged once
+ * per second so an operator can confirm propagation is alive.
  */
 export const trianglePlugin: Plugin = (app) => {
   const log = app.logger.child('triangle');
   let pipeline: RenderPipeline | undefined;
+  let colorBuffer: Buffer | undefined;
+  let colorBindGroup: BindGroup | undefined;
   let lastLogMs = -Infinity;
+  const colorScratch = new Float32Array(4);
 
   app.addSystem('startup', [Commands], (cmd) => {
     const { renderer } = app;
     const module = renderer.createShaderModule({ code: TRIANGLE_WGSL, label: 'triangle' });
+
+    colorBuffer = renderer.createBuffer({
+      size: COLOR_BUFFER_SIZE,
+      usage: BufferUsage.UNIFORM | BufferUsage.COPY_DST,
+      label: 'triangle-color',
+    });
+
+    const bindGroupLayout = renderer.createBindGroupLayout({
+      label: 'triangle-color',
+      entries: [{ binding: 0, visibility: ShaderStage.FRAGMENT, buffer: { type: 'uniform' } }],
+    });
+    const pipelineLayout = renderer.createPipelineLayout({
+      label: 'triangle',
+      bindGroupLayouts: [bindGroupLayout],
+    });
+    colorBindGroup = renderer.createBindGroup({
+      label: 'triangle-color',
+      layout: bindGroupLayout,
+      entries: [{ binding: 0, resource: { buffer: colorBuffer } }],
+    });
+
     pipeline = renderer.createRenderPipeline({
       label: 'triangle',
+      layout: pipelineLayout,
       vertex: { module, entryPoint: 'vs_main' },
       fragment: {
         module,
@@ -58,17 +115,12 @@ export const trianglePlugin: Plugin = (app) => {
       },
       primitive: { topology: 'triangle-list' },
     });
-    // Spawn the triangle as an ECS entity with a Transform, plus a child to
-    // visibly exercise hierarchy propagation. Required Components auto-attach
-    // GlobalTransform; the engine's PostUpdate propagation populates it.
+
     cmd.spawn(new Transform()).withChildren((parent) => {
       parent.spawn(new Transform(vec3.create(0.3, 0.0, 0.0)));
     });
   });
 
-  // Each frame, the propagation system in PostUpdate writes the latest
-  // GlobalTransform matrices. This 'last'-stage debug system reads them and
-  // prints once per second so the console stays legible.
   app.addSystem(
     'last',
     [Query([GlobalTransform], { has: [Parent] })],
@@ -96,9 +148,17 @@ export const trianglePlugin: Plugin = (app) => {
     },
   );
 
-  app.addSystem('render', [RenderCtx], (ctx) => {
-    if (!pipeline) return;
+  app.addSystem('render', [RenderCtx, Res(Time)], (ctx, time) => {
+    if (!pipeline || !colorBuffer || !colorBindGroup) return;
+    const hue = (time.virtual.elapsed * 0.25) % 1;
+    const [r, g, b] = hslToRgb(hue, 1, 0.6);
+    colorScratch[0] = r;
+    colorScratch[1] = g;
+    colorScratch[2] = b;
+    colorScratch[3] = 1;
+    app.renderer.writeBuffer(colorBuffer, 0, colorScratch);
     ctx.pass.setPipeline(pipeline);
+    ctx.pass.setBindGroup(0, colorBindGroup);
     ctx.pass.draw(3);
   });
 };
