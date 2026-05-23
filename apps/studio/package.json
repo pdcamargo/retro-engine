@@ -5,7 +5,7 @@
   "description": "Retro Engine desktop studio — Tauri 2.x + Bun + jsimgui.",
   "type": "module",
   "scripts": {
-    "dev": "bun index.html --port 1420",
+    "dev": "bun --port 1420 index.html",
     "build": "bun build index.html --outdir dist --minify --target=browser",
     "lint": "oxlint .",
     "test": "bun test",
