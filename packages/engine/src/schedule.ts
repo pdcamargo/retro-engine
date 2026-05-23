@@ -185,7 +185,7 @@ export const runStage = (stageSystems: StageSystems, app: App, stage: Stage): vo
       app.discardSystemCommands(sys.id);
       throw err;
     }
-    app.flushSystemCommands(sys.id);
+    app.flushSystemCommands(sys.id, stage);
     app.recordSystemLastSeenTick(sys.id, tickAtRunStart);
   }
 };

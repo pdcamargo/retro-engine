@@ -1,5 +1,6 @@
 import type {
   ComponentType,
+  Entity,
   Query as QueryHandle,
   QueryFilters,
   World,
@@ -39,6 +40,21 @@ export interface ResolveCtx {
   readonly lastSeenTick: number;
   /** Present only during render-stage system invocation. */
   readonly render?: RenderContext;
+  /**
+   * Set when an observer is being dispatched in response to a triggered
+   * event. The `Trigger<E>` param reads it to expose `trigger.event()` to
+   * the observer body. `undefined` in every non-observer context.
+   *
+   * @internal
+   */
+  readonly triggerEvent?: unknown;
+  /**
+   * Set when an *entity-targeted* observer is being dispatched. `undefined`
+   * for global-trigger observers and for all non-observer contexts.
+   *
+   * @internal
+   */
+  readonly triggerEntity?: Entity;
 }
 
 /**

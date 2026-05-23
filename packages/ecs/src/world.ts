@@ -359,12 +359,47 @@ export class World {
     writeChangedTick(loc.archetype, type, loc.row, this.bumpTick());
   }
 
+  /**
+   * Advance the mutation tick by one and return the new value. Used by
+   * engine-layer machinery that needs a strictly-increasing tick stamp without
+   * touching any archetype column or pushing a removed entry — notably the
+   * message-channel buffer, which stamps each write with a fresh tick so
+   * readers' `lastSeenTick > entry.tick` filter eliminates the missed-message
+   * edge case when a system writes messages but does no structural mutations.
+   *
+   * Does not touch `addedTickColumns` or `changedTickColumns`; component
+   * `Added<T>` / `Changed<T>` filters are unaffected by calls here. The tick
+   * counter is a JavaScript `Number` (safe to 2^53), so realistic event rates
+   * do not approach saturation.
+   */
+  advanceTick(): number {
+    return this.bumpTick();
+  }
+
   /** Look up a component on an entity. `undefined` when the entity lacks it. */
   getComponent<T>(entity: Entity, type: ComponentType<T>): T | undefined {
     const loc = this.entityIndex.get(entity);
     if (!loc) return undefined;
     if (!loc.archetype.typeSet.has(type as ComponentType)) return undefined;
     return loc.archetype.columns.get(type as ComponentType)![loc.row] as T;
+  }
+
+  /**
+   * The component classes currently attached to `entity`. Returns the
+   * entity's archetype type list (an empty array if the entity is not live).
+   * Used by engine-layer machinery that needs to enumerate components for
+   * dispatch — notably the commands flush's per-component `onRemove` fan-out
+   * at despawn time.
+   *
+   * The returned array is a live reference to the archetype's internal type
+   * list; do not mutate it.
+   *
+   * @internal
+   */
+  componentTypesOf(entity: Entity): readonly ComponentType[] {
+    const loc = this.entityIndex.get(entity);
+    if (!loc) return [];
+    return loc.archetype.types;
   }
 
   /** Whether the entity carries the given component class. */

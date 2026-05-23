@@ -9,10 +9,14 @@ import { World } from '@retro-engine/ecs';
 
 import type { CommandOp } from './commands';
 import { applyCommandOp } from './commands';
+import { ComponentHookRegistry } from './component-hooks';
+import type { HookCtx, HookKind } from './component-hooks';
 import { CorePlugin } from './core-plugin';
 import type { Logger } from './log';
 import { engineLogger } from './log';
 import { runFixedMainLoop } from './fixed-time';
+import { MessageRegistry } from './messages';
+import { ObserverRegistry } from './observers';
 import type { Plugin, PluginObject, PluginsState } from './plugin';
 import { wrapFunctionPlugin } from './plugin';
 import type { PluginGroup } from './plugin-group';
@@ -36,6 +40,11 @@ export type { Logger } from './log';
 export { createConsoleLogger, engineLogger } from './log';
 export type { CommandsHandle, EntityCommands } from './commands';
 export { Commands } from './commands';
+export type { HookCtx, HookKind } from './component-hooks';
+export type { MessageEntry, MessageWriterHandle } from './messages';
+export { MessageReader, MessageWriter } from './messages';
+export type { TriggerHandle } from './observers';
+export { Trigger } from './observers';
 export type { Plugin, PluginFn, PluginObject, PluginsState } from './plugin';
 export type { PluginGroup } from './plugin-group';
 export { PluginGroupBuilder } from './plugin-group';
@@ -194,6 +203,24 @@ export class App {
   private readonly commandsBuffers = new Map<SystemId, CommandOp[]>();
   private readonly lastSeenTickMap = new Map<SystemId, number>();
   private readonly stateRegistry = new StateRegistry();
+  /** @internal Frame-buffered message channels. Drained at the end of `advanceFrame`. */
+  readonly messageRegistry: MessageRegistry = new MessageRegistry();
+  /** @internal Observer registry — global + entity-targeted, keyed by event class. */
+  readonly observerRegistry: ObserverRegistry = new ObserverRegistry();
+  /** @internal Component-lifecycle hook registry (plugin-side; class-static hooks are reflection-discovered). */
+  readonly componentHookRegistry: ComponentHookRegistry = new ComponentHookRegistry();
+  /**
+   * @internal Re-entrant trigger depth tracker. Set by the observer dispatch
+   * to the current op's depth; read by `CommandsHandle.trigger` to stamp
+   * newly-enqueued trigger ops. Reset between command flushes.
+   */
+  currentTriggerDepth = 0;
+  /**
+   * @internal Stage of the system currently being flushed. Threaded into
+   * observer dispatch's ResolveCtx so observer-body params resolving inside
+   * the flush see the same stage as the triggering system.
+   */
+  currentFlushStage: Stage = 'update';
   private readonly canvas: HTMLCanvasElement | undefined;
   private readonly clearColor: { r: number; g: number; b: number; a: number };
   private surface: Surface | undefined;
@@ -357,18 +384,39 @@ export class App {
 
   /**
    * Drain one system's command buffer, applying each enqueued op in order.
-   * Deletes the buffer entry before iterating, so an op that re-enqueues into
-   * the same system's buffer starts a fresh array (no recursive replay).
+   * Newly-enqueued ops produced during dispatch (typically from observer
+   * bodies or component hooks invoked inside `applyCommandOp`) are appended
+   * to the same buffer and fire in the same flush, subject to the
+   * re-entrant trigger depth limit. The buffer entry is removed from the
+   * map at the end of the flush (in `finally`, so a throw mid-flush still
+   * cleans up); a subsequent invocation of the same system therefore starts
+   * with an empty buffer.
+   *
+   * Tracks `currentFlushStage` so observer dispatch inside the flush can
+   * thread the triggering system's stage into the observer's ResolveCtx.
+   *
    * Called by the stage runners after each system's function returns;
    * no-op when no commands were enqueued.
    *
    * @internal
    */
-  flushSystemCommands(id: SystemId): void {
+  flushSystemCommands(id: SystemId, stage: Stage = 'update'): void {
     const buf = this.commandsBuffers.get(id);
     if (!buf || buf.length === 0) return;
-    this.commandsBuffers.delete(id);
-    for (const op of buf) applyCommandOp(op, this);
+    const prevStage = this.currentFlushStage;
+    this.currentFlushStage = stage;
+    try {
+      let i = 0;
+      while (i < buf.length) {
+        const op = buf[i]!;
+        i += 1;
+        applyCommandOp(op, this, id);
+      }
+    } finally {
+      this.commandsBuffers.delete(id);
+      this.currentFlushStage = prevStage;
+      this.currentTriggerDepth = 0;
+    }
   }
 
   /**
@@ -611,6 +659,109 @@ export class App {
     return this.resources.get(ctor) as T | undefined;
   }
 
+  /**
+   * Register a frame-buffered message class. Idempotent — re-registering the
+   * same constructor is a silent no-op and does not reset the buffer. After
+   * registration, systems with `MessageWriter(ctor)` may write payloads;
+   * unregistered writes throw at flush time.
+   *
+   * Readers (`MessageReader(ctor)`) are silent on missing registration —
+   * they yield nothing — so a reader can be wired against a future message
+   * type before the source plugin registers it.
+   *
+   * Buffers drain at the end of `advanceFrame` (after all stages and the
+   * removed-buffer drain). A `runIf`-gated reader that skips a frame loses
+   * that frame's messages; same hazard pattern as `RemovedComponents`.
+   *
+   * @example
+   * ```ts
+   * class Death { constructor(public entity: Entity) {} }
+   * app.addMessage(Death);
+   * ```
+   */
+  addMessage<T extends object>(ctor: new (...args: never[]) => T): this {
+    this.messageRegistry.register(ctor as unknown as new (...args: never[]) => object);
+    return this;
+  }
+
+  /**
+   * Read the message registry. Internal accessor used by `MessageWriter` /
+   * `MessageReader` param resolvers; not part of the public API.
+   *
+   * @internal
+   */
+  getMessageRegistry(): MessageRegistry {
+    return this.messageRegistry;
+  }
+
+  /**
+   * Register a global observer against event class `eventCtor`. The observer
+   * fires synchronously whenever `commands.trigger(event)` posts an event of
+   * that class — globally — or whenever an entity-targeted trigger
+   * (`commands.entity(e).trigger(event)`) fires (entity-targeted observers
+   * fire first, then globals, in registration order).
+   *
+   * The observer is a system in disguise: its params resolve the same way
+   * `addSystem`'s do (against the triggering system's `ResolveCtx`). The
+   * conventional first param is `Trigger(eventCtor)` to access the event
+   * payload and the optional target entity.
+   *
+   * @example
+   * ```ts
+   * class PlayerDied { constructor(public entity: Entity) {} }
+   * app.addObserver([Trigger(PlayerDied), Commands], (trig, cmd) => {
+   *   cmd.spawn(new Tombstone(trig.event().entity));
+   * });
+   * ```
+   */
+  addObserver<E extends object, const Ps extends readonly Param<unknown>[]>(
+    eventCtor: new (...args: never[]) => E,
+    params: Ps,
+    fn: (...args: ParamValues<Ps>) => void,
+  ): this {
+    this.observerRegistry.registerGlobal(
+      eventCtor as unknown as new (...args: never[]) => object,
+      params,
+      fn as (...args: unknown[]) => void,
+    );
+    return this;
+  }
+
+  /**
+   * Register a plugin-side component hook of `kind` for component class
+   * `ctor`. Hooks fire during the commands flush when a structural mutation
+   * touches the type:
+   *
+   * - `onAdd` — first time `ctor` appears on an entity (newly attached).
+   * - `onInsert` — every insert pass that touches `ctor`, including
+   *   replace-in-place. Superset of `onAdd`.
+   * - `onReplace` — only when `ctor` was already present and is being
+   *   overwritten. Fires pre-mutation with the OLD value.
+   * - `onRemove` — once per removal (including the per-component fan-out
+   *   at despawn). Fires pre-mutation with the about-to-be-removed value.
+   *
+   * The component class may also declare static methods of the same names
+   * (`class Sprite { static onAdd(ctx) { … } }`) — those fire first, then
+   * registry entries in registration order.
+   *
+   * Direct `world.spawn` / `world.insertBundle` / `world.removeComponent` /
+   * `world.despawn` calls (outside a commands flush) do NOT fire hooks in
+   * v1; the dispatch lives at the engine/commands layer. Test code that
+   * needs hook coverage routes through `Commands`.
+   */
+  registerComponentHook<T extends object>(
+    ctor: new (...args: never[]) => T,
+    kind: HookKind,
+    fn: (ctx: HookCtx<T>) => void,
+  ): this {
+    this.componentHookRegistry.register(
+      ctor as unknown as new (...args: never[]) => object,
+      kind,
+      fn as (ctx: HookCtx<unknown>) => void,
+    );
+    return this;
+  }
+
   /** Start the frame loop. Resolves once startup is complete; the loop runs until {@link App.stop}. */
   async run(): Promise<void> {
     await this.renderer.init();
@@ -665,6 +816,7 @@ export class App {
     runStage(this.stages.last, this, 'last');
     this.renderFrame();
     this.world.drainRemovedBuffer();
+    this.messageRegistry.drainAll();
   }
 
   stop(): void {
@@ -732,7 +884,7 @@ export class App {
         this.discardSystemCommands(sys.id);
         throw err;
       }
-      this.flushSystemCommands(sys.id);
+      this.flushSystemCommands(sys.id, 'render');
       this.recordSystemLastSeenTick(sys.id, tickAtRunStart);
     }
     pass.end();

@@ -1,8 +1,10 @@
 import type { ComponentType, Entity } from '@retro-engine/ecs';
 
+import type { HookCtx } from './component-hooks';
 import type { ChildBuilder } from './hierarchy';
 import { Children, Parent } from './hierarchy';
 import type { App } from './index';
+import { dispatchGlobalTrigger, dispatchTargetedTrigger, MAX_TRIGGER_DEPTH } from './observers';
 import type { Param, ResolveCtx, SystemId } from './system-param';
 
 /**
@@ -21,7 +23,16 @@ export type CommandOp =
   | { kind: 'removeResource'; type: ComponentType }
   | { kind: 'appendChild'; parent: Entity; child: Entity }
   | { kind: 'detachChild'; parent: Entity; child: Entity }
-  | { kind: 'despawnSubtree'; root: Entity };
+  | { kind: 'despawnSubtree'; root: Entity }
+  | { kind: 'triggerGlobal'; event: object; depth: number }
+  | { kind: 'triggerEntity'; event: object; target: Entity; depth: number }
+  | {
+      kind: 'attachObserver';
+      target: Entity;
+      eventCtor: ComponentType;
+      params: ReadonlyArray<Param<unknown>>;
+      fn: (...args: unknown[]) => void;
+    };
 
 const flattenComponents = (
   parts: ReadonlyArray<object | readonly object[]>,
@@ -34,22 +45,171 @@ const flattenComponents = (
   return flat;
 };
 
+const userPassedTypes = (components: readonly object[]): Map<ComponentType, object> => {
+  const m = new Map<ComponentType, object>();
+  for (const c of components) m.set(c.constructor as ComponentType, c);
+  return m;
+};
+
+const cmdHandleFor = (app: App, systemId: SystemId): CommandsHandle =>
+  new CommandsHandleImpl(app, systemId);
+
+/**
+ * Spawn the entity (allocating archetype storage for the previously-reserved
+ * id) and fan out lifecycle hooks. Hooks fire only for user-passed component
+ * types — `onAdd` for every passed type (each is new to the entity by
+ * definition of spawn), then `onInsert` for every passed type. Required
+ * components expanded by `resolveBundle` are not auto-hooked in v1; consumers
+ * who want hooks on those types register them on a passed component or
+ * provide their own bundle.
+ *
+ * @internal
+ */
+const applySpawnWithHooks = (
+  app: App,
+  entity: Entity,
+  components: readonly object[],
+  cmdHandle: CommandsHandle,
+): void => {
+  const userTypes = userPassedTypes(components);
+  app.world.spawnReserved(entity, components);
+  const registry = app.componentHookRegistry;
+  for (const type of userTypes.keys()) {
+    if (!registry.has(type, 'onAdd')) continue;
+    const value = app.world.getComponent(entity, type);
+    if (value === undefined) continue;
+    registry.dispatch(type, 'onAdd', { world: app.world, commands: cmdHandle, entity, value } as HookCtx<unknown>);
+  }
+  for (const type of userTypes.keys()) {
+    if (!registry.has(type, 'onInsert')) continue;
+    const value = app.world.getComponent(entity, type);
+    if (value === undefined) continue;
+    registry.dispatch(type, 'onInsert', { world: app.world, commands: cmdHandle, entity, value } as HookCtx<unknown>);
+  }
+};
+
+/**
+ * Insert a bundle on a live entity and fan out lifecycle hooks. Pre-mutation:
+ * fires `onReplace` (with the OLD value) for every user-passed type that the
+ * entity already carried. Post-mutation: fires `onAdd` for newly-added types,
+ * then `onInsert` for every user-passed type.
+ *
+ * Throws nothing of its own — propagates any throw from `world.insertBundle`
+ * or a hook body up to the commands flush.
+ *
+ * @internal
+ */
+const applyInsertWithHooks = (
+  app: App,
+  entity: Entity,
+  components: readonly object[],
+  cmdHandle: CommandsHandle,
+): void => {
+  const userTypes = userPassedTypes(components);
+  const registry = app.componentHookRegistry;
+
+  const replaced: Array<{ type: ComponentType; oldValue: unknown }> = [];
+  const newlyAdded: ComponentType[] = [];
+  for (const type of userTypes.keys()) {
+    if (app.world.has(entity, type)) {
+      replaced.push({ type, oldValue: app.world.getComponent(entity, type) });
+    } else {
+      newlyAdded.push(type);
+    }
+  }
+
+  for (const { type, oldValue } of replaced) {
+    if (!registry.has(type, 'onReplace')) continue;
+    if (oldValue === undefined) continue;
+    registry.dispatch(type, 'onReplace', { world: app.world, commands: cmdHandle, entity, value: oldValue } as HookCtx<unknown>);
+  }
+
+  app.world.insertBundle(entity, components);
+
+  for (const type of newlyAdded) {
+    if (!registry.has(type, 'onAdd')) continue;
+    const value = app.world.getComponent(entity, type);
+    if (value === undefined) continue;
+    registry.dispatch(type, 'onAdd', { world: app.world, commands: cmdHandle, entity, value } as HookCtx<unknown>);
+  }
+  for (const type of userTypes.keys()) {
+    if (!registry.has(type, 'onInsert')) continue;
+    const value = app.world.getComponent(entity, type);
+    if (value === undefined) continue;
+    registry.dispatch(type, 'onInsert', { world: app.world, commands: cmdHandle, entity, value } as HookCtx<unknown>);
+  }
+};
+
+/**
+ * Remove one component and fan out the `onRemove` hook. The hook fires
+ * pre-mutation with the about-to-be-removed value, so a hook body that
+ * does `world.getComponent(entity, T)` still sees the value.
+ *
+ * @internal
+ */
+const applyRemoveWithHooks = (
+  app: App,
+  entity: Entity,
+  type: ComponentType,
+  cmdHandle: CommandsHandle,
+): void => {
+  if (!app.world.has(entity, type)) return;
+  const registry = app.componentHookRegistry;
+  if (registry.has(type, 'onRemove')) {
+    const value = app.world.getComponent(entity, type);
+    if (value !== undefined) {
+      registry.dispatch(type, 'onRemove', { world: app.world, commands: cmdHandle, entity, value } as HookCtx<unknown>);
+    }
+  }
+  app.world.removeComponent(entity, type);
+};
+
+/**
+ * Despawn an entity, fanning `onRemove` out over every component the entity
+ * carries (one hook invocation per component, in archetype type order),
+ * then clear any entity-targeted observers bound to the entity before the
+ * structural mutation lands.
+ *
+ * @internal
+ */
+const applyDespawnWithHooks = (app: App, entity: Entity, cmdHandle: CommandsHandle): void => {
+  if (!app.world.hasEntity(entity)) return;
+  const registry = app.componentHookRegistry;
+  const types = [...app.world.componentTypesOf(entity)];
+  for (const type of types) {
+    if (!registry.has(type, 'onRemove')) continue;
+    const value = app.world.getComponent(entity, type);
+    if (value === undefined) continue;
+    registry.dispatch(type, 'onRemove', { world: app.world, commands: cmdHandle, entity, value } as HookCtx<unknown>);
+  }
+  app.observerRegistry.clearTargetedFor(entity);
+  app.world.despawn(entity);
+};
+
 /**
  * Apply one queued command to the world / resources. Routes through the same
  * public `World` / `App` methods user code calls directly — so resource
  * change-frame stamps, archetype transitions, and tick columns behave the
- * same as direct mutations. Carve-outs documented per-arm.
+ * same as direct mutations. Lifecycle hooks (`onAdd` / `onInsert` /
+ * `onReplace` / `onRemove`) dispatch around each structural mutation; trigger
+ * ops fan out to the observer registry. Carve-outs documented per-arm.
+ *
+ * The triggering system's id threads in so hook + observer bodies receive a
+ * {@link CommandsHandle} bound to the same buffer that's currently being
+ * drained; re-entrant ops fire later in the same flush, subject to the
+ * re-entrant trigger depth limit ({@link MAX_TRIGGER_DEPTH}).
  *
  * @internal
  */
-export const applyCommandOp = (op: CommandOp, app: App): void => {
+export const applyCommandOp = (op: CommandOp, app: App, triggeringSystemId: SystemId): void => {
+  const cmdHandle = cmdHandleFor(app, triggeringSystemId);
   switch (op.kind) {
     case 'spawn': {
-      app.world.spawnReserved(op.entity, op.components);
+      applySpawnWithHooks(app, op.entity, op.components, cmdHandle);
       return;
     }
     case 'despawn': {
-      app.world.despawn(op.entity);
+      applyDespawnWithHooks(app, op.entity, cmdHandle);
       return;
     }
     case 'insert': {
@@ -59,11 +219,11 @@ export const applyCommandOp = (op: CommandOp, app: App): void => {
         );
         return;
       }
-      app.world.insertBundle(op.entity, op.components);
+      applyInsertWithHooks(app, op.entity, op.components, cmdHandle);
       return;
     }
     case 'remove': {
-      app.world.removeComponent(op.entity, op.type);
+      applyRemoveWithHooks(app, op.entity, op.type, cmdHandle);
       return;
     }
     case 'insertResource': {
@@ -105,7 +265,7 @@ export const applyCommandOp = (op: CommandOp, app: App): void => {
       if (existingParent) {
         existingParent.entity = op.parent;
       } else {
-        app.world.insertBundle(op.child, [new Parent(op.parent)]);
+        applyInsertWithHooks(app, op.child, [new Parent(op.parent)], cmdHandle);
       }
       // Append child to parent.Children (creating the component if absent).
       const children = app.world.getComponent(op.parent, Children);
@@ -114,7 +274,7 @@ export const applyCommandOp = (op: CommandOp, app: App): void => {
           children.entities.push(op.child);
         }
       } else {
-        app.world.insertBundle(op.parent, [new Children([op.child])]);
+        applyInsertWithHooks(app, op.parent, [new Children([op.child])], cmdHandle);
       }
       return;
     }
@@ -128,7 +288,7 @@ export const applyCommandOp = (op: CommandOp, app: App): void => {
       // where the child was reparented elsewhere between enqueue and flush).
       const childParent = app.world.getComponent(op.child, Parent);
       if (childParent && childParent.entity === op.parent) {
-        app.world.removeComponent(op.child, Parent);
+        applyRemoveWithHooks(app, op.child, Parent, cmdHandle);
       }
       return;
     }
@@ -157,7 +317,35 @@ export const applyCommandOp = (op: CommandOp, app: App): void => {
           }
         }
       }
-      for (const e of toDespawn) app.world.despawn(e);
+      for (const e of toDespawn) applyDespawnWithHooks(app, e, cmdHandle);
+      return;
+    }
+    case 'triggerGlobal': {
+      // Depth was validated at enqueue (see `CommandsHandleImpl.trigger`); the
+      // arm trusts the value. Reading the triggering system's current stage
+      // for ResolveCtx via App state.
+      dispatchGlobalTrigger(app, op.event, triggeringSystemId, app.currentFlushStage, op.depth);
+      return;
+    }
+    case 'triggerEntity': {
+      dispatchTargetedTrigger(
+        app,
+        op.event,
+        op.target,
+        triggeringSystemId,
+        app.currentFlushStage,
+        op.depth,
+      );
+      return;
+    }
+    case 'attachObserver': {
+      if (!app.world.hasEntity(op.target)) {
+        app.logger.devWarn(
+          `commands.entity(${op.target}).observe: entity is not live at flush — observer not attached`,
+        );
+        return;
+      }
+      app.observerRegistry.registerTargeted(op.target, op.eventCtor, op.params, op.fn);
       return;
     }
   }
@@ -176,6 +364,10 @@ export const applyCommandOp = (op: CommandOp, app: App): void => {
  * `despawnRecursive`) maintain the `Parent` and `Children` components
  * automatically; consumers do not need to import those classes to wire
  * hierarchies.
+ *
+ * Reactive methods (`trigger`, `observe`) post events targeted at this
+ * entity and attach entity-scoped observers, respectively. Both fire at
+ * flush, in enqueue order with the rest of the builder's calls.
  */
 export interface EntityCommands {
   /** The entity id this builder targets. */
@@ -217,6 +409,27 @@ export interface EntityCommands {
    * any. Dead descendants are skipped silently.
    */
   despawnRecursive(): void;
+  /**
+   * Enqueue an entity-targeted trigger of `event`. Fires every observer
+   * bound to this `(entity, event class)` pair first, then every global
+   * observer for the event class, in registration order — all during the
+   * current commands flush, after the enqueueing system body returns.
+   */
+  trigger<E extends object>(event: E): EntityCommands;
+  /**
+   * Register an entity-targeted observer at flush time. The observer fires
+   * synchronously inside `applyCommandOp` whenever an event of class
+   * `eventCtor` is triggered against this entity. Mirrors the system
+   * registration shape: a tuple of param tokens (conventionally led by
+   * `Trigger(eventCtor)`) and a function receiving one value per param.
+   *
+   * The observer is dropped automatically when the entity is despawned.
+   */
+  observe<E extends object, const Ps extends readonly Param<unknown>[]>(
+    eventCtor: ComponentType<E>,
+    params: Ps,
+    fn: (...args: ObserverArgs<Ps>) => void,
+  ): EntityCommands;
 }
 
 /**
@@ -234,6 +447,12 @@ export interface EntityCommands {
  * reserved at enqueue time (available via `.id`), the row is allocated at
  * flush. The id can be passed to subsequent commands in the same buffer; the
  * returned builder can chain `.insert(...)`, `.withChildren(...)`, etc.
+ *
+ * Reactive method `trigger` posts a global event whose observers fire during
+ * the flush, in registration order. Re-entrant triggers (an observer body
+ * calling `commands.trigger(...)` again) chain in the same flush, capped by
+ * a re-entrant depth limit; a `devWarn` fires and the op is dropped at the
+ * limit.
  */
 export interface CommandsHandle {
   /**
@@ -256,7 +475,28 @@ export interface CommandsHandle {
   insertResource<T extends object>(value: T): void;
   /** Enqueue removal of a resource by class. Silent at flush if the resource is absent. */
   removeResource(type: ComponentType): void;
+  /**
+   * Enqueue a global trigger of `event`. Every global observer registered
+   * against the event's class fires synchronously during the flush, in
+   * registration order. To target a specific entity, use
+   * `commands.entity(target).trigger(event)` instead.
+   *
+   * Re-entrant triggers (from inside an observer body) chain in the same
+   * flush. The chain depth is capped at 8; the 9th nested trigger emits a
+   * `devWarn` and is dropped.
+   */
+  trigger<E extends object>(event: E): void;
 }
+
+/**
+ * Map a tuple of {@link Param}s to the tuple of values an observer body
+ * receives. Same shape as `ParamValues` from system-param.ts; declared
+ * locally so the observer surface in this file does not pull a value
+ * dependency from system-param.
+ */
+type ObserverArgs<Ps extends readonly Param<unknown>[]> = {
+  -readonly [K in keyof Ps]: Ps[K] extends Param<infer T> ? T : never;
+};
 
 class EntityCommandsImpl implements EntityCommands {
   constructor(
@@ -310,11 +550,43 @@ class EntityCommandsImpl implements EntityCommands {
   despawnRecursive(): void {
     this.handle.enqueue({ kind: 'despawnSubtree', root: this.id });
   }
+
+  trigger<E extends object>(event: E): EntityCommands {
+    const newDepth = this.handle.app.currentTriggerDepth + 1;
+    if (newDepth > MAX_TRIGGER_DEPTH) {
+      this.handle.app.logger.devWarn(
+        `commands.entity(${this.id}).trigger: re-entrant trigger depth limit (${MAX_TRIGGER_DEPTH}) exceeded for event ${(event as object).constructor.name || '<anonymous>'} — dropping`,
+      );
+      return this;
+    }
+    this.handle.enqueue({
+      kind: 'triggerEntity',
+      event: event as object,
+      target: this.id,
+      depth: newDepth,
+    });
+    return this;
+  }
+
+  observe<E extends object, const Ps extends readonly Param<unknown>[]>(
+    eventCtor: ComponentType<E>,
+    params: Ps,
+    fn: (...args: ObserverArgs<Ps>) => void,
+  ): EntityCommands {
+    this.handle.enqueue({
+      kind: 'attachObserver',
+      target: this.id,
+      eventCtor: eventCtor as ComponentType,
+      params: params as ReadonlyArray<Param<unknown>>,
+      fn: fn as (...args: unknown[]) => void,
+    });
+    return this;
+  }
 }
 
 class CommandsHandleImpl implements CommandsHandle {
   constructor(
-    private readonly app: App,
+    readonly app: App,
     private readonly systemId: SystemId,
   ) {}
 
@@ -343,6 +615,17 @@ class CommandsHandleImpl implements CommandsHandle {
 
   removeResource(type: ComponentType): void {
     this.enqueue({ kind: 'removeResource', type });
+  }
+
+  trigger<E extends object>(event: E): void {
+    const newDepth = this.app.currentTriggerDepth + 1;
+    if (newDepth > MAX_TRIGGER_DEPTH) {
+      this.app.logger.devWarn(
+        `commands.trigger: re-entrant trigger depth limit (${MAX_TRIGGER_DEPTH}) exceeded for event ${(event as object).constructor.name || '<anonymous>'} — dropping`,
+      );
+      return;
+    }
+    this.enqueue({ kind: 'triggerGlobal', event: event as object, depth: newDepth });
   }
 }
 
