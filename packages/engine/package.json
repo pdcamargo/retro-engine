@@ -31,7 +31,8 @@
     "build": "tsc -p tsconfig.build.json",
     "lint": "oxlint .",
     "test": "bun test",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "bench": "bun run bench/index.ts"
   },
   "dependencies": {
     "@retro-engine/ecs": "workspace:*",

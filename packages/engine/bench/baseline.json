@@ -1,0 +1,184 @@
+{
+  "schema": 1,
+  "package": "@retro-engine/engine",
+  "captured_at": "2026-05-23T05:17:19.097Z",
+  "runtime": "bun@1.3.1",
+  "benches": [
+    {
+      "key": "propagateTransforms (full) @ chain-100",
+      "group": null,
+      "args": {},
+      "mean_ns": 16940.12644213358,
+      "p99_ns": 26208,
+      "samples": 38658
+    },
+    {
+      "key": "propagateTransformsGated @ chain-100 @ 0% dirty",
+      "group": null,
+      "args": {},
+      "mean_ns": 2646.0292378087197,
+      "p99_ns": 2849.029541015625,
+      "samples": 62
+    },
+    {
+      "key": "propagateTransformsGated @ chain-100 @ 10% dirty",
+      "group": null,
+      "args": {},
+      "mean_ns": 20932.37217203776,
+      "p99_ns": 21276.692626953125,
+      "samples": 12
+    },
+    {
+      "key": "propagateTransformsGated @ chain-100 @ 100% dirty",
+      "group": null,
+      "args": {},
+      "mean_ns": 24361.057759602863,
+      "p99_ns": 24580.302001953125,
+      "samples": 12
+    },
+    {
+      "key": "propagateTransforms (full) @ wide-1k",
+      "group": null,
+      "args": {},
+      "mean_ns": 134604.97974927677,
+      "p99_ns": 158000,
+      "samples": 5185
+    },
+    {
+      "key": "propagateTransformsGated @ wide-1k @ 0% dirty",
+      "group": null,
+      "args": {},
+      "mean_ns": 19260.898213704426,
+      "p99_ns": 19357.666015625,
+      "samples": 12
+    },
+    {
+      "key": "propagateTransformsGated @ wide-1k @ 10% dirty",
+      "group": null,
+      "args": {},
+      "mean_ns": 159346.08416970802,
+      "p99_ns": 192125,
+      "samples": 4384
+    },
+    {
+      "key": "propagateTransformsGated @ wide-1k @ 100% dirty",
+      "group": null,
+      "args": {},
+      "mean_ns": 186047.62090981644,
+      "p99_ns": 216834,
+      "samples": 3759
+    },
+    {
+      "key": "propagateTransforms (full) @ forest-10k",
+      "group": null,
+      "args": {},
+      "mean_ns": 2236679.6655948553,
+      "p99_ns": 3001083,
+      "samples": 311
+    },
+    {
+      "key": "propagateTransformsGated @ forest-10k @ 0% dirty",
+      "group": null,
+      "args": {},
+      "mean_ns": 185778.48594909863,
+      "p99_ns": 202834,
+      "samples": 3772
+    },
+    {
+      "key": "propagateTransformsGated @ forest-10k @ 10% dirty",
+      "group": null,
+      "args": {},
+      "mean_ns": 394006.9224283305,
+      "p99_ns": 479541,
+      "samples": 1779
+    },
+    {
+      "key": "propagateTransformsGated @ forest-10k @ 100% dirty",
+      "group": null,
+      "args": {},
+      "mean_ns": 2845946.545081967,
+      "p99_ns": 3398083,
+      "samples": 244
+    },
+    {
+      "key": "flush 10k spawn ops (1 cmp) via advanceFrame",
+      "group": null,
+      "args": {},
+      "mean_ns": 4332221.981132075,
+      "p99_ns": 4973250,
+      "samples": 159
+    },
+    {
+      "key": "flush 10k spawn ops (3 cmps) via advanceFrame",
+      "group": null,
+      "args": {},
+      "mean_ns": 8261997.414634147,
+      "p99_ns": 9067125,
+      "samples": 82
+    },
+    {
+      "key": "flush 10k insert ops on existing entities",
+      "group": null,
+      "args": {},
+      "mean_ns": 9133741.081081081,
+      "p99_ns": 9866917,
+      "samples": 74
+    },
+    {
+      "key": "flush 10k remove ops on existing entities",
+      "group": null,
+      "args": {},
+      "mean_ns": 7953534.388235294,
+      "p99_ns": 8756959,
+      "samples": 85
+    },
+    {
+      "key": "flush 10k despawn ops on existing entities",
+      "group": null,
+      "args": {},
+      "mean_ns": 4690271.544217687,
+      "p99_ns": 5218458,
+      "samples": 147
+    },
+    {
+      "key": "flush mixed 10k ops (spawn + insert + remove + despawn)",
+      "group": null,
+      "args": {},
+      "mean_ns": 9719564.594202898,
+      "p99_ns": 10326542,
+      "samples": 69
+    },
+    {
+      "key": "markResourceChanged 10k calls (direct on App)",
+      "group": null,
+      "args": {},
+      "mean_ns": 39947.29760659928,
+      "p99_ns": 46750,
+      "samples": 17214
+    },
+    {
+      "key": "cmd.markResourceChanged 10k ops via advanceFrame",
+      "group": null,
+      "args": {},
+      "mean_ns": 113807.06489048709,
+      "p99_ns": 194250,
+      "samples": 6118
+    },
+    {
+      "key": "ChangedRes param resolution: 1k advanceFrame ticks, no marks",
+      "group": null,
+      "args": {},
+      "mean_ns": 599210.3687821613,
+      "p99_ns": 1026708,
+      "samples": 1166
+    },
+    {
+      "key": "ChangedRes param resolution: 1k advanceFrame ticks, mark every frame",
+      "group": null,
+      "args": {},
+      "mean_ns": 733992.8150105708,
+      "p99_ns": 1629584,
+      "samples": 946
+    }
+  ]
+}
