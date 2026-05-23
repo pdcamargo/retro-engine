@@ -41,6 +41,7 @@ export type { PluginGroup } from './plugin-group';
 export { PluginGroupBuilder } from './plugin-group';
 export type { Param, ParamValues, ResolveCtx, SystemId } from './system-param';
 export { Query, RenderCtx, Res, ResMut, RunCondition } from './system-param';
+export { RemovedComponents } from './change-detection';
 export { anyWithComponent, inState, resourceChanged, resourceExists } from './run-conditions';
 export type { NextStateInstance, StateInstance } from './state';
 export { NextState, State } from './state';
@@ -191,6 +192,7 @@ export class App {
   private readonly resources = new Map<object, object>();
   private readonly resourceChangeFrames = new Map<object, number>();
   private readonly commandsBuffers = new Map<SystemId, CommandOp[]>();
+  private readonly lastSeenTickMap = new Map<SystemId, number>();
   private readonly stateRegistry = new StateRegistry();
   private readonly canvas: HTMLCanvasElement | undefined;
   private readonly clearColor: { r: number; g: number; b: number; a: number };
@@ -380,6 +382,30 @@ export class App {
    */
   discardSystemCommands(id: SystemId): void {
     this.commandsBuffers.delete(id);
+  }
+
+  /**
+   * Read the pre-run tick snapshot previously recorded for system `id`, or
+   * `0` if the system has not run yet. Called by the scheduler immediately
+   * before invoking a system to populate `ResolveCtx.lastSeenTick`.
+   *
+   * @internal
+   */
+  lastSeenTickOf(id: SystemId): number {
+    return this.lastSeenTickMap.get(id) ?? 0;
+  }
+
+  /**
+   * Store the pre-run tick snapshot for system `id`. Called by the scheduler
+   * after a system's body returns and its command buffer flushes. The stored
+   * value is `World.changeTick` as observed *before* the system ran — so the
+   * system re-observes its own prior-frame mutations on its next invocation
+   * (the Bevy-aligned pre-run snapshot model).
+   *
+   * @internal
+   */
+  recordSystemLastSeenTick(id: SystemId, tick: number): void {
+    this.lastSeenTickMap.set(id, tick);
   }
 
   /**
@@ -638,6 +664,7 @@ export class App {
     runStage(this.stages.postUpdate, this, 'postUpdate');
     runStage(this.stages.last, this, 'last');
     this.renderFrame();
+    this.world.drainRemovedBuffer();
   }
 
   stop(): void {
@@ -688,11 +715,14 @@ export class App {
     const render: RenderContext = { encoder, pass, surfaceView };
     for (const sys of this.stages.render.ordered()) {
       if (sys.runIf && !sys.runIf.test(this)) continue;
+      const lastSeenTick = this.lastSeenTickOf(sys.id);
+      const tickAtRunStart = this.world.changeTick;
       const ctx: ResolveCtx = {
         app: this,
         world: this.world,
         stage: 'render',
         systemId: sys.id,
+        lastSeenTick,
         render,
       };
       const values = sys.params.map((p) => p.resolve(ctx));
@@ -703,6 +733,7 @@ export class App {
         throw err;
       }
       this.flushSystemCommands(sys.id);
+      this.recordSystemLastSeenTick(sys.id, tickAtRunStart);
     }
     pass.end();
     this.renderer.submit([encoder.finish()]);

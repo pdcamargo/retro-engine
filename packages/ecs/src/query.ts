@@ -9,11 +9,21 @@ import type { World } from './world';
  * - `has` — does not affect archetype matching; appends one boolean per entry
  *   to each yielded row, in declaration order, indicating whether the row's
  *   archetype carries that component.
+ * - `changed` — gate-only filter. The row's archetype must contain every
+ *   listed type and each type's `changedTick` must be strictly greater than
+ *   the query's `sinceTick`. Does not affect row shape.
+ * - `added` — gate-only filter. The row's archetype must contain every
+ *   listed type and each type's `addedTick` must be strictly greater than
+ *   the query's `sinceTick`. By construction every operation that bumps
+ *   `addedTick` also bumps `changedTick`, so `added` ⟹ `changed`.
+ *   Does not affect row shape.
  */
 export interface QueryFilters {
   readonly with?: readonly ComponentType[];
   readonly without?: readonly ComponentType[];
   readonly has?: readonly ComponentType[];
+  readonly changed?: readonly ComponentType[];
+  readonly added?: readonly ComponentType[];
 }
 
 type InstanceOf<C> = C extends new (...args: never[]) => infer V ? V : never;
@@ -46,6 +56,11 @@ export type QueryEntry<
  * order across archetypes is unspecified. Mutating component data through the
  * yielded instances is safe; structural mutations (add/remove/despawn) during
  * iteration are undefined behavior — defer them via a future `Commands`.
+ *
+ * `sinceTick` scopes the optional `changed` / `added` filter clauses; the
+ * engine's `Query` param wires the calling system's pre-run tick snapshot
+ * here automatically. Direct callers default to `0` ("no scoping" — every
+ * tick column is above zero after its first write).
  */
 export class Query<
   Ts extends readonly ComponentType[],
@@ -55,10 +70,11 @@ export class Query<
     private readonly world: World,
     private readonly types: Ts,
     private readonly filters: F | undefined,
+    private readonly sinceTick: number = 0,
   ) {}
 
   *[Symbol.iterator](): IterableIterator<QueryRow<Ts, F>> {
-    yield* this.world.iterateQuery(this.types, this.filters);
+    yield* this.world.iterateQuery(this.types, this.filters, this.sinceTick);
   }
 
   /**
@@ -79,7 +95,7 @@ export class Query<
    * ```
    */
   *entries(): IterableIterator<QueryEntry<Ts, F>> {
-    yield* this.world.iterateQueryEntries(this.types, this.filters);
+    yield* this.world.iterateQueryEntries(this.types, this.filters, this.sinceTick);
   }
 
   /** First matching row, or `undefined` if no rows match. */

@@ -22,12 +22,21 @@ export type SystemId = number & { readonly __brand: 'SystemId' };
  * The contents are read-only — params resolve values from the context, they do
  * not mutate it. Mutations to `world` or resources happen through the values
  * the params return (or, later, through a `Commands` param's deferred queue).
+ *
+ * `lastSeenTick` is the calling system's pre-run snapshot of
+ * `World.changeTick`, captured by the scheduler before any param resolves.
+ * Change-detection params (`Query` with `changed`/`added` filters,
+ * `RemovedComponents`) use it as their per-system observation threshold; a
+ * row or removed entry matches iff its tick is strictly greater than
+ * `lastSeenTick`. Systems on their first invocation see `0`, which means "no
+ * scoping — observe everything."
  */
 export interface ResolveCtx {
   readonly app: App;
   readonly world: World;
   readonly stage: Stage;
   readonly systemId: SystemId;
+  readonly lastSeenTick: number;
   /** Present only during render-stage system invocation. */
   readonly render?: RenderContext;
 }
@@ -223,8 +232,9 @@ const queryKey = (types: readonly ComponentType[], filters?: QueryFilters): stri
       : '';
   const orderedIds = (cs: readonly ComponentType[] | undefined): string =>
     cs ? cs.map(componentId).join(',') : '';
-  // `with` and `without` are set-semantic; `has` order affects row shape.
-  return `t:${t}|w:${sortedIds(filters.with)}|wo:${sortedIds(filters.without)}|h:${orderedIds(filters.has)}`;
+  // `with` / `without` / `changed` / `added` are set-semantic; `has` order
+  // affects row shape.
+  return `t:${t}|w:${sortedIds(filters.with)}|wo:${sortedIds(filters.without)}|h:${orderedIds(filters.has)}|c:${sortedIds(filters.changed)}|a:${sortedIds(filters.added)}`;
 };
 
 /**
@@ -257,7 +267,7 @@ export function Query<
   if (cached) return cached as Param<QueryHandle<Ts, F>>;
   const param: Param<QueryHandle<Ts, F>> = {
     resolve(ctx) {
-      return ctx.world.query(types, filters);
+      return ctx.world.query(types, filters, ctx.lastSeenTick);
     },
   };
   queryCache.set(key, param as Param<unknown>);

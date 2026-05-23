@@ -1,4 +1,6 @@
+import type { ColumnEntry } from './archetype';
 import { Archetype, archetypeKeyOf, resolveBundle } from './archetype';
+import { isAddedSince, isChangedSince, writeChangedTick, type RemovedEntry } from './change-detection';
 import { Query, type QueryEntry, type QueryFilters, type QueryRow } from './query';
 import { Disabled, type ComponentType, type Entity } from './types';
 
@@ -55,23 +57,48 @@ export class EntityRef {
 
 /**
  * Archetype-graph world. Entities are opaque IDs; each unique component set is
- * an archetype with parallel columns of component data plus a side-by-side
- * column of last-mutation ticks (the tick columns are wired now so future
- * change-detection filters can read them without re-storaging). Queries
- * iterate only matching archetypes.
+ * an archetype with parallel columns of component data plus two side-by-side
+ * tick columns per component (last-mutation and first-added). Queries iterate
+ * only matching archetypes.
  *
  * Structural changes (add/remove component) move the entity row between
  * archetypes via swap-remove; row order within an archetype is not preserved
  * across removals.
+ *
+ * **Change-detection model.** The world advances a monotonic `changeTick` on
+ * every structural mutation and on every {@link World.markChanged} call.
+ * Storage carries two tick columns per component: `changedTick` (bumped on
+ * mutation, including in-place via {@link World.markChanged}) and `addedTick`
+ * (bumped only when the component is newly attached to an entity, preserved
+ * across archetype transitions). Component removals are buffered in
+ * {@link World.takeRemovedComponents} and drained at frame boundary by the
+ * scheduler.
+ *
+ * Queries gate rows on `changed` / `added` filter clauses by comparing the
+ * row's tick column entries to a `sinceTick` threshold supplied by the
+ * caller — typically the calling system's last-seen tick, captured by the
+ * scheduler before the system runs.
  */
 export class World {
   private nextEntityId = 1;
   private tickCounter = 0;
   private readonly archetypeByKey = new Map<string, Archetype>();
   private readonly entityIndex = new Map<Entity, EntityLocation>();
+  private readonly removedBuffer = new Map<ComponentType, RemovedEntry[]>();
 
   constructor() {
     this.archetypeByKey.set(EMPTY_ARCHETYPE_KEY, new Archetype(new Set()));
+  }
+
+  /**
+   * Monotonic mutation tick. Advances on every structural mutation
+   * (`spawn`, `insertBundle`, `removeComponent`, `despawn`) and on every
+   * {@link World.markChanged} call. Read by the scheduler to snapshot each
+   * system's observation window; consumer code rarely needs to read it
+   * directly.
+   */
+  get changeTick(): number {
+    return this.tickCounter;
   }
 
   /**
@@ -127,27 +154,44 @@ export class World {
    * Components declared on `static requires` are resolved transitively and
    * auto-inserted with their default constructor before the archetype is
    * looked up — same semantics as `spawn`.
+   *
+   * Every component on the new row is tagged with `addedTick = changedTick =
+   * <fresh tick>`; subsequent `Added<T>` and `Changed<T>` filters see the
+   * new row as both added and changed.
    */
   spawnReserved(entity: Entity, components: readonly object[]): void {
     if (this.entityIndex.has(entity)) {
       throw new Error(`ecs: cannot spawn already-live entity ${entity}`);
     }
+    const tick = this.bumpTick();
     if (components.length === 0) {
       const empty = this.archetypeByKey.get(EMPTY_ARCHETYPE_KEY)!;
-      const row = empty.push(entity, new Map(), this.bumpTick());
+      const row = empty.push(entity, new Map());
       this.entityIndex.set(entity, { archetype: empty, row });
       return;
     }
     const resolved = resolveBundle(components);
     const archetype = this.getOrCreateArchetype(new Set(resolved.keys()));
-    const row = archetype.push(entity, resolved, this.bumpTick());
+    const entries = freshEntries(resolved, tick);
+    const row = archetype.push(entity, entries);
     this.entityIndex.set(entity, { archetype, row });
   }
 
-  /** Despawn an entity. Silent if the entity is already gone. */
+  /**
+   * Despawn an entity. Silent if the entity is already gone.
+   *
+   * Each component the entity carried at despawn time is pushed into the
+   * removed buffer with the current mutation tick; systems with the
+   * `RemovedComponents<T>` param can observe the removal until the buffer
+   * is drained at frame boundary.
+   */
   despawn(entity: Entity): void {
     const loc = this.entityIndex.get(entity);
     if (!loc) return;
+    const tick = this.bumpTick();
+    for (const t of loc.archetype.types) {
+      this.pushRemoved(t, entity, tick);
+    }
     const moved = loc.archetype.swapRemove(loc.row);
     if (moved !== undefined) {
       this.entityIndex.get(moved)!.row = loc.row;
@@ -173,8 +217,16 @@ export class World {
    * are already present on the entity.
    *
    * If every component in the resolved bundle is already part of the entity's
-   * archetype, the cells are overwritten in place (no archetype transition);
-   * otherwise the entity moves to a new archetype carrying the union of types.
+   * archetype, the cells are overwritten in place (no archetype transition)
+   * and their `changedTick` bumps while `addedTick` is preserved (replace
+   * semantics); otherwise the entity moves to a new archetype carrying the
+   * union of types. On a transition:
+   *
+   * - Components retained from the old archetype preserve both ticks.
+   * - Components newly added to the entity receive `addedTick = changedTick =
+   *   <fresh tick>`.
+   * - Components present in both the old archetype and the bundle (user
+   *   explicitly re-inserted) bump `changedTick` while preserving `addedTick`.
    */
   insertBundle(entity: Entity, components: readonly object[]): void {
     const loc = this.entityIndex.get(entity);
@@ -190,11 +242,11 @@ export class World {
         break;
       }
     }
+    const tick = this.bumpTick();
     if (!needsTransition) {
-      const tick = this.bumpTick();
       for (const [t, v] of resolved) {
         loc.archetype.columns.get(t)![loc.row] = v;
-        loc.archetype.tickColumns.get(t)![loc.row] = tick;
+        loc.archetype.changedTickColumns.get(t)![loc.row] = tick;
       }
       return;
     }
@@ -202,18 +254,41 @@ export class World {
     const newTypes = new Set<ComponentType>(loc.archetype.typeSet);
     for (const t of resolved.keys()) newTypes.add(t);
 
-    const merged = new Map<ComponentType, unknown>();
+    const entries = new Map<ComponentType, ColumnEntry>();
     for (const t of loc.archetype.types) {
-      merged.set(t, loc.archetype.columns.get(t)![loc.row]);
+      const oldRow = loc.row;
+      const oldAdded = loc.archetype.addedTickColumns.get(t)![oldRow]!;
+      const oldChanged = loc.archetype.changedTickColumns.get(t)![oldRow]!;
+      if (resolved.has(t)) {
+        // Component is present in both old archetype and bundle — user
+        // re-inserted by value. Bump changedTick; preserve addedTick.
+        entries.set(t, {
+          value: resolved.get(t),
+          addedTick: oldAdded,
+          changedTick: tick,
+        });
+      } else {
+        // Carried over unchanged.
+        entries.set(t, {
+          value: loc.archetype.columns.get(t)![oldRow],
+          addedTick: oldAdded,
+          changedTick: oldChanged,
+        });
+      }
     }
-    for (const [t, v] of resolved) merged.set(t, v);
+    for (const [t, v] of resolved) {
+      if (!loc.archetype.typeSet.has(t)) {
+        // Newly added to entity.
+        entries.set(t, { value: v, addedTick: tick, changedTick: tick });
+      }
+    }
 
     const target = this.getOrCreateArchetype(newTypes);
     const moved = loc.archetype.swapRemove(loc.row);
     if (moved !== undefined) {
       this.entityIndex.get(moved)!.row = loc.row;
     }
-    const newRow = target.push(entity, merged, this.bumpTick());
+    const newRow = target.push(entity, entries);
     this.entityIndex.set(entity, { archetype: target, row: newRow });
   }
 
@@ -222,18 +297,29 @@ export class World {
    * the component. Removing a Required dependency does not cascade to its
    * requirers — the requirer is left in an inconsistent state and the caller
    * is responsible for any cleanup.
+   *
+   * The removed `(entity, type)` pair is pushed into the removed buffer with
+   * the current mutation tick. Components retained on the entity preserve
+   * both their tick columns across the archetype move.
    */
   removeComponent(entity: Entity, type: ComponentType): void {
     const loc = this.entityIndex.get(entity);
     if (!loc) return;
     if (!loc.archetype.typeSet.has(type)) return;
+    const tick = this.bumpTick();
+    this.pushRemoved(type, entity, tick);
     const newTypes = new Set<ComponentType>(loc.archetype.typeSet);
     newTypes.delete(type);
 
-    const merged = new Map<ComponentType, unknown>();
+    const entries = new Map<ComponentType, ColumnEntry>();
     for (const t of loc.archetype.types) {
       if (t === type) continue;
-      merged.set(t, loc.archetype.columns.get(t)![loc.row]);
+      const oldRow = loc.row;
+      entries.set(t, {
+        value: loc.archetype.columns.get(t)![oldRow],
+        addedTick: loc.archetype.addedTickColumns.get(t)![oldRow]!,
+        changedTick: loc.archetype.changedTickColumns.get(t)![oldRow]!,
+      });
     }
 
     const target = this.getOrCreateArchetype(newTypes);
@@ -241,8 +327,36 @@ export class World {
     if (moved !== undefined) {
       this.entityIndex.get(moved)!.row = loc.row;
     }
-    const newRow = target.push(entity, merged, this.bumpTick());
+    const newRow = target.push(entity, entries);
     this.entityIndex.set(entity, { archetype: target, row: newRow });
+  }
+
+  /**
+   * Hint that a component has been mutated in place. Bumps `world.changeTick`
+   * and writes the new tick into the component's `changedTick` column so
+   * `Changed<T>` filters see the row on subsequent observations.
+   *
+   * Silent no-op when the entity is not live or does not carry `type` —
+   * mutation hints are too fragile to throw on, and a missing component is
+   * typically a sign that the entity has already moved on by the time the
+   * hint fires.
+   *
+   * `addedTick` is **not** touched: a long-lived component that mutates is
+   * `Changed`, not `Added`.
+   *
+   * @example
+   * ```ts
+   * for (const [pos] of world.query([Position])) {
+   *   pos.x += 1;
+   *   world.markChanged(entity, Position);
+   * }
+   * ```
+   */
+  markChanged(entity: Entity, type: ComponentType): void {
+    const loc = this.entityIndex.get(entity);
+    if (!loc) return;
+    if (!loc.archetype.typeSet.has(type)) return;
+    writeChangedTick(loc.archetype, type, loc.row, this.bumpTick());
   }
 
   /** Look up a component on an entity. `undefined` when the entity lacks it. */
@@ -285,12 +399,42 @@ export class World {
    * Build a {@link Query} over the given component types with optional
    * filters. The returned handle is iterable and exposes
    * {@link Query.single}, {@link Query.first}, {@link Query.count}.
+   *
+   * `sinceTick` scopes the optional `changed` / `added` filter clauses: a
+   * row matches a `changed` filter for component `T` iff
+   * `T.changedTick > sinceTick`. Defaults to `0`, which means "see all"
+   * (every tick column starts above zero after its first write). The engine's
+   * `Query(...)` param wires the calling system's pre-run tick snapshot here
+   * automatically; direct callers pass nothing for "no change-filter scoping."
    */
   query<
     const Ts extends readonly ComponentType[],
     F extends QueryFilters | undefined = undefined,
-  >(types: Ts, filters?: F): Query<Ts, F> {
-    return new Query(this, types, filters);
+  >(types: Ts, filters?: F, sinceTick = 0): Query<Ts, F> {
+    return new Query(this, types, filters, sinceTick);
+  }
+
+  /**
+   * Read the current `removedBuffer` slice for `type` without draining it.
+   * Used by the engine's `RemovedComponents<T>` param when resolving on a
+   * per-system basis; the buffer drains at frame boundary via
+   * {@link World.drainRemovedBuffer}, not on read.
+   *
+   * @internal
+   */
+  getRemovedComponents(type: ComponentType): readonly RemovedEntry[] {
+    return this.removedBuffer.get(type) ?? [];
+  }
+
+  /**
+   * Clear every `removedBuffer` entry. Called by the scheduler at frame
+   * boundary so the v1 frame-buffered contract holds: a removal observed in
+   * frame F is not observable in frame F+1.
+   *
+   * @internal
+   */
+  drainRemovedBuffer(): void {
+    this.removedBuffer.clear();
   }
 
   /**
@@ -299,10 +443,16 @@ export class World {
   *iterateQuery<
     const Ts extends readonly ComponentType[],
     F extends QueryFilters | undefined,
-  >(types: Ts, filters: F | undefined): IterableIterator<QueryRow<Ts, F>> {
+  >(
+    types: Ts,
+    filters: F | undefined,
+    sinceTick: number,
+  ): IterableIterator<QueryRow<Ts, F>> {
     const withFilter = filters?.with;
     const withoutFilter = filters?.without;
     const hasFilter = filters?.has;
+    const changedFilter = filters?.changed;
+    const addedFilter = filters?.added;
     const explicitDisabled = withFilter?.includes(Disabled) ?? false;
 
     for (const archetype of this.archetypeByKey.values()) {
@@ -338,12 +488,37 @@ export class World {
         if (!matches) continue;
       }
 
+      if (changedFilter) {
+        for (const t of changedFilter) {
+          if (!archetype.typeSet.has(t)) {
+            matches = false;
+            break;
+          }
+        }
+        if (!matches) continue;
+      }
+      if (addedFilter) {
+        for (const t of addedFilter) {
+          if (!archetype.typeSet.has(t)) {
+            matches = false;
+            break;
+          }
+        }
+        if (!matches) continue;
+      }
+
       const cols: unknown[][] = types.map((t) => archetype.columns.get(t)!);
       const hasFlags = hasFilter ? hasFilter.map((t) => archetype.typeSet.has(t)) : [];
       const rowCount = archetype.entities.length;
       const ncols = cols.length;
       const nflags = hasFlags.length;
       for (let r = 0; r < rowCount; r++) {
+        if (changedFilter && !this.rowPassesChanged(archetype, changedFilter, r, sinceTick)) {
+          continue;
+        }
+        if (addedFilter && !this.rowPassesAdded(archetype, addedFilter, r, sinceTick)) {
+          continue;
+        }
         const row: unknown[] = [];
         for (let i = 0; i < ncols; i++) row.push(cols[i]![r]);
         for (let j = 0; j < nflags; j++) row.push(hasFlags[j]);
@@ -360,10 +535,16 @@ export class World {
   *iterateQueryEntries<
     const Ts extends readonly ComponentType[],
     F extends QueryFilters | undefined,
-  >(types: Ts, filters: F | undefined): IterableIterator<QueryEntry<Ts, F>> {
+  >(
+    types: Ts,
+    filters: F | undefined,
+    sinceTick: number,
+  ): IterableIterator<QueryEntry<Ts, F>> {
     const withFilter = filters?.with;
     const withoutFilter = filters?.without;
     const hasFilter = filters?.has;
+    const changedFilter = filters?.changed;
+    const addedFilter = filters?.added;
     const explicitDisabled = withFilter?.includes(Disabled) ?? false;
 
     for (const archetype of this.archetypeByKey.values()) {
@@ -399,6 +580,25 @@ export class World {
         if (!matches) continue;
       }
 
+      if (changedFilter) {
+        for (const t of changedFilter) {
+          if (!archetype.typeSet.has(t)) {
+            matches = false;
+            break;
+          }
+        }
+        if (!matches) continue;
+      }
+      if (addedFilter) {
+        for (const t of addedFilter) {
+          if (!archetype.typeSet.has(t)) {
+            matches = false;
+            break;
+          }
+        }
+        if (!matches) continue;
+      }
+
       const cols: unknown[][] = types.map((t) => archetype.columns.get(t)!);
       const hasFlags = hasFilter ? hasFilter.map((t) => archetype.typeSet.has(t)) : [];
       const entities = archetype.entities;
@@ -406,12 +606,51 @@ export class World {
       const ncols = cols.length;
       const nflags = hasFlags.length;
       for (let r = 0; r < rowCount; r++) {
+        if (changedFilter && !this.rowPassesChanged(archetype, changedFilter, r, sinceTick)) {
+          continue;
+        }
+        if (addedFilter && !this.rowPassesAdded(archetype, addedFilter, r, sinceTick)) {
+          continue;
+        }
         const row: unknown[] = [entities[r]!];
         for (let i = 0; i < ncols; i++) row.push(cols[i]![r]);
         for (let j = 0; j < nflags; j++) row.push(hasFlags[j]);
         yield row as QueryEntry<Ts, F>;
       }
     }
+  }
+
+  private rowPassesChanged(
+    archetype: Archetype,
+    types: readonly ComponentType[],
+    row: number,
+    sinceTick: number,
+  ): boolean {
+    for (const t of types) {
+      if (!isChangedSince(archetype, t, row, sinceTick)) return false;
+    }
+    return true;
+  }
+
+  private rowPassesAdded(
+    archetype: Archetype,
+    types: readonly ComponentType[],
+    row: number,
+    sinceTick: number,
+  ): boolean {
+    for (const t of types) {
+      if (!isAddedSince(archetype, t, row, sinceTick)) return false;
+    }
+    return true;
+  }
+
+  private pushRemoved(type: ComponentType, entity: Entity, tick: number): void {
+    let bucket = this.removedBuffer.get(type);
+    if (!bucket) {
+      bucket = [];
+      this.removedBuffer.set(type, bucket);
+    }
+    bucket.push({ entity, tick });
   }
 
   private getOrCreateArchetype(types: ReadonlySet<ComponentType>): Archetype {
@@ -429,3 +668,14 @@ export class World {
     return this.tickCounter;
   }
 }
+
+const freshEntries = (
+  values: ReadonlyMap<ComponentType, unknown>,
+  tick: number,
+): Map<ComponentType, ColumnEntry> => {
+  const out = new Map<ComponentType, ColumnEntry>();
+  for (const [t, v] of values) {
+    out.set(t, { value: v, addedTick: tick, changedTick: tick });
+  }
+  return out;
+};

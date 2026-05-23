@@ -14,10 +14,31 @@ export const archetypeKeyOf = (set: Iterable<ComponentType>): string => {
 };
 
 /**
+ * One row's worth of per-component storage data: the component value and the
+ * pair of mutation ticks (when this `(entity, type)` pair was added to its
+ * current archetype, when it was last marked changed).
+ *
+ * `addedTick === changedTick` immediately after add. They diverge when the
+ * component is mutated in place (`World.markChanged`) or re-inserted by value
+ * without a structural change.
+ *
+ * @internal
+ */
+export interface ColumnEntry {
+  readonly value: unknown;
+  readonly addedTick: number;
+  readonly changedTick: number;
+}
+
+/**
  * Storage bucket for entities sharing the same component set. Each component
- * type has a parallel column of values plus a side-by-side column of last-
- * mutation ticks (the tick columns are wired now so future change-detection
- * filters can read them without re-storaging).
+ * type has three parallel columns: the value column, a `changedTick` column
+ * (bumped on every mutation through the World surface, including in-place
+ * `markChanged`), and an `addedTick` column (bumped only when the component
+ * is newly attached to the entity, preserved across archetype transitions).
+ *
+ * `Added<T>` ⟹ `Changed<T>` by construction: every operation that writes
+ * `addedTick` also writes `changedTick` to the same value.
  *
  * @internal
  */
@@ -25,26 +46,36 @@ export class Archetype {
   readonly types: readonly ComponentType[];
   readonly typeSet: ReadonlySet<ComponentType>;
   readonly columns: Map<ComponentType, unknown[]>;
-  readonly tickColumns: Map<ComponentType, number[]>;
+  readonly changedTickColumns: Map<ComponentType, number[]>;
+  readonly addedTickColumns: Map<ComponentType, number[]>;
   readonly entities: Entity[] = [];
 
   constructor(types: ReadonlySet<ComponentType>) {
     this.typeSet = types;
     this.types = [...types];
     this.columns = new Map();
-    this.tickColumns = new Map();
+    this.changedTickColumns = new Map();
+    this.addedTickColumns = new Map();
     for (const t of types) {
       this.columns.set(t, []);
-      this.tickColumns.set(t, []);
+      this.changedTickColumns.set(t, []);
+      this.addedTickColumns.set(t, []);
     }
   }
 
-  push(entity: Entity, values: ReadonlyMap<ComponentType, unknown>, tick: number): number {
+  /**
+   * Append a row carrying one {@link ColumnEntry} per type in this archetype.
+   * The caller is responsible for supplying an entry for every type — missing
+   * entries are a programmer error.
+   */
+  push(entity: Entity, entries: ReadonlyMap<ComponentType, ColumnEntry>): number {
     const row = this.entities.length;
     this.entities.push(entity);
     for (const t of this.types) {
-      this.columns.get(t)!.push(values.get(t));
-      this.tickColumns.get(t)!.push(tick);
+      const entry = entries.get(t)!;
+      this.columns.get(t)!.push(entry.value);
+      this.changedTickColumns.get(t)!.push(entry.changedTick);
+      this.addedTickColumns.get(t)!.push(entry.addedTick);
     }
     return row;
   }
@@ -59,7 +90,8 @@ export class Archetype {
     if (row === last) {
       this.entities.pop();
       for (const col of this.columns.values()) col.pop();
-      for (const col of this.tickColumns.values()) col.pop();
+      for (const col of this.changedTickColumns.values()) col.pop();
+      for (const col of this.addedTickColumns.values()) col.pop();
       return undefined;
     }
     const moved = this.entities[last]!;
@@ -69,7 +101,11 @@ export class Archetype {
       col[row] = col[last]!;
       col.pop();
     }
-    for (const col of this.tickColumns.values()) {
+    for (const col of this.changedTickColumns.values()) {
+      col[row] = col[last]!;
+      col.pop();
+    }
+    for (const col of this.addedTickColumns.values()) {
       col[row] = col[last]!;
       col.pop();
     }
