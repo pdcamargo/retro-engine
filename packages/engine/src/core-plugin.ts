@@ -1,3 +1,4 @@
+import { CameraPlugin } from './camera/camera-plugin';
 import { RemovedComponents } from './change-detection';
 import { Children, Parent, propagateTransformsGated } from './hierarchy';
 import type { App } from './index';
@@ -74,5 +75,6 @@ export class CorePlugin implements PluginObject {
       const idx = siblings.entities.indexOf(ctx.entity);
       if (idx >= 0) siblings.entities.splice(idx, 1);
     });
+    app.addPlugin(new CameraPlugin());
   }
 }

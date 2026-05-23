@@ -1,4 +1,5 @@
 import type {
+  ColorAttachment,
   CommandEncoder,
   Renderer,
   RenderPassEncoder,
@@ -7,6 +8,9 @@ import type {
 } from '@retro-engine/renderer-core';
 import { World } from '@retro-engine/ecs';
 
+import type { CameraView } from './camera/camera';
+import { ClearColor } from './camera/clear-color';
+import { SortedCameras } from './camera/sorted-cameras';
 import type { CommandOp } from './commands';
 import { applyCommandOp } from './commands';
 import { ComponentHookRegistry } from './component-hooks';
@@ -40,6 +44,28 @@ import { Time } from './time';
 
 export type { Logger } from './log';
 export { createConsoleLogger, engineLogger } from './log';
+export type { CameraView, ComputedCamera, Viewport } from './camera/camera';
+export { Camera, CameraRenderTarget, ClearColorConfig } from './camera/camera';
+export { ClearColor } from './camera/clear-color';
+export type { Camera2dOptions, Camera3dOptions } from './camera/camera-bundles';
+export { Camera2d, Camera3d } from './camera/camera-bundles';
+export {
+  buildOrthographicMatrix,
+  buildPerspectiveMatrix,
+  OrthographicProjection,
+  PerspectiveProjection,
+  ScalingMode,
+  updateOrthographicArea,
+} from './camera/projection';
+export { RenderLayers, renderLayersIntersect } from './camera/render-layers';
+export { SortedCameras } from './camera/sorted-cameras';
+export {
+  VIEW_UNIFORM_BYTE_SIZE,
+  VIEW_UNIFORM_FLOAT_COUNT,
+  VIEW_UNIFORM_WGSL,
+  ViewBindGroupCache,
+} from './camera/extracted';
+export { CameraPlugin } from './camera/camera-plugin';
 export type { CommandsHandle, EntityCommands } from './commands';
 export { Commands } from './commands';
 export type { HookCtx, HookKind, LifecycleEvent } from './component-hooks';
@@ -105,14 +131,29 @@ export type Stage =
   | 'fixedLast';
 
 /**
- * Per-frame context handed to render-stage systems via the `RenderCtx` param.
- * The encoder and pass are scoped to the current frame and become invalid once
- * the frame ends — do not retain them across systems or across ticks.
+ * Per-frame, per-camera context handed to render-stage systems via the
+ * `RenderCtx` param. The encoder and pass are scoped to the current camera's
+ * render pass and become invalid as soon as the engine closes the pass — do
+ * not retain them across systems, across cameras, or across frames.
+ *
+ * `camera` exposes the {@link CameraView} for the camera the engine is
+ * currently dispatching against; render systems read view matrices, the
+ * resolved target, the viewport, and the per-camera view bind group through
+ * this field. Render-set systems fire once per active camera per frame
+ * (per ADR-0020), so a render system body sees a different `camera` each
+ * invocation when multiple cameras are active.
+ *
+ * `surfaceView` is kept for backwards compatibility with code written
+ * against ADR-0019; for cameras targeting the App's primary surface, it
+ * equals `camera.target.view`, and for off-screen-target cameras it is also
+ * set to that camera's target view (i.e. `camera.target.view` is always the
+ * better source — `surfaceView` is the original field name).
  */
 export interface RenderContext {
   readonly encoder: CommandEncoder;
   readonly pass: RenderPassEncoder;
   readonly surfaceView: TextureView;
+  readonly camera: CameraView;
 }
 
 export interface AppOptions {
@@ -264,6 +305,12 @@ export class App {
     this.canvas = options.canvas;
     this.clearColor = options.clearColor ?? { r: 0, g: 0, b: 0, a: 1 };
     this.logger = options.logger ?? engineLogger;
+    // ADR-0020: legacy `AppOptions.clearColor` is sugar for inserting a
+    // `ClearColor` resource. CameraPlugin only inserts a default if no
+    // ClearColor is already present, so user-supplied values win.
+    if (options.clearColor !== undefined) {
+      this.insertResource(new ClearColor(options.clearColor));
+    }
     this.addPlugin(new CorePlugin());
   }
 
@@ -999,24 +1046,51 @@ export class App {
     this.runRenderSet(bySet.get(RenderSet.Queue), RenderSet.Queue, undefined);
     this.runRenderSet(bySet.get(RenderSet.PhaseSort), RenderSet.PhaseSort, undefined);
 
-    // The render pass opens here and stays open through the Render set.
-    // Headless apps (no canvas / no surface) skip the pass but still run
-    // Cleanup so per-frame teardown systems fire.
-    if (this.surface) {
+    // ADR-0020: open one render pass per active camera, in SortedCameras
+    // order. The Render set runs once per camera with that camera's
+    // RenderContext. If no cameras are active and a surface exists, fall
+    // back to a single clear-only pass so the swapchain doesn't show stale
+    // content; headless apps with no cameras skip GPU work entirely.
+    const sorted = this.getResource(SortedCameras);
+    const views = sorted?.views ?? [];
+    if (views.length > 0) {
+      const encoder = this.renderer.createCommandEncoder('frame');
+      for (const view of views) {
+        const attachment: ColorAttachment = {
+          view: view.target.view,
+          loadOp: view.loadOp,
+          storeOp: 'store',
+          ...(view.clearColor !== undefined ? { clearValue: view.clearColor } : {}),
+        };
+        const pass = encoder.beginRenderPass({
+          label: `camera#${view.sourceEntity}`,
+          colorAttachments: [attachment],
+        });
+        const render: RenderContext = {
+          encoder,
+          pass,
+          surfaceView: view.target.view,
+          camera: view,
+        };
+        this.runRenderSet(renderSystems, RenderSet.Render, render);
+        pass.end();
+      }
+      this.renderer.submit([encoder.finish()]);
+    } else if (this.surface) {
       const surfaceView = this.surface.getCurrentTextureView();
       const encoder = this.renderer.createCommandEncoder('frame');
+      const clearColor = this.getResource(ClearColor)?.color ?? this.clearColor;
       const pass = encoder.beginRenderPass({
+        label: 'fallback-clear',
         colorAttachments: [
           {
             view: surfaceView,
             loadOp: 'clear',
             storeOp: 'store',
-            clearValue: this.clearColor,
+            clearValue: clearColor,
           },
         ],
       });
-      const render: RenderContext = { encoder, pass, surfaceView };
-      this.runRenderSet(renderSystems, RenderSet.Render, render);
       pass.end();
       this.renderer.submit([encoder.finish()]);
     }

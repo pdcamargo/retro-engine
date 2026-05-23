@@ -4,6 +4,7 @@ import type { Entity } from '@retro-engine/ecs';
 
 import {
   App,
+  Camera2d,
   Children,
   Commands,
   type CommandsHandle,
@@ -373,6 +374,7 @@ describe('Render-stage flush', () => {
     const renderer = makeRenderingRenderer();
     const canvas = makeStubCanvas();
     const app = new App({ renderer, canvas });
+    app.world.spawn(...Camera2d());
     let entityFromRender: Entity | undefined;
     app.addSystem('render', [Commands], (cmd) => {
       entityFromRender = cmd.spawn(new Pos()).id;

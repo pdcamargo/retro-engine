@@ -2,6 +2,7 @@ import { describe, expect, it, spyOn } from 'bun:test';
 
 import {
   App,
+  Camera2d,
   createConsoleLogger,
   inState,
   type Logger,
@@ -78,6 +79,7 @@ describe('System param protocol', () => {
 
   it('resolves RenderCtx to the active frame context in render systems', async () => {
     const app = new App({ renderer: makeRenderingRenderer(), canvas: makeStubCanvas() });
+    app.world.spawn(...Camera2d());
     let received: RenderContext | undefined;
     app.addSystem('render', [RenderCtx], (ctx) => {
       received = ctx;
@@ -88,6 +90,7 @@ describe('System param protocol', () => {
     expect(received?.pass).toBeDefined();
     expect(received?.encoder).toBeDefined();
     expect(received?.surfaceView).toBeDefined();
+    expect(received?.camera).toBeDefined();
   });
 
   it('skips a system whose runIf condition returns false', async () => {

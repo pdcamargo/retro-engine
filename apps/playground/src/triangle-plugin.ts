@@ -1,6 +1,7 @@
 import type { Entity } from '@retro-engine/ecs';
 import type { Plugin } from '@retro-engine/engine';
 import {
+  Camera2d,
   Commands,
   GlobalTransform,
   Parent,
@@ -115,6 +116,11 @@ export const trianglePlugin: Plugin = (app) => {
       },
       primitive: { topology: 'triangle-list' },
     });
+
+    // Spawn the world camera. After ADR-0020, render systems fire once per
+    // active camera; without a Camera2d / Camera3d the engine falls back to
+    // a clear-only pass and the triangle would never draw.
+    cmd.spawn(Camera2d());
 
     cmd.spawn(new Transform()).withChildren((parent) => {
       parent.spawn(new Transform(vec3.create(0.3, 0.0, 0.0)));

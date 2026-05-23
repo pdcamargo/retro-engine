@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test';
 
 import {
   App,
+  Camera2d,
   Extract,
   Query,
   RenderCtx,
@@ -85,6 +86,7 @@ describe('Extract<P>', () => {
 describe('RenderSet ordering', () => {
   it('runs the six sub-sets in order Extract → Prepare → Queue → PhaseSort → Render → Cleanup', async () => {
     const app = new App({ renderer: makeRenderingRenderer(), canvas: makeStubCanvas() });
+    app.world.spawn(...Camera2d());
     const trail: string[] = [];
     app.addSystem('render', [], () => trail.push('cleanup'), { set: RenderSet.Cleanup });
     app.addSystem('render', [], () => trail.push('render'), { set: RenderSet.Render });
@@ -98,6 +100,7 @@ describe('RenderSet ordering', () => {
 
   it('defaults to the Render set for render-stage systems with no explicit set', async () => {
     const app = new App({ renderer: makeRenderingRenderer(), canvas: makeStubCanvas() });
+    app.world.spawn(...Camera2d());
     const trail: string[] = [];
     // No `set` option — defaults to RenderSet.Render. Backwards-compat path
     // the playground triangle relied on before ADR-0019.
@@ -119,6 +122,7 @@ describe('RenderSet ordering', () => {
 describe('RenderCtx scope', () => {
   it('resolves inside the Render set', async () => {
     const app = new App({ renderer: makeRenderingRenderer(), canvas: makeStubCanvas() });
+    app.world.spawn(...Camera2d());
     let resolved = false;
     app.addSystem('render', [RenderCtx], (ctx) => {
       expect(ctx.pass).toBeDefined();
@@ -141,6 +145,7 @@ describe('RenderCtx scope', () => {
 describe('Render-world auto-clear', () => {
   it('clears every render-world entity between frames', async () => {
     const app = new App({ renderer: makeRenderingRenderer(), canvas: makeStubCanvas() });
+    app.world.spawn(...Camera2d());
     const renderCounts: number[] = [];
     app.addSystem('render', [], () => {
       app.renderWorld.spawn(new Marker(), new Position());
@@ -176,6 +181,7 @@ describe('Render-world auto-clear', () => {
 describe('Extract round-trip integration', () => {
   it('copies a main-world entity into the render world each frame', async () => {
     const app = new App({ renderer: makeRenderingRenderer(), canvas: makeStubCanvas() });
+    app.world.spawn(...Camera2d());
     app.world.spawn(new Position(3, 0));
     app.world.spawn(new Position(5, 0));
 
