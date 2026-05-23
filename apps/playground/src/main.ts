@@ -1,6 +1,7 @@
 import { App } from '@retro-engine/engine';
 import { createWebGPURenderer } from '@retro-engine/renderer-webgpu';
 
+import { LoggingPlugin } from './logging-plugin';
 import { trianglePlugin } from './triangle-plugin';
 
 const canvas = document.getElementById('playground-canvas');
@@ -10,6 +11,7 @@ if (!(canvas instanceof HTMLCanvasElement)) {
 
 const renderer = createWebGPURenderer(canvas);
 const app = new App({ renderer, canvas });
+app.addPlugin(new LoggingPlugin());
 app.addPlugin(trianglePlugin);
 
 app.run().catch((err: unknown) => {

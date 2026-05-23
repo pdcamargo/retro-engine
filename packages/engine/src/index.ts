@@ -9,10 +9,14 @@ import { World } from '@retro-engine/ecs';
 
 import type { CommandOp } from './commands';
 import { applyCommandOp } from './commands';
-import { propagateTransforms } from './hierarchy';
+import { CorePlugin } from './core-plugin';
 import type { Logger } from './log';
 import { engineLogger } from './log';
 import { runFixedMainLoop } from './fixed-time';
+import type { Plugin, PluginObject, PluginsState } from './plugin';
+import { wrapFunctionPlugin } from './plugin';
+import type { PluginGroup } from './plugin-group';
+import { PluginGroupBuilder } from './plugin-group';
 import type { RegisteredSystem } from './schedule';
 import { runStage, StageSystems } from './schedule';
 import {
@@ -25,13 +29,16 @@ import {
   StateRegistry,
 } from './state';
 import type { Param, ParamValues, ResolveCtx, SystemId } from './system-param';
-import { ResMut, RunCondition } from './system-param';
+import { RunCondition } from './system-param';
 import { Time } from './time';
 
 export type { Logger } from './log';
 export { createConsoleLogger, engineLogger } from './log';
 export type { CommandsHandle, EntityCommands } from './commands';
 export { Commands } from './commands';
+export type { Plugin, PluginFn, PluginObject, PluginsState } from './plugin';
+export type { PluginGroup } from './plugin-group';
+export { PluginGroupBuilder } from './plugin-group';
 export type { Param, ParamValues, ResolveCtx, SystemId } from './system-param';
 export { Query, RenderCtx, Res, ResMut, RunCondition } from './system-param';
 export { anyWithComponent, inState, resourceChanged, resourceExists } from './run-conditions';
@@ -42,9 +49,6 @@ export { Time } from './time';
 export { GlobalTransform, Transform } from './transform';
 export type { ChildBuilder } from './hierarchy';
 export { Children, Parent } from './hierarchy';
-
-/** A plugin extends an `App` by registering systems, resources, and component types. */
-export type Plugin = (app: App) => void;
 
 /**
  * Named stage in the schedule — when a system runs within a frame.
@@ -198,23 +202,127 @@ export class App {
   private currentFrameTimestampMs = 0;
   private hasRunStartup = false;
 
+  private readonly pluginRegistry: PluginObject[] = [];
+  private readonly pluginNameIndex = new Map<string, PluginObject>();
+  private readonly pluginsReadyFlags: boolean[] = [];
+  private _pluginsState: PluginsState = 'Building';
+
   constructor(options: AppOptions) {
     this.renderer = options.renderer;
     this.canvas = options.canvas;
     this.clearColor = options.clearColor ?? { r: 0, g: 0, b: 0, a: 1 };
     this.logger = options.logger ?? engineLogger;
-    this.insertResource(new Time());
-    this.addSystem('first', [ResMut(Time)], (time) => {
-      time.tick(this.currentFrameTimestampMs);
-    });
-    this.addSystem('postUpdate', [], () => {
-      propagateTransforms(this.world, this.logger);
-    });
+    this.addPlugin(new CorePlugin());
   }
 
+  /**
+   * Current phase of the plugin lifecycle state machine. Starts at
+   * `'Building'`; the first {@link App.advanceFrame} (or {@link App.run})
+   * transitions through `'Ready'` and `'Cleaned'` once every plugin's
+   * `ready()` reports true.
+   */
+  get pluginsState(): PluginsState {
+    return this._pluginsState;
+  }
+
+  /**
+   * Register a plugin. Accepts either an object implementing the
+   * {@link PluginObject} interface or a {@link PluginFn} callback — function
+   * plugins are auto-wrapped (named functions are unique by `fn.name`;
+   * anonymous functions are non-unique).
+   *
+   * Throws if the App is no longer in `'Building'` (i.e. the first
+   * `advanceFrame` has already run), or if the plugin's
+   * {@link PluginObject.isUnique} reports true and another plugin with the
+   * same `name()` is already registered. Calls `plugin.build(this)`
+   * synchronously before returning.
+   */
   addPlugin(plugin: Plugin): this {
-    plugin(this);
+    if (this._pluginsState !== 'Building') {
+      throw new Error(
+        `App.addPlugin: plugins must be registered before the first advanceFrame — App is in state '${this._pluginsState}'`,
+      );
+    }
+    const wrapped = wrapFunctionPlugin(plugin);
+    const name = wrapped.name();
+    const unique = wrapped.isUnique?.() ?? true;
+    if (unique && this.pluginNameIndex.has(name)) {
+      throw new Error(
+        `App.addPlugin: plugin '${name}' is unique and already registered — set isUnique() to false to allow duplicates`,
+      );
+    }
+    this.pluginRegistry.push(wrapped);
+    this.pluginsReadyFlags.push(false);
+    this.pluginNameIndex.set(name, wrapped);
+    wrapped.build(this);
     return this;
+  }
+
+  /**
+   * Register a batch of plugins in order. Accepts a `Plugin[]`, a
+   * {@link PluginGroup} (its `.build()` builder is materialised), or a
+   * {@link PluginGroupBuilder} (its current entry list is flushed). Each
+   * resolved plugin is forwarded to {@link App.addPlugin} in order — the
+   * same uniqueness and state-machine checks apply.
+   */
+  addPlugins(input: ReadonlyArray<PluginObject> | PluginGroup | PluginGroupBuilder): this {
+    let plugins: ReadonlyArray<PluginObject>;
+    if (Array.isArray(input)) {
+      plugins = input;
+    } else if (input instanceof PluginGroupBuilder) {
+      plugins = input.build();
+    } else {
+      plugins = (input as PluginGroup).build().build();
+    }
+    for (const p of plugins) this.addPlugin(p);
+    return this;
+  }
+
+  /**
+   * Drive the plugin lifecycle one tick: while `_pluginsState === 'Building'`,
+   * poll `ready()` for each not-yet-ready plugin; when every plugin reports
+   * true, run `finish()` and `cleanup()` in registration order and advance
+   * state to `'Cleaned'`. No-op once cleaned.
+   *
+   * Called at the very top of {@link App.advanceFrame}, before any system
+   * runs. The schedule still runs every frame regardless of state — only
+   * the lifecycle hooks are gated.
+   */
+  private tickPluginLifecycle(): void {
+    if (this._pluginsState !== 'Building') return;
+    let allReady = true;
+    for (let i = 0; i < this.pluginRegistry.length; i += 1) {
+      if (this.pluginsReadyFlags[i]) continue;
+      const plugin = this.pluginRegistry[i]!;
+      const ready = plugin.ready ? plugin.ready(this) : true;
+      if (ready) {
+        this.pluginsReadyFlags[i] = true;
+      } else {
+        allReady = false;
+      }
+    }
+    if (!allReady) return;
+    for (const plugin of this.pluginRegistry) {
+      plugin.finish?.(this);
+    }
+    this._pluginsState = 'Ready';
+    for (const plugin of this.pluginRegistry) {
+      plugin.cleanup?.(this);
+    }
+    this._pluginsState = 'Cleaned';
+  }
+
+  /**
+   * Latest `performance.now()`-style timestamp recorded by
+   * {@link App.advanceFrame}. The engine's internal `Time.tick` system
+   * (registered by `CorePlugin`) reads this to advance the clock. Exposed
+   * for engine-internal plugins; gameplay code reads time through
+   * `Res(Time)` / `ResMut(Time)`.
+   *
+   * @internal
+   */
+  currentFrameTimestamp(): number {
+    return this.currentFrameTimestampMs;
   }
 
   /**
@@ -510,6 +618,7 @@ export class App {
    */
   advanceFrame(timestampMs?: number): void {
     this.currentFrameTimestampMs = timestampMs ?? performance.now();
+    this.tickPluginLifecycle();
     runStage(this.stages.first, this, 'first');
     if (!this.hasRunStartup) {
       runStage(this.stages.startup, this, 'startup');
