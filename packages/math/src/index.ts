@@ -1,5 +1,9 @@
 export * from 'wgpu-matrix';
 
+export * from './aabb';
+export * from './frustum';
+export * from './plane';
+
 /** sRGB color with linear alpha. Channels in [0, 1]. */
 export interface Color {
   r: number;

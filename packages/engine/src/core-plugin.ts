@@ -6,6 +6,7 @@ import type { PluginObject } from './plugin';
 import { Query, ResMut } from './system-param';
 import { Time } from './time';
 import { Transform } from './transform';
+import { VisibilityPlugin } from './visibility/visibility-plugin';
 
 /**
  * Engine-internal plugin that wires every framework-essential system the
@@ -76,5 +77,6 @@ export class CorePlugin implements PluginObject {
       if (idx >= 0) siblings.entities.splice(idx, 1);
     });
     app.addPlugin(new CameraPlugin());
+    app.addPlugin(new VisibilityPlugin());
   }
 }

@@ -1,5 +1,5 @@
 import type { Color, Mat4, Vec3 } from '@retro-engine/math';
-import { mat4, vec3 } from '@retro-engine/math';
+import { Frustum, mat4, vec3 } from '@retro-engine/math';
 import type {
   BindGroup,
   Buffer,
@@ -190,6 +190,14 @@ export class Camera {
     this.clearColor = options.clearColor ?? ClearColorConfig.Default;
     this.computed = defaultComputed();
   }
+
+  /**
+   * Required Components declaration: spawning an entity with `Camera`
+   * auto-inserts a default-constructed `Frustum`. The visibility plugin
+   * refreshes the frustum each `'postUpdate'` from the camera's computed
+   * view-projection matrix; downstream culling reads it.
+   */
+  static readonly requires = [Frustum];
 }
 
 /**

@@ -90,6 +90,16 @@ export { Time } from './time';
 export { GlobalTransform, Transform } from './transform';
 export type { ChildBuilder } from './hierarchy';
 export { Children, Parent } from './hierarchy';
+export {
+  checkVisibilitySystem,
+  InheritedVisibility,
+  NoFrustumCulling,
+  updateFrustaSystem,
+  ViewVisibility,
+  Visibility,
+  VisibilityPlugin,
+  visibilityPropagateSystem,
+} from './visibility';
 
 /**
  * Named stage in the schedule — when a system runs within a frame.
