@@ -278,6 +278,78 @@ describe('Direct world mutations do NOT fire hooks (v1 limitation, documented)',
   });
 });
 
+describe('onRemove cascade — consumer registers a hook that despawns children', () => {
+  it('plain cmd.despawn of the root tears down the whole subtree via the hook chain', () => {
+    class TreeNode {
+      constructor(public children: Entity[] = []) {}
+    }
+    const app = new App({ renderer: makeHeadlessRenderer() });
+    app.registerComponentHook(TreeNode, 'onRemove', (ctx) => {
+      for (const child of ctx.value.children) {
+        if (ctx.world.hasEntity(child)) ctx.commands.despawn(child);
+      }
+    });
+
+    let rootId: Entity | undefined;
+    const descendants: Entity[] = [];
+    app.addSystem('startup', [Commands], (cmd) => {
+      const leafA = cmd.spawn(new TreeNode()).id;
+      const leafB = cmd.spawn(new TreeNode()).id;
+      const mid = cmd.spawn(new TreeNode([leafA, leafB])).id;
+      rootId = cmd.spawn(new TreeNode([mid])).id;
+      descendants.push(leafA, leafB, mid);
+    });
+    app.advanceFrame(0);
+    expect(app.world.hasEntity(rootId!)).toBe(true);
+    for (const id of descendants) expect(app.world.hasEntity(id)).toBe(true);
+
+    app.addSystem('update', [Commands], (cmd) => {
+      cmd.despawn(rootId!);
+    });
+    app.advanceFrame(16);
+    expect(app.world.hasEntity(rootId!)).toBe(false);
+    for (const id of descendants) expect(app.world.hasEntity(id)).toBe(false);
+  });
+});
+
+describe('onRemove back-reference cleanup — consumer registers a hook that splices an entity out of its parent', () => {
+  it('despawning a member removes its id from the group\'s member list', () => {
+    class Group {
+      constructor(public members: Entity[] = []) {}
+    }
+    class MemberOf {
+      constructor(public group: Entity) {}
+    }
+    const app = new App({ renderer: makeHeadlessRenderer() });
+    app.registerComponentHook(MemberOf, 'onRemove', (ctx) => {
+      const groupEntity = ctx.value.group;
+      if (!ctx.world.hasEntity(groupEntity)) return;
+      const set = ctx.world.getComponent(groupEntity, Group);
+      if (!set) return;
+      const i = set.members.indexOf(ctx.entity);
+      if (i >= 0) set.members.splice(i, 1);
+    });
+
+    let groupId: Entity | undefined;
+    let memberId: Entity | undefined;
+    app.addSystem('startup', [Commands], (cmd) => {
+      const m = cmd.spawn().id;
+      groupId = cmd.spawn(new Group([m])).id;
+      cmd.entity(m).insert(new MemberOf(groupId));
+      memberId = m;
+    });
+    app.advanceFrame(0);
+    expect(app.world.getComponent(groupId!, Group)?.members).toEqual([memberId!]);
+
+    app.addSystem('update', [Commands], (cmd) => {
+      cmd.despawn(memberId!);
+    });
+    app.advanceFrame(16);
+    expect(app.world.hasEntity(memberId!)).toBe(false);
+    expect(app.world.getComponent(groupId!, Group)?.members).toEqual([]);
+  });
+});
+
 describe('Hooks fire on insert when adding new types to an existing entity', () => {
   it('onAdd fires for the new type, onInsert fires for all bundle types', () => {
     let aAdds = 0;

@@ -24,7 +24,7 @@ Each phase is a sketch. Promote to a backlog item when a real use case appears.
 ## Open questions
 
 - Z-ordering: separate component, or a property on the relevant render component (e.g., `Sprite.layer`)?
-- Despawn-parent semantics: recursive despawn (M2 baseline default) is the right default, but escape hatches (`detachChildren()` before despawn) need an API surface.
+- Despawn-parent semantics: always-cascade is the default since ADR-0014. The remaining open question is the escape hatch — a first-class `detachChildren()` / "drop the subtree before I despawn the root" surface for the rarer "orphan the children on purpose" use case. Today's escape hatch is `cmd.entity(parent).removeChild(child)` per child, which is verbose for wide subtrees.
 - Mat4-vs-TRS storage for `GlobalTransform`: implementation detail or public choice?
 - Does `Transform` need a builder API, or are object-literal constructors enough?
 

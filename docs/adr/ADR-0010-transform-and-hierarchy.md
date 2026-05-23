@@ -1,6 +1,6 @@
 # ADR-0010: Transform and Hierarchy
 
-- **Status:** Accepted
+- **Status:** Superseded in part by [ADR-0014](ADR-0014-recursive-despawn-via-component-hooks.md) (§3 despawn semantics, §7 `despawnRecursive` mechanics)
 - **Date:** 2026-05-22
 
 ## Context

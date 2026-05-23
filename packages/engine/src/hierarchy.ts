@@ -16,10 +16,13 @@ import { composeTransformInto, GlobalTransform, Transform } from './transform';
  * `cmd.entity(parent).addChild(child)`) rather than constructing `Parent`
  * directly — the sugar also maintains the parent's {@link Children} list.
  *
- * If the referenced entity is no longer live (despawned without a recursive
- * cascade) the child becomes an *effective root*: the propagation system
- * treats it as having no parent and emits one `devWarn` per offending entity
- * per frame. Reparent via `cmd.entity(newParent).addChild(child)` to clear.
+ * If the referenced entity is no longer live (e.g. removed via a direct
+ * `world.despawn` call outside the commands flush) the child becomes an
+ * *effective root*: the propagation system treats it as having no parent
+ * and emits one `devWarn` per offending entity per frame. Reparent via
+ * `cmd.entity(newParent).addChild(child)` to clear. Commands-driven
+ * `despawn` cascades through `Children`, so orphans via that path do not
+ * occur.
  */
 export class Parent {
   constructor(public entity: Entity) {}
@@ -28,12 +31,13 @@ export class Parent {
 /**
  * Maintained list of an entity's direct children. The list is kept in sync by
  * the `Commands` hierarchy sugar (`withChildren`, `addChild`, `removeChild`,
- * `despawnRecursive`); user code may *read* it freely but should mutate it
- * through `Commands`, not by reaching into `entities` directly.
+ * `despawn`); user code may *read* it freely but should mutate it through
+ * `Commands`, not by reaching into `entities` directly.
  *
  * The propagation system does **not** read `Children` — it depends only on
  * `Parent`. `Children` exists for consumer code that needs to walk down the
- * hierarchy (debug viz, gameplay logic) and for the recursive-despawn path.
+ * hierarchy (debug viz, gameplay logic) and drives the cascading-despawn
+ * lifecycle hook registered by the engine's core plugin.
  */
 export class Children {
   constructor(public entities: Entity[] = []) {}

@@ -23,7 +23,6 @@ export type CommandOp =
   | { kind: 'removeResource'; type: ComponentType }
   | { kind: 'appendChild'; parent: Entity; child: Entity }
   | { kind: 'detachChild'; parent: Entity; child: Entity }
-  | { kind: 'despawnSubtree'; root: Entity }
   | { kind: 'triggerGlobal'; event: object; depth: number }
   | { kind: 'triggerEntity'; event: object; target: Entity; depth: number }
   | {
@@ -292,34 +291,6 @@ export const applyCommandOp = (op: CommandOp, app: App, triggeringSystemId: Syst
       }
       return;
     }
-    case 'despawnSubtree': {
-      if (!app.world.hasEntity(op.root)) return;
-      // Detach the root from its own parent's Children list, if any.
-      const rootParent = app.world.getComponent(op.root, Parent);
-      if (rootParent) {
-        const parentChildren = app.world.getComponent(rootParent.entity, Children);
-        if (parentChildren) {
-          const idx = parentChildren.entities.indexOf(op.root);
-          if (idx >= 0) parentChildren.entities.splice(idx, 1);
-        }
-      }
-      // Walk the subtree via Children. Use a stack; despawn order doesn't matter.
-      const stack: Entity[] = [op.root];
-      const toDespawn: Entity[] = [];
-      while (stack.length > 0) {
-        const e = stack.pop()!;
-        if (!app.world.hasEntity(e)) continue;
-        toDespawn.push(e);
-        const children = app.world.getComponent(e, Children);
-        if (children) {
-          for (const child of children.entities) {
-            if (app.world.hasEntity(child)) stack.push(child);
-          }
-        }
-      }
-      for (const e of toDespawn) applyDespawnWithHooks(app, e, cmdHandle);
-      return;
-    }
     case 'triggerGlobal': {
       // Depth was validated at enqueue (see `CommandsHandleImpl.trigger`); the
       // arm trusts the value. Reading the triggering system's current stage
@@ -380,7 +351,11 @@ export interface EntityCommands {
   insert(...components: ReadonlyArray<object | readonly object[]>): EntityCommands;
   /** Enqueue removal of one or more components by class. */
   remove(...types: ComponentType[]): EntityCommands;
-  /** Enqueue despawn of this entity. Does **not** cascade to children — use {@link despawnRecursive}. */
+  /**
+   * Enqueue despawn of this entity. Cascades through `Children` (every
+   * descendant is despawned) and removes this entity from its parent's
+   * `Children` list. Dead descendants are skipped silently.
+   */
   despawn(): void;
   /**
    * Build a hierarchy of children under this entity. Inside the callback,
@@ -404,9 +379,10 @@ export interface EntityCommands {
    */
   removeChild(child: Entity): EntityCommands;
   /**
-   * Despawn this entity along with every descendant reachable through
-   * `Children`. Detaches the root from its own parent's `Children` list, if
-   * any. Dead descendants are skipped silently.
+   * Alias for {@link despawn}. Both cascade through `Children` and detach
+   * this entity from its parent's `Children` list. Kept for call-site
+   * intent — write `.despawnRecursive()` when reading the code should
+   * emphasise the subtree walk; write `.despawn()` otherwise.
    */
   despawnRecursive(): void;
   /**
@@ -548,7 +524,7 @@ class EntityCommandsImpl implements EntityCommands {
   }
 
   despawnRecursive(): void {
-    this.handle.enqueue({ kind: 'despawnSubtree', root: this.id });
+    this.handle.enqueue({ kind: 'despawn', entity: this.id });
   }
 
   trigger<E extends object>(event: E): EntityCommands {

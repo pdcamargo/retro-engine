@@ -1,4 +1,4 @@
-import { propagateTransforms } from './hierarchy';
+import { Children, Parent, propagateTransforms } from './hierarchy';
 import type { App } from './index';
 import type { PluginObject } from './plugin';
 import { ResMut } from './system-param';
@@ -7,8 +7,9 @@ import { Time } from './time';
 /**
  * Engine-internal plugin that wires every framework-essential system the
  * engine guarantees to run. Registered first by the `App` constructor —
- * before any user-supplied plugin — so user code observes `Time` and
- * propagated transforms with no additional setup.
+ * before any user-supplied plugin — so user code observes `Time`,
+ * propagated transforms, and hierarchy lifecycle behaviour with no
+ * additional setup.
  *
  * Current responsibilities:
  *
@@ -18,6 +19,9 @@ import { Time } from './time';
  *   with one canonical clock advance.
  * - Register the transform propagation system in `'postUpdate'`, so every
  *   entity's `GlobalTransform` is up-to-date before render reads it.
+ * - Register hierarchy lifecycle hooks so `cmd.entity(e).despawn()`
+ *   cascades through `Children` and detaches the dying entity from its
+ *   parent's `Children` list.
  *
  * Future engine-internal systems (renderer scheduling, input polling, asset
  * loading drivers, scene-loading hooks) follow the same pattern: register
@@ -40,6 +44,19 @@ export class CorePlugin implements PluginObject {
     });
     app.addSystem('postUpdate', [], () => {
       propagateTransforms(app.world, app.logger);
+    });
+    app.registerComponentHook(Children, 'onRemove', (ctx) => {
+      for (const child of ctx.value.entities) {
+        if (ctx.world.hasEntity(child)) ctx.commands.despawn(child);
+      }
+    });
+    app.registerComponentHook(Parent, 'onRemove', (ctx) => {
+      const parentEntity = ctx.value.entity;
+      if (!ctx.world.hasEntity(parentEntity)) return;
+      const siblings = ctx.world.getComponent(parentEntity, Children);
+      if (!siblings) return;
+      const idx = siblings.entities.indexOf(ctx.entity);
+      if (idx >= 0) siblings.entities.splice(idx, 1);
     });
   }
 }

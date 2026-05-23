@@ -223,6 +223,58 @@ describe('cmd.despawn', () => {
     });
     expect(() => app.advanceFrame(0)).not.toThrow();
   });
+
+  it('cascades through Children — descendants are despawned with the root', () => {
+    const app = new App({ renderer: makeHeadlessRenderer() });
+    let rootId: Entity | undefined;
+    let childId: Entity | undefined;
+    let grandchildId: Entity | undefined;
+    app.addSystem('startup', [Commands], (cmd) => {
+      const root = cmd.spawn(new Pos());
+      rootId = root.id;
+      root.withChildren((p) => {
+        const child = p.spawn(new Pos());
+        childId = child.id;
+        child.withChildren((g) => {
+          grandchildId = g.spawn(new Pos()).id;
+        });
+      });
+    });
+    app.advanceFrame(0);
+    expect(app.world.hasEntity(rootId!)).toBe(true);
+    expect(app.world.hasEntity(childId!)).toBe(true);
+    expect(app.world.hasEntity(grandchildId!)).toBe(true);
+
+    app.addSystem('update', [Commands], (cmd) => {
+      cmd.despawn(rootId!);
+    });
+    app.advanceFrame(16);
+    expect(app.world.hasEntity(rootId!)).toBe(false);
+    expect(app.world.hasEntity(childId!)).toBe(false);
+    expect(app.world.hasEntity(grandchildId!)).toBe(false);
+  });
+
+  it('detaches the entity from its parent\'s Children list on plain despawn', () => {
+    const app = new App({ renderer: makeHeadlessRenderer() });
+    let parentId: Entity | undefined;
+    let childId: Entity | undefined;
+    app.addSystem('startup', [Commands], (cmd) => {
+      const parent = cmd.spawn(new Pos());
+      parentId = parent.id;
+      parent.withChildren((p) => {
+        childId = p.spawn(new Pos()).id;
+      });
+    });
+    app.advanceFrame(0);
+    expect(app.world.getComponent(parentId!, Children)?.entities).toEqual([childId!]);
+
+    app.addSystem('update', [Commands], (cmd) => {
+      cmd.despawn(childId!);
+    });
+    app.advanceFrame(16);
+    expect(app.world.hasEntity(childId!)).toBe(false);
+    expect(app.world.getComponent(parentId!, Children)?.entities).toEqual([]);
+  });
 });
 
 describe('cmd.entity(...).insert / remove / despawn', () => {
