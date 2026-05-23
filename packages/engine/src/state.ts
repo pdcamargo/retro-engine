@@ -316,8 +316,7 @@ const invokeStateSystem = (rec: StateSystemRecord, app: App): void => {
     world: app.world,
     // 'stateTransition' is an internal driver phase — not part of the
     // user-registerable Stage union. Cast keeps ResolveCtx.stage typed as
-    // Stage (per ADR-0006's sealed shape) without leaking the synthetic
-    // label into the public Stage type.
+    // Stage without leaking the synthetic label into the public Stage type.
     stage: 'stateTransition' as Stage,
     systemId: rec.id,
     lastSeenTick,
@@ -341,8 +340,7 @@ const runRecords = (recs: readonly StateSystemRecord[], app: App): void => {
 
 /**
  * Drive the StateTransition phase for one frame: for every registered state
- * type with a pending `NextState.value`, apply the transition in the order
- * sealed by ADR-0008 §3:
+ * type with a pending `NextState.value`, apply the transition in this order:
  *
  *   1. User OnExit(S_old) systems
  *   2. Remove state-scoped resources for S_old

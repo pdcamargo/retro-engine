@@ -21,7 +21,7 @@ const removedComponentsCache = new WeakMap<object, Param<Iterable<Entity>>>();
  * order — systems running later in F can still observe it), but is gone in
  * frame F+1. A system whose `runIf` returns false for a whole frame loses
  * that frame's removals; cross-frame accumulation for `RemovedComponents` is
- * a documented v1 limitation (see ADR-0012).
+ * a documented v1 limitation.
  *
  * Tokens are cached per constructor: `RemovedComponents(Foo) === RemovedComponents(Foo)`.
  *
