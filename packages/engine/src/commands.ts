@@ -1,6 +1,7 @@
 import type { ComponentType, Entity } from '@retro-engine/ecs';
 
 import type { HookCtx } from './component-hooks';
+import { dispatchLifecycleObservers } from './component-hooks';
 import type { ChildBuilder } from './hierarchy';
 import { Children, Parent } from './hierarchy';
 import type { App } from './index';
@@ -68,21 +69,24 @@ const applySpawnWithHooks = (
   app: App,
   entity: Entity,
   components: readonly object[],
-  cmdHandle: CommandsHandle,
+  triggeringSystemId: SystemId,
 ): void => {
   const userTypes = userPassedTypes(components);
   app.world.spawnReserved(entity, components);
+  const cmdHandle = cmdHandleFor(app, triggeringSystemId);
   const registry = app.componentHookRegistry;
   for (const type of userTypes.keys()) {
-    if (!registry.has(type, 'onAdd')) continue;
     const value = app.world.getComponent(entity, type);
     if (value === undefined) continue;
+    dispatchLifecycleObservers(app, 'onAdd', type, triggeringSystemId, entity, value);
+    if (!registry.has(type, 'onAdd')) continue;
     registry.dispatch(type, 'onAdd', { world: app.world, commands: cmdHandle, entity, value } as HookCtx<unknown>);
   }
   for (const type of userTypes.keys()) {
-    if (!registry.has(type, 'onInsert')) continue;
     const value = app.world.getComponent(entity, type);
     if (value === undefined) continue;
+    dispatchLifecycleObservers(app, 'onInsert', type, triggeringSystemId, entity, value);
+    if (!registry.has(type, 'onInsert')) continue;
     registry.dispatch(type, 'onInsert', { world: app.world, commands: cmdHandle, entity, value } as HookCtx<unknown>);
   }
 };
@@ -102,9 +106,10 @@ const applyInsertWithHooks = (
   app: App,
   entity: Entity,
   components: readonly object[],
-  cmdHandle: CommandsHandle,
+  triggeringSystemId: SystemId,
 ): void => {
   const userTypes = userPassedTypes(components);
+  const cmdHandle = cmdHandleFor(app, triggeringSystemId);
   const registry = app.componentHookRegistry;
 
   const replaced: Array<{ type: ComponentType; oldValue: unknown }> = [];
@@ -118,23 +123,26 @@ const applyInsertWithHooks = (
   }
 
   for (const { type, oldValue } of replaced) {
-    if (!registry.has(type, 'onReplace')) continue;
     if (oldValue === undefined) continue;
+    dispatchLifecycleObservers(app, 'onReplace', type, triggeringSystemId, entity, oldValue);
+    if (!registry.has(type, 'onReplace')) continue;
     registry.dispatch(type, 'onReplace', { world: app.world, commands: cmdHandle, entity, value: oldValue } as HookCtx<unknown>);
   }
 
   app.world.insertBundle(entity, components);
 
   for (const type of newlyAdded) {
-    if (!registry.has(type, 'onAdd')) continue;
     const value = app.world.getComponent(entity, type);
     if (value === undefined) continue;
+    dispatchLifecycleObservers(app, 'onAdd', type, triggeringSystemId, entity, value);
+    if (!registry.has(type, 'onAdd')) continue;
     registry.dispatch(type, 'onAdd', { world: app.world, commands: cmdHandle, entity, value } as HookCtx<unknown>);
   }
   for (const type of userTypes.keys()) {
-    if (!registry.has(type, 'onInsert')) continue;
     const value = app.world.getComponent(entity, type);
     if (value === undefined) continue;
+    dispatchLifecycleObservers(app, 'onInsert', type, triggeringSystemId, entity, value);
+    if (!registry.has(type, 'onInsert')) continue;
     registry.dispatch(type, 'onInsert', { world: app.world, commands: cmdHandle, entity, value } as HookCtx<unknown>);
   }
 };
@@ -150,13 +158,15 @@ const applyRemoveWithHooks = (
   app: App,
   entity: Entity,
   type: ComponentType,
-  cmdHandle: CommandsHandle,
+  triggeringSystemId: SystemId,
 ): void => {
   if (!app.world.has(entity, type)) return;
-  const registry = app.componentHookRegistry;
-  if (registry.has(type, 'onRemove')) {
-    const value = app.world.getComponent(entity, type);
-    if (value !== undefined) {
+  const value = app.world.getComponent(entity, type);
+  if (value !== undefined) {
+    dispatchLifecycleObservers(app, 'onRemove', type, triggeringSystemId, entity, value);
+    const registry = app.componentHookRegistry;
+    if (registry.has(type, 'onRemove')) {
+      const cmdHandle = cmdHandleFor(app, triggeringSystemId);
       registry.dispatch(type, 'onRemove', { world: app.world, commands: cmdHandle, entity, value } as HookCtx<unknown>);
     }
   }
@@ -171,14 +181,20 @@ const applyRemoveWithHooks = (
  *
  * @internal
  */
-const applyDespawnWithHooks = (app: App, entity: Entity, cmdHandle: CommandsHandle): void => {
+const applyDespawnWithHooks = (
+  app: App,
+  entity: Entity,
+  triggeringSystemId: SystemId,
+): void => {
   if (!app.world.hasEntity(entity)) return;
+  const cmdHandle = cmdHandleFor(app, triggeringSystemId);
   const registry = app.componentHookRegistry;
   const types = [...app.world.componentTypesOf(entity)];
   for (const type of types) {
-    if (!registry.has(type, 'onRemove')) continue;
     const value = app.world.getComponent(entity, type);
     if (value === undefined) continue;
+    dispatchLifecycleObservers(app, 'onRemove', type, triggeringSystemId, entity, value);
+    if (!registry.has(type, 'onRemove')) continue;
     registry.dispatch(type, 'onRemove', { world: app.world, commands: cmdHandle, entity, value } as HookCtx<unknown>);
   }
   app.observerRegistry.clearTargetedFor(entity);
@@ -201,14 +217,13 @@ const applyDespawnWithHooks = (app: App, entity: Entity, cmdHandle: CommandsHand
  * @internal
  */
 export const applyCommandOp = (op: CommandOp, app: App, triggeringSystemId: SystemId): void => {
-  const cmdHandle = cmdHandleFor(app, triggeringSystemId);
   switch (op.kind) {
     case 'spawn': {
-      applySpawnWithHooks(app, op.entity, op.components, cmdHandle);
+      applySpawnWithHooks(app, op.entity, op.components, triggeringSystemId);
       return;
     }
     case 'despawn': {
-      applyDespawnWithHooks(app, op.entity, cmdHandle);
+      applyDespawnWithHooks(app, op.entity, triggeringSystemId);
       return;
     }
     case 'insert': {
@@ -218,11 +233,11 @@ export const applyCommandOp = (op: CommandOp, app: App, triggeringSystemId: Syst
         );
         return;
       }
-      applyInsertWithHooks(app, op.entity, op.components, cmdHandle);
+      applyInsertWithHooks(app, op.entity, op.components, triggeringSystemId);
       return;
     }
     case 'remove': {
-      applyRemoveWithHooks(app, op.entity, op.type, cmdHandle);
+      applyRemoveWithHooks(app, op.entity, op.type, triggeringSystemId);
       return;
     }
     case 'insertResource': {
@@ -264,7 +279,7 @@ export const applyCommandOp = (op: CommandOp, app: App, triggeringSystemId: Syst
       if (existingParent) {
         existingParent.entity = op.parent;
       } else {
-        applyInsertWithHooks(app, op.child, [new Parent(op.parent)], cmdHandle);
+        applyInsertWithHooks(app, op.child, [new Parent(op.parent)], triggeringSystemId);
       }
       // Append child to parent.Children (creating the component if absent).
       const children = app.world.getComponent(op.parent, Children);
@@ -273,7 +288,7 @@ export const applyCommandOp = (op: CommandOp, app: App, triggeringSystemId: Syst
           children.entities.push(op.child);
         }
       } else {
-        applyInsertWithHooks(app, op.parent, [new Children([op.child])], cmdHandle);
+        applyInsertWithHooks(app, op.parent, [new Children([op.child])], triggeringSystemId);
       }
       return;
     }
@@ -287,7 +302,7 @@ export const applyCommandOp = (op: CommandOp, app: App, triggeringSystemId: Syst
       // where the child was reparented elsewhere between enqueue and flush).
       const childParent = app.world.getComponent(op.child, Parent);
       if (childParent && childParent.entity === op.parent) {
-        applyRemoveWithHooks(app, op.child, Parent, cmdHandle);
+        applyRemoveWithHooks(app, op.child, Parent, triggeringSystemId);
       }
       return;
     }
