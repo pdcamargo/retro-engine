@@ -46,6 +46,49 @@ const baseCapabilities: RendererCapabilities = {
   bgra8UnormStorage: false,
 };
 
+/**
+ * Inert renderer that returns no-op handles from the resource factories the
+ * shader system touches — `createShaderModule`, `createRenderPipeline`,
+ * `createPipelineLayout`. Used by `shader.bench.ts` so PipelineCache /
+ * SpecializedRenderPipelines benchmarks exercise their own dedupe logic
+ * without GPU-bound work and without throwing from the helper renderer.
+ *
+ * All non-shader factories still throw — accidental use is loud.
+ */
+export const makeShaderBenchRenderer = (): Renderer => ({
+  capabilities: baseCapabilities,
+  init: () => Promise.resolve(),
+  destroy: () => undefined,
+  getPreferredSurfaceFormat: (): TextureFormat => 'rgba8unorm',
+  createSurface: (): Surface => fail('createSurface'),
+  createShaderModule: (_descriptor: ShaderModuleDescriptor): ShaderModule => ({
+    destroy: () => undefined,
+  }),
+  createBuffer: (_descriptor: BufferDescriptor): Buffer => fail('createBuffer'),
+  createTexture: (_descriptor: TextureDescriptor): Texture => fail('createTexture'),
+  createSampler: (_descriptor?: SamplerDescriptor): Sampler => fail('createSampler'),
+  writeBuffer: (_buffer: Buffer, _offset: number, _data: BufferSource): void =>
+    fail('writeBuffer'),
+  writeTexture: (
+    _destination: ImageCopyTexture,
+    _data: BufferSource,
+    _dataLayout: ImageDataLayout,
+    _size: Extent3D,
+  ): void => fail('writeTexture'),
+  createBindGroupLayout: (_descriptor: BindGroupLayoutDescriptor): BindGroupLayout =>
+    fail('createBindGroupLayout'),
+  createPipelineLayout: (_descriptor: PipelineLayoutDescriptor): PipelineLayout => ({
+    destroy: () => undefined,
+  }),
+  createBindGroup: (_descriptor: BindGroupDescriptor): BindGroup => fail('createBindGroup'),
+  createRenderPipeline: (_descriptor: RenderPipelineDescriptor): RenderPipeline => ({
+    destroy: () => undefined,
+  }),
+  createCommandEncoder: (_label?: string): CommandEncoder => fail('createCommandEncoder'),
+  resolveRenderTarget: (_target: RenderTarget): ResolvedRenderTarget => fail('resolveRenderTarget'),
+  submit: (_buffers: readonly CommandBuffer[]): void => fail('submit'),
+});
+
 export const makeHeadlessRenderer = (): Renderer => ({
   capabilities: baseCapabilities,
   init: () => Promise.resolve(),

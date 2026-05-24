@@ -100,6 +100,15 @@ export {
   VisibilityPlugin,
   visibilityPropagateSystem,
 } from './visibility';
+export type { PreprocessOptions, SpecializeFn } from './shader';
+export {
+  PipelineCache,
+  preprocessWgsl,
+  Shader,
+  ShaderPlugin,
+  ShaderRegistry,
+  SpecializedRenderPipelines,
+} from './shader';
 
 /**
  * Named stage in the schedule — when a system runs within a frame.

@@ -27,3 +27,7 @@ A new ADR is sealed that pins the convention, and:
 - A public helper (e.g. `getViewBindGroupLayout(app): BindGroupLayout`) exists for user pipelines and is exercised by at least one material in `packages/engine` (the unlit material under Phase 7.7 is the natural first consumer).
 - The playground triangle (or its replacement) demonstrates the convention end-to-end — view data sampled in a real WGSL shader, pipeline layout declaring `[viewLayout, ...]`, no manual `setBindGroup(0, ...)` call.
 - The ADR also addresses what happens when a pipeline does not declare `@group(0)` — silent skip vs. validation error vs. engine-side no-op rebind.
+
+## Note (2026-05-24, after ADR-0022 / Phase 4)
+
+The view uniform's WGSL is now registered as a shader module under `retro_engine::view` (see ADR-0022 §8). User shaders no longer copy-paste the `ViewUniform` struct + `@group(0) @binding(0)` declaration — they `#import retro_engine::view`. When this backlog item lands as part of Phase 7, retrofitting consumers is a directive change, not a snippet rewrite. The remaining work (auto-bind, group-index pinning, validation behaviour) stays unchanged.

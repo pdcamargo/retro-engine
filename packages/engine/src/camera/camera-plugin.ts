@@ -17,9 +17,11 @@ import {
   type Viewport,
 } from './camera';
 import { ClearColor } from './clear-color';
+import { ShaderRegistry } from '../shader/shader-registry';
 import {
   ExtractedCamera,
   VIEW_UNIFORM_BYTE_SIZE,
+  VIEW_UNIFORM_WGSL,
   ViewBindGroupCache,
 } from './extracted';
 import {
@@ -178,6 +180,13 @@ export class CameraPlugin implements PluginObject {
     }
     app.insertResource(new SortedCameras());
     app.insertResource(new ViewBindGroupCache());
+
+    // Register the canonical view uniform module so user shaders can write
+    // `#import retro_engine::view` to pull in the ViewUniform struct + the
+    // @group(0)/@binding(0) declaration that ADR-0020 reserves for view data.
+    // ShaderPlugin runs immediately before us under CorePlugin, so the
+    // registry is guaranteed present.
+    app.getResource(ShaderRegistry)?.register('retro_engine::view', VIEW_UNIFORM_WGSL);
 
     const log: Logger = app.logger.child('camera');
     const warnedMissingPrimary = { value: false };

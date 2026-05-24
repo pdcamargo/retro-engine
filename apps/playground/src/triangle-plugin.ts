@@ -5,14 +5,18 @@ import {
   Commands,
   GlobalTransform,
   Parent,
+  PipelineCache,
   Query,
   RenderCtx,
   Res,
+  ResMut,
+  Shader,
+  SpecializedRenderPipelines,
   Time,
   Transform,
 } from '@retro-engine/engine';
 import { vec3 } from '@retro-engine/math';
-import type { BindGroup, Buffer, RenderPipeline } from '@retro-engine/renderer-core';
+import type { BindGroup, Buffer, TextureFormat } from '@retro-engine/renderer-core';
 import { BufferUsage, ShaderStage } from '@retro-engine/renderer-core';
 
 const TRIANGLE_WGSL = /* wgsl */ `
@@ -61,13 +65,20 @@ const hslToRgb = (h: number, s: number, l: number): [number, number, number] => 
   return [hue2rgb(h + 1 / 3), hue2rgb(h), hue2rgb(h - 1 / 3)];
 };
 
+interface TrianglePipelineKey {
+  format: TextureFormat;
+}
+
 /**
  * Draws one triangle per frame whose color cycles through the hue wheel.
  *
- * Witnesses the HAL surface added in milestone A: uniform buffer with
+ * Witnesses the HAL surface added in milestone A (uniform buffer with
  * `BufferUsage.UNIFORM | COPY_DST`, an explicit `BindGroupLayout` +
  * `PipelineLayout`, a `BindGroup` referencing the buffer, and a per-frame
- * `writeBuffer` + `setBindGroup` before the draw.
+ * `writeBuffer` + `setBindGroup` before the draw) plus the Phase 4 shader
+ * surface — the shader is wrapped in a `Shader`, compiled through the
+ * App-wide `PipelineCache`, and dispatched per frame through a
+ * `SpecializedRenderPipelines` keyed by color-target format.
  *
  * The triangle still spawns as a transform-hierarchy witness — a parent with
  * a child offset, propagated each frame by `'postUpdate'`, and logged once
@@ -75,15 +86,16 @@ const hslToRgb = (h: number, s: number, l: number): [number, number, number] => 
  */
 export const trianglePlugin: Plugin = (app) => {
   const log = app.logger.child('triangle');
-  let pipeline: RenderPipeline | undefined;
+  let specializer: SpecializedRenderPipelines<TrianglePipelineKey> | undefined;
   let colorBuffer: Buffer | undefined;
   let colorBindGroup: BindGroup | undefined;
   let lastLogMs = -Infinity;
   const colorScratch = new Float32Array(4);
 
-  app.addSystem('startup', [Commands], (cmd) => {
+  app.addSystem('startup', [Commands, ResMut(PipelineCache)], (cmd, pipelineCache) => {
     const { renderer } = app;
-    const module = renderer.createShaderModule({ code: TRIANGLE_WGSL, label: 'triangle' });
+    const triangleShader = new Shader(TRIANGLE_WGSL, { label: 'triangle' });
+    const module = pipelineCache.compileShader(triangleShader);
 
     colorBuffer = renderer.createBuffer({
       size: COLOR_BUFFER_SIZE,
@@ -105,17 +117,17 @@ export const trianglePlugin: Plugin = (app) => {
       entries: [{ binding: 0, resource: { buffer: colorBuffer } }],
     });
 
-    pipeline = renderer.createRenderPipeline({
+    specializer = new SpecializedRenderPipelines<TrianglePipelineKey>(pipelineCache, (key) => ({
       label: 'triangle',
       layout: pipelineLayout,
       vertex: { module, entryPoint: 'vs_main' },
       fragment: {
         module,
         entryPoint: 'fs_main',
-        targets: [{ format: renderer.getPreferredSurfaceFormat() }],
+        targets: [{ format: key.format }],
       },
       primitive: { topology: 'triangle-list' },
-    });
+    }));
 
     // Spawn the world camera. After ADR-0020, render systems fire once per
     // active camera; without a Camera2d / Camera3d the engine falls back to
@@ -155,7 +167,7 @@ export const trianglePlugin: Plugin = (app) => {
   );
 
   app.addSystem('render', [RenderCtx, Res(Time)], (ctx, time) => {
-    if (!pipeline || !colorBuffer || !colorBindGroup) return;
+    if (!specializer || !colorBuffer || !colorBindGroup) return;
     const hue = (time.virtual.elapsed * 0.25) % 1;
     const [r, g, b] = hslToRgb(hue, 1, 0.6);
     colorScratch[0] = r;
@@ -163,6 +175,7 @@ export const trianglePlugin: Plugin = (app) => {
     colorScratch[2] = b;
     colorScratch[3] = 1;
     app.renderer.writeBuffer(colorBuffer, 0, colorScratch);
+    const pipeline = specializer.get({ format: app.renderer.getPreferredSurfaceFormat() });
     ctx.pass.setPipeline(pipeline);
     ctx.pass.setBindGroup(0, colorBindGroup);
     ctx.pass.draw(3);
