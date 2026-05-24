@@ -10,8 +10,10 @@ describe('RendererCapabilities', () => {
       timestampQueries: false,
       indirectDraw: true,
       bgra8UnormStorage: false,
+      baseVertex: true,
     };
     expect(caps.computeShaders).toBe(true);
     expect(caps.timestampQueries).toBe(false);
+    expect(caps.baseVertex).toBe(true);
   });
 });

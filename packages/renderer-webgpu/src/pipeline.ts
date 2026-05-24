@@ -41,10 +41,25 @@ export const createRenderPipelineImpl = (
     descriptor.layout === undefined || descriptor.layout === 'auto'
       ? 'auto'
       : (descriptor.layout as InternalPipelineLayout)[GPU_PIPELINE_LAYOUT];
-  const desc: GPURenderPipelineDescriptor = {
-    layout,
-    vertex: { module: vertexModule, entryPoint: descriptor.vertex.entryPoint },
+  const vertex: GPUVertexState = {
+    module: vertexModule,
+    entryPoint: descriptor.vertex.entryPoint,
   };
+  if (descriptor.vertex.buffers && descriptor.vertex.buffers.length > 0) {
+    vertex.buffers = descriptor.vertex.buffers.map((b) => {
+      const layout: GPUVertexBufferLayout = {
+        arrayStride: b.arrayStride,
+        attributes: b.attributes.map((a) => ({
+          shaderLocation: a.shaderLocation,
+          format: a.format,
+          offset: a.offset,
+        })),
+      };
+      if (b.stepMode !== undefined) layout.stepMode = b.stepMode;
+      return layout;
+    });
+  }
+  const desc: GPURenderPipelineDescriptor = { layout, vertex };
   if (descriptor.label !== undefined) desc.label = descriptor.label;
   if (descriptor.fragment) {
     desc.fragment = {
@@ -53,8 +68,19 @@ export const createRenderPipelineImpl = (
       targets: descriptor.fragment.targets.map((t) => ({ format: t.format })),
     };
   }
-  if (descriptor.primitive?.topology) {
-    desc.primitive = { topology: descriptor.primitive.topology };
+  if (descriptor.primitive) {
+    const primitive: GPUPrimitiveState = {};
+    if (descriptor.primitive.topology !== undefined) primitive.topology = descriptor.primitive.topology;
+    if (descriptor.primitive.cullMode !== undefined) primitive.cullMode = descriptor.primitive.cullMode;
+    if (descriptor.primitive.frontFace !== undefined) primitive.frontFace = descriptor.primitive.frontFace;
+    desc.primitive = primitive;
+  }
+  if (descriptor.depthStencil) {
+    desc.depthStencil = {
+      format: descriptor.depthStencil.format,
+      depthWriteEnabled: descriptor.depthStencil.depthWriteEnabled ?? true,
+      depthCompare: descriptor.depthStencil.depthCompare ?? 'less',
+    };
   }
   const pipeline = device.createRenderPipeline(desc);
   const handle: InternalRenderPipeline = {

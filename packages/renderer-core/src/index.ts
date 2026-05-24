@@ -141,24 +141,34 @@ export { ShaderStage } from './binding';
 
 export type { RendererCapabilities } from './capabilities';
 
-export type { ClearColor, TextureFormat } from './formats';
+export type { ClearColor, IndexFormat, TextureFormat, VertexFormat } from './formats';
+export { indexFormatByteSize, vertexFormatByteSize } from './formats';
 
 export type {
   ColorAttachment,
   CommandBuffer,
   CommandEncoder,
+  DepthStencilAttachment,
   RenderPassDescriptor,
   RenderPassEncoder,
 } from './encoder';
 
 export type {
   ColorTargetState,
+  CompareFunction,
   ComputePipeline,
+  CullMode,
+  DepthStencilState,
   FragmentState,
+  FrontFace,
   PrimitiveState,
+  PrimitiveTopology,
   RenderPipeline,
   RenderPipelineDescriptor,
+  VertexAttribute,
+  VertexBufferLayout,
   VertexState,
+  VertexStepMode,
 } from './pipeline';
 
 export type { RenderTarget, ResolvedRenderTarget } from './render-target';

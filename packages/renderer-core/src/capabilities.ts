@@ -11,4 +11,14 @@ export interface RendererCapabilities {
   readonly timestampQueries: boolean;
   readonly indirectDraw: boolean;
   readonly bgra8UnormStorage: boolean;
+  /**
+   * Whether the backend supports a non-zero `baseVertex` parameter on
+   * {@link RenderPassEncoder.drawIndexed}.
+   *
+   * `true` on WebGPU (every indexed draw can pick a base-vertex offset, which
+   * is what lets the mesh allocator pack many meshes into one shared vertex
+   * buffer). `false` on WebGL2 (`drawElements` has no such parameter), in
+   * which case the engine falls back to one vertex buffer per mesh.
+   */
+  readonly baseVertex: boolean;
 }

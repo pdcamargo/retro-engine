@@ -44,6 +44,7 @@ const baseCapabilities: RendererCapabilities = {
   timestampQueries: false,
   indirectDraw: false,
   bgra8UnormStorage: false,
+  baseVertex: true,
 };
 
 interface RecordingRenderer extends Renderer {

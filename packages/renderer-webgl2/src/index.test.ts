@@ -8,6 +8,7 @@ describe('createWebGL2Renderer (stub)', () => {
     const renderer = createWebGL2Renderer(canvas);
     expect(renderer.capabilities.computeShaders).toBe(false);
     expect(renderer.capabilities.indirectDraw).toBe(false);
+    expect(renderer.capabilities.baseVertex).toBe(false);
   });
 
   it('init() rejects with a not-implemented error', async () => {

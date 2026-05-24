@@ -44,6 +44,7 @@ export const baseCapabilities: RendererCapabilities = {
   timestampQueries: false,
   indirectDraw: false,
   bgra8UnormStorage: false,
+  baseVertex: true,
 };
 
 /**
@@ -95,7 +96,10 @@ export const makeRenderingRenderer = (): Renderer => {
   const pass: RenderPassEncoder = {
     setPipeline: () => undefined,
     setBindGroup: () => undefined,
+    setVertexBuffer: () => undefined,
+    setIndexBuffer: () => undefined,
     draw: () => undefined,
+    drawIndexed: () => undefined,
     end: () => undefined,
   };
   const commandBuffer: CommandBuffer = { destroy: () => undefined };

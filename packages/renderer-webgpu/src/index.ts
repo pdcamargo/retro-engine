@@ -66,6 +66,7 @@ export const createWebGPURenderer = (_canvas: HTMLCanvasElement): Renderer => {
     timestampQueries: false,
     indirectDraw: true,
     bgra8UnormStorage: false,
+    baseVertex: true,
   };
 
   const requireDevice = (): GPUDevice => {
