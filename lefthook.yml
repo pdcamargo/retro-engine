@@ -14,3 +14,9 @@ pre-push:
       run: bunx turbo run typecheck
     test:
       run: bunx turbo run test
+    bench:
+      # Runs every bench end-to-end; catches compile / runtime drift in bench
+      # files. Does NOT compare against committed baselines — see CLAUDE.md §11
+      # and ADR-0017 §5 for why pre-push doesn't gate on perf numbers
+      # (`bench:check` stays a local, pre-PR step).
+      run: bunx turbo run bench

@@ -12,9 +12,9 @@ concurrency:
 
 jobs:
   verify:
-    name: Lint + Typecheck + Test + Build
+    name: Lint + Typecheck + Test + Build + Bench
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
       - name: Checkout
@@ -50,6 +50,13 @@ jobs:
 
       - name: Build
         run: bunx turbo run build
+
+      - name: Bench
+        # Runs every bench end-to-end; catches compile / runtime drift in
+        # bench files. Does NOT compare against committed baselines — see
+        # CLAUDE.md §11 and ADR-0017 §5 for why CI doesn't gate on perf
+        # numbers (`bench:check` stays a local, pre-PR step).
+        run: bunx turbo run bench
 
       - name: Changeset status
         # Warning-only during pre-0.1.0; flip `continue-on-error` to false after first publish.

@@ -18,6 +18,7 @@ import type {
   PipelineLayoutDescriptor,
   Renderer,
   RendererCapabilities,
+  RenderPassEncoder,
   RenderPipeline,
   RenderPipelineDescriptor,
   RenderTarget,
@@ -30,6 +31,7 @@ import type {
   Texture,
   TextureDescriptor,
   TextureFormat,
+  TextureView,
 } from '@retro-engine/renderer-core';
 
 import type { Logger } from '@retro-engine/engine';
@@ -115,6 +117,89 @@ export const makeHeadlessRenderer = (): Renderer => ({
   resolveRenderTarget: (_target: RenderTarget): ResolvedRenderTarget => fail('resolveRenderTarget'),
   submit: (_buffers: readonly CommandBuffer[]): void => fail('submit'),
 });
+
+/**
+ * Renderer stub for render-graph dispatch benches. Returns inert handles from
+ * the resource factories `App.renderFrame()` + `CameraDriverNode` touch —
+ * `createCommandEncoder`, `beginRenderPass`, `pass.end`, `submit`,
+ * `resolveRenderTarget`, plus the buffer / bind-group factories
+ * `CameraPlugin.prepareCameras` calls. Mirrors `test-utils.makeRenderingRenderer`;
+ * kept here so bench helpers stay decoupled from test helpers.
+ */
+export const makeRenderingBenchRenderer = (): Renderer => {
+  const view: TextureView = { destroy: () => undefined };
+  const pass: RenderPassEncoder = {
+    setPipeline: () => undefined,
+    setBindGroup: () => undefined,
+    draw: () => undefined,
+    end: () => undefined,
+  };
+  const commandBuffer: CommandBuffer = { destroy: () => undefined };
+  const encoder: CommandEncoder = {
+    beginRenderPass: () => pass,
+    finish: () => commandBuffer,
+  };
+  const surface: Surface = {
+    configure: () => undefined,
+    resize: () => undefined,
+    getCurrentTextureView: () => view,
+    get format(): TextureFormat {
+      return 'rgba8unorm';
+    },
+    get width(): number {
+      return 640;
+    },
+    get height(): number {
+      return 480;
+    },
+    destroy: () => undefined,
+  };
+  const inertBuffer = (size: number, usage: number): Buffer => ({
+    size,
+    usage,
+    destroy: () => undefined,
+  });
+  const inertBindGroupLayout: BindGroupLayout = { destroy: () => undefined };
+  const inertBindGroup: BindGroup = { destroy: () => undefined };
+  return {
+    capabilities: baseCapabilities,
+    init: () => Promise.resolve(),
+    destroy: () => undefined,
+    getPreferredSurfaceFormat: (): TextureFormat => 'rgba8unorm',
+    createSurface: () => surface,
+    createShaderModule: (_descriptor: ShaderModuleDescriptor): ShaderModule => fail('createShaderModule'),
+    createBuffer: (descriptor: BufferDescriptor): Buffer => inertBuffer(descriptor.size, descriptor.usage),
+    createTexture: (_descriptor: TextureDescriptor): Texture => fail('createTexture'),
+    createSampler: (_descriptor?: SamplerDescriptor): Sampler => fail('createSampler'),
+    writeBuffer: (_buffer: Buffer, _offset: number, _data: BufferSource): void => undefined,
+    writeTexture: (
+      _destination: ImageCopyTexture,
+      _data: BufferSource,
+      _dataLayout: ImageDataLayout,
+      _size: Extent3D,
+    ): void => fail('writeTexture'),
+    createBindGroupLayout: (_descriptor: BindGroupLayoutDescriptor): BindGroupLayout => inertBindGroupLayout,
+    createPipelineLayout: (_descriptor: PipelineLayoutDescriptor): PipelineLayout => fail('createPipelineLayout'),
+    createBindGroup: (_descriptor: BindGroupDescriptor): BindGroup => inertBindGroup,
+    createRenderPipeline: (_descriptor: RenderPipelineDescriptor): RenderPipeline => fail('createRenderPipeline'),
+    createCommandEncoder: () => encoder,
+    resolveRenderTarget: (target: RenderTarget): ResolvedRenderTarget => {
+      if (target.kind === 'surface') {
+        return { view, format: 'rgba8unorm', width: 640, height: 480 };
+      }
+      return fail('resolveRenderTarget for non-surface targets');
+    },
+    submit: () => undefined,
+  };
+};
+
+export const makeStubBenchCanvas = (): HTMLCanvasElement =>
+  ({
+    clientWidth: 640,
+    clientHeight: 480,
+    width: 0,
+    height: 0,
+  }) as unknown as HTMLCanvasElement;
 
 export const silentLogger: Logger = {
   error: () => {},

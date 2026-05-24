@@ -1,288 +1,360 @@
 {
   "schema": 1,
   "package": "@retro-engine/engine",
-  "captured_at": "2026-05-24T05:25:24.343Z",
+  "captured_at": "2026-05-24T06:11:24.644Z",
   "runtime": "bun@1.3.1",
   "benches": [
     {
       "key": "propagateTransforms (full) @ chain-100",
       "group": null,
       "args": {},
-      "mean_ns": 17553.311722366416,
-      "p99_ns": 30625,
-      "samples": 37373
+      "mean_ns": 17843.181489436905,
+      "p99_ns": 29750,
+      "samples": 36779
     },
     {
       "key": "propagateTransformsGated @ chain-100 @ 0% dirty",
       "group": null,
       "args": {},
-      "mean_ns": 2605.7650282118057,
-      "p99_ns": 2797.18017578125,
-      "samples": 63
+      "mean_ns": 2661.0389064100923,
+      "p99_ns": 2881.3984375,
+      "samples": 61
     },
     {
       "key": "propagateTransformsGated @ chain-100 @ 10% dirty",
       "group": null,
       "args": {},
-      "mean_ns": 21081.10390218099,
-      "p99_ns": 21436.920166015625,
+      "mean_ns": 21442.632080078125,
+      "p99_ns": 21981.7607421875,
       "samples": 12
     },
     {
       "key": "propagateTransformsGated @ chain-100 @ 100% dirty",
       "group": null,
       "args": {},
-      "mean_ns": 25001.919270833332,
-      "p99_ns": 25290.97509765625,
+      "mean_ns": 25973.27423095703,
+      "p99_ns": 26224.11083984375,
       "samples": 12
     },
     {
       "key": "propagateTransforms (full) @ wide-1k",
       "group": null,
       "args": {},
-      "mean_ns": 143400.58369275005,
-      "p99_ns": 168500,
-      "samples": 4869
+      "mean_ns": 138968.26921545202,
+      "p99_ns": 170333,
+      "samples": 5022
     },
     {
       "key": "propagateTransformsGated @ wide-1k @ 0% dirty",
       "group": null,
       "args": {},
-      "mean_ns": 18721.92637125651,
-      "p99_ns": 18904.72412109375,
+      "mean_ns": 19489.307840983074,
+      "p99_ns": 19568.76611328125,
       "samples": 12
     },
     {
       "key": "propagateTransformsGated @ wide-1k @ 10% dirty",
       "group": null,
       "args": {},
-      "mean_ns": 158866.02297543222,
-      "p99_ns": 188875,
-      "samples": 4396
+      "mean_ns": 158564.34022257553,
+      "p99_ns": 202000,
+      "samples": 4403
     },
     {
       "key": "propagateTransformsGated @ wide-1k @ 100% dirty",
       "group": null,
       "args": {},
-      "mean_ns": 182351.93531559728,
-      "p99_ns": 218334,
-      "samples": 3834
+      "mean_ns": 183515.9755841428,
+      "p99_ns": 229791,
+      "samples": 3809
     },
     {
       "key": "propagateTransforms (full) @ forest-10k",
       "group": null,
       "args": {},
-      "mean_ns": 2242211.977419355,
-      "p99_ns": 3020500,
-      "samples": 310
+      "mean_ns": 2388858.642611684,
+      "p99_ns": 3235417,
+      "samples": 291
     },
     {
       "key": "propagateTransformsGated @ forest-10k @ 0% dirty",
       "group": null,
       "args": {},
-      "mean_ns": 179441.11865709894,
-      "p99_ns": 198334,
-      "samples": 3902
+      "mean_ns": 186882.45170757736,
+      "p99_ns": 204209,
+      "samples": 3748
     },
     {
       "key": "propagateTransformsGated @ forest-10k @ 10% dirty",
       "group": null,
       "args": {},
-      "mean_ns": 394423.36951631046,
-      "p99_ns": 481292,
-      "samples": 1778
+      "mean_ns": 404859.19226327946,
+      "p99_ns": 512333,
+      "samples": 1732
     },
     {
       "key": "propagateTransformsGated @ forest-10k @ 100% dirty",
       "group": null,
       "args": {},
-      "mean_ns": 2965828.730769231,
-      "p99_ns": 3700583,
-      "samples": 234
+      "mean_ns": 3405445.81773399,
+      "p99_ns": 4736667,
+      "samples": 203
     },
     {
       "key": "flush 10k spawn ops (1 cmp) via advanceFrame",
       "group": null,
       "args": {},
-      "mean_ns": 4444019.941935484,
-      "p99_ns": 5164834,
-      "samples": 155
+      "mean_ns": 4951143.575539568,
+      "p99_ns": 5961917,
+      "samples": 139
     },
     {
       "key": "flush 10k spawn ops (3 cmps) via advanceFrame",
       "group": null,
       "args": {},
-      "mean_ns": 8422110.9125,
-      "p99_ns": 9405042,
-      "samples": 80
+      "mean_ns": 8599116.961538462,
+      "p99_ns": 9583750,
+      "samples": 78
     },
     {
       "key": "flush 10k insert ops on existing entities",
       "group": null,
       "args": {},
-      "mean_ns": 9262111.301369863,
-      "p99_ns": 10041084,
-      "samples": 73
+      "mean_ns": 10023154.940298507,
+      "p99_ns": 10954292,
+      "samples": 67
     },
     {
       "key": "flush 10k remove ops on existing entities",
       "group": null,
       "args": {},
-      "mean_ns": 8074148.797619048,
-      "p99_ns": 8808083,
-      "samples": 84
+      "mean_ns": 8508667.696202531,
+      "p99_ns": 9443417,
+      "samples": 79
     },
     {
       "key": "flush 10k despawn ops on existing entities",
       "group": null,
       "args": {},
-      "mean_ns": 4888179.645390071,
-      "p99_ns": 5457667,
-      "samples": 141
+      "mean_ns": 5203573.234848484,
+      "p99_ns": 5983833,
+      "samples": 132
     },
     {
       "key": "flush mixed 10k ops (spawn + insert + remove + despawn)",
       "group": null,
       "args": {},
-      "mean_ns": 9880642.88235294,
-      "p99_ns": 10590000,
-      "samples": 68
+      "mean_ns": 10416210.28125,
+      "p99_ns": 11529875,
+      "samples": 64
     },
     {
       "key": "markResourceChanged 10k calls (direct on App)",
       "group": null,
       "args": {},
-      "mean_ns": 44989.07559846064,
-      "p99_ns": 52917,
-      "samples": 15331
+      "mean_ns": 42360.707746262226,
+      "p99_ns": 52291,
+      "samples": 16253
     },
     {
       "key": "cmd.markResourceChanged 10k ops via advanceFrame",
       "group": null,
       "args": {},
-      "mean_ns": 125367.79654303205,
-      "p99_ns": 200167,
-      "samples": 5554
+      "mean_ns": 125515.20310525366,
+      "p99_ns": 212458,
+      "samples": 5539
     },
     {
       "key": "ChangedRes param resolution: 1k advanceFrame ticks, no marks",
       "group": null,
       "args": {},
-      "mean_ns": 1978343.0625,
-      "p99_ns": 2362792,
-      "samples": 352
+      "mean_ns": 2139218.707692308,
+      "p99_ns": 2717166,
+      "samples": 325
     },
     {
       "key": "ChangedRes param resolution: 1k advanceFrame ticks, mark every frame",
       "group": null,
       "args": {},
-      "mean_ns": 2084893.9580838324,
-      "p99_ns": 2486667,
-      "samples": 334
+      "mean_ns": 2259832.944625407,
+      "p99_ns": 2936417,
+      "samples": 307
     },
     {
       "key": "preprocessWgsl @ small",
       "group": null,
       "args": {},
-      "mean_ns": 3979.7353088378904,
-      "p99_ns": 4063.9140625,
-      "samples": 40
+      "mean_ns": 4099.682247677365,
+      "p99_ns": 4227.396728515625,
+      "samples": 37
     },
     {
       "key": "preprocessWgsl @ medium",
       "group": null,
       "args": {},
-      "mean_ns": 17416.000325520832,
-      "p99_ns": 17994.5068359375,
+      "mean_ns": 17588.044067382812,
+      "p99_ns": 17939.70751953125,
       "samples": 12
     },
     {
       "key": "preprocessWgsl @ large",
       "group": null,
       "args": {},
-      "mean_ns": 209608.95894516032,
-      "p99_ns": 245875,
-      "samples": 3337
+      "mean_ns": 212681.99787039854,
+      "p99_ns": 286625,
+      "samples": 3287
     },
     {
       "key": "PipelineCache.compileShader miss @ small",
       "group": null,
       "args": {},
-      "mean_ns": 2209.3166272962417,
-      "p99_ns": 4162.2822265625,
-      "samples": 74
+      "mean_ns": 2270.2147990481953,
+      "p99_ns": 3866.2109375,
+      "samples": 71
     },
     {
       "key": "PipelineCache.compileShader hit @ small",
       "group": null,
       "args": {},
-      "mean_ns": 1045.708515806968,
-      "p99_ns": 1102.67138671875,
-      "samples": 161
+      "mean_ns": 1077.632612179487,
+      "p99_ns": 1176.828857421875,
+      "samples": 156
     },
     {
       "key": "PipelineCache.compileShader miss @ medium",
       "group": null,
       "args": {},
-      "mean_ns": 6329.909614894701,
-      "p99_ns": 6912.43505859375,
+      "mean_ns": 6458.794210682745,
+      "p99_ns": 7099.2431640625,
       "samples": 23
     },
     {
       "key": "PipelineCache.compileShader hit @ medium",
       "group": null,
       "args": {},
-      "mean_ns": 4203.667628238076,
-      "p99_ns": 4289.36767578125,
-      "samples": 38
+      "mean_ns": 4305.895032728041,
+      "p99_ns": 4382.537841796875,
+      "samples": 37
     },
     {
       "key": "PipelineCache.compileShader miss @ large",
       "group": null,
       "args": {},
-      "mean_ns": 77555.7647585975,
-      "p99_ns": 90541,
-      "samples": 8927
+      "mean_ns": 79665.60239300506,
+      "p99_ns": 101583,
+      "samples": 8692
     },
     {
       "key": "PipelineCache.compileShader hit @ large",
       "group": null,
       "args": {},
-      "mean_ns": 75904.80043835616,
-      "p99_ns": 90667,
-      "samples": 9125
+      "mean_ns": 77622.42913165267,
+      "p99_ns": 97334,
+      "samples": 8925
     },
     {
       "key": "PipelineCache.getOrCreateRenderPipeline miss",
       "group": null,
       "args": {},
-      "mean_ns": 459.1919946563378,
-      "p99_ns": 1918.10107421875,
-      "samples": 356
+      "mean_ns": 501.23902053833007,
+      "p99_ns": 1893.19873046875,
+      "samples": 320
     },
     {
       "key": "PipelineCache.getOrCreateRenderPipeline hit",
       "group": null,
       "args": {},
-      "mean_ns": 164.17063346416586,
-      "p99_ns": 221.944091796875,
-      "samples": 1043
+      "mean_ns": 146.0750009157875,
+      "p99_ns": 200.825927734375,
+      "samples": 1173
     },
     {
       "key": "SpecializedRenderPipelines.get hit",
       "group": null,
       "args": {},
-      "mean_ns": 58.44738965544393,
-      "p99_ns": 65.673828125,
-      "samples": 2927
+      "mean_ns": 58.47365744365061,
+      "p99_ns": 68.5322265625,
+      "samples": 2924
     },
     {
       "key": "SpecializedRenderPipelines.get miss-then-hit (first call)",
       "group": null,
       "args": {},
-      "mean_ns": 597.4509008071002,
-      "p99_ns": 1865.41748046875,
-      "samples": 272
+      "mean_ns": 640.1153326148531,
+      "p99_ns": 2335.8662109375,
+      "samples": 251
+    },
+    {
+      "key": "RenderGraph build + freeze @ 4 nodes",
+      "group": null,
+      "args": {},
+      "mean_ns": 1019.426806640625,
+      "p99_ns": 1169.81005859375,
+      "samples": 165
+    },
+    {
+      "key": "RenderGraph build + freeze @ 16 nodes",
+      "group": null,
+      "args": {},
+      "mean_ns": 4024.921380458734,
+      "p99_ns": 4169.86083984375,
+      "samples": 39
+    },
+    {
+      "key": "RenderGraph build + freeze @ 64 nodes",
+      "group": null,
+      "args": {},
+      "mean_ns": 17011.071044921875,
+      "p99_ns": 17403.45263671875,
+      "samples": 12
+    },
+    {
+      "key": "RenderSubGraph dispatch @ 4 stub nodes",
+      "group": null,
+      "args": {},
+      "mean_ns": 7.18163040986698,
+      "p99_ns": 8.809326171875,
+      "samples": 23159
+    },
+    {
+      "key": "RenderSubGraph dispatch @ 16 stub nodes",
+      "group": null,
+      "args": {},
+      "mean_ns": 23.279099067388817,
+      "p99_ns": 25.99072265625,
+      "samples": 7319
+    },
+    {
+      "key": "RenderSubGraph dispatch @ 64 stub nodes",
+      "group": null,
+      "args": {},
+      "mean_ns": 86.65974235823806,
+      "p99_ns": 91.867919921875,
+      "samples": 1979
+    },
+    {
+      "key": "CameraDriverNode dispatch @ 1 cameras (Core2d, MainPassNode)",
+      "group": null,
+      "args": {},
+      "mean_ns": 49.65186646927235,
+      "p99_ns": 97.635986328125,
+      "samples": 3440
+    },
+    {
+      "key": "CameraDriverNode dispatch @ 4 cameras (Core2d, MainPassNode)",
+      "group": null,
+      "args": {},
+      "mean_ns": 169.5634143780197,
+      "p99_ns": 227.7119140625,
+      "samples": 1009
+    },
+    {
+      "key": "CameraDriverNode dispatch @ 16 cameras (Core2d, MainPassNode)",
+      "group": null,
+      "args": {},
+      "mean_ns": 615.3864454186481,
+      "p99_ns": 717.447998046875,
+      "samples": 276
     }
   ]
 }
