@@ -259,6 +259,7 @@ export class CameraPlugin implements PluginObject {
               viewProjectionMatrix: mat4.clone(c.viewProjectionMatrix),
               worldPosition: vec3.clone(c.worldPosition),
               targetSize: { width: size.width, height: size.height },
+              subGraph: camera.subGraph,
             }),
           );
         }
@@ -321,6 +322,7 @@ export class CameraPlugin implements PluginObject {
             renderLayers: ext.renderLayers,
             viewBindGroup: slots.bindGroup,
             viewBuffer: slots.buffer,
+            subGraph: ext.subGraph,
             _targetKind: targetKindOf(ext.target),
           };
           sortable.push(view);

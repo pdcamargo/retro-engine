@@ -11,6 +11,9 @@ import type {
   TextureViewDescriptor,
 } from '@retro-engine/renderer-core';
 
+import { Core2dLabel } from '../render-graph/core-2d';
+import type { RenderLabel } from '../render-graph/render-label';
+
 /**
  * Per-camera sub-rect of the render target. All values are physical pixels
  * (not logical CSS pixels) — multiply by `devicePixelRatio` if you have
@@ -169,6 +172,15 @@ export class Camera {
   msaaWriteback: boolean;
   /** How this camera clears its target — `Default`, `Custom`, or `None`. */
   clearColor: ClearColorConfig;
+  /**
+   * Render-graph sub-graph that drives this camera. Resolved at frame time
+   * by the `CameraDriverNode` to the matching {@link RenderSubGraph} on the
+   * `RenderGraph`; built-ins are `Core2dLabel` (default) and `Core3dLabel`.
+   * Plugins may register their own sub-graph and set this field to its
+   * label. A camera with a sub-graph label that no plugin registered is
+   * dropped at dispatch time with a one-shot dev warning.
+   */
+  subGraph: RenderLabel;
   /** Cached per-frame state; populated by the camera system, do not write from gameplay code. */
   computed: ComputedCamera;
 
@@ -180,6 +192,7 @@ export class Camera {
     hdr: boolean;
     msaaWriteback: boolean;
     clearColor: ClearColorConfig;
+    subGraph: RenderLabel;
   }> = {}) {
     this.isActive = options.isActive ?? true;
     this.order = options.order ?? 0;
@@ -188,6 +201,7 @@ export class Camera {
     this.hdr = options.hdr ?? false;
     this.msaaWriteback = options.msaaWriteback ?? false;
     this.clearColor = options.clearColor ?? ClearColorConfig.Default;
+    this.subGraph = options.subGraph ?? Core2dLabel;
     this.computed = defaultComputed();
   }
 
@@ -238,4 +252,6 @@ export interface CameraView {
   readonly viewBindGroup: BindGroup;
   /** Backing uniform buffer for {@link viewBindGroup}; engine-owned. */
   readonly viewBuffer: Buffer;
+  /** Sub-graph label this camera dispatches into. Mirrored from `Camera.subGraph`. */
+  readonly subGraph: RenderLabel;
 }

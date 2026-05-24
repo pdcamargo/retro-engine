@@ -6,6 +6,7 @@ import type {
   Buffer,
 } from '@retro-engine/renderer-core';
 
+import type { RenderLabel } from '../render-graph/render-label';
 import type { CameraRenderTarget, ClearColorConfig, Viewport } from './camera';
 
 /**
@@ -42,6 +43,8 @@ export class ExtractedCamera {
   worldPosition: Vec3;
   /** Physical-pixel size of the target at extract time. */
   targetSize: { width: number; height: number };
+  /** Mirrored from `Camera.subGraph`. */
+  subGraph: RenderLabel;
 
   constructor(init: {
     sourceEntity: Entity;
@@ -55,6 +58,7 @@ export class ExtractedCamera {
     viewProjectionMatrix: Mat4;
     worldPosition: Vec3;
     targetSize: { width: number; height: number };
+    subGraph: RenderLabel;
   }) {
     this.sourceEntity = init.sourceEntity;
     this.order = init.order;
@@ -67,6 +71,7 @@ export class ExtractedCamera {
     this.viewProjectionMatrix = init.viewProjectionMatrix;
     this.worldPosition = init.worldPosition;
     this.targetSize = init.targetSize;
+    this.subGraph = init.subGraph;
   }
 }
 

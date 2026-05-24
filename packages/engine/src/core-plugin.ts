@@ -3,6 +3,7 @@ import { RemovedComponents } from './change-detection';
 import { Children, Parent, propagateTransformsGated } from './hierarchy';
 import type { App } from './index';
 import type { PluginObject } from './plugin';
+import { RenderGraphPlugin } from './render-graph/render-graph-plugin';
 import { ShaderPlugin } from './shader/shader-plugin';
 import { Query, ResMut } from './system-param';
 import { Time } from './time';
@@ -80,5 +81,6 @@ export class CorePlugin implements PluginObject {
     app.addPlugin(new ShaderPlugin());
     app.addPlugin(new CameraPlugin());
     app.addPlugin(new VisibilityPlugin());
+    app.addPlugin(new RenderGraphPlugin());
   }
 }

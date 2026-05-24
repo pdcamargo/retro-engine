@@ -1,3 +1,5 @@
+import { Core3dLabel } from '../render-graph/core-3d';
+import type { RenderLabel } from '../render-graph/render-label';
 import { Transform } from '../transform';
 import {
   Camera,
@@ -19,6 +21,12 @@ interface BaseCameraOptions {
   hdr?: boolean;
   msaaWriteback?: boolean;
   clearColor?: ClearColorConfig;
+  /**
+   * Sub-graph this camera dispatches into. Defaults to `Core2dLabel` for
+   * `Camera2d` and `Core3dLabel` for `Camera3d` — override only if your
+   * plugin registered a custom sub-graph.
+   */
+  subGraph?: RenderLabel;
   /** Optional initial `Transform`. Defaults to identity. */
   transform?: Transform;
 }
@@ -48,6 +56,7 @@ const buildCamera = (options: BaseCameraOptions): Camera =>
     ...(options.hdr !== undefined ? { hdr: options.hdr } : {}),
     ...(options.msaaWriteback !== undefined ? { msaaWriteback: options.msaaWriteback } : {}),
     ...(options.clearColor !== undefined ? { clearColor: options.clearColor } : {}),
+    ...(options.subGraph !== undefined ? { subGraph: options.subGraph } : {}),
   });
 
 /**
@@ -105,7 +114,7 @@ export const Camera2d = (options: Camera2dOptions = {}): readonly object[] => [
  * ```
  */
 export const Camera3d = (options: Camera3dOptions = {}): readonly object[] => [
-  buildCamera(options),
+  buildCamera({ subGraph: Core3dLabel, ...options }),
   new PerspectiveProjection(options.projection),
   options.transform ?? new Transform(),
 ];

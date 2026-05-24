@@ -1,5 +1,4 @@
 import type {
-  ColorAttachment,
   CommandEncoder,
   Renderer,
   RenderPassEncoder,
@@ -25,6 +24,8 @@ import type { Plugin, PluginObject, PluginsState } from './plugin';
 import { wrapFunctionPlugin } from './plugin';
 import type { PluginGroup } from './plugin-group';
 import { PluginGroupBuilder } from './plugin-group';
+import { EMPTY_SLOT_VALUES } from './render-graph/slot';
+import { RenderGraph } from './render-graph/render-graph';
 import type { RegisteredSystem } from './schedule';
 import { runStage, StageSystems } from './schedule';
 import type { RenderSetName } from './render-set';
@@ -109,6 +110,32 @@ export {
   ShaderRegistry,
   SpecializedRenderPipelines,
 } from './shader';
+export type {
+  Node as RenderNode,
+  NodeRunContext as RenderNodeRunContext,
+  RenderLabel,
+  SlotInfo,
+  SlotValue,
+  SlotValues,
+  ViewNode,
+} from './render-graph';
+export {
+  buildCore2dSubGraph,
+  buildCore3dSubGraph,
+  CameraDriverLabel,
+  CameraDriverNode,
+  Core2dLabel,
+  Core3dLabel,
+  createLabel,
+  EMPTY_SLOT_VALUES,
+  isViewNode,
+  MainPassLabel,
+  MainPassNode,
+  RenderGraph,
+  RenderGraphPlugin,
+  RenderSubGraph,
+  SlotType,
+} from './render-graph';
 
 /**
  * Named stage in the schedule — when a system runs within a frame.
@@ -1056,7 +1083,6 @@ export class App {
     this.renderWorld.clearAllEntities();
 
     const bySet = this.groupRenderSystemsBySet();
-    const renderSystems = bySet.get(RenderSet.Render);
 
     // Pre-pass sets: Extract → Prepare → Queue → PhaseSort. No encoder yet —
     // these systems prepare data only, no command recording.
@@ -1065,36 +1091,29 @@ export class App {
     this.runRenderSet(bySet.get(RenderSet.Queue), RenderSet.Queue, undefined);
     this.runRenderSet(bySet.get(RenderSet.PhaseSort), RenderSet.PhaseSort, undefined);
 
-    // ADR-0020: open one render pass per active camera, in SortedCameras
-    // order. The Render set runs once per camera with that camera's
-    // RenderContext. If no cameras are active and a surface exists, fall
-    // back to a single clear-only pass so the swapchain doesn't show stale
-    // content; headless apps with no cameras skip GPU work entirely.
+    // ADR-0020 + ADR-0023: the per-camera dispatch loop lives inside
+    // `CameraDriverNode` on the `RenderGraph`. The graph owns the per-frame
+    // encoder, opens one render pass per camera against the camera's
+    // sub-graph (`Core2d` / `Core3d` by default), and submits. If no cameras
+    // are active and a surface exists, fall back to a clear-only pass so the
+    // swapchain doesn't show stale content; headless apps with no cameras
+    // skip GPU work entirely.
+    const graph = this.getResource(RenderGraph);
+    graph?.freeze();
     const sorted = this.getResource(SortedCameras);
     const views = sorted?.views ?? [];
     if (views.length > 0) {
-      const encoder = this.renderer.createCommandEncoder('frame');
-      for (const view of views) {
-        const attachment: ColorAttachment = {
-          view: view.target.view,
-          loadOp: view.loadOp,
-          storeOp: 'store',
-          ...(view.clearColor !== undefined ? { clearValue: view.clearColor } : {}),
-        };
-        const pass = encoder.beginRenderPass({
-          label: `camera#${view.sourceEntity}`,
-          colorAttachments: [attachment],
+      if (graph !== undefined) {
+        graph.run({
+          app: this,
+          graph,
+          encoder: undefined,
+          pass: undefined,
+          view: undefined,
+          renderSetSystems: bySet,
+          inputs: EMPTY_SLOT_VALUES,
         });
-        const render: RenderContext = {
-          encoder,
-          pass,
-          surfaceView: view.target.view,
-          camera: view,
-        };
-        this.runRenderSet(renderSystems, RenderSet.Render, render);
-        pass.end();
       }
-      this.renderer.submit([encoder.finish()]);
     } else if (this.surface) {
       const surfaceView = this.surface.getCurrentTextureView();
       const encoder = this.renderer.createCommandEncoder('frame');
@@ -1136,7 +1155,17 @@ export class App {
     return bySet;
   }
 
-  private runRenderSet(
+  /**
+   * Dispatch one render sub-set's systems against the supplied
+   * {@link RenderContext} (or `undefined` for pre-/post-pass sets). Exposed
+   * so render-graph nodes — primarily `MainPassNode` — can run the
+   * `RenderSet.Render` systems for the active camera. Not part of the public
+   * engine API; downstream code outside the engine package should not call
+   * this directly.
+   *
+   * @internal
+   */
+  runRenderSet(
     systems: readonly RegisteredSystem[] | undefined,
     setName: RenderSetName,
     render: RenderContext | undefined,
