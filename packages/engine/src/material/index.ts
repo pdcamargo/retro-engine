@@ -46,6 +46,8 @@ export {
   gcEntityTransforms,
 } from './mesh-3d-transforms';
 
+export { MeshTransformGcPlugin } from './gc-entity-transforms';
+
 export type { MaterialCtor, MaterialPluginOptions } from './material-plugin';
 export { MaterialPlugin } from './material-plugin';
 

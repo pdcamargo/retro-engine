@@ -169,6 +169,7 @@ export {
   Materials,
   MaterialSchema,
   MeshMaterial3d,
+  MeshTransformGcPlugin,
   prepareBindGroup,
   RenderMaterials,
   schemaToBindGroupLayout,
@@ -185,6 +186,23 @@ export {
   uniformSlotByteSize,
   visibilityToFlags,
 } from './material';
+export type {
+  Material2d,
+  Material2dCtor,
+  Material2dPluginOptions,
+  MaterialPipelineKey2d,
+  Materials2d,
+  RenderMaterials2d,
+} from './material2d';
+export {
+  alphaBucketKey,
+  COLOR_MATERIAL_2D_DEFAULT_MASK_CUTOFF,
+  COLOR_MATERIAL_2D_WGSL,
+  ColorMaterial2d,
+  ColorMaterial2dPlugin,
+  Material2dPlugin,
+  MeshMaterial2d,
+} from './material2d';
 export {
   Aabb,
   Annulus,
@@ -210,6 +228,7 @@ export {
   indicesFormat,
   interMeshVertexBufferLayout,
   Mesh,
+  Mesh2d,
   Mesh3d,
   MeshAllocator,
   MeshAllocatorSettings,
