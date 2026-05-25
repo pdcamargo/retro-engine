@@ -24,10 +24,10 @@ import {
   Transform,
 } from '@retro-engine/engine';
 
-const TILE_PX = 16 as const;
+const TILE_PX = 32 as const;
 const TILE_COLS = 4 as const;
 const TILE_ROWS = 4 as const;
-const SHEET_PX = TILE_PX * TILE_COLS; // 64 — image is square
+const SHEET_PX = TILE_PX * TILE_COLS; // 128 — image is square
 
 // 16 distinct tile colours. Picked for visual contrast — neighbours in the
 // grid never share a hue family.
@@ -50,22 +50,54 @@ const PALETTE: ReadonlyArray<readonly [number, number, number]> = [
   [236, 240, 241], // light gray
 ];
 
-/** Build a 64×64 RGBA8 image where each 16×16 tile is a distinct palette colour. */
+/**
+ * Build a `SHEET_PX × SHEET_PX` RGBA8 image where each `TILE_PX × TILE_PX`
+ * tile is a distinct palette colour with its index baked in as visible text
+ * (`1` … `16`). Uses the DOM `<canvas>` 2D API so each tile carries
+ * unambiguous identity — a sprite rendering "5" is unambiguously sampling
+ * tile 5, not "some greenish colour that might be 5 or 11."
+ */
 const buildTileSheet = (): Image => {
-  const data = new Uint8Array(SHEET_PX * SHEET_PX * 4);
-  for (let py = 0; py < SHEET_PX; py++) {
-    for (let px = 0; px < SHEET_PX; px++) {
-      const tc = Math.floor(px / TILE_PX);
-      const tr = Math.floor(py / TILE_PX);
+  const canvas = document.createElement('canvas');
+  canvas.width = SHEET_PX;
+  canvas.height = SHEET_PX;
+  const ctx = canvas.getContext('2d');
+  if (ctx === null) {
+    throw new Error('atlas-showcase: 2D canvas context unavailable');
+  }
+  // Crisp pixels — no smoothing on the eventual texture upload either (the
+  // sampler below pins magFilter/minFilter to nearest).
+  ctx.imageSmoothingEnabled = false;
+
+  for (let tr = 0; tr < TILE_ROWS; tr++) {
+    for (let tc = 0; tc < TILE_COLS; tc++) {
       const tileIdx = tr * TILE_COLS + tc;
       const [r, g, b] = PALETTE[tileIdx]!;
-      const i = (py * SHEET_PX + px) * 4;
-      data[i] = r;
-      data[i + 1] = g;
-      data[i + 2] = b;
-      data[i + 3] = 255;
+      const x = tc * TILE_PX;
+      const y = tr * TILE_PX;
+
+      ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+      ctx.fillRect(x, y, TILE_PX, TILE_PX);
+
+      // Pick white or black text by perceived luminance — keeps numbers
+      // readable across the whole palette.
+      const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+      ctx.fillStyle = luminance < 140 ? '#ffffff' : '#000000';
+      ctx.font = 'bold 20px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(String(tileIdx + 1), x + TILE_PX / 2, y + TILE_PX / 2 + 1);
     }
   }
+
+  const imageData = ctx.getImageData(0, 0, SHEET_PX, SHEET_PX);
+  // Canvas `Uint8ClampedArray` and engine `Uint8Array` share the same byte
+  // layout — wrap, don't copy.
+  const data = new Uint8Array(
+    imageData.data.buffer,
+    imageData.data.byteOffset,
+    imageData.data.byteLength,
+  );
   return Image.fromBytes({
     data,
     format: 'rgba8unorm',
@@ -77,8 +109,8 @@ const buildTileSheet = (): Image => {
 };
 
 const GRID = 8 as const;
-const CELL_SIZE = 28 as const;
-const CELL_SPACING = 32 as const;
+const CELL_SIZE = 48 as const;
+const CELL_SPACING = 56 as const;
 
 /**
  * Playground showcase: 8×8 grid (64 entities) of sprites sharing one
