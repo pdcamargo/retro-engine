@@ -3,21 +3,20 @@ import type { RenderPassEncoder } from '@retro-engine/renderer-core';
 import type { RenderContext } from '../index';
 
 /**
- * One drawable item inside a 2D phase. Pushed by `SpritePlugin`'s queue system
- * (and by any future 2D pipeline such as a Phase 8.7 `Material2d`); consumed by
- * the Core2d phase nodes (`OpaquePass2dNode`, `TransparentPass2dNode`) which
- * sort the items by `sortDepth` and invoke each item's `draw` closure against
- * the open pass.
+ * One drawable item inside a 2D phase. Pushed by 2D pipelines' queue systems
+ * (`SpritePlugin`, `Material2dPlugin`, etc.); consumed by the Core2d phase
+ * nodes (`OpaquePass2dNode`, `TransparentPass2dNode`) which sort the items by
+ * `sortDepth` and invoke each item's `draw` closure against the open pass.
  *
  * Shape-identical to `PhaseItem3d` — the engine's 2D phase plumbing mirrors
  * the 3D plumbing one-for-one so a downstream maintainer learning the 2D path
  * inherits the same mental model.
  *
  * `sortDepth` is the camera-space `z` of the entity's origin (post-view, pre-
- * projection). Smaller values are nearer; opaque/mask sort ascending
- * (front-to-back) — irrelevant for the 2D depth-less pass but kept for shape
- * parity — and transparent sorts descending (back-to-front) for painter's-
- * algorithm compositing.
+ * projection). Smaller values are nearer. Core2d has no depth attachment, so
+ * all three phases (opaque, alphaMask, transparent) sort back-to-front
+ * (painter's algorithm) — the phase distinction exists for blend state, not
+ * sort direction.
  */
 export interface PhaseItem2d {
   readonly sourceEntity: number;

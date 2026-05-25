@@ -8,9 +8,11 @@ import { createLabel } from './render-label';
 
 /**
  * Label for the Core2d opaque pass node. The `Opaque2d` + `AlphaMask2d` phase
- * items share this pass; both sort front-to-back (mirroring the 3D
- * convention) even though there is no depth attachment to take advantage of
- * early-Z — the shape parity matters more than the marginal sort cost.
+ * items share this pass; both sort back-to-front. Core2d has no depth
+ * attachment, so the only mechanism that controls visual order between
+ * overlapping draws is the CPU sort — painter's algorithm applies to opaque
+ * and mask phases just as it does to transparent. The opaque/mask/transparent
+ * distinction in Core2d is purely about blend state, not sort direction.
  */
 export const OpaquePass2dLabel = createLabel('opaque_pass_2d');
 
@@ -28,8 +30,9 @@ export const OpaquePass2dLabel = createLabel('opaque_pass_2d');
  *   pipeline simpler and matches `Camera2d`'s default `depthTarget: 'none'`.
  *
  * After opening the pass, the node pre-binds the view bind group at
- * `@group(0)` (ADR-0028 §11), sorts opaque items front-to-back, draws them,
- * sorts alpha-mask items front-to-back, draws them, then ends the pass.
+ * `@group(0)`, sorts opaque items back-to-front, draws them, sorts alpha-mask
+ * items back-to-front, draws them, then ends the pass. Back-to-front matches
+ * the painter's-algorithm order required without a depth buffer.
  */
 export const OpaquePass2dNode: ViewNode = {
   label: OpaquePass2dLabel,
@@ -71,12 +74,12 @@ export const OpaquePass2dNode: ViewNode = {
     if (phases !== undefined) {
       const opaque = phases.opaque.get(view.sourceEntity);
       if (opaque !== undefined && opaque.length > 0) {
-        opaque.sort((a, b) => a.sortDepth - b.sortDepth);
+        opaque.sort((a, b) => b.sortDepth - a.sortDepth);
         for (const item of opaque) item.draw(pass, renderCtx);
       }
       const mask = phases.alphaMask.get(view.sourceEntity);
       if (mask !== undefined && mask.length > 0) {
-        mask.sort((a, b) => a.sortDepth - b.sortDepth);
+        mask.sort((a, b) => b.sortDepth - a.sortDepth);
         for (const item of mask) item.draw(pass, renderCtx);
       }
     }
