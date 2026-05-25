@@ -139,13 +139,21 @@ export const atlasShowcasePlugin: Plugin = (app) => {
       for (let r = 0; r < GRID; r++) {
         for (let c = 0; c < GRID; c++) {
           const px = (c - (GRID - 1) * 0.5) * CELL_SPACING;
-          const py = (r - (GRID - 1) * 0.5) * CELL_SPACING;
+          // Y-up: r=0 should end up at the TOP of the screen, so negate. Without
+          // this the visual order is bottom-up and the showcase reads "wrong."
+          const py = -(r - (GRID - 1) * 0.5) * CELL_SPACING;
           const index = (c + r * GRID) % tileCount;
           cmd.spawn(
             new Sprite({
               image: sheet,
               color: vec4.create(1, 1, 1, 1),
               customSize: vec2.create(CELL_SIZE, CELL_SIZE),
+              // Canvas/PNG textures store row 0 at the top (Y-down memory
+              // layout), while the sprite quad's UV(0,0) corner lands at the
+              // screen's bottom under Y-up clip space. Without flipY, every
+              // textured sprite renders upside-down — visible here as
+              // 180°-rotated digits. Mirrors Bevy's Sprite.flip_y semantics.
+              flipY: true,
             }),
             new TextureAtlas(layout, index),
             new Transform(vec3.create(px, py, 0)),
