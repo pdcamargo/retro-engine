@@ -14,6 +14,8 @@ import type {
 
 import { ViewBindGroupCache } from '../camera/extracted';
 import { SortedCameras } from '../camera/sorted-cameras';
+import { Images } from '../image/images';
+import { RenderImages } from '../image/image-plugin';
 import type { App, RenderContext } from '../index';
 import type { AllocatorSlice, MeshHandle, RenderMesh } from '../mesh';
 import { MeshAllocator, Meshes, Mesh3d, RenderMeshes } from '../mesh';
@@ -174,19 +176,23 @@ export class MaterialPlugin<M extends Material> implements PluginObject {
 
     // Prepare: drain Materials<M> events; for added/modified, build or rebuild
     // the per-handle PreparedMaterial in RenderMaterials<M>; for removed,
-    // destroy and drop.
+    // destroy and drop. `after: ['image-prepare']` ensures `RenderImages` is
+    // populated before the schema walker resolves any `imageMode: 'handle'`
+    // binding.
     app.addSystem(
       'render',
-      [ResMut(MaterialsCtor), ResMut(RenderMaterialsCtor)],
-      (materials, renderMaterials) => {
+      [ResMut(MaterialsCtor), ResMut(RenderMaterialsCtor), Res(Images), Res(RenderImages)],
+      (materials, renderMaterials, images, renderImages) => {
         state.ensureInitialised(app);
         state.prepareMaterials(
           app,
           materials as unknown as Materials<M>,
           renderMaterials as unknown as RenderMaterials<M>,
+          images as Images,
+          renderImages as RenderImages,
         );
       },
-      { set: RenderSet.Prepare },
+      { set: RenderSet.Prepare, after: ['image-prepare'] },
     );
 
     // Queue: iterate visible (Mesh3d, MeshMaterial3d<M>, GlobalTransform,
@@ -334,6 +340,8 @@ class MaterialPluginState<M extends Material> {
     app: App,
     materials: Materials<M>,
     renderMaterials: RenderMaterials<M>,
+    images: Images,
+    renderImages: RenderImages,
   ): void {
     const events = materials.drainPendingChanges();
     if (events.length === 0) return;
@@ -352,6 +360,8 @@ class MaterialPluginState<M extends Material> {
         value as M,
         previous,
         this.scratch,
+        images,
+        renderImages,
         `material#${this.materialClass.name}#${String(event.handle)}`,
       );
       renderMaterials.set(event.handle, prepared);

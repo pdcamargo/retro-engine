@@ -1,7 +1,7 @@
 import type { Vec4 } from '@retro-engine/math';
 import { vec4 } from '@retro-engine/math';
-import type { Sampler, TextureView } from '@retro-engine/renderer-core';
 
+import type { ImageHandle } from '../image/images';
 import type { App } from '../index';
 import type { PluginObject } from '../plugin';
 import { ShaderRegistry } from '../shader/shader-registry';
@@ -16,15 +16,33 @@ import { PBR_WGSL } from './pbr.wgsl';
  *
  * Bindings (`@group(2)`):
  *
- * | Binding | Kind     | Field                       |
- * |---------|----------|-----------------------------|
- * | 0       | uniform  | packed material struct      |
- * | 1       | texture  | `baseColorTexture`          |
- * | 2       | sampler  | `materialSampler`           |
- * | 3       | texture  | `metallicRoughnessTexture`  |
- * | 4       | texture  | `normalMapTexture`          |
- * | 5       | texture  | `emissiveTexture`           |
- * | 6       | texture  | `occlusionTexture`          |
+ * | Binding | Kind     | Field                       | Source                         |
+ * |---------|----------|-----------------------------|--------------------------------|
+ * | 0       | uniform  | packed material struct      | `baseColor`, `emissive`, `metallic`, `roughness`, `occlusionStrength`, `alphaCutoff` |
+ * | 1       | texture  | `baseColorTexture`          | `Image.view`                   |
+ * | 2       | sampler  | `baseColorTexture` (shared) | `Image.sampler` (primary)      |
+ * | 3       | texture  | `metallicRoughnessTexture`  | `Image.view`                   |
+ * | 4       | texture  | `normalMapTexture`          | `Image.view`                   |
+ * | 5       | texture  | `emissiveTexture`           | `Image.view`                   |
+ * | 6       | texture  | `occlusionTexture`          | `Image.view`                   |
+ *
+ * All five texture slots are `ImageHandle | undefined` fields. When a field
+ * is `undefined`, the bind-group schema falls back to a well-known default on
+ * the {@link Images} registry: `baseColorTexture` / `metallicRoughnessTexture`
+ * / `emissiveTexture` / `occlusionTexture` fall back to `Images.WHITE`,
+ * `normalMapTexture` falls back to `Images.NORMAL_FLAT` (the flat
+ * `(0.5, 0.5, 1, 1)` tangent-space identity normal). `new StandardMaterial({
+ * baseColor })` therefore produces a usable PBR material with no manual
+ * texture authoring.
+ *
+ * **Sampler model.** The PBR shader (`pbr.wgsl`) uses a single sampler
+ * declared at `@group(2) @binding(2)` for all five texture taps. The schema's
+ * sampler entry shares its `fieldKey` with the binding-1 `baseColorTexture`
+ * entry — i.e. the sampler resolves through whichever Image is bound at
+ * binding 1 (or `Images.WHITE` when undefined). All five PBR textures sample
+ * through that one sampler. Per-channel sampling control (one sampler per
+ * texture) is a future expansion and would require new bindings + a WGSL
+ * rewrite.
  *
  * The packed uniform struct (48 bytes, std140-laid-out by the schema walker):
  *
@@ -38,12 +56,6 @@ import { PBR_WGSL } from './pbr.wgsl';
  *   alpha_cutoff: f32,          // offset 44
  * };
  * ```
- *
- * All five texture slots are required in Phase 7 — the schema walker throws
- * when a referenced field is `undefined`. Consumers spawning a PBR material
- * without (say) a normal map create a 1×1 default texture and pass its view
- * for the missing slots. A default-texture convenience helper is on the
- * Phase 7.x slate.
  *
  * **Lighting placeholder.** Phase 7's `pbr.wgsl` evaluates Cook-Torrance
  * against a single hardcoded directional light and a constant ambient term.
@@ -63,12 +75,11 @@ export class StandardMaterial implements Material {
   occlusionStrength = 1;
   alphaCutoff = 0.5;
 
-  baseColorTexture: TextureView | undefined;
-  materialSampler: Sampler | undefined;
-  metallicRoughnessTexture: TextureView | undefined;
-  normalMapTexture: TextureView | undefined;
-  emissiveTexture: TextureView | undefined;
-  occlusionTexture: TextureView | undefined;
+  baseColorTexture: ImageHandle | undefined;
+  metallicRoughnessTexture: ImageHandle | undefined;
+  normalMapTexture: ImageHandle | undefined;
+  emissiveTexture: ImageHandle | undefined;
+  occlusionTexture: ImageHandle | undefined;
 
   alphaMode_: AlphaMode = 'opaque';
   depthBias_ = 0;
@@ -80,12 +91,11 @@ export class StandardMaterial implements Material {
     roughness?: number;
     occlusionStrength?: number;
     alphaCutoff?: number;
-    baseColorTexture?: TextureView;
-    materialSampler?: Sampler;
-    metallicRoughnessTexture?: TextureView;
-    normalMapTexture?: TextureView;
-    emissiveTexture?: TextureView;
-    occlusionTexture?: TextureView;
+    baseColorTexture?: ImageHandle;
+    metallicRoughnessTexture?: ImageHandle;
+    normalMapTexture?: ImageHandle;
+    emissiveTexture?: ImageHandle;
+    occlusionTexture?: ImageHandle;
     alphaMode?: AlphaMode;
     depthBias?: number;
   }) {
@@ -95,13 +105,12 @@ export class StandardMaterial implements Material {
     if (init?.roughness !== undefined) this.roughness = init.roughness;
     if (init?.occlusionStrength !== undefined) this.occlusionStrength = init.occlusionStrength;
     if (init?.alphaCutoff !== undefined) this.alphaCutoff = init.alphaCutoff;
-    if (init?.baseColorTexture) this.baseColorTexture = init.baseColorTexture;
-    if (init?.materialSampler) this.materialSampler = init.materialSampler;
-    if (init?.metallicRoughnessTexture)
+    if (init?.baseColorTexture !== undefined) this.baseColorTexture = init.baseColorTexture;
+    if (init?.metallicRoughnessTexture !== undefined)
       this.metallicRoughnessTexture = init.metallicRoughnessTexture;
-    if (init?.normalMapTexture) this.normalMapTexture = init.normalMapTexture;
-    if (init?.emissiveTexture) this.emissiveTexture = init.emissiveTexture;
-    if (init?.occlusionTexture) this.occlusionTexture = init.occlusionTexture;
+    if (init?.normalMapTexture !== undefined) this.normalMapTexture = init.normalMapTexture;
+    if (init?.emissiveTexture !== undefined) this.emissiveTexture = init.emissiveTexture;
+    if (init?.occlusionTexture !== undefined) this.occlusionTexture = init.occlusionTexture;
     if (init?.alphaMode) this.alphaMode_ = init.alphaMode;
     if (init?.depthBias !== undefined) this.depthBias_ = init.depthBias;
   }
@@ -132,7 +141,9 @@ export class StandardMaterial implements Material {
       kind: 'texture',
       binding: 1,
       visibility: 'fragment',
+      imageMode: 'handle',
       fieldKey: 'baseColorTexture',
+      fallback: 'white',
       sampleType: 'float',
       viewDimension: '2d',
     },
@@ -140,14 +151,18 @@ export class StandardMaterial implements Material {
       kind: 'sampler',
       binding: 2,
       visibility: 'fragment',
-      fieldKey: 'materialSampler',
+      imageMode: 'handle',
+      fieldKey: 'baseColorTexture',
+      fallback: 'white',
       type: 'filtering',
     },
     {
       kind: 'texture',
       binding: 3,
       visibility: 'fragment',
+      imageMode: 'handle',
       fieldKey: 'metallicRoughnessTexture',
+      fallback: 'white',
       sampleType: 'float',
       viewDimension: '2d',
     },
@@ -155,7 +170,9 @@ export class StandardMaterial implements Material {
       kind: 'texture',
       binding: 4,
       visibility: 'fragment',
+      imageMode: 'handle',
       fieldKey: 'normalMapTexture',
+      fallback: 'normalFlat',
       sampleType: 'float',
       viewDimension: '2d',
     },
@@ -163,7 +180,9 @@ export class StandardMaterial implements Material {
       kind: 'texture',
       binding: 5,
       visibility: 'fragment',
+      imageMode: 'handle',
       fieldKey: 'emissiveTexture',
+      fallback: 'white',
       sampleType: 'float',
       viewDimension: '2d',
     },
@@ -171,7 +190,9 @@ export class StandardMaterial implements Material {
       kind: 'texture',
       binding: 6,
       visibility: 'fragment',
+      imageMode: 'handle',
       fieldKey: 'occlusionTexture',
+      fallback: 'white',
       sampleType: 'float',
       viewDimension: '2d',
     },

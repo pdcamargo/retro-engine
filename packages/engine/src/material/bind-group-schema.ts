@@ -115,6 +115,14 @@ export type BindGroupTextureViewDimension =
 export type BindGroupSamplerType = 'filtering' | 'non-filtering' | 'comparison';
 
 /**
+ * Named fallback an `imageMode: 'handle'` texture / sampler entry resolves to
+ * when the material's field is `undefined`. Maps to the matching default on
+ * the `Images` registry — `'white'` → `images.WHITE`, `'black'` →
+ * `images.BLACK`, `'normalFlat'` → `images.NORMAL_FLAT`.
+ */
+export type ImageFallback = 'white' | 'black' | 'normalFlat';
+
+/**
  * One entry in a material's bind-group schema. Discriminated by `kind`.
  *
  * Every entry carries a `binding` (matching the WGSL `@binding(N)` attribute),
@@ -122,8 +130,20 @@ export type BindGroupSamplerType = 'filtering' | 'non-filtering' | 'comparison';
  * material's instance field that supplies the resource at prepare time.
  *
  * Uniform entries pack one or more material fields into a single UBO at the
- * slot. Texture / sampler entries reference a single field. Storage buffer
- * entries reference a single field whose value is the resource.
+ * slot. Texture and sampler entries come in two flavours, discriminated by
+ * `imageMode`:
+ *
+ * - `'handle'` — the named field stores an `ImageHandle | undefined`; the
+ *   walker resolves it through `RenderImages`, falling back to a well-known
+ *   default (`fallback`) when the field is `undefined`. The handle-mode
+ *   sampler entry uses the **same** `fieldKey` as the matching texture entry
+ *   so a single `Image`'s sampler binds at both slots.
+ * - `'view'` (texture) / `'sampler'` (sampler) — the field stores a raw
+ *   `TextureView` / `Sampler` directly. The walker throws if the field is
+ *   `undefined`. This is the low-level escape hatch — prefer handle mode
+ *   for any material that wants ergonomic defaults.
+ *
+ * Storage buffer entries reference a single field whose value is the resource.
  */
 export type BindGroupEntry<M> =
   | {
@@ -136,6 +156,18 @@ export type BindGroupEntry<M> =
       readonly kind: 'texture';
       readonly binding: number;
       readonly visibility: BindingVisibility;
+      readonly imageMode: 'handle';
+      readonly fieldKey: keyof M & string;
+      readonly fallback: ImageFallback;
+      readonly sampleType?: BindGroupTextureSampleType;
+      readonly viewDimension?: BindGroupTextureViewDimension;
+      readonly multisampled?: boolean;
+    }
+  | {
+      readonly kind: 'texture';
+      readonly binding: number;
+      readonly visibility: BindingVisibility;
+      readonly imageMode: 'view';
       readonly fieldKey: keyof M & string;
       readonly sampleType?: BindGroupTextureSampleType;
       readonly viewDimension?: BindGroupTextureViewDimension;
@@ -145,7 +177,17 @@ export type BindGroupEntry<M> =
       readonly kind: 'sampler';
       readonly binding: number;
       readonly visibility: BindingVisibility;
-      readonly fieldKey?: keyof M & string;
+      readonly imageMode: 'handle';
+      readonly fieldKey: keyof M & string;
+      readonly fallback: ImageFallback;
+      readonly type?: BindGroupSamplerType;
+    }
+  | {
+      readonly kind: 'sampler';
+      readonly binding: number;
+      readonly visibility: BindingVisibility;
+      readonly imageMode: 'sampler';
+      readonly fieldKey: keyof M & string;
       readonly type?: BindGroupSamplerType;
     }
   | {

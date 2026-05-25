@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'bun:test';
 
-import type { Sampler, TextureView } from '@retro-engine/renderer-core';
 import { vec4 } from '@retro-engine/math';
 
 import { App, Camera3d, Cuboid, Mesh3d, Meshes, ShaderPlugin } from '../index';
@@ -8,9 +7,6 @@ import { makeRenderingRenderer, makeStubCanvas } from '../test-utils';
 
 import { MaterialPlugin } from './material-plugin';
 import { UnlitMaterial, UnlitMaterialPlugin } from './unlit-material';
-
-const stubTextureView: TextureView = { destroy: () => undefined };
-const stubSampler: Sampler = { destroy: () => undefined };
 
 describe('MaterialPlugin<UnlitMaterial>', () => {
   it('builds without throwing when added in the right order', () => {
@@ -49,12 +45,10 @@ describe('MaterialPlugin<UnlitMaterial>', () => {
     app.addPlugin(plugin);
 
     const meshHandle = app.getResource(Meshes)!.add(new Cuboid().mesh().build());
+    // No colorTexture — the schema's `fallback: 'white'` resolves binding 1
+    // and binding 2 through `Images.WHITE`.
     const materialHandle = app.getResource(plugin.Materials)!.add(
-      new UnlitMaterial({
-        color: vec4.create(1, 0.4, 0.2, 1),
-        colorTexture: stubTextureView,
-        colorSampler: stubSampler,
-      }),
+      new UnlitMaterial({ color: vec4.create(1, 0.4, 0.2, 1) }),
     );
 
     app.world.spawn(new Mesh3d(meshHandle), new plugin.MeshMaterial3d(materialHandle));

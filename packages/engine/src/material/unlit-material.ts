@@ -1,7 +1,7 @@
 import type { Vec4 } from '@retro-engine/math';
 import { vec4 } from '@retro-engine/math';
-import type { Sampler, TextureView } from '@retro-engine/renderer-core';
 
+import type { ImageHandle } from '../image/images';
 import type { App } from '../index';
 import type { PluginObject } from '../plugin';
 import { ShaderRegistry } from '../shader/shader-registry';
@@ -17,42 +17,30 @@ import { UNLIT_WGSL } from './unlit.wgsl';
  *
  * Bindings (`@group(2)`):
  *
- * | Binding | Kind     | Field             |
- * |---------|----------|-------------------|
- * | 0       | uniform  | `color: vec4f`    |
- * | 1       | texture  | `colorTexture`    |
- * | 2       | sampler  | `colorSampler`    |
+ * | Binding | Kind     | Field            | Source                |
+ * |---------|----------|------------------|-----------------------|
+ * | 0       | uniform  | `color: vec4f`   | packed UBO            |
+ * | 1       | texture  | `colorTexture`   | `Image.view`          |
+ * | 2       | sampler  | `colorTexture`   | `Image.sampler`       |
  *
- * The texture + sampler are required — `colorTexture` and `colorSampler` must
- * be set before adding the material to {@link Materials}. The engine ships
- * neither a default white texture nor a default sampler in Phase 7; consumers
- * create both via `renderer.createTexture` / `renderer.createSampler` and
- * pass the resulting view + sampler in.
- *
- * Register the plugin once at App build:
- *
- * ```ts
- * const unlit = new MaterialPlugin(UnlitMaterial);
- * app.addPlugin(unlit);
- * // Required-once: register the WGSL source with ShaderRegistry. The
- * // UnlitMaterialPlugin convenience class below does this for you.
- * ```
+ * `colorTexture` is an `ImageHandle | undefined`; bindings 1 and 2 share the
+ * field and bind the resolved {@link RenderImage}'s view + sampler. When
+ * `colorTexture` is `undefined`, both bindings fall back to `Images.WHITE`
+ * (the engine's pre-seeded 1×1 opaque-white default), so `new UnlitMaterial({
+ * color })` produces a usable tint-only material with no plumbing.
  */
 export class UnlitMaterial implements Material {
   color: Vec4 = vec4.create(1, 1, 1, 1);
-  colorTexture: TextureView | undefined;
-  colorSampler: Sampler | undefined;
+  colorTexture: ImageHandle | undefined;
   alphaMode_: AlphaMode = 'opaque';
 
   constructor(init?: {
     color?: Vec4;
-    colorTexture?: TextureView;
-    colorSampler?: Sampler;
+    colorTexture?: ImageHandle;
     alphaMode?: AlphaMode;
   }) {
     if (init?.color) this.color = init.color;
-    if (init?.colorTexture) this.colorTexture = init.colorTexture;
-    if (init?.colorSampler) this.colorSampler = init.colorSampler;
+    if (init?.colorTexture !== undefined) this.colorTexture = init.colorTexture;
     if (init?.alphaMode) this.alphaMode_ = init.alphaMode;
   }
 
@@ -71,7 +59,9 @@ export class UnlitMaterial implements Material {
       kind: 'texture',
       binding: 1,
       visibility: 'fragment',
+      imageMode: 'handle',
       fieldKey: 'colorTexture',
+      fallback: 'white',
       sampleType: 'float',
       viewDimension: '2d',
     },
@@ -79,7 +69,9 @@ export class UnlitMaterial implements Material {
       kind: 'sampler',
       binding: 2,
       visibility: 'fragment',
-      fieldKey: 'colorSampler',
+      imageMode: 'handle',
+      fieldKey: 'colorTexture',
+      fallback: 'white',
       type: 'filtering',
     },
   ]);

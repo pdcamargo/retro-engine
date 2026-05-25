@@ -9,10 +9,16 @@ import type {
 } from '@retro-engine/renderer-core';
 import { BufferUsage } from '@retro-engine/renderer-core';
 
+import type { ImageHandle } from '../image/images';
+import type { Images } from '../image/images';
+import type { RenderImage } from '../image/render-image';
+import type { RenderImages } from '../image/image-plugin';
+
 import type {
   BindGroupEntry,
   BindGroupSamplerType,
   BindGroupSchema,
+  ImageFallback,
   UniformField,
 } from './bind-group-schema';
 import {
@@ -136,14 +142,24 @@ export interface PreparedMaterial {
  * - Uniform slots pack their fields into `scratch` (a reused CPU `Float32Array`/
  *   `DataView` pair) and upload via `renderer.writeBuffer` to a per-material
  *   uniform buffer allocated lazily on first prepare.
- * - Texture / sampler / storage entries read the named field directly from
- *   `material` and bind it.
+ * - Texture and sampler entries come in two modes (per {@link BindGroupEntry}):
+ *   `'handle'` mode resolves an `ImageHandle | undefined` field through
+ *   `RenderImages`, falling back to `images.WHITE` / `.BLACK` /
+ *   `.NORMAL_FLAT` per the entry's `fallback`. `'view'` / `'sampler'` mode
+ *   reads the field directly and throws on `undefined`.
+ * - Storage entries read the named field directly from `material` and bind it.
  *
  * `scratch` is reused across every prepare call — the caller (typically
  * `prepareMaterials<M>`) maintains one scratch buffer per `MaterialPlugin<M>`.
  *
- * Throws if a required (non-`undefined`) resource field on the material is
- * itself `undefined`. The error names the slot binding number and field key.
+ * `images` + `renderImages` are required by handle-mode entries; they're
+ * inserted by `ImagePlugin` early in App build, and `MaterialPlugin<M>`'s
+ * prepare system declares `after: ['image-prepare']` so the GPU resources
+ * exist by the time this walker runs.
+ *
+ * Throws if a required resource cannot be resolved, if `image.dimension` is
+ * `'cube'` or `'3d'` (no Phase 7.5 consumer wired up yet), or if a view-mode
+ * field is `undefined`.
  */
 export const prepareBindGroup = <M extends object>(
   renderer: Renderer,
@@ -152,6 +168,8 @@ export const prepareBindGroup = <M extends object>(
   material: M,
   previous: PreparedMaterial | undefined,
   scratch: ArrayBuffer,
+  images: Images,
+  renderImages: RenderImages,
   label?: string,
 ): PreparedMaterial => {
   const view = new DataView(scratch);
@@ -181,6 +199,19 @@ export const prepareBindGroup = <M extends object>(
       continue;
     }
     if (entry.kind === 'texture') {
+      if (entry.imageMode === 'handle') {
+        const renderImage = resolveImageBinding(
+          material,
+          entry.fieldKey,
+          entry.fallback,
+          images,
+          renderImages,
+          'texture',
+          entry.binding,
+        );
+        entries.push({ binding: entry.binding, resource: renderImage.view });
+        continue;
+      }
       const value = (material as Record<string, unknown>)[entry.fieldKey];
       if (value === undefined || value === null) {
         throw new Error(
@@ -191,10 +222,18 @@ export const prepareBindGroup = <M extends object>(
       continue;
     }
     if (entry.kind === 'sampler') {
-      if (entry.fieldKey === undefined) {
-        throw new Error(
-          `prepareBindGroup: sampler binding ${entry.binding} declares no fieldKey; supply one or pre-provide a default sampler.`,
+      if (entry.imageMode === 'handle') {
+        const renderImage = resolveImageBinding(
+          material,
+          entry.fieldKey,
+          entry.fallback,
+          images,
+          renderImages,
+          'sampler',
+          entry.binding,
         );
+        entries.push({ binding: entry.binding, resource: renderImage.sampler });
+        continue;
       }
       const value = (material as Record<string, unknown>)[entry.fieldKey];
       if (value === undefined || value === null) {
@@ -240,6 +279,46 @@ export const prepareBindGroup = <M extends object>(
   const prepared: PreparedMaterial = { bindGroup };
   if (uniformBuffer !== undefined) prepared.uniformBuffer = uniformBuffer;
   return prepared;
+};
+
+/**
+ * Resolve an `imageMode: 'handle'` texture or sampler entry: read the
+ * material's named field (an `ImageHandle | undefined`), fall back to the
+ * named default when undefined, look up the `RenderImage` in `RenderImages`,
+ * and reject `'cube'` / `'3d'` images (no Phase 7.5 consumer is wired up yet
+ * — the type-level support is for future cube / volume materials).
+ */
+const resolveImageBinding = <M>(
+  material: M,
+  fieldKey: string,
+  fallback: ImageFallback,
+  images: Images,
+  renderImages: RenderImages,
+  kind: 'texture' | 'sampler',
+  binding: number,
+): RenderImage => {
+  const raw = (material as Record<string, unknown>)[fieldKey] as ImageHandle | undefined;
+  const handle: ImageHandle =
+    raw !== undefined && raw !== null
+      ? raw
+      : fallback === 'white'
+        ? images.WHITE
+        : fallback === 'black'
+          ? images.BLACK
+          : images.NORMAL_FLAT;
+  const renderImage = renderImages.get(handle);
+  if (renderImage === undefined) {
+    throw new Error(
+      `prepareBindGroup: ${kind} binding ${binding} could not resolve ImageHandle ${String(handle)} via RenderImages — make sure ImagePlugin is registered before any MaterialPlugin (its prepare system runs in RenderSet.Prepare with label 'image-prepare').`,
+    );
+  }
+  const sourceImage = images.get(handle);
+  if (sourceImage !== undefined && sourceImage.dimension !== '2d') {
+    throw new Error(
+      `prepareBindGroup: ${kind} binding ${binding} resolved to an image with dimension '${sourceImage.dimension}'; Phase 7.5 only wires up '2d' images. Cube and 3D consumers light up alongside their first real consumer (skybox, volumetrics, etc.).`,
+    );
+  }
+  return renderImage;
 };
 
 /**

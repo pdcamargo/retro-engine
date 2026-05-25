@@ -7,7 +7,6 @@
 
 import { describe, expect, it } from 'bun:test';
 
-import type { Sampler, TextureView } from '@retro-engine/renderer-core';
 import { vec4 } from '@retro-engine/math';
 
 import { App, Camera3d, Commands, Cuboid, Mesh3d, Meshes, Query, Transform } from '../index';
@@ -15,10 +14,8 @@ import { makeRenderingRenderer, makeStubCanvas } from '../test-utils';
 import { ResMut } from '../system-param';
 
 import { MaterialPlugin } from './material-plugin';
+import { StandardMaterial, StandardMaterialPlugin } from './standard-material';
 import { UnlitMaterial, UnlitMaterialPlugin } from './unlit-material';
-
-const stubView: TextureView = { destroy: () => undefined };
-const stubSampler: Sampler = { destroy: () => undefined };
 
 describe('playground repro: Commands.spawn flow with MaterialPlugin', () => {
   it('advances a frame without crashing in calculateBoundsSystem', async () => {
@@ -33,11 +30,7 @@ describe('playground repro: Commands.spawn flow with MaterialPlugin', () => {
       (cmd, meshes, materials) => {
         const meshHandle = meshes.add(new Cuboid().mesh().build());
         const materialHandle = materials.add(
-          new UnlitMaterial({
-            color: vec4.create(1, 0.5, 0.25, 1),
-            colorTexture: stubView,
-            colorSampler: stubSampler,
-          }),
+          new UnlitMaterial({ color: vec4.create(1, 0.5, 0.25, 1) }),
         );
         const transform = new Transform();
         cmd.spawn(
@@ -68,11 +61,7 @@ describe('playground repro: Commands.spawn flow with MaterialPlugin', () => {
         for (let i = 0; i < 16; i++) {
           const meshHandle = meshes.add(new Cuboid().mesh().build());
           const materialHandle = materials.add(
-            new UnlitMaterial({
-              color: vec4.create(1, 0.5, 0.25, 1),
-              colorTexture: stubView,
-              colorSampler: stubSampler,
-            }),
+            new UnlitMaterial({ color: vec4.create(1, 0.5, 0.25, 1) }),
           );
           const transform = new Transform();
           const components: object[] = [
@@ -104,5 +93,43 @@ describe('playground repro: Commands.spawn flow with MaterialPlugin', () => {
 
     await app.run();
     expect(observed).toBeGreaterThanOrEqual(16);
+  });
+
+  it('default-fallback path: PBR with only baseColor renders via Images.WHITE / NORMAL_FLAT', async () => {
+    // Phase 7.5 — the canonical "the schema resolves missing textures through
+    // the seeded default Images" check. No texture fields set on the material
+    // (`baseColorTexture`, `metallicRoughnessTexture`, `normalMapTexture`,
+    // `emissiveTexture`, `occlusionTexture` are all undefined). The five
+    // texture bindings + the shared sampler binding all resolve through
+    // `Images.WHITE` (or `Images.NORMAL_FLAT` for the normal map slot) via
+    // the schema's per-entry `fallback` discriminant.
+    const app = new App({ renderer: makeRenderingRenderer(), canvas: makeStubCanvas() });
+    app.addPlugin(new StandardMaterialPlugin());
+    const plugin = new MaterialPlugin(StandardMaterial);
+    app.addPlugin(plugin);
+
+    app.addSystem(
+      'startup',
+      [Commands, ResMut(Meshes), ResMut(plugin.Materials)],
+      (cmd, meshes, materials) => {
+        const meshHandle = meshes.add(new Cuboid().mesh().build());
+        const materialHandle = materials.add(
+          new StandardMaterial({ baseColor: vec4.create(1, 0.5, 0.25, 1) }),
+        );
+        cmd.spawn(
+          new Mesh3d(meshHandle),
+          new plugin.MeshMaterial3d(materialHandle),
+          new Transform(),
+        );
+        cmd.spawn(...Camera3d());
+      },
+    );
+
+    await app.run();
+    const renderMaterials = app.getResource(plugin.RenderMaterials)!;
+    // One material registered → one prepared entry in RenderMaterials. If the
+    // walker's fallback path were broken, the prepare system would throw and
+    // the entry would be missing.
+    expect(renderMaterials.size).toBe(1);
   });
 });

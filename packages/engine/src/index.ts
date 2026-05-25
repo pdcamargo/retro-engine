@@ -131,6 +131,7 @@ export type {
   BindGroupTextureSampleType,
   BindGroupTextureViewDimension,
   BindingVisibility,
+  ImageFallback,
   Material,
   MaterialAssetEvent,
   MaterialCtor,
@@ -142,6 +143,20 @@ export type {
   UniformField,
   UniformFieldPack,
 } from './material';
+export type {
+  ImageAssetEvent,
+  ImageDimension,
+  ImageHandle,
+  RenderImage,
+} from './image';
+export {
+  bytesPerTexel,
+  ExtractedImageAssetEvents,
+  Image,
+  ImagePlugin,
+  Images,
+  RenderImages,
+} from './image';
 export {
   alphaModeKey,
   ENTITY_TRANSFORM_BUFFER_SIZE,

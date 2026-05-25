@@ -92,32 +92,50 @@ export const makeShaderBenchRenderer = (): Renderer => ({
   submit: (_buffers: readonly CommandBuffer[]): void => fail('submit'),
 });
 
-export const makeHeadlessRenderer = (): Renderer => ({
-  capabilities: baseCapabilities,
-  init: () => Promise.resolve(),
-  destroy: () => undefined,
-  getPreferredSurfaceFormat: (): TextureFormat => 'rgba8unorm',
-  createSurface: (): Surface => fail('createSurface'),
-  createShaderModule: (_descriptor: ShaderModuleDescriptor): ShaderModule => fail('createShaderModule'),
-  createBuffer: (_descriptor: BufferDescriptor): Buffer => fail('createBuffer'),
-  createTexture: (_descriptor: TextureDescriptor): Texture => fail('createTexture'),
-  createSampler: (_descriptor?: SamplerDescriptor): Sampler => fail('createSampler'),
-  writeBuffer: (_buffer: Buffer, _offset: number, _data: BufferSource): void => fail('writeBuffer'),
-  writeTexture: (
-    _destination: ImageCopyTexture,
-    _data: BufferSource,
-    _dataLayout: ImageDataLayout,
-    _size: Extent3D,
-  ): void => fail('writeTexture'),
-  createBindGroupLayout: (_descriptor: BindGroupLayoutDescriptor): BindGroupLayout =>
-    fail('createBindGroupLayout'),
-  createPipelineLayout: (_descriptor: PipelineLayoutDescriptor): PipelineLayout => fail('createPipelineLayout'),
-  createBindGroup: (_descriptor: BindGroupDescriptor): BindGroup => fail('createBindGroup'),
-  createRenderPipeline: (_descriptor: RenderPipelineDescriptor): RenderPipeline => fail('createRenderPipeline'),
-  createCommandEncoder: (_label?: string): CommandEncoder => fail('createCommandEncoder'),
-  resolveRenderTarget: (_target: RenderTarget): ResolvedRenderTarget => fail('resolveRenderTarget'),
-  submit: (_buffers: readonly CommandBuffer[]): void => fail('submit'),
-});
+export const makeHeadlessRenderer = (): Renderer => {
+  const view: TextureView = { destroy: () => undefined };
+  const inertBuffer = (size: number, usage: number): Buffer => ({
+    size,
+    usage,
+    destroy: () => undefined,
+  });
+  const inertTexture = (descriptor: TextureDescriptor): Texture => ({
+    width: descriptor.width,
+    height: descriptor.height,
+    depthOrArrayLayers: descriptor.depthOrArrayLayers ?? 1,
+    format: descriptor.format,
+    mipLevelCount: descriptor.mipLevelCount ?? 1,
+    sampleCount: descriptor.sampleCount ?? 1,
+    usage: descriptor.usage,
+    createView: () => view,
+    destroy: () => undefined,
+  });
+  return {
+    capabilities: baseCapabilities,
+    init: () => Promise.resolve(),
+    destroy: () => undefined,
+    getPreferredSurfaceFormat: (): TextureFormat => 'rgba8unorm',
+    createSurface: (): Surface => fail('createSurface'),
+    createShaderModule: (_descriptor: ShaderModuleDescriptor): ShaderModule => fail('createShaderModule'),
+    createBuffer: (descriptor: BufferDescriptor): Buffer => inertBuffer(descriptor.size, descriptor.usage),
+    createTexture: (descriptor: TextureDescriptor): Texture => inertTexture(descriptor),
+    createSampler: (_descriptor?: SamplerDescriptor): Sampler => ({ destroy: () => undefined }),
+    writeBuffer: (_buffer: Buffer, _offset: number, _data: BufferSource): void => undefined,
+    writeTexture: (
+      _destination: ImageCopyTexture,
+      _data: BufferSource,
+      _dataLayout: ImageDataLayout,
+      _size: Extent3D,
+    ): void => undefined,
+    createBindGroupLayout: (_descriptor: BindGroupLayoutDescriptor): BindGroupLayout => ({ destroy: () => undefined }),
+    createPipelineLayout: (_descriptor: PipelineLayoutDescriptor): PipelineLayout => ({ destroy: () => undefined }),
+    createBindGroup: (_descriptor: BindGroupDescriptor): BindGroup => ({ destroy: () => undefined }),
+    createRenderPipeline: (_descriptor: RenderPipelineDescriptor): RenderPipeline => fail('createRenderPipeline'),
+    createCommandEncoder: (_label?: string): CommandEncoder => fail('createCommandEncoder'),
+    resolveRenderTarget: (_target: RenderTarget): ResolvedRenderTarget => fail('resolveRenderTarget'),
+    submit: (_buffers: readonly CommandBuffer[]): void => fail('submit'),
+  };
+};
 
 /**
  * Renderer stub for render-graph dispatch benches. Returns inert handles from

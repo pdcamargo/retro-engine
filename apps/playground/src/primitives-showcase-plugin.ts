@@ -1,15 +1,17 @@
-// Visual verification harness for Phase 7's material system.
+// Visual verification harness for Phase 7.5's image-asset migration.
 //
 // Spawns 15 mesh primitives as `Mesh3d + MeshMaterial3d<UnlitMaterial>`
-// bundles. The engine's Core3d phase trio + MaterialPlugin<UnlitMaterial>
-// draws every entity — no custom shader, no custom pipeline, no custom
-// render-graph node, no manual depth texture. This file is the Phase 7
-// boundary check (ADR-0028): the showcase previously ran ~440 LOC of
-// hand-rolled draw plumbing; with materials in tree, it shrinks to one
-// startup system + one per-frame rotation system.
+// bundles. Each material carries only a tint colour — no texture or sampler
+// fields are populated. The schema's `fallback: 'white'` discriminant
+// resolves the binding-1 texture and binding-2 sampler through
+// `Images.WHITE`, the 1×1 opaque-white default seeded by `ImagePlugin`.
+//
+// Pre-Phase-7.5 this file owned an ~35-LOC white-texture + linear-sampler
+// bootstrap. Phase 7.5 collapses that to nothing — the default
+// `Images.WHITE` handle is provisioned by the engine before the first frame
+// runs.
 
 import { quat, vec3 } from '@retro-engine/math';
-import { TextureUsage } from '@retro-engine/renderer-core';
 import type { Plugin } from '@retro-engine/engine';
 import {
   Annulus,
@@ -85,14 +87,14 @@ const placePrimitives = (): Placement[] => {
  * each backed by a `UnlitMaterial` with a tint color. Rotating shapes spin
  * around the Y axis each frame to show their 3D-ness.
  *
- * The 436-LOC pre-Phase-7 version of this plugin owned a custom shader,
- * pipeline layout, render sub-graph, depth texture, and per-mesh model bind
- * groups. With the material system in tree (ADR-0028), all of that becomes
- * engine concerns: `MaterialPlugin<UnlitMaterial>` builds the pipeline,
- * `Camera3d()` defaults `depthTarget` to `'auto'` so the engine allocates
- * per-camera depth textures, and the Core3d phase trio draws everything
- * through its standard pass. What's left is the data — placements +
- * color tints + a rotation system.
+ * The Phase 7 version of this plugin instantiated a 1×1 white texture + a
+ * linear sampler at startup and passed both into every material. Phase 7.5's
+ * `Image` asset folds that bootstrap into the engine: the engine's
+ * `ImagePlugin` seeds an `Images.WHITE` default, and the `UnlitMaterial`
+ * schema's `fallback: 'white'` resolves the binding-1 + binding-2 slots
+ * through that default whenever `colorTexture` is undefined. Result: the
+ * playground spawn loop reads as 'mesh + material + transform' with no
+ * texture plumbing.
  */
 export const primitivesShowcasePlugin: Plugin = (app) => {
   const log = app.logger.child('showcase');
@@ -114,30 +116,6 @@ export const primitivesShowcasePlugin: Plugin = (app) => {
     'startup',
     [Commands, ResMut(Meshes), ResMut(unlitPlugin.Materials)],
     (cmd, meshes, materials) => {
-      // One shared 1×1 white texture + one shared linear sampler. The
-      // UnlitMaterial schema requires both; users without per-material
-      // textures fall back to a default like this.
-      const whiteTexture = app.renderer.createTexture({
-        label: 'showcase-white',
-        width: 1,
-        height: 1,
-        format: 'rgba8unorm',
-        usage: TextureUsage.TEXTURE_BINDING | TextureUsage.COPY_DST,
-      });
-      const whitePixels = new Uint8Array([0xff, 0xff, 0xff, 0xff]);
-      app.renderer.writeTexture(
-        { texture: whiteTexture },
-        whitePixels,
-        { bytesPerRow: 4 },
-        { width: 1, height: 1, depthOrArrayLayers: 1 },
-      );
-      const whiteView = whiteTexture.createView();
-      const sampler = app.renderer.createSampler({
-        label: 'showcase-sampler',
-        magFilter: 'linear',
-        minFilter: 'linear',
-      });
-
       for (const place of placePrimitives()) {
         const meshHandle = meshes.add(place.meshable.mesh().build());
         const materialHandle = materials.add(
@@ -148,8 +126,6 @@ export const primitivesShowcasePlugin: Plugin = (app) => {
               place.color[2],
               1,
             ]) as unknown as Float32Array & { readonly length: 4 },
-            colorTexture: whiteView,
-            colorSampler: sampler,
           }),
         );
         const transform = new Transform();
@@ -169,7 +145,7 @@ export const primitivesShowcasePlugin: Plugin = (app) => {
       quat.fromAxisAngle(vec3.create(1, 0, 0), -Math.PI / 6, camTransform.rotation);
       cmd.spawn(...Camera3d({ transform: camTransform }));
 
-      log.info('spawned 16 primitives backed by UnlitMaterial');
+      log.info('spawned 16 primitives backed by UnlitMaterial (Images.WHITE fallback)');
     },
   );
 };

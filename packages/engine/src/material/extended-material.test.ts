@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'bun:test';
 
-import type { Sampler, TextureView } from '@retro-engine/renderer-core';
 import { vec4 } from '@retro-engine/math';
 
 import { App, Cuboid, Mesh3d, Meshes } from '../index';
@@ -15,9 +14,6 @@ import {
 import type { Material, ShaderRef } from './material';
 import { ShaderRefs } from './material';
 import { UnlitMaterial, UnlitMaterialPlugin } from './unlit-material';
-
-const stubView: TextureView = { destroy: () => undefined };
-const stubSampler: Sampler = { destroy: () => undefined };
 
 class ExtSizzle implements Material {
   sizzle = 0.5;
@@ -132,11 +128,7 @@ describe('MaterialPlugin.forExtended', () => {
     const meshHandle = app.getResource(Meshes)!.add(new Cuboid().mesh().build());
     const handle = app.getResource(ext.Materials)!.add(
       new ExtendedMaterial(
-        new UnlitMaterial({
-          color: vec4.create(1, 0.5, 0.25, 1),
-          colorTexture: stubView,
-          colorSampler: stubSampler,
-        }),
+        new UnlitMaterial({ color: vec4.create(1, 0.5, 0.25, 1) }),
         new ExtSizzle(),
       ),
     );

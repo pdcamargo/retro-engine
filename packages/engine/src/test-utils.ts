@@ -48,48 +48,73 @@ export const baseCapabilities: RendererCapabilities = {
 };
 
 /**
- * A headless `Renderer` whose every factory throws.
+ * A headless `Renderer` whose surface / encoder / pipeline factories throw.
  *
- * Intended for tests that exercise engine logic without touching the GPU. Any
- * call into a factory method is a signal that the test reached production
- * rendering code paths and should either avoid them or switch to
- * {@link makeRenderingRenderer}.
+ * Intended for tests that exercise engine logic without touching the
+ * render-pass machinery — `createSurface` / `createCommandEncoder` / `submit`
+ * / `resolveRenderTarget` / `createRenderPipeline` all throw, signalling that
+ * the test reached production rendering code paths.
+ *
+ * Plain resource factories (`createBuffer`, `createTexture`, `createSampler`,
+ * `writeBuffer`, `writeTexture`, `createBindGroupLayout`,
+ * `createPipelineLayout`, `createBindGroup`) return inert objects so the
+ * engine-internal `MeshAllocator` / `ImagePlugin` / `MaterialPlugin` lifecycle
+ * — which runs every frame from `CorePlugin` onwards — can complete without
+ * a real GPU.
  */
-export const makeHeadlessRenderer = (): Renderer => ({
-  capabilities: baseCapabilities,
-  init: () => Promise.resolve(),
-  destroy: () => undefined,
-  getPreferredSurfaceFormat: (): TextureFormat => 'rgba8unorm',
-  createSurface: (): Surface => fail('createSurface'),
-  createShaderModule: (_descriptor: ShaderModuleDescriptor): ShaderModule => fail('createShaderModule'),
-  createBuffer: (_descriptor: BufferDescriptor): Buffer => fail('createBuffer'),
-  createTexture: (_descriptor: TextureDescriptor): Texture => fail('createTexture'),
-  createSampler: (_descriptor?: SamplerDescriptor): Sampler => fail('createSampler'),
-  writeBuffer: (_buffer: Buffer, _offset: number, _data: BufferSource): void => fail('writeBuffer'),
-  writeTexture: (
-    _destination: ImageCopyTexture,
-    _data: BufferSource,
-    _dataLayout: ImageDataLayout,
-    _size: Extent3D,
-  ): void => fail('writeTexture'),
-  createBindGroupLayout: (_descriptor: BindGroupLayoutDescriptor): BindGroupLayout => fail('createBindGroupLayout'),
-  createPipelineLayout: (_descriptor: PipelineLayoutDescriptor): PipelineLayout => fail('createPipelineLayout'),
-  createBindGroup: (_descriptor: BindGroupDescriptor): BindGroup => fail('createBindGroup'),
-  createRenderPipeline: (_descriptor: RenderPipelineDescriptor): RenderPipeline => fail('createRenderPipeline'),
-  createCommandEncoder: (_label?: string): CommandEncoder => fail('createCommandEncoder'),
-  resolveRenderTarget: (_target: RenderTarget): ResolvedRenderTarget => fail('resolveRenderTarget'),
-  submit: (_buffers: readonly CommandBuffer[]): void => fail('submit'),
-});
+export const makeHeadlessRenderer = (): Renderer => {
+  const view: TextureView = { destroy: () => undefined };
+  const inertBuffer = (size: number, usage: number): Buffer => ({
+    size,
+    usage,
+    destroy: () => undefined,
+  });
+  const inertTexture = (descriptor: TextureDescriptor): Texture => ({
+    width: descriptor.width,
+    height: descriptor.height,
+    depthOrArrayLayers: descriptor.depthOrArrayLayers ?? 1,
+    format: descriptor.format,
+    mipLevelCount: descriptor.mipLevelCount ?? 1,
+    sampleCount: descriptor.sampleCount ?? 1,
+    usage: descriptor.usage,
+    createView: () => view,
+    destroy: () => undefined,
+  });
+  return {
+    capabilities: baseCapabilities,
+    init: () => Promise.resolve(),
+    destroy: () => undefined,
+    getPreferredSurfaceFormat: (): TextureFormat => 'rgba8unorm',
+    createSurface: (): Surface => fail('createSurface'),
+    createShaderModule: (_descriptor: ShaderModuleDescriptor): ShaderModule => fail('createShaderModule'),
+    createBuffer: (descriptor: BufferDescriptor): Buffer => inertBuffer(descriptor.size, descriptor.usage),
+    createTexture: (descriptor: TextureDescriptor): Texture => inertTexture(descriptor),
+    createSampler: (_descriptor?: SamplerDescriptor): Sampler => ({ destroy: () => undefined }),
+    writeBuffer: (_buffer: Buffer, _offset: number, _data: BufferSource): void => undefined,
+    writeTexture: (
+      _destination: ImageCopyTexture,
+      _data: BufferSource,
+      _dataLayout: ImageDataLayout,
+      _size: Extent3D,
+    ): void => undefined,
+    createBindGroupLayout: (_descriptor: BindGroupLayoutDescriptor): BindGroupLayout => ({ destroy: () => undefined }),
+    createPipelineLayout: (_descriptor: PipelineLayoutDescriptor): PipelineLayout => ({ destroy: () => undefined }),
+    createBindGroup: (_descriptor: BindGroupDescriptor): BindGroup => ({ destroy: () => undefined }),
+    createRenderPipeline: (_descriptor: RenderPipelineDescriptor): RenderPipeline => fail('createRenderPipeline'),
+    createCommandEncoder: (_label?: string): CommandEncoder => fail('createCommandEncoder'),
+    resolveRenderTarget: (_target: RenderTarget): ResolvedRenderTarget => fail('resolveRenderTarget'),
+    submit: (_buffers: readonly CommandBuffer[]): void => fail('submit'),
+  };
+};
 
 /**
  * A `Renderer` stub that satisfies the frame-loop calls without doing GPU work.
  *
  * `createSurface`, `createCommandEncoder`, `submit`, `resolveRenderTarget`,
- * and the resource factories used by `CameraPlugin` (`createBuffer`,
- * `createBindGroupLayout`, `createBindGroup`, `writeBuffer`) return inert
- * objects so `App.renderFrame()` can run end-to-end in tests. Factories not
- * exercised by the engine's own systems (shader modules, textures, samplers,
- * pipelines, writeTexture) still throw — tests that need them mock individually.
+ * and the resource factories used by `CameraPlugin` + `MeshAllocator` +
+ * `ImagePlugin` (`createBuffer`, `createBindGroupLayout`, `createBindGroup`,
+ * `writeBuffer`, `createTexture`, `createSampler`, `writeTexture`) return
+ * inert objects so `App.renderFrame()` can run end-to-end in tests.
  */
 export const makeRenderingRenderer = (): Renderer => {
   const view: TextureView = { destroy: () => undefined };
@@ -159,7 +184,7 @@ export const makeRenderingRenderer = (): Renderer => {
       _data: BufferSource,
       _dataLayout: ImageDataLayout,
       _size: Extent3D,
-    ): void => fail('writeTexture'),
+    ): void => undefined,
     createBindGroupLayout: (_descriptor: BindGroupLayoutDescriptor): BindGroupLayout => inertBindGroupLayout,
     createPipelineLayout: (_descriptor: PipelineLayoutDescriptor): PipelineLayout => ({
       destroy: () => undefined,

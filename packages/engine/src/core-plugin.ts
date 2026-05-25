@@ -1,6 +1,7 @@
 import { CameraPlugin } from './camera/camera-plugin';
 import { RemovedComponents } from './change-detection';
 import { Children, Parent, propagateTransformsGated } from './hierarchy';
+import { ImagePlugin } from './image/image-plugin';
 import type { App } from './index';
 import { MeshPlugin } from './mesh/mesh-plugin';
 import type { PluginObject } from './plugin';
@@ -82,6 +83,7 @@ export class CorePlugin implements PluginObject {
     app.addPlugin(new ShaderPlugin());
     app.addPlugin(new CameraPlugin());
     app.addPlugin(new MeshPlugin());
+    app.addPlugin(new ImagePlugin());
     app.addPlugin(new VisibilityPlugin());
     app.addPlugin(new RenderGraphPlugin());
   }

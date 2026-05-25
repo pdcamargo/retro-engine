@@ -5,6 +5,7 @@ export type {
   BindGroupTextureSampleType,
   BindGroupTextureViewDimension,
   BindingVisibility,
+  ImageFallback,
   UniformField,
   UniformFieldPack,
 } from './bind-group-schema';
