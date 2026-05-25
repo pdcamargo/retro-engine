@@ -276,6 +276,8 @@ export {
   ViewPhases3d,
 } from './render-graph';
 export type {
+  AtlasAnimationMode,
+  AtlasAnimationOptions,
   SpriteAlphaBucket,
   SpriteAnchor,
   SpriteBatch,
@@ -287,6 +289,8 @@ export type {
   TextureAtlasLayoutHandle,
 } from './sprite';
 export {
+  AtlasAnimation,
+  atlasAnimationSystem,
   atlasSyncSystem,
   calculateSpriteBoundsSystem,
   packSpriteInstance,

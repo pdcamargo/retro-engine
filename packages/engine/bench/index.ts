@@ -17,6 +17,7 @@ import './render-graph.bench';
 import './mesh-allocator.bench';
 import './sprite-batch.bench';
 import './atlas-sync.bench';
+import './atlas-animation.bench';
 
 interface NormalizedBench {
   readonly key: string;

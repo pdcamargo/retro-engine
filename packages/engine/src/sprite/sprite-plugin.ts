@@ -13,9 +13,11 @@ import { ViewPhases2d } from '../render-graph/phase-2d';
 import { RenderSet } from '../render-set';
 import { ShaderRegistry } from '../shader/shader-registry';
 import { Extract, Query, Res, ResMut } from '../system-param';
+import { Time } from '../time';
 import { GlobalTransform } from '../transform';
 import { NoFrustumCulling, ViewVisibility } from '../visibility/visibility';
 
+import { AtlasAnimation, atlasAnimationSystem } from './atlas-animation';
 import { atlasSyncSystem } from './atlas-sync';
 import { calculateSpriteBoundsSystem } from './calculate-sprite-bounds';
 import { Sprite } from './sprite';
@@ -51,10 +53,13 @@ import { TextureAtlasLayouts } from './texture-atlas-layouts';
  *   active 2D cameras and pushes one `PhaseItem2d` per `(camera, batch)`,
  *   routing to opaque vs transparent based on the batch's alpha bucket.
  * - Inserts {@link TextureAtlasLayouts} as a main-world resource and registers
- *   two `'postUpdate'` systems: `'atlas-sync'` (writes `sprite.rect` from
- *   `(layout, index)` for entities whose `TextureAtlas` changed) and
- *   `'sprite-bounds'` (auto-AABB for sprite frustum culling, ordered after
- *   `'atlas-sync'` so atlassed sprites have an up-to-date rect first).
+ *   three `'postUpdate'` systems: `'atlas-animation'` (advances
+ *   `TextureAtlas.index` over time for entities carrying an `AtlasAnimation`,
+ *   ordered before `'atlas-sync'` so the new index propagates in the same
+ *   frame), `'atlas-sync'` (writes `sprite.rect` from `(layout, index)` for
+ *   entities whose `TextureAtlas` changed), and `'sprite-bounds'` (auto-AABB
+ *   for sprite frustum culling, ordered after `'atlas-sync'` so atlassed
+ *   sprites have an up-to-date rect first).
  *
  * Unique — only one sprite pipeline ships with the engine. Custom 2D
  * materials (`Material2d`, Phase 8.7) use a separate plugin and share the
@@ -92,12 +97,17 @@ export class SpritePlugin implements PluginObject {
     }
 
     // `'postUpdate'` chain for atlas-driven sprites:
+    //   atlas-animation advances TextureAtlas.index over time
+    //   ↓
     //   atlas-sync writes sprite.rect from (layout, index)
     //   ↓
     //   sprite-bounds computes Aabb from sprite footprint (uses up-to-date rect)
     //   ↓
     //   downstream visibility pipeline picks up Aabb (CalculateBounds slot is
     //   the head of VisibilityPlugin's documented order).
+    type AtlasAnimationQuery = QueryHandle<
+      readonly [typeof AtlasAnimation, typeof TextureAtlas]
+    >;
     type AtlasSyncQuery = QueryHandle<
       readonly [typeof Sprite, typeof TextureAtlas],
       { changed: readonly (typeof TextureAtlas)[] }
@@ -106,6 +116,19 @@ export class SpritePlugin implements PluginObject {
       readonly [typeof Sprite],
       { without: readonly (typeof NoFrustumCulling)[] }
     >;
+
+    app.addSystem(
+      'postUpdate',
+      [Res(Time), Query([AtlasAnimation, TextureAtlas])],
+      (time, animated) => {
+        atlasAnimationSystem(
+          time as Time,
+          animated as unknown as AtlasAnimationQuery,
+          app.world,
+        );
+      },
+      { label: 'atlas-animation', before: ['atlas-sync'] },
+    );
 
     app.addSystem(
       'postUpdate',

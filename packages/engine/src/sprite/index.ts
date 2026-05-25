@@ -1,3 +1,5 @@
+export type { AtlasAnimationMode, AtlasAnimationOptions } from './atlas-animation';
+export { AtlasAnimation, atlasAnimationSystem } from './atlas-animation';
 export { atlasSyncSystem } from './atlas-sync';
 export { calculateSpriteBoundsSystem } from './calculate-sprite-bounds';
 export type { SpriteAnchor, SpriteOptions } from './sprite';

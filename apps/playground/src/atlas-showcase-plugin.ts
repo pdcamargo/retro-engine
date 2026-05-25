@@ -1,4 +1,5 @@
-// Visual harness for Phase 8.2's texture-atlas asset (ADR-0032).
+// Visual harness for Phase 8.2's texture-atlas asset (ADR-0032) + Phase 8.4's
+// time-driven `AtlasAnimation` (ADR-0033).
 //
 // Spawns an 8×8 grid of sprites that all share one procedurally generated
 // 64×64 source image and one 4×4 `TextureAtlasLayout`. Each entity carries a
@@ -6,10 +7,16 @@
 // distinct tile colours. Atlas-sync writes `sprite.rect` per frame in
 // `postUpdate` before the sprite-prepare batcher reads it; calculate-sprite-
 // bounds populates `Aabb` so the frustum-cull path is active.
+//
+// Two of the 64 entities also carry an `AtlasAnimation` and visibly cycle
+// through the full 16-tile range at ~6 Hz. The other 62 stay on the static
+// tile they were spawned with — proves animator + atlas + bounds compose
+// live with no special wiring.
 
 import { vec2, vec3, vec4 } from '@retro-engine/math';
 import type { Plugin } from '@retro-engine/engine';
 import {
+  AtlasAnimation,
   Camera2d,
   ClearColorConfig,
   Commands,
@@ -136,6 +143,10 @@ export const atlasShowcasePlugin: Plugin = (app) => {
       );
 
       const tileCount = TILE_COLS * TILE_ROWS;
+      // Two center-ish cells become animated. Their static-grid neighbours
+      // stay frozen on the tile they spawned with, making the two cycling
+      // sprites obvious by contrast.
+      const animatedCells = new Set(['3,3', '4,4']);
       for (let r = 0; r < GRID; r++) {
         for (let c = 0; c < GRID; c++) {
           const px = (c - (GRID - 1) * 0.5) * CELL_SPACING;
@@ -143,21 +154,34 @@ export const atlasShowcasePlugin: Plugin = (app) => {
           // this the visual order is bottom-up and the showcase reads "wrong."
           const py = -(r - (GRID - 1) * 0.5) * CELL_SPACING;
           const index = (c + r * GRID) % tileCount;
-          cmd.spawn(
-            new Sprite({
-              image: sheet,
-              color: vec4.create(1, 1, 1, 1),
-              customSize: vec2.create(CELL_SIZE, CELL_SIZE),
-              // Canvas/PNG textures store row 0 at the top (Y-down memory
-              // layout), while the sprite quad's UV(0,0) corner lands at the
-              // screen's bottom under Y-up clip space. Without flipY, every
-              // textured sprite renders upside-down — visible here as
-              // 180°-rotated digits. Mirrors Bevy's Sprite.flip_y semantics.
-              flipY: true,
-            }),
-            new TextureAtlas(layout, index),
-            new Transform(vec3.create(px, py, 0)),
-          );
+          const sprite = new Sprite({
+            image: sheet,
+            color: vec4.create(1, 1, 1, 1),
+            customSize: vec2.create(CELL_SIZE, CELL_SIZE),
+            // Canvas/PNG textures store row 0 at the top (Y-down memory
+            // layout), while the sprite quad's UV(0,0) corner lands at the
+            // screen's bottom under Y-up clip space. Without flipY, every
+            // textured sprite renders upside-down — visible here as
+            // 180°-rotated digits. Mirrors Bevy's Sprite.flip_y semantics.
+            flipY: true,
+          });
+          const atlas = new TextureAtlas(layout, index);
+          const transform = new Transform(vec3.create(px, py, 0));
+          if (animatedCells.has(`${r},${c}`)) {
+            cmd.spawn(
+              sprite,
+              atlas,
+              transform,
+              new AtlasAnimation({
+                firstIndex: 0,
+                lastIndex: tileCount - 1,
+                fps: 6,
+                mode: 'loop',
+              }),
+            );
+          } else {
+            cmd.spawn(sprite, atlas, transform);
+          }
         }
       }
 
@@ -167,7 +191,7 @@ export const atlasShowcasePlugin: Plugin = (app) => {
         }),
       );
       log.info(
-        `spawned ${GRID * GRID} sprites sharing one image + one ${TILE_COLS}×${TILE_ROWS} TextureAtlasLayout`,
+        `spawned ${GRID * GRID} sprites sharing one image + one ${TILE_COLS}×${TILE_ROWS} TextureAtlasLayout (${animatedCells.size} animated)`,
       );
     },
   );
