@@ -16,7 +16,12 @@ import {
   State,
   Time,
 } from './index';
-import { makeHeadlessRenderer, makeRenderingRenderer, makeStubCanvas } from './test-utils';
+import {
+  attachLegacyMainPassToCore2d,
+  makeHeadlessRenderer,
+  makeRenderingRenderer,
+  makeStubCanvas,
+} from './test-utils';
 
 describe('App', () => {
   it('accepts plugins and runs startup systems', async () => {
@@ -80,6 +85,9 @@ describe('System param protocol', () => {
   it('resolves RenderCtx to the active frame context in render systems', async () => {
     const app = new App({ renderer: makeRenderingRenderer(), canvas: makeStubCanvas() });
     app.world.spawn(...Camera2d());
+    // Phase 8.1 removed `MainPassNode` from Core2d's default; re-attach it so
+    // the `RenderSet.Render` system sees an open pass via `RenderCtx`.
+    attachLegacyMainPassToCore2d(app);
     let received: RenderContext | undefined;
     app.addSystem('render', [RenderCtx], (ctx) => {
       received = ctx;

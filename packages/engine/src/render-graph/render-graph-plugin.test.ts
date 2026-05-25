@@ -6,8 +6,9 @@ import { makeRenderingRenderer, makeStubCanvas } from '../test-utils';
 import { Core2dLabel } from './core-2d';
 import { Core3dLabel } from './core-3d';
 import { CameraDriverLabel } from './camera-driver-node';
-import { MainPassLabel } from './main-pass-node';
+import { OpaquePass2dLabel } from './opaque-pass-2d-node';
 import { OpaquePass3dLabel } from './opaque-pass-3d-node';
+import { TransparentPass2dLabel } from './transparent-pass-2d-node';
 import { TransparentPass3dLabel } from './transparent-pass-3d-node';
 
 describe('RenderGraphPlugin', () => {
@@ -27,14 +28,17 @@ describe('RenderGraphPlugin', () => {
     expect(order.map((n) => String(n.label))).toEqual([String(CameraDriverLabel)]);
   });
 
-  it('Core2d contains MainPassNode; Core3d ships the Phase 7 phase trio', () => {
+  it('Core2d and Core3d each ship the opaque + transparent phase pair (ADR-0031)', () => {
     const app = new App({ renderer: makeRenderingRenderer(), canvas: makeStubCanvas() });
     const graph = app.getResource(RenderGraph)!;
     // freeze is required before orderedNodes returns
     graph.freeze();
     const core2d = graph.getSubGraph(Core2dLabel)!;
     const core3d = graph.getSubGraph(Core3dLabel)!;
-    expect(core2d.orderedNodes()!.map((n) => String(n.label))).toEqual([String(MainPassLabel)]);
+    expect(core2d.orderedNodes()!.map((n) => String(n.label))).toEqual([
+      String(OpaquePass2dLabel),
+      String(TransparentPass2dLabel),
+    ]);
     expect(core3d.orderedNodes()!.map((n) => String(n.label))).toEqual([
       String(OpaquePass3dLabel),
       String(TransparentPass3dLabel),

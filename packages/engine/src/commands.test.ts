@@ -14,7 +14,12 @@ import {
   RunCondition,
   Time,
 } from './index';
-import { makeHeadlessRenderer, makeRenderingRenderer, makeStubCanvas } from './test-utils';
+import {
+  attachLegacyMainPassToCore2d,
+  makeHeadlessRenderer,
+  makeRenderingRenderer,
+  makeStubCanvas,
+} from './test-utils';
 
 interface SpyLogger {
   readonly logger: Logger;
@@ -375,6 +380,10 @@ describe('Render-stage flush', () => {
     const canvas = makeStubCanvas();
     const app = new App({ renderer, canvas });
     app.world.spawn(...Camera2d());
+    // Phase 8.1 removed MainPassNode from the Core2d default; the
+    // `RenderSet.Render` set has no built-in dispatcher there. Re-attach the
+    // legacy node so the no-explicit-`set` system below fires.
+    attachLegacyMainPassToCore2d(app);
     let entityFromRender: Entity | undefined;
     app.addSystem('render', [Commands], (cmd) => {
       entityFromRender = cmd.spawn(new Pos()).id;

@@ -240,6 +240,7 @@ export type { Meshable, MeshBuilder, SphereKind } from './mesh';
 export type {
   Node as RenderNode,
   NodeRunContext as RenderNodeRunContext,
+  PhaseItem2d,
   PhaseItem3d,
   RenderLabel,
   SlotInfo,
@@ -259,16 +260,42 @@ export {
   isViewNode,
   MainPassLabel,
   MainPassNode,
+  OpaquePass2dLabel,
+  OpaquePass2dNode,
   OpaquePass3dLabel,
   OpaquePass3dNode,
   RenderGraph,
   RenderGraphPlugin,
   RenderSubGraph,
   SlotType,
+  TransparentPass2dLabel,
+  TransparentPass2dNode,
   TransparentPass3dLabel,
   TransparentPass3dNode,
+  ViewPhases2d,
   ViewPhases3d,
 } from './render-graph';
+export type {
+  SpriteAlphaBucket,
+  SpriteAnchor,
+  SpriteBatch,
+  SpriteKey,
+  SpriteOptions,
+  SpriteSpecializeContext,
+} from './sprite';
+export {
+  packSpriteInstance,
+  Rect,
+  resolveAnchor,
+  SPRITE_INSTANCE_BYTE_SIZE,
+  SPRITE_INSTANCE_FLOAT_COUNT,
+  SPRITE_WGSL,
+  Sprite,
+  SpriteInstanceBuffer,
+  SpritePipeline,
+  SpritePlugin,
+  SpritePreparedBatches,
+} from './sprite';
 
 /**
  * Named stage in the schedule — when a system runs within a frame.

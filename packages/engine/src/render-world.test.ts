@@ -8,7 +8,12 @@ import {
   RenderCtx,
   RenderSet,
 } from './index';
-import { makeHeadlessRenderer, makeRenderingRenderer, makeStubCanvas } from './test-utils';
+import {
+  attachLegacyMainPassToCore2d,
+  makeHeadlessRenderer,
+  makeRenderingRenderer,
+  makeStubCanvas,
+} from './test-utils';
 
 class Position {
   constructor(
@@ -87,6 +92,9 @@ describe('RenderSet ordering', () => {
   it('runs the six sub-sets in order Extract → Prepare → Queue → PhaseSort → Render → Cleanup', async () => {
     const app = new App({ renderer: makeRenderingRenderer(), canvas: makeStubCanvas() });
     app.world.spawn(...Camera2d());
+    // Phase 8.1 removed `MainPassNode` from Core2d's default sub-graph;
+    // re-attach it so `RenderSet.Render` systems have an open pass to fire in.
+    attachLegacyMainPassToCore2d(app);
     const trail: string[] = [];
     app.addSystem('render', [], () => trail.push('cleanup'), { set: RenderSet.Cleanup });
     app.addSystem('render', [], () => trail.push('render'), { set: RenderSet.Render });
@@ -101,6 +109,7 @@ describe('RenderSet ordering', () => {
   it('defaults to the Render set for render-stage systems with no explicit set', async () => {
     const app = new App({ renderer: makeRenderingRenderer(), canvas: makeStubCanvas() });
     app.world.spawn(...Camera2d());
+    attachLegacyMainPassToCore2d(app);
     const trail: string[] = [];
     // No `set` option — defaults to RenderSet.Render. Backwards-compat path
     // the playground triangle relied on before ADR-0019.
@@ -123,6 +132,7 @@ describe('RenderCtx scope', () => {
   it('resolves inside the Render set', async () => {
     const app = new App({ renderer: makeRenderingRenderer(), canvas: makeStubCanvas() });
     app.world.spawn(...Camera2d());
+    attachLegacyMainPassToCore2d(app);
     let resolved = false;
     app.addSystem('render', [RenderCtx], (ctx) => {
       expect(ctx.pass).toBeDefined();
@@ -146,6 +156,7 @@ describe('Render-world auto-clear', () => {
   it('clears every render-world entity between frames', async () => {
     const app = new App({ renderer: makeRenderingRenderer(), canvas: makeStubCanvas() });
     app.world.spawn(...Camera2d());
+    attachLegacyMainPassToCore2d(app);
     const renderCounts: number[] = [];
     app.addSystem('render', [], () => {
       app.renderWorld.spawn(new Marker(), new Position());
@@ -182,6 +193,7 @@ describe('Extract round-trip integration', () => {
   it('copies a main-world entity into the render world each frame', async () => {
     const app = new App({ renderer: makeRenderingRenderer(), canvas: makeStubCanvas() });
     app.world.spawn(...Camera2d());
+    attachLegacyMainPassToCore2d(app);
     app.world.spawn(new Position(3, 0));
     app.world.spawn(new Position(5, 0));
 

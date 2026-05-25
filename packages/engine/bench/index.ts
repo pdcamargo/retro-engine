@@ -15,6 +15,7 @@ import './resource-change.bench';
 import './shader.bench';
 import './render-graph.bench';
 import './mesh-allocator.bench';
+import './sprite-batch.bench';
 
 interface NormalizedBench {
   readonly key: string;

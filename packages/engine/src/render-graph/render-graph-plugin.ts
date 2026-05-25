@@ -6,14 +6,15 @@ import { ResMut } from '../system-param';
 import { CameraDriverNode } from './camera-driver-node';
 import { buildCore2dSubGraph } from './core-2d';
 import { buildCore3dSubGraph } from './core-3d';
+import { ViewPhases2d } from './phase-2d';
 import { ViewPhases3d } from './phase-3d';
 import { RenderGraph } from './render-graph';
 
 /**
  * Engine-internal plugin that installs the {@link RenderGraph} resource and
  * registers the day-1 graph contents: the {@link CameraDriverNode} root, and
- * the `Core2d` and `Core3d` default sub-graphs (each containing a single
- * `MainPassNode`).
+ * the `Core2d` and `Core3d` default sub-graphs (each carrying the
+ * opaque + transparent phase-node pair).
  *
  * Registered automatically by `CorePlugin` after `CameraPlugin` and
  * `VisibilityPlugin` so the graph resource is available before any user
@@ -35,15 +36,20 @@ export class RenderGraphPlugin implements PluginObject {
     graph.addSubGraph(buildCore2dSubGraph());
     graph.addSubGraph(buildCore3dSubGraph());
     app.insertResource(graph);
+    app.insertResource(new ViewPhases2d());
     app.insertResource(new ViewPhases3d());
 
-    // Clear phase items at the head of `RenderSet.Queue` so every material
-    // plugin's queue system can push fresh items each frame without an
-    // explicit "reset" hook.
+    // Clear phase items at the head of `RenderSet.Queue` so every pipeline's
+    // queue system can push fresh items each frame without an explicit "reset"
+    // hook. Both 2D and 3D phase lists clear in the same system so ordering is
+    // deterministic; the cost is two `Map.clear()` calls per frame.
     app.addSystem(
       'render',
-      [ResMut(ViewPhases3d)],
-      (phases) => phases.clear(),
+      [ResMut(ViewPhases2d), ResMut(ViewPhases3d)],
+      (phases2d, phases3d) => {
+        phases2d.clear();
+        phases3d.clear();
+      },
       { set: RenderSet.Queue },
     );
   }

@@ -29,7 +29,7 @@ import {
   RenderCtx,
   RenderSet,
 } from '../index';
-import { makeStubCanvas } from '../test-utils';
+import { attachLegacyMainPassToCore2d, makeStubCanvas } from '../test-utils';
 
 interface CapturingRenderer {
   renderer: Renderer;
@@ -139,6 +139,9 @@ describe('Camera-driven render set (ADR-0020)', () => {
     app.world.spawn(...Camera2d({ order: 0 }));
     app.world.spawn(...Camera2d({ order: 1 }));
     await app.run();
+    // Phase 8.1 Core2d sub-graph contains exactly `OpaquePass2dNode`; with no
+    // transparent phase items, the transparent pass short-circuits. One pass
+    // per active camera.
     expect(beginPassCalls).toHaveLength(2);
   });
 
@@ -165,6 +168,9 @@ describe('Camera-driven render set (ADR-0020)', () => {
     const app = new App({ renderer, canvas: makeStubCanvas() });
     const c1 = app.world.spawn(...Camera2d({ order: 0 }));
     const c2 = app.world.spawn(...Camera2d({ order: 1 }));
+    // Phase 8.1 removed `MainPassNode` from Core2d's default sub-graph;
+    // re-attach it so `RenderSet.Render` systems see an open pass.
+    attachLegacyMainPassToCore2d(app);
     const sourceEntities: number[] = [];
     app.addSystem('render', [RenderCtx], (ctx) => {
       sourceEntities.push(ctx.camera.sourceEntity);
@@ -205,6 +211,7 @@ describe('Camera-driven render set (ADR-0020)', () => {
     const c10 = app.world.spawn(...Camera2d({ order: 10 }));
     const c5 = app.world.spawn(...Camera2d({ order: 5 }));
     const c1 = app.world.spawn(...Camera2d({ order: 1 }));
+    attachLegacyMainPassToCore2d(app);
     const ordered: number[] = [];
     app.addSystem('render', [RenderCtx], (ctx) => {
       ordered.push(ctx.camera.sourceEntity);
@@ -225,6 +232,7 @@ describe('Camera-driven render set (ADR-0020)', () => {
     const { renderer } = makeCapturingRenderer();
     const app = new App({ renderer, canvas: makeStubCanvas() });
     app.world.spawn(...Camera2d());
+    attachLegacyMainPassToCore2d(app);
     const seen: unknown[] = [];
     app.addSystem('render', [RenderCtx], (ctx) => {
       seen.push(ctx.camera.viewBindGroup);
