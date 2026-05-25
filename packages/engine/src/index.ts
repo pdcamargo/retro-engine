@@ -46,7 +46,7 @@ import { Time } from './time';
 export type { Logger } from './log';
 export { createConsoleLogger, engineLogger } from './log';
 export type { CameraView, ComputedCamera, Viewport } from './camera/camera';
-export { Camera, CameraRenderTarget, ClearColorConfig } from './camera/camera';
+export { Camera, CameraDepthTarget, CameraRenderTarget, ClearColorConfig } from './camera/camera';
 export { ClearColor } from './camera/clear-color';
 export type { Camera2dOptions, Camera3dOptions } from './camera/camera-bundles';
 export { Camera2d, Camera3d } from './camera/camera-bundles';
@@ -65,6 +65,7 @@ export {
   VIEW_UNIFORM_FLOAT_COUNT,
   VIEW_UNIFORM_WGSL,
   ViewBindGroupCache,
+  ViewDepthCache,
 } from './camera/extracted';
 export { CameraPlugin } from './camera/camera-plugin';
 export type { CommandsHandle, EntityCommands } from './commands';
@@ -122,7 +123,55 @@ export type {
   RenderMesh,
   RenderMeshBufferInfo,
 } from './mesh';
+export type {
+  AlphaMode,
+  BindGroupEntry,
+  BindGroupSamplerType,
+  BindGroupSchema,
+  BindGroupTextureSampleType,
+  BindGroupTextureViewDimension,
+  BindingVisibility,
+  Material,
+  MaterialAssetEvent,
+  MaterialCtor,
+  MaterialHandle,
+  MaterialPipelineKey,
+  MaterialPluginOptions,
+  PreparedMaterial,
+  ShaderRef,
+  UniformField,
+  UniformFieldPack,
+} from './material';
 export {
+  alphaModeKey,
+  ENTITY_TRANSFORM_BUFFER_SIZE,
+  EntityTransformGpuCache,
+  ensureEntityTransform,
+  ExtendedMaterial,
+  forExtendedMaterial,
+  gcEntityTransforms,
+  MaterialPlugin,
+  Materials,
+  MaterialSchema,
+  MeshMaterial3d,
+  prepareBindGroup,
+  RenderMaterials,
+  schemaToBindGroupLayout,
+  ShaderRefs,
+  PBR_WGSL,
+  StandardMaterial,
+  StandardMaterialPlugin,
+  UNLIT_WGSL,
+  UnlitMaterial,
+  UnlitMaterialPlugin,
+  uniformFieldAlignment,
+  uniformFieldByteSize,
+  uniformFieldOffsets,
+  uniformSlotByteSize,
+  visibilityToFlags,
+} from './material';
+export {
+  Aabb,
   Annulus,
   AnnulusMeshBuilder,
   calculateBoundsSystem,
@@ -146,6 +195,7 @@ export {
   indicesFormat,
   interMeshVertexBufferLayout,
   Mesh,
+  Mesh3d,
   MeshAllocator,
   MeshAllocatorSettings,
   MeshAttribute,
@@ -175,6 +225,7 @@ export type { Meshable, MeshBuilder, SphereKind } from './mesh';
 export type {
   Node as RenderNode,
   NodeRunContext as RenderNodeRunContext,
+  PhaseItem3d,
   RenderLabel,
   SlotInfo,
   SlotValue,
@@ -193,10 +244,15 @@ export {
   isViewNode,
   MainPassLabel,
   MainPassNode,
+  OpaquePass3dLabel,
+  OpaquePass3dNode,
   RenderGraph,
   RenderGraphPlugin,
   RenderSubGraph,
   SlotType,
+  TransparentPass3dLabel,
+  TransparentPass3dNode,
+  ViewPhases3d,
 } from './render-graph';
 
 /**

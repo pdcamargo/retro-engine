@@ -4,10 +4,13 @@ import type {
   BindGroup,
   BindGroupLayout,
   Buffer,
+  Texture,
+  TextureFormat,
+  TextureView,
 } from '@retro-engine/renderer-core';
 
 import type { RenderLabel } from '../render-graph/render-label';
-import type { CameraRenderTarget, ClearColorConfig, Viewport } from './camera';
+import type { CameraDepthTarget, CameraRenderTarget, ClearColorConfig, Viewport } from './camera';
 
 /**
  * Render-world component carrying a single frame's snapshot of a main-world
@@ -29,6 +32,8 @@ export class ExtractedCamera {
   order: number;
   /** Engine-level target. `primary` is resolved against the App surface in prepare. */
   target: CameraRenderTarget;
+  /** Mirrored `Camera.depthTarget`. Resolved against `ViewDepthCache` in prepare. */
+  depthTarget: CameraDepthTarget;
   /** Optional sub-rect. Undefined → full target. */
   viewport: Viewport | undefined;
   /** Clear-config snapshot. */
@@ -50,6 +55,7 @@ export class ExtractedCamera {
     sourceEntity: Entity;
     order: number;
     target: CameraRenderTarget;
+    depthTarget: CameraDepthTarget;
     viewport: Viewport | undefined;
     clearColor: ClearColorConfig;
     renderLayers: number;
@@ -63,6 +69,7 @@ export class ExtractedCamera {
     this.sourceEntity = init.sourceEntity;
     this.order = init.order;
     this.target = init.target;
+    this.depthTarget = init.depthTarget;
     this.viewport = init.viewport;
     this.clearColor = init.clearColor;
     this.renderLayers = init.renderLayers;
@@ -73,6 +80,33 @@ export class ExtractedCamera {
     this.targetSize = init.targetSize;
     this.subGraph = init.subGraph;
   }
+}
+
+/**
+ * Per-camera depth texture cached across frames, keyed by main-world camera
+ * entity. Engine-internal — populated by `prepareViewDepthTextures` in
+ * `RenderSet.Prepare` (camera-plugin); read by Core3d phase nodes via
+ * `CameraView.depth`.
+ *
+ * Entries are reallocated when the camera's color-target dimensions or
+ * requested depth format change. Entries whose `sourceEntity` is absent from
+ * the current frame's `SortedCameras.views` are garbage-collected at the end
+ * of the prepare pass.
+ *
+ * @internal
+ */
+export class ViewDepthCache {
+  /** Per-source-entity depth textures + views. */
+  readonly perCamera: Map<
+    Entity,
+    {
+      texture: Texture;
+      view: TextureView;
+      width: number;
+      height: number;
+      format: TextureFormat;
+    }
+  > = new Map();
 }
 
 /** Slots for one camera's GPU-side view resources. */

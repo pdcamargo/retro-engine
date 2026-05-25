@@ -50,6 +50,7 @@ const makeCapturingRenderer = (): CapturingRenderer => {
     setIndexBuffer: () => undefined,
     draw: () => undefined,
     drawIndexed: () => undefined,
+    setStencilReference: () => undefined,
     end: () => undefined,
   };
   const commandBuffer: CommandBuffer = { destroy: () => undefined };

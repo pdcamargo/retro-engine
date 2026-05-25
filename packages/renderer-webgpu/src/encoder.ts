@@ -60,6 +60,10 @@ const toDepthStencilAttachment = (att: DepthStencilAttachment): GPURenderPassDep
   };
   if (att.depthClearValue !== undefined) out.depthClearValue = att.depthClearValue;
   if (att.depthReadOnly !== undefined) out.depthReadOnly = att.depthReadOnly;
+  if (att.stencilClearValue !== undefined) out.stencilClearValue = att.stencilClearValue;
+  if (att.stencilLoadOp !== undefined) out.stencilLoadOp = att.stencilLoadOp;
+  if (att.stencilStoreOp !== undefined) out.stencilStoreOp = att.stencilStoreOp;
+  if (att.stencilReadOnly !== undefined) out.stencilReadOnly = att.stencilReadOnly;
   return out;
 };
 
@@ -107,6 +111,9 @@ const makeRenderPassEncoder = (pass: GPURenderPassEncoder): RenderPassEncoder =>
       firstInstance?: number,
     ): void {
       pass.drawIndexed(indexCount, instanceCount, firstIndex, baseVertex, firstInstance);
+    },
+    setStencilReference(reference: number): void {
+      pass.setStencilReference(reference);
     },
     end(): void {
       pass.end();

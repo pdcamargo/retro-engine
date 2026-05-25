@@ -154,7 +154,12 @@ export type {
 } from './encoder';
 
 export type {
+  BlendComponent,
+  BlendFactor,
+  BlendOperation,
+  BlendState,
   ColorTargetState,
+  ColorWriteFlags,
   CompareFunction,
   ComputePipeline,
   CullMode,
@@ -165,11 +170,14 @@ export type {
   PrimitiveTopology,
   RenderPipeline,
   RenderPipelineDescriptor,
+  StencilFaceState,
+  StencilOperation,
   VertexAttribute,
   VertexBufferLayout,
   VertexState,
   VertexStepMode,
 } from './pipeline';
+export { ColorWrite } from './pipeline';
 
 export type { RenderTarget, ResolvedRenderTarget } from './render-target';
 

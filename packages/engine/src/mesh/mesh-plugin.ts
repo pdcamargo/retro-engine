@@ -3,10 +3,12 @@ import { vertexFormatByteSize } from '@retro-engine/renderer-core';
 import type { App } from '../index';
 import type { PluginObject } from '../plugin';
 import { RenderSet } from '../render-set';
-import { Res, ResMut } from '../system-param';
+import { Query, Res, ResMut } from '../system-param';
+import { NoFrustumCulling } from '../visibility/visibility';
 import { MeshAllocator, MeshAllocatorSettings } from './allocator';
 import { calculateBoundsSystem } from './calculate-bounds';
 import type { Indices } from './indices';
+import { Mesh3d } from './mesh-3d';
 import type { MeshAssetEvent, MeshHandle } from './meshes';
 import { Meshes } from './meshes';
 import type { MeshAttributeData } from './mesh';
@@ -102,12 +104,18 @@ export class MeshPlugin implements PluginObject {
       app.insertResource(new RenderMeshes());
     }
 
-    // Reserved slot in VisibilityPlugin's documented order. The slot anchors
-    // the registration position so when `Mesh3d` lands, the auto-AABB writer
-    // is already at the right place — see TSDoc on `calculateBoundsSystem`.
-    app.addSystem('postUpdate', [], () => {
-      calculateBoundsSystem();
-    });
+    // Head of VisibilityPlugin's documented order:
+    // `CalculateBounds → UpdateFrusta → VisibilityPropagate → CheckVisibility`.
+    // Iterate every `Mesh3d` entity without `NoFrustumCulling`, look up the
+    // mesh asset, and write a local-space `Aabb` so the frustum test downstream
+    // has something to clip against.
+    app.addSystem(
+      'postUpdate',
+      [Res(Meshes), Query([Mesh3d], { without: [NoFrustumCulling] })],
+      (meshes, meshables) => {
+        calculateBoundsSystem(meshes, meshables, app.world);
+      },
+    );
 
     // RenderSet.Extract: drain Meshes' pending-change buffer into the
     // render-side queue. App resources are accessible from any stage, so we

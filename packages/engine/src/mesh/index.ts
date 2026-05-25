@@ -1,6 +1,7 @@
 export type { AllocatorSlice } from './allocator';
 export { MeshAllocator, MeshAllocatorSettings } from './allocator';
-export { calculateBoundsSystem } from './calculate-bounds';
+export { Aabb, calculateBoundsSystem } from './calculate-bounds';
+export { Mesh3d } from './mesh-3d';
 export type { Indices } from './indices';
 export { indexByteSize, indexCount, indicesFormat, u16Indices, u32Indices } from './indices';
 export type { MeshAttributeData } from './mesh';

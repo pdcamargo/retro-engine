@@ -65,7 +65,25 @@ export const createRenderPipelineImpl = (
     desc.fragment = {
       module: (descriptor.fragment.module as InternalShaderModule)[GPU_MODULE],
       entryPoint: descriptor.fragment.entryPoint,
-      targets: descriptor.fragment.targets.map((t) => ({ format: t.format })),
+      targets: descriptor.fragment.targets.map((t) => {
+        const target: GPUColorTargetState = { format: t.format };
+        if (t.blend) {
+          target.blend = {
+            color: {
+              operation: t.blend.color.operation ?? 'add',
+              srcFactor: t.blend.color.srcFactor ?? 'one',
+              dstFactor: t.blend.color.dstFactor ?? 'zero',
+            },
+            alpha: {
+              operation: t.blend.alpha.operation ?? 'add',
+              srcFactor: t.blend.alpha.srcFactor ?? 'one',
+              dstFactor: t.blend.alpha.dstFactor ?? 'zero',
+            },
+          };
+        }
+        if (t.writeMask !== undefined) target.writeMask = t.writeMask;
+        return target;
+      }),
     };
   }
   if (descriptor.primitive) {
@@ -76,10 +94,30 @@ export const createRenderPipelineImpl = (
     desc.primitive = primitive;
   }
   if (descriptor.depthStencil) {
+    const ds = descriptor.depthStencil;
+    const front = ds.stencilFront ?? {};
+    const back = ds.stencilBack ?? {};
     desc.depthStencil = {
-      format: descriptor.depthStencil.format,
-      depthWriteEnabled: descriptor.depthStencil.depthWriteEnabled ?? true,
-      depthCompare: descriptor.depthStencil.depthCompare ?? 'less',
+      format: ds.format,
+      depthWriteEnabled: ds.depthWriteEnabled ?? true,
+      depthCompare: ds.depthCompare ?? 'less',
+      stencilFront: {
+        compare: front.compare ?? 'always',
+        failOp: front.failOp ?? 'keep',
+        depthFailOp: front.depthFailOp ?? 'keep',
+        passOp: front.passOp ?? 'keep',
+      },
+      stencilBack: {
+        compare: back.compare ?? 'always',
+        failOp: back.failOp ?? 'keep',
+        depthFailOp: back.depthFailOp ?? 'keep',
+        passOp: back.passOp ?? 'keep',
+      },
+      stencilReadMask: ds.stencilReadMask ?? 0xffffffff,
+      stencilWriteMask: ds.stencilWriteMask ?? 0xffffffff,
+      depthBias: ds.depthBias ?? 0,
+      depthBiasSlopeScale: ds.depthBiasSlopeScale ?? 0,
+      depthBiasClamp: ds.depthBiasClamp ?? 0,
     };
   }
   const pipeline = device.createRenderPipeline(desc);

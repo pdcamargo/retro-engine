@@ -3,6 +3,7 @@ import type { RenderLabel } from '../render-graph/render-label';
 import { Transform } from '../transform';
 import {
   Camera,
+  CameraDepthTarget,
   CameraRenderTarget,
   ClearColorConfig,
   type Viewport,
@@ -18,6 +19,13 @@ interface BaseCameraOptions {
   order?: number;
   viewport?: Viewport;
   target?: CameraRenderTarget;
+  /**
+   * Depth attachment for the camera. `Camera2d()` defaults to
+   * `CameraDepthTarget.None`; `Camera3d()` defaults to
+   * `CameraDepthTarget.auto()`. Override to set a custom format or to share a
+   * manually-managed depth view.
+   */
+  depthTarget?: CameraDepthTarget;
   hdr?: boolean;
   msaaWriteback?: boolean;
   clearColor?: ClearColorConfig;
@@ -53,6 +61,7 @@ const buildCamera = (options: BaseCameraOptions): Camera =>
     ...(options.order !== undefined ? { order: options.order } : {}),
     ...(options.viewport !== undefined ? { viewport: options.viewport } : {}),
     ...(options.target !== undefined ? { target: options.target } : {}),
+    ...(options.depthTarget !== undefined ? { depthTarget: options.depthTarget } : {}),
     ...(options.hdr !== undefined ? { hdr: options.hdr } : {}),
     ...(options.msaaWriteback !== undefined ? { msaaWriteback: options.msaaWriteback } : {}),
     ...(options.clearColor !== undefined ? { clearColor: options.clearColor } : {}),
@@ -114,7 +123,10 @@ export const Camera2d = (options: Camera2dOptions = {}): readonly object[] => [
  * ```
  */
 export const Camera3d = (options: Camera3dOptions = {}): readonly object[] => [
-  buildCamera({ subGraph: Core3dLabel, ...options }),
+  // `Camera3d()` defaults to an engine-allocated depth attachment so 3D draws
+  // resolve depth correctly without manual texture management. The consumer
+  // can override via `options.depthTarget`.
+  buildCamera({ subGraph: Core3dLabel, depthTarget: CameraDepthTarget.auto(), ...options }),
   new PerspectiveProjection(options.projection),
   options.transform ?? new Transform(),
 ];

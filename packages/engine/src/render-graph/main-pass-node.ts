@@ -7,31 +7,34 @@ import type { NodeRunContext, ViewNode } from './node';
 import { createLabel } from './render-label';
 
 /**
- * Label for the engine's default per-camera draw pass.
+ * Label for the Core2d default per-camera draw pass.
  *
- * Day-1 sub-graphs (`Core2d`, `Core3d`) register a single node — the
- * {@link MainPassNode} singleton — under this label. The node opens one
- * color-attachment render pass against the active camera's resolved target,
- * runs every system in {@link RenderSet.Render} once with the active pass in
- * its `RenderCtx`, and ends the pass.
+ * The Phase 7 {@link MainPassNode} singleton registers under this label inside
+ * the `Core2d` sub-graph. It opens one color-attachment render pass against
+ * the active camera's resolved target, pre-binds `@group(0)` to the camera's
+ * view bind group (ADR-0028 §11), runs every system in {@link RenderSet.Render}
+ * once with the active pass in its `RenderCtx`, and ends the pass.
  *
- * Phase 8 replaces this node inside `Core2d` with the
- * `Opaque2d` / `AlphaMask2d` / `Transparent2d` phase trio; Phase 10 expands
- * `Core3d`'s rendering with depth + lighting nodes. The label exists today so
- * plugins can position their own nodes "before the main pass" / "after the
- * main pass" while migration is in progress.
+ * Core3d does *not* use this node anymore — it ships the `Opaque3d` /
+ * `AlphaMask3d` / `Transparent3d` phase trio (ADR-0028 §10). Phase 8 will
+ * displace `MainPassNode` inside `Core2d` with the 2D phase trio; the label
+ * exists today so plugins can position their own nodes "before the main pass"
+ * / "after the main pass" while migration is in progress.
  */
 export const MainPassLabel = createLabel('main_pass');
 
 /**
- * Day-1 shim {@link ViewNode}: opens the per-camera render pass and dispatches
- * the existing `RenderSet.Render` systems against it. Replicates the body of
- * `App.renderFrame()`'s per-camera lambda one-for-one — ADR-0019 and ADR-0020
- * promised "no restructuring" when the graph lands, and this node is how that
- * promise is kept.
+ * Core2d default-pass {@link ViewNode}: opens the per-camera render pass,
+ * pre-binds the view bind group at `@group(0)`, and dispatches every
+ * `RenderSet.Render` system against the open pass.
+ *
+ * `@group(0)` auto-bind (ADR-0028 §11): the engine sets the view bind group
+ * before any render-set system runs. Material pipelines that want view data
+ * lay out `@group(0) @binding(0)` and read it; user pipelines that re-bind
+ * `@group(0)` to their own data are unsupported.
  *
  * The node is stateless and is reused as a singleton across every sub-graph
- * that wants the default behavior.
+ * that registers it.
  */
 export const MainPassNode: ViewNode = {
   label: MainPassLabel,
@@ -57,6 +60,7 @@ export const MainPassNode: ViewNode = {
       label: `camera#${view.sourceEntity}`,
       colorAttachments: [attachment],
     });
+    pass.setBindGroup(0, view.viewBindGroup);
     const render: RenderContext = {
       encoder,
       pass,

@@ -63,6 +63,12 @@ export interface RenderPassEncoder {
     baseVertex?: number,
     firstInstance?: number,
   ): void;
+  /**
+   * Set the stencil reference value compared against by the active pipeline's
+   * {@link DepthStencilState.stencilFront} / `stencilBack` `compare`. Dynamic
+   * state — survives pipeline changes within the same pass.
+   */
+  setStencilReference(reference: number): void;
   end(): void;
 }
 
@@ -93,8 +99,9 @@ export interface ColorAttachment {
 /**
  * Depth-stencil attachment for a render pass.
  *
- * Today only the depth side is exposed; stencil load/store ops land with a
- * stencil-using consumer.
+ * Depth load/store ops are required; stencil load/store ops are optional and
+ * are only consulted when the attached view's format has a stencil aspect
+ * (`depth24plus-stencil8`, `depth32float-stencil8`, etc.).
  */
 export interface DepthStencilAttachment {
   /** Depth (or depth-stencil) texture view. Must have a depth aspect. */
@@ -105,4 +112,12 @@ export interface DepthStencilAttachment {
   depthStoreOp: 'store' | 'discard';
   /** When the attached view also has a stencil aspect that the pipeline doesn't use. */
   depthReadOnly?: boolean;
+  /** Initial stencil value when `stencilLoadOp === 'clear'`. Defaults to 0. */
+  stencilClearValue?: number;
+  /** Stencil load op. Required when the view has a stencil aspect that the pipeline uses. */
+  stencilLoadOp?: 'load' | 'clear';
+  /** Stencil store op. Required when the view has a stencil aspect that the pipeline uses. */
+  stencilStoreOp?: 'store' | 'discard';
+  /** When the attached view has a stencil aspect that the pipeline doesn't write. */
+  stencilReadOnly?: boolean;
 }

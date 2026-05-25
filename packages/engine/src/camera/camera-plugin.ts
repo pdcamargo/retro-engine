@@ -1,7 +1,7 @@
 import type { Entity } from '@retro-engine/ecs';
 import { mat4, vec3 } from '@retro-engine/math';
 import type { ResolvedRenderTarget } from '@retro-engine/renderer-core';
-import { BufferUsage, ShaderStage } from '@retro-engine/renderer-core';
+import { BufferUsage, ShaderStage, TextureUsage } from '@retro-engine/renderer-core';
 
 import type { App } from '../index';
 import type { Logger } from '../log';
@@ -11,6 +11,7 @@ import { Extract, Query, Res, ResMut } from '../system-param';
 import { GlobalTransform } from '../transform';
 import {
   Camera,
+  type CameraDepthTarget,
   type CameraRenderTarget,
   type CameraView,
   ClearColorConfig,
@@ -23,6 +24,7 @@ import {
   VIEW_UNIFORM_BYTE_SIZE,
   VIEW_UNIFORM_WGSL,
   ViewBindGroupCache,
+  ViewDepthCache,
 } from './extracted';
 import {
   buildOrthographicMatrix,
@@ -146,6 +148,67 @@ const fullTargetViewport = (target: ResolvedRenderTarget): Viewport => ({
   depth: { min: 0, max: 1 },
 });
 
+/**
+ * Resolve a {@link CameraDepthTarget} to a concrete `(view, format)` pair,
+ * allocating or reusing a depth texture in {@link ViewDepthCache} for the
+ * `'auto'` case. Returns `undefined` for `'none'` cameras.
+ *
+ * Reallocates when the cached texture's dimensions or format no longer match
+ * the camera's color-target size + requested depth format.
+ */
+const resolveCameraDepth = (
+  cache: ViewDepthCache,
+  app: App,
+  sourceEntity: Entity,
+  depthTarget: CameraDepthTarget,
+  color: ResolvedRenderTarget,
+): { view: import('@retro-engine/renderer-core').TextureView; format: import('@retro-engine/renderer-core').TextureFormat } | undefined => {
+  if (depthTarget.kind === 'none') {
+    const existing = cache.perCamera.get(sourceEntity);
+    if (existing) {
+      existing.view.destroy();
+      existing.texture.destroy();
+      cache.perCamera.delete(sourceEntity);
+    }
+    return undefined;
+  }
+  if (depthTarget.kind === 'manual') {
+    const existing = cache.perCamera.get(sourceEntity);
+    if (existing) {
+      existing.view.destroy();
+      existing.texture.destroy();
+      cache.perCamera.delete(sourceEntity);
+    }
+    return { view: depthTarget.view, format: depthTarget.format };
+  }
+  // 'auto'
+  const format = depthTarget.format ?? 'depth32float';
+  const { width, height } = color;
+  const existing = cache.perCamera.get(sourceEntity);
+  if (
+    existing &&
+    existing.width === width &&
+    existing.height === height &&
+    existing.format === format
+  ) {
+    return { view: existing.view, format };
+  }
+  if (existing) {
+    existing.view.destroy();
+    existing.texture.destroy();
+  }
+  const texture = app.renderer.createTexture({
+    label: `view-depth#${sourceEntity}`,
+    width,
+    height,
+    format,
+    usage: TextureUsage.RENDER_ATTACHMENT,
+  });
+  const view = texture.createView();
+  cache.perCamera.set(sourceEntity, { texture, view, width, height, format });
+  return { view, format };
+};
+
 const resolveClearColor = (config: ClearColorConfig, fallback: ClearColor) => {
   if (config.kind === 'none') return { color: undefined, loadOp: 'load' as const };
   const color = config.kind === 'custom' ? config.color : fallback.color;
@@ -180,6 +243,7 @@ export class CameraPlugin implements PluginObject {
     }
     app.insertResource(new SortedCameras());
     app.insertResource(new ViewBindGroupCache());
+    app.insertResource(new ViewDepthCache());
 
     // Register the canonical view uniform module so user shaders can write
     // `#import retro_engine::view` to pull in the ViewUniform struct + the
@@ -251,6 +315,7 @@ export class CameraPlugin implements PluginObject {
               sourceEntity: entity,
               order: camera.order,
               target: camera.target,
+              depthTarget: camera.depthTarget,
               viewport: camera.viewport,
               clearColor: camera.clearColor,
               renderLayers: layers?.mask ?? RenderLayers.DEFAULT_MASK,
@@ -275,13 +340,15 @@ export class CameraPlugin implements PluginObject {
       [
         Query([ExtractedCamera]),
         ResMut(ViewBindGroupCache),
+        ResMut(ViewDepthCache),
         ResMut(SortedCameras),
         Res(ClearColor),
       ],
-      (q, cache, sorted, clearColor) => {
+      (q, cache, depthCache, sorted, clearColor) => {
         sorted.views.length = 0;
         const sortable: SortableCameraView[] = [];
         const inverseViewScratch = mat4.identity();
+        const liveSourceEntities = new Set<Entity>();
         for (const [renderEntity, ext] of q.entries()) {
           const resolved = resolveCameraRenderTarget(ext.target, app);
           if (!resolved) {
@@ -293,7 +360,15 @@ export class CameraPlugin implements PluginObject {
             }
             continue;
           }
+          liveSourceEntities.add(ext.sourceEntity);
           const slots = ensureCameraSlots(cache, app, ext.sourceEntity);
+          const depth = resolveCameraDepth(
+            depthCache,
+            app,
+            ext.sourceEntity,
+            ext.depthTarget,
+            resolved,
+          );
           const viewport = ext.viewport ?? fullTargetViewport(resolved);
           mat4.invert(ext.viewMatrix, inverseViewScratch);
           writeViewUniform(
@@ -312,6 +387,7 @@ export class CameraPlugin implements PluginObject {
             sourceEntity: ext.sourceEntity,
             order: ext.order,
             target: resolved,
+            depth,
             viewport,
             clearColor: color,
             loadOp,
@@ -326,6 +402,14 @@ export class CameraPlugin implements PluginObject {
             _targetKind: targetKindOf(ext.target),
           };
           sortable.push(view);
+        }
+        // Garbage-collect depth textures for cameras absent this frame.
+        for (const [entity, entry] of depthCache.perCamera) {
+          if (!liveSourceEntities.has(entity)) {
+            entry.view.destroy();
+            entry.texture.destroy();
+            depthCache.perCamera.delete(entity);
+          }
         }
         sortable.sort((a, b) => {
           if (a.order !== b.order) return a.order - b.order;

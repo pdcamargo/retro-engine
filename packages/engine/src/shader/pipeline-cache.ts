@@ -133,14 +133,64 @@ export class PipelineCache {
   private descriptorKey(d: RenderPipelineDescriptor): string {
     const layoutPart =
       d.layout === undefined || d.layout === 'auto' ? 'auto' : this.layoutKey(d.layout);
-    const vertexPart = `${this.moduleKey(d.vertex.module)}@${d.vertex.entryPoint}`;
+    const vertexPart = `${this.moduleKey(d.vertex.module)}@${d.vertex.entryPoint}#${this.vertexBuffersKey(d.vertex.buffers)}`;
     const fragmentPart = d.fragment
       ? `${this.moduleKey(d.fragment.module)}@${d.fragment.entryPoint}:${d.fragment.targets
-          .map((t) => t.format)
+          .map((t) => this.targetKey(t))
           .join(',')}`
       : 'none';
-    const primitivePart = d.primitive?.topology ?? 'triangle-list';
-    return `${layoutPart}|${vertexPart}|${fragmentPart}|${primitivePart}`;
+    const primitiveTopology = d.primitive?.topology ?? 'triangle-list';
+    const primitiveCull = d.primitive?.cullMode ?? 'none';
+    const primitiveFront = d.primitive?.frontFace ?? 'ccw';
+    const primitivePart = `${primitiveTopology}/${primitiveCull}/${primitiveFront}`;
+    const depthPart = this.depthStencilKey(d.depthStencil);
+    return `${layoutPart}|${vertexPart}|${fragmentPart}|${primitivePart}|${depthPart}`;
+  }
+
+  private vertexBuffersKey(buffers: RenderPipelineDescriptor['vertex']['buffers']): string {
+    if (!buffers || buffers.length === 0) return 'no-vbuf';
+    return buffers
+      .map((b) => {
+        const step = b.stepMode ?? 'vertex';
+        const attrs = b.attributes
+          .map((a) => `${a.shaderLocation}:${a.format}@${a.offset}`)
+          .join(';');
+        return `${b.arrayStride}/${step}/${attrs}`;
+      })
+      .join('+');
+  }
+
+  private targetKey(target: { format: string; blend?: unknown; writeMask?: number }): string {
+    const blend = target.blend as
+      | undefined
+      | {
+          color: { operation?: string; srcFactor?: string; dstFactor?: string };
+          alpha: { operation?: string; srcFactor?: string; dstFactor?: string };
+        };
+    const blendPart = blend
+      ? `${blend.color.operation ?? 'add'}/${blend.color.srcFactor ?? 'one'}/${blend.color.dstFactor ?? 'zero'}` +
+        `~${blend.alpha.operation ?? 'add'}/${blend.alpha.srcFactor ?? 'one'}/${blend.alpha.dstFactor ?? 'zero'}`
+      : 'no-blend';
+    const writeMask = target.writeMask ?? 0xf;
+    return `${target.format}^${blendPart}^${writeMask}`;
+  }
+
+  private depthStencilKey(ds: RenderPipelineDescriptor['depthStencil']): string {
+    if (!ds) return 'no-ds';
+    const front = ds.stencilFront ?? {};
+    const back = ds.stencilBack ?? {};
+    const stencilFront = `${front.compare ?? 'always'}/${front.failOp ?? 'keep'}/${front.depthFailOp ?? 'keep'}/${front.passOp ?? 'keep'}`;
+    const stencilBack = `${back.compare ?? 'always'}/${back.failOp ?? 'keep'}/${back.depthFailOp ?? 'keep'}/${back.passOp ?? 'keep'}`;
+    return (
+      `${ds.format}` +
+      `:dw=${ds.depthWriteEnabled ?? true}` +
+      `:dc=${ds.depthCompare ?? 'less'}` +
+      `:sf=${stencilFront}` +
+      `:sb=${stencilBack}` +
+      `:srm=${ds.stencilReadMask ?? 0xffffffff}` +
+      `:swm=${ds.stencilWriteMask ?? 0xffffffff}` +
+      `:db=${ds.depthBias ?? 0}/${ds.depthBiasSlopeScale ?? 0}/${ds.depthBiasClamp ?? 0}`
+    );
   }
 
   private moduleKey(module: ShaderModule): string {

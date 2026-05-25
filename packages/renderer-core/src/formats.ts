@@ -4,7 +4,13 @@
  * Expand as the engine needs them — every value added here must be mappable to
  * a concrete pixel format in every backend that ships.
  */
-export type TextureFormat = 'rgba8unorm' | 'bgra8unorm' | 'rgba16float' | 'depth32float';
+export type TextureFormat =
+  | 'rgba8unorm'
+  | 'bgra8unorm'
+  | 'rgba16float'
+  | 'depth32float'
+  | 'depth24plus'
+  | 'depth24plus-stencil8';
 
 /**
  * RGBA clear / fill color, components in `[0, 1]`.

@@ -216,4 +216,107 @@ describe('PipelineCache.getOrCreateRenderPipeline', () => {
     });
     expect(renderer.pipelines).toHaveLength(1);
   });
+
+  it('compiles separately when the depth-stencil state differs', () => {
+    const renderer = makeRecordingRenderer();
+    const cache = new PipelineCache(renderer, new ShaderRegistry());
+    const module = cache.compileShader(new Shader(SHADER_A));
+    const layout = renderer.createPipelineLayout({ bindGroupLayouts: [] });
+    const base = buildDescriptor(module, layout, 'rgba8unorm');
+    cache.getOrCreateRenderPipeline({
+      ...base,
+      depthStencil: { format: 'depth32float', depthWriteEnabled: true, depthCompare: 'less' },
+    });
+    cache.getOrCreateRenderPipeline({
+      ...base,
+      depthStencil: { format: 'depth32float', depthWriteEnabled: false, depthCompare: 'less' },
+    });
+    cache.getOrCreateRenderPipeline({
+      ...base,
+      depthStencil: { format: 'depth24plus', depthWriteEnabled: true, depthCompare: 'less' },
+    });
+    expect(renderer.pipelines).toHaveLength(3);
+  });
+
+  it('compiles separately when the cull mode or front face differs', () => {
+    const renderer = makeRecordingRenderer();
+    const cache = new PipelineCache(renderer, new ShaderRegistry());
+    const module = cache.compileShader(new Shader(SHADER_A));
+    const layout = renderer.createPipelineLayout({ bindGroupLayouts: [] });
+    const base = buildDescriptor(module, layout, 'rgba8unorm');
+    cache.getOrCreateRenderPipeline({ ...base, primitive: { topology: 'triangle-list', cullMode: 'none' } });
+    cache.getOrCreateRenderPipeline({ ...base, primitive: { topology: 'triangle-list', cullMode: 'back' } });
+    cache.getOrCreateRenderPipeline({
+      ...base,
+      primitive: { topology: 'triangle-list', cullMode: 'back', frontFace: 'cw' },
+    });
+    expect(renderer.pipelines).toHaveLength(3);
+  });
+
+  it('compiles separately when per-target blend or writeMask differs', () => {
+    const renderer = makeRecordingRenderer();
+    const cache = new PipelineCache(renderer, new ShaderRegistry());
+    const module = cache.compileShader(new Shader(SHADER_A));
+    const layout = renderer.createPipelineLayout({ bindGroupLayouts: [] });
+    const base = buildDescriptor(module, layout, 'rgba8unorm');
+    cache.getOrCreateRenderPipeline(base);
+    cache.getOrCreateRenderPipeline({
+      ...base,
+      fragment: {
+        module,
+        entryPoint: 'fs_main',
+        targets: [
+          {
+            format: 'rgba8unorm',
+            blend: {
+              color: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' },
+              alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' },
+            },
+          },
+        ],
+      },
+    });
+    cache.getOrCreateRenderPipeline({
+      ...base,
+      fragment: {
+        module,
+        entryPoint: 'fs_main',
+        targets: [{ format: 'rgba8unorm', writeMask: 0x1 /* red only */ }],
+      },
+    });
+    expect(renderer.pipelines).toHaveLength(3);
+  });
+
+  it('compiles separately when the vertex buffer layout differs', () => {
+    const renderer = makeRecordingRenderer();
+    const cache = new PipelineCache(renderer, new ShaderRegistry());
+    const module = cache.compileShader(new Shader(SHADER_A));
+    const layout = renderer.createPipelineLayout({ bindGroupLayouts: [] });
+    const base = buildDescriptor(module, layout, 'rgba8unorm');
+    cache.getOrCreateRenderPipeline(base);
+    cache.getOrCreateRenderPipeline({
+      ...base,
+      vertex: {
+        module,
+        entryPoint: 'vs_main',
+        buffers: [
+          { arrayStride: 12, attributes: [{ shaderLocation: 0, format: 'float32x3', offset: 0 }] },
+        ],
+      },
+    });
+    cache.getOrCreateRenderPipeline({
+      ...base,
+      vertex: {
+        module,
+        entryPoint: 'vs_main',
+        buffers: [
+          { arrayStride: 20, attributes: [
+            { shaderLocation: 0, format: 'float32x3', offset: 0 },
+            { shaderLocation: 1, format: 'float32x2', offset: 12 },
+          ] },
+        ],
+      },
+    });
+    expect(renderer.pipelines).toHaveLength(3);
+  });
 });

@@ -7,6 +7,8 @@ import { Core2dLabel } from './core-2d';
 import { Core3dLabel } from './core-3d';
 import { CameraDriverLabel } from './camera-driver-node';
 import { MainPassLabel } from './main-pass-node';
+import { OpaquePass3dLabel } from './opaque-pass-3d-node';
+import { TransparentPass3dLabel } from './transparent-pass-3d-node';
 
 describe('RenderGraphPlugin', () => {
   it('installs RenderGraph as an App resource with the default Core2d / Core3d sub-graphs', () => {
@@ -25,7 +27,7 @@ describe('RenderGraphPlugin', () => {
     expect(order.map((n) => String(n.label))).toEqual([String(CameraDriverLabel)]);
   });
 
-  it("default sub-graphs each contain the MainPassNode", () => {
+  it('Core2d contains MainPassNode; Core3d ships the Phase 7 phase trio', () => {
     const app = new App({ renderer: makeRenderingRenderer(), canvas: makeStubCanvas() });
     const graph = app.getResource(RenderGraph)!;
     // freeze is required before orderedNodes returns
@@ -33,7 +35,10 @@ describe('RenderGraphPlugin', () => {
     const core2d = graph.getSubGraph(Core2dLabel)!;
     const core3d = graph.getSubGraph(Core3dLabel)!;
     expect(core2d.orderedNodes()!.map((n) => String(n.label))).toEqual([String(MainPassLabel)]);
-    expect(core3d.orderedNodes()!.map((n) => String(n.label))).toEqual([String(MainPassLabel)]);
+    expect(core3d.orderedNodes()!.map((n) => String(n.label))).toEqual([
+      String(OpaquePass3dLabel),
+      String(TransparentPass3dLabel),
+    ]);
   });
 
   it('freezes the graph on the first frame; further mutation throws', async () => {

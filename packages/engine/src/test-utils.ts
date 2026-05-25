@@ -100,6 +100,7 @@ export const makeRenderingRenderer = (): Renderer => {
     setIndexBuffer: () => undefined,
     draw: () => undefined,
     drawIndexed: () => undefined,
+    setStencilReference: () => undefined,
     end: () => undefined,
   };
   const commandBuffer: CommandBuffer = { destroy: () => undefined };
@@ -129,16 +130,29 @@ export const makeRenderingRenderer = (): Renderer => {
   });
   const inertBindGroupLayout: BindGroupLayout = { destroy: () => undefined };
   const inertBindGroup: BindGroup = { destroy: () => undefined };
+  const inertTexture = (descriptor: TextureDescriptor): Texture => ({
+    width: descriptor.width,
+    height: descriptor.height,
+    depthOrArrayLayers: descriptor.depthOrArrayLayers ?? 1,
+    format: descriptor.format,
+    mipLevelCount: descriptor.mipLevelCount ?? 1,
+    sampleCount: descriptor.sampleCount ?? 1,
+    usage: descriptor.usage,
+    createView: () => view,
+    destroy: () => undefined,
+  });
   return {
     capabilities: baseCapabilities,
     init: () => Promise.resolve(),
     destroy: () => undefined,
     getPreferredSurfaceFormat: (): TextureFormat => 'rgba8unorm',
     createSurface: () => surface,
-    createShaderModule: (_descriptor: ShaderModuleDescriptor): ShaderModule => fail('createShaderModule'),
+    createShaderModule: (_descriptor: ShaderModuleDescriptor): ShaderModule => ({
+      destroy: () => undefined,
+    }),
     createBuffer: (descriptor: BufferDescriptor): Buffer => inertBuffer(descriptor.size, descriptor.usage),
-    createTexture: (_descriptor: TextureDescriptor): Texture => fail('createTexture'),
-    createSampler: (_descriptor?: SamplerDescriptor): Sampler => fail('createSampler'),
+    createTexture: (descriptor: TextureDescriptor): Texture => inertTexture(descriptor),
+    createSampler: (_descriptor?: SamplerDescriptor): Sampler => ({ destroy: () => undefined }),
     writeBuffer: (_buffer: Buffer, _offset: number, _data: BufferSource): void => undefined,
     writeTexture: (
       _destination: ImageCopyTexture,
@@ -147,9 +161,13 @@ export const makeRenderingRenderer = (): Renderer => {
       _size: Extent3D,
     ): void => fail('writeTexture'),
     createBindGroupLayout: (_descriptor: BindGroupLayoutDescriptor): BindGroupLayout => inertBindGroupLayout,
-    createPipelineLayout: (_descriptor: PipelineLayoutDescriptor): PipelineLayout => fail('createPipelineLayout'),
+    createPipelineLayout: (_descriptor: PipelineLayoutDescriptor): PipelineLayout => ({
+      destroy: () => undefined,
+    }),
     createBindGroup: (_descriptor: BindGroupDescriptor): BindGroup => inertBindGroup,
-    createRenderPipeline: (_descriptor: RenderPipelineDescriptor): RenderPipeline => fail('createRenderPipeline'),
+    createRenderPipeline: (_descriptor: RenderPipelineDescriptor): RenderPipeline => ({
+      destroy: () => undefined,
+    }),
     createCommandEncoder: () => encoder,
     resolveRenderTarget: (target: RenderTarget): ResolvedRenderTarget => {
       if (target.kind === 'surface') {

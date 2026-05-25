@@ -111,6 +111,37 @@ export const CameraRenderTarget = {
 } as const;
 
 /**
+ * Per-camera depth attachment declaration.
+ *
+ * - `'auto'` — the engine allocates a depth texture matching the camera's
+ *   color-target size and `format` (defaults to `'depth32float'`; opt into a
+ *   stencil-bearing format by setting `format: 'depth24plus-stencil8'`).
+ *   The texture is owned and lifecycle-managed by the `ViewDepthCache` render-
+ *   world resource. This is the `Camera3d()` factory default.
+ * - `'none'` — the camera draws with no depth attachment. Suitable for 2D
+ *   compositing. This is the `Camera2d()` factory default.
+ * - `{ kind: 'manual', view, format }` — the consumer provides the depth
+ *   texture view. The engine does not allocate or resize.
+ */
+export type CameraDepthTarget =
+  | { readonly kind: 'auto'; readonly format?: TextureFormat }
+  | { readonly kind: 'none' }
+  | { readonly kind: 'manual'; readonly view: TextureView; readonly format: TextureFormat };
+
+export const CameraDepthTarget = {
+  /** Engine-allocated depth texture. Default `'depth32float'`. */
+  auto(format?: TextureFormat): CameraDepthTarget {
+    return format !== undefined ? { kind: 'auto', format } : { kind: 'auto' };
+  },
+  /** No depth attachment. */
+  None: Object.freeze<CameraDepthTarget>({ kind: 'none' }),
+  /** Consumer-managed depth view; format must match a depth/depth-stencil aspect. */
+  manual(view: TextureView, format: TextureFormat): CameraDepthTarget {
+    return { kind: 'manual', view, format };
+  },
+} as const;
+
+/**
  * Cached per-frame values written by the camera system in `'postUpdate'` (or
  * the prepare-cameras step on the render side). Consumers read these rather
  * than recomputing each frame.
@@ -166,6 +197,13 @@ export class Camera {
   viewport: Viewport | undefined;
   /** Where this camera draws. Default: the App's primary surface. */
   target: CameraRenderTarget;
+  /**
+   * Depth attachment for this camera's render passes. Default is
+   * {@link CameraDepthTarget.None} — appropriate for 2D. `Camera3d()` defaults
+   * to `{ kind: 'auto' }`, which has the engine allocate and manage a depth
+   * texture matching the color target's size.
+   */
+  depthTarget: CameraDepthTarget;
   /** Enables HDR-format intermediate output. Honored by post-processing (Phase 12). */
   hdr: boolean;
   /** Whether earlier MSAA-resolved camera output should write through this camera's pass. */
@@ -189,6 +227,7 @@ export class Camera {
     order: number;
     viewport: Viewport;
     target: CameraRenderTarget;
+    depthTarget: CameraDepthTarget;
     hdr: boolean;
     msaaWriteback: boolean;
     clearColor: ClearColorConfig;
@@ -198,6 +237,7 @@ export class Camera {
     this.order = options.order ?? 0;
     this.viewport = options.viewport;
     this.target = options.target ?? CameraRenderTarget.Primary;
+    this.depthTarget = options.depthTarget ?? CameraDepthTarget.None;
     this.hdr = options.hdr ?? false;
     this.msaaWriteback = options.msaaWriteback ?? false;
     this.clearColor = options.clearColor ?? ClearColorConfig.Default;
@@ -232,6 +272,14 @@ export interface CameraView {
   readonly order: number;
   /** Resolved render target — backend view + format + dimensions. */
   readonly target: ResolvedRenderTarget;
+  /**
+   * Resolved depth attachment for this camera. `undefined` when the camera
+   * was spawned with `CameraDepthTarget.None`. For `'auto'` cameras, the
+   * `ViewDepthCache` (engine-owned) allocates a depth texture matching the
+   * color target's dimensions; the view and format are mirrored here for the
+   * Core3d phase nodes to attach without re-querying the cache.
+   */
+  readonly depth: { readonly view: TextureView; readonly format: TextureFormat } | undefined;
   /** Resolved viewport (defaults to the full target if `Camera.viewport` was undefined). */
   readonly viewport: Viewport;
   /** Final clear color — `undefined` when the camera was set to `ClearColorConfig.None`. */
