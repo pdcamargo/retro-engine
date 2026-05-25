@@ -601,13 +601,25 @@ const makeDrawClosure =
     pass.setPipeline(pipeline);
     pass.setBindGroup(1, entityBindGroup);
     pass.setBindGroup(2, materialBindGroup);
-    pass.setVertexBuffer(0, vertexSlice.buffer, vertexSlice.offset, vertexSlice.size);
+    // Slab-allocated meshes share one vertex / index buffer; the slot is
+    // picked via `baseVertex` (added to every index read) and `firstIndex`
+    // (offset into the index buffer in elements). Binding at `slice.offset`
+    // bytes AND adding `baseVertex` would double-count and read past the
+    // slot. Bind the whole slab at offset 0 and rely on the indices —
+    // matches the pattern AllocatorSlice's TSDoc documents.
+    pass.setVertexBuffer(0, vertexSlice.buffer);
     if (renderMesh.bufferInfo.kind === 'indexed') {
       const idx = indexSlice!;
-      pass.setIndexBuffer(idx.buffer, renderMesh.bufferInfo.indexFormat, idx.offset, idx.size);
-      pass.drawIndexed(renderMesh.bufferInfo.indexCount, 1, 0, vertexSlice.baseVertex, 0);
+      pass.setIndexBuffer(idx.buffer, renderMesh.bufferInfo.indexFormat);
+      pass.drawIndexed(
+        renderMesh.bufferInfo.indexCount,
+        1,
+        idx.baseVertex,
+        vertexSlice.baseVertex,
+        0,
+      );
     } else {
-      pass.draw(renderMesh.vertexCount, 1, 0, 0);
+      pass.draw(renderMesh.vertexCount, 1, vertexSlice.baseVertex, 0);
     }
   };
 
