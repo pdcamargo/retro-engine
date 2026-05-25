@@ -31,9 +31,9 @@ export interface PhaseItem2d {
  *
  * Keyed by main-world camera entity id (the `sourceEntity` on `CameraView`).
  * Phase nodes look up the active camera's lists at render time, sort, and
- * draw. Sprites only write `opaque` and `transparent` in Phase 8.1; the
- * `alphaMask` slot is reserved for an alpha-cutoff sprite pipeline (e.g.
- * tilemaps) that lands alongside the atlas asset.
+ * draw. The sprite pipeline writes `opaque` and `transparent`; Material2d
+ * with `alphaMode: { kind: 'mask' }` writes `alphaMask` (discard-based
+ * fragment path, no blending).
  */
 export class ViewPhases2d {
   readonly opaque: Map<number, PhaseItem2d[]> = new Map();
