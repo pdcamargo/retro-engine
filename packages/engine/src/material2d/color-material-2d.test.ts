@@ -25,7 +25,7 @@ const setupApp = () => {
   app.addPlugin(plugin);
   const meshHandle = app
     .getResource(Meshes)!
-    .add(new Rectangle({ width: 32, height: 32 }).mesh().build());
+    .add(new Rectangle({ halfSize: [16, 16] }).mesh().build());
   return { app, log, plugin, meshHandle };
 };
 
@@ -113,7 +113,7 @@ describe('ColorMaterial2d alpha bucketing', () => {
     app.addPlugin(plugin);
     const meshHandle = app
       .getResource(Meshes)!
-      .add(new Rectangle({ width: 32, height: 32 }).mesh().build());
+      .add(new Rectangle({ halfSize: [16, 16] }).mesh().build());
 
     // One opaque sprite, one opaque ColorMaterial2d entity, one blend
     // ColorMaterial2d entity.

@@ -59,7 +59,7 @@ describe('Material2dPlugin<ColorMaterial2d>', () => {
 
     const meshHandle = app
       .getResource(Meshes)!
-      .add(new Rectangle({ width: 64, height: 32 }).mesh().build());
+      .add(new Rectangle({ halfSize: [32, 16] }).mesh().build());
     const materialHandle = app
       .getResource(plugin.Materials2d)!
       .add(new ColorMaterial2d({ color: vec4.create(1, 0.5, 0.2, 1) }));

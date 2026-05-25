@@ -4,6 +4,7 @@ import { createWebGPURenderer } from '@retro-engine/renderer-webgpu';
 import { atlasShowcasePlugin } from './atlas-showcase-plugin';
 import { LoggingPlugin } from './logging-plugin';
 import { primitivesShowcasePlugin } from './primitives-showcase-plugin';
+import { shapesShowcasePlugin } from './shapes-showcase-plugin';
 import { sliceShowcasePlugin } from './slice-showcase-plugin';
 import { spriteShowcasePlugin } from './sprite-showcase-plugin';
 
@@ -16,6 +17,7 @@ if (!(canvas instanceof HTMLCanvasElement)) {
 //   `?mode=slice`   → Phase 8.5 9-slice sprite showcase (ADR-0034).
 //   `?mode=atlas`   → Phase 8.2 texture-atlas showcase (ADR-0032).
 //   `?mode=sprites` → Phase 8.1 sprite pipeline showcase (ADR-0031).
+//   `?mode=shapes`  → Phase 8.7 Material2d showcase (ADR-0035).
 //   anything else   → Phase 7.5 primitives demo.
 // All demos stay discoverable from one bundle.
 const mode = new URLSearchParams(window.location.search).get('mode');
@@ -26,7 +28,9 @@ const showcase =
       ? atlasShowcasePlugin
       : mode === 'sprites'
         ? spriteShowcasePlugin
-        : primitivesShowcasePlugin;
+        : mode === 'shapes'
+          ? shapesShowcasePlugin
+          : primitivesShowcasePlugin;
 
 const renderer = createWebGPURenderer(canvas);
 const app = new App({

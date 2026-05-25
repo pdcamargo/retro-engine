@@ -18,6 +18,7 @@
 
 import { bench, summary } from 'mitata';
 
+import type { Entity } from '@retro-engine/ecs';
 import { mat4, vec4 } from '@retro-engine/math';
 
 import { Images, RenderImages } from '../src';
@@ -73,8 +74,8 @@ summary(() => {
     const renderer = makeRenderingBenchRenderer();
     const cache = new EntityTransformGpuCache();
     const model = mat4.identity();
-    for (let entity = 0; entity < 1000; entity++) {
-      ensureEntityTransform(cache, renderer, entity, model);
+    for (let i = 0; i < 1000; i++) {
+      ensureEntityTransform(cache, renderer, i as unknown as Entity, model);
     }
   });
 });
