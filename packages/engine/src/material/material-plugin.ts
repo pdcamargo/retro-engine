@@ -162,8 +162,11 @@ export class MaterialPlugin<M extends Material> implements PluginObject {
       app.insertResource(new ViewPhases3d());
     }
 
+    // GPU resource creation is deferred to the first system tick — the
+    // renderer's device is undefined until `app.run()` awaits `init()`, which
+    // happens AFTER every plugin's `build` runs. The prepare/queue systems
+    // guard with `state.ensureInitialised(app)`.
     const state = new MaterialPluginState(this);
-    state.initialise(app);
 
     const MaterialsCtor = this.Materials;
     const RenderMaterialsCtor = this.RenderMaterials;
@@ -176,6 +179,7 @@ export class MaterialPlugin<M extends Material> implements PluginObject {
       'render',
       [ResMut(MaterialsCtor), ResMut(RenderMaterialsCtor)],
       (materials, renderMaterials) => {
+        state.ensureInitialised(app);
         state.prepareMaterials(
           app,
           materials as unknown as Materials<M>,
@@ -216,6 +220,7 @@ export class MaterialPlugin<M extends Material> implements PluginObject {
         phases,
         viewBindGroupCache,
       ) => {
+        state.ensureInitialised(app);
         state.queueMaterials(
           app,
           renderables as unknown as RenderablesQuery,
@@ -258,6 +263,7 @@ class MaterialPluginState<M extends Material> {
   specialized!: SpecializedRenderPipelines<SpecializeContext>;
   scratch = new ArrayBuffer(1024);
   app!: App;
+  initialised = false;
 
   constructor(plugin: MaterialPlugin<M>) {
     this.plugin = plugin;
@@ -265,6 +271,19 @@ class MaterialPluginState<M extends Material> {
 
   get materialClass(): MaterialCtor<M> {
     return this.plugin.materialClass;
+  }
+
+  /**
+   * Idempotent GPU-resource bootstrap: build the material's bind-group layout,
+   * compile its shaders, allocate its specialization cache. Called from the
+   * first prepare/queue tick of every frame — the renderer's device isn't
+   * available until `app.run()` awaits `init()`, which happens after every
+   * plugin's `build` finishes.
+   */
+  ensureInitialised(app: App): void {
+    if (this.initialised) return;
+    this.initialise(app);
+    this.initialised = true;
   }
 
   initialise(app: App): void {
