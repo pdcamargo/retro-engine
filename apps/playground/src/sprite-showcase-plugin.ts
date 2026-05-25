@@ -123,12 +123,19 @@ export const spriteShowcasePlugin: Plugin = (app) => {
     },
   );
 
+  // Use `.entries()` to get the entity id alongside components so we can
+  // bump the Transform change tick after each in-place rotation. The
+  // propagation system in `postUpdate` is gated on
+  // `Query([Transform], { changed: [Transform] })` — without an explicit
+  // `markChanged`, in-place quat mutations stay invisible to it and
+  // `GlobalTransform.matrix` never refreshes from the spinning Transform.
   app.addSystem('update', [Query([Transform, Spin]), ResMut(Time)], (rotators, time) => {
     const dt = time.virtual.delta;
-    for (const [transform, spin] of rotators) {
+    for (const [entity, transform, spin] of rotators.entries()) {
       const delta = quat.create();
       quat.fromAxisAngle(vec3.create(0, 0, 1), spin.speed * dt, delta);
       quat.multiply(delta, transform.rotation, transform.rotation);
+      app.world.markChanged(entity, Transform);
     }
   });
 };

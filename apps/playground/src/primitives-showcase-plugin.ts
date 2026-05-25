@@ -102,13 +102,17 @@ export const primitivesShowcasePlugin: Plugin = (app) => {
   app.addPlugin(new UnlitMaterialPlugin());
   app.addPlugin(unlitPlugin);
 
-  // Spin every Spin-marked entity around its Y axis each frame.
+  // Spin every Spin-marked entity around its Y axis each frame. The
+  // `markChanged` call after the in-place quat mutation is required so the
+  // `propagateTransformsGated` system (gated on `{ changed: [Transform] }`)
+  // sees the update and refreshes `GlobalTransform.matrix`.
   app.addSystem('update', [Query([Transform, Spin]), ResMut(Time)], (rotators, time) => {
     const dt = time.virtual.delta;
-    for (const [transform, spin] of rotators) {
+    for (const [entity, transform, spin] of rotators.entries()) {
       const delta = quat.create();
       quat.fromAxisAngle(vec3.create(0, 1, 0), spin.speed * dt, delta);
       quat.multiply(delta, transform.rotation, transform.rotation);
+      app.world.markChanged(entity, Transform);
     }
   });
 
