@@ -282,8 +282,13 @@ export type {
   SpriteKey,
   SpriteOptions,
   SpriteSpecializeContext,
+  TextureAtlasFromGridOptions,
+  TextureAtlasLayoutAssetEvent,
+  TextureAtlasLayoutHandle,
 } from './sprite';
 export {
+  atlasSyncSystem,
+  calculateSpriteBoundsSystem,
   packSpriteInstance,
   Rect,
   resolveAnchor,
@@ -295,6 +300,9 @@ export {
   SpritePipeline,
   SpritePlugin,
   SpritePreparedBatches,
+  TextureAtlas,
+  TextureAtlasLayout,
+  TextureAtlasLayouts,
 } from './sprite';
 
 /**

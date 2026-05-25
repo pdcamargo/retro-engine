@@ -1,6 +1,7 @@
 import { App } from '@retro-engine/engine';
 import { createWebGPURenderer } from '@retro-engine/renderer-webgpu';
 
+import { atlasShowcasePlugin } from './atlas-showcase-plugin';
 import { LoggingPlugin } from './logging-plugin';
 import { primitivesShowcasePlugin } from './primitives-showcase-plugin';
 import { spriteShowcasePlugin } from './sprite-showcase-plugin';
@@ -10,11 +11,18 @@ if (!(canvas instanceof HTMLCanvasElement)) {
   throw new Error('playground: #playground-canvas missing or not a <canvas>');
 }
 
-// Mode switch — `?mode=sprites` runs the Phase 8.1 sprite showcase, anything
-// else (including no query) runs the Phase 7.5 primitives demo. Matches the
-// `--example`-style ergonomic so both demos stay discoverable from one bundle.
+// Mode switch:
+//   `?mode=atlas`   → Phase 8.2 texture-atlas showcase (ADR-0032).
+//   `?mode=sprites` → Phase 8.1 sprite pipeline showcase (ADR-0031).
+//   anything else   → Phase 7.5 primitives demo.
+// Both demos stay discoverable from one bundle.
 const mode = new URLSearchParams(window.location.search).get('mode');
-const showcase = mode === 'sprites' ? spriteShowcasePlugin : primitivesShowcasePlugin;
+const showcase =
+  mode === 'atlas'
+    ? atlasShowcasePlugin
+    : mode === 'sprites'
+      ? spriteShowcasePlugin
+      : primitivesShowcasePlugin;
 
 const renderer = createWebGPURenderer(canvas);
 const app = new App({

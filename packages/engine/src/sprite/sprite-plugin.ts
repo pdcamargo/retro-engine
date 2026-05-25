@@ -14,8 +14,10 @@ import { RenderSet } from '../render-set';
 import { ShaderRegistry } from '../shader/shader-registry';
 import { Extract, Query, Res, ResMut } from '../system-param';
 import { GlobalTransform } from '../transform';
-import { ViewVisibility } from '../visibility/visibility';
+import { NoFrustumCulling, ViewVisibility } from '../visibility/visibility';
 
+import { atlasSyncSystem } from './atlas-sync';
+import { calculateSpriteBoundsSystem } from './calculate-sprite-bounds';
 import { Sprite } from './sprite';
 import {
   packSpriteInstance,
@@ -27,6 +29,8 @@ import {
 import { SpriteInstanceBuffer } from './sprite-instance-buffer';
 import { SpritePipeline } from './sprite-pipeline';
 import { SPRITE_WGSL } from './sprite.wgsl';
+import { TextureAtlas } from './texture-atlas';
+import { TextureAtlasLayouts } from './texture-atlas-layouts';
 
 /**
  * Engine plugin owning the built-in batched sprite pipeline.
@@ -46,6 +50,11 @@ import { SPRITE_WGSL } from './sprite.wgsl';
  * - Registers `RenderSet.Queue` system `'sprite-queue'`: iterates batches ×
  *   active 2D cameras and pushes one `PhaseItem2d` per `(camera, batch)`,
  *   routing to opaque vs transparent based on the batch's alpha bucket.
+ * - Inserts {@link TextureAtlasLayouts} as a main-world resource and registers
+ *   two `'postUpdate'` systems: `'atlas-sync'` (writes `sprite.rect` from
+ *   `(layout, index)` for entities whose `TextureAtlas` changed) and
+ *   `'sprite-bounds'` (auto-AABB for sprite frustum culling, ordered after
+ *   `'atlas-sync'` so atlassed sprites have an up-to-date rect first).
  *
  * Unique — only one sprite pipeline ships with the engine. Custom 2D
  * materials (`Material2d`, Phase 8.7) use a separate plugin and share the
@@ -78,6 +87,59 @@ export class SpritePlugin implements PluginObject {
     if (app.getResource(ViewPhases2d) === undefined) {
       app.insertResource(new ViewPhases2d());
     }
+    if (app.getResource(TextureAtlasLayouts) === undefined) {
+      app.insertResource(new TextureAtlasLayouts());
+    }
+
+    // `'postUpdate'` chain for atlas-driven sprites:
+    //   atlas-sync writes sprite.rect from (layout, index)
+    //   ↓
+    //   sprite-bounds computes Aabb from sprite footprint (uses up-to-date rect)
+    //   ↓
+    //   downstream visibility pipeline picks up Aabb (CalculateBounds slot is
+    //   the head of VisibilityPlugin's documented order).
+    type AtlasSyncQuery = QueryHandle<
+      readonly [typeof Sprite, typeof TextureAtlas],
+      { changed: readonly (typeof TextureAtlas)[] }
+    >;
+    type SpriteBoundsQuery = QueryHandle<
+      readonly [typeof Sprite],
+      { without: readonly (typeof NoFrustumCulling)[] }
+    >;
+
+    app.addSystem(
+      'postUpdate',
+      [
+        Res(TextureAtlasLayouts),
+        Query([Sprite, TextureAtlas], { changed: [TextureAtlas] }),
+      ],
+      (layouts, atlassed) => {
+        atlasSyncSystem(
+          layouts as TextureAtlasLayouts,
+          atlassed as unknown as AtlasSyncQuery,
+          app.world,
+        );
+      },
+      { label: 'atlas-sync' },
+    );
+
+    app.addSystem(
+      'postUpdate',
+      [
+        Res(TextureAtlasLayouts),
+        Res(Images),
+        Query([Sprite], { without: [NoFrustumCulling] }),
+      ],
+      (layouts, images, spritesQ) => {
+        calculateSpriteBoundsSystem(
+          layouts as TextureAtlasLayouts,
+          images as Images,
+          spritesQ as unknown as SpriteBoundsQuery,
+          app.world,
+        );
+      },
+      { label: 'sprite-bounds', after: ['atlas-sync'] },
+    );
 
     type SpriteQuery = QueryHandle<
       readonly [typeof Sprite, typeof GlobalTransform, typeof ViewVisibility]
