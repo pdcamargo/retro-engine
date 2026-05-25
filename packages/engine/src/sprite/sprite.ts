@@ -5,6 +5,8 @@ import type { ImageHandle } from '../image/images';
 import { Transform, GlobalTransform } from '../transform';
 import { InheritedVisibility, ViewVisibility, Visibility } from '../visibility';
 
+import type { SpriteImageMode } from './texture-slicer';
+
 /**
  * Where on a sprite's footprint its origin sits, in normalised footprint
  * coordinates. The named values mirror Bevy:
@@ -78,6 +80,14 @@ export interface SpriteOptions {
   flipX?: boolean;
   /** Flip the source UV along the Y axis. Default `false`. */
   flipY?: boolean;
+  /**
+   * Sub-quad layout. Default (or `{ kind: 'auto' }`) is a single quad —
+   * the historical sprite shape. Set `{ kind: 'sliced', slicer }` to turn
+   * the sprite into a 9-slice panel whose corners stay crisp while edges
+   * and centre stretch to fill {@link customSize}. See
+   * {@link SpriteImageMode} and {@link TextureSlicer}.
+   */
+  imageMode?: SpriteImageMode;
 }
 
 /**
@@ -118,6 +128,7 @@ export class Sprite {
   anchor: SpriteAnchor;
   flipX: boolean;
   flipY: boolean;
+  imageMode: SpriteImageMode | undefined;
 
   constructor(options: SpriteOptions = {}) {
     this.image = options.image;
@@ -127,6 +138,7 @@ export class Sprite {
     this.anchor = options.anchor ?? 'center';
     this.flipX = options.flipX ?? false;
     this.flipY = options.flipY ?? false;
+    this.imageMode = options.imageMode;
   }
 
   static readonly requires = [

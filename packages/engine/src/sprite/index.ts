@@ -24,3 +24,9 @@ export type {
   TextureAtlasLayoutHandle,
 } from './texture-atlas-layouts';
 export { TextureAtlasLayouts } from './texture-atlas-layouts';
+export type {
+  SliceScaleMode,
+  SpriteImageMode,
+  TextureSlicerOptions,
+} from './texture-slicer';
+export { BorderRect, TextureSlicer } from './texture-slicer';

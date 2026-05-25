@@ -288,8 +288,15 @@ const prepareSprites = (
     bucket.push(e);
   }
 
-  // Grow the instance buffer to fit every visible sprite.
-  instanceBuffer.ensureCapacity(app.renderer, entries.length);
+  // Grow the instance buffer to fit every visible sprite. A 9-sliced sprite
+  // contributes 9 instances; the default single-quad path contributes 1. The
+  // pre-count walk is cheaper than over-allocating 9× upfront when the scene
+  // is mostly plain sprites with a few 9-slice panels.
+  let totalInstances = 0;
+  for (const e of entries) {
+    totalInstances += instanceCountForSprite(e.sprite);
+  }
+  instanceBuffer.ensureCapacity(app.renderer, totalInstances);
   const f32 = instanceBuffer.scratchF32;
   const u32 = instanceBuffer.scratchU32;
 
@@ -311,8 +318,11 @@ const prepareSprites = (
       const eSize = eImage !== undefined
         ? { width: eImage.width, height: eImage.height }
         : imageSize;
-      cursorFloats += packSpriteInstance(e.sprite, matrix, eSize, f32, u32, cursorFloats);
-      cursorInstances += 1;
+      const consumed = packSpriteInstance(e.sprite, matrix, eSize, f32, u32, cursorFloats);
+      cursorFloats += consumed;
+      // `consumed` is always a multiple of SPRITE_INSTANCE_FLOAT_COUNT — 1×
+      // for the default sprite path, 9× for 9-sliced. Integer-exact.
+      cursorInstances += consumed / SPRITE_INSTANCE_FLOAT_COUNT;
     }
     const batch: SpriteBatch = {
       image: first.imageHandle,
@@ -408,8 +418,9 @@ const queueSprites = (
   }
 };
 
-// Unused-export-marker: SPRITE_INSTANCE_FLOAT_COUNT is imported above for
-// indirect documentation of the per-sprite slot size; the prepare loop uses
-// `packSpriteInstance`'s return value directly. Referenced here so the import
-// is not stripped by the bundler.
-void SPRITE_INSTANCE_FLOAT_COUNT;
+// Per-entity instance count: 9 for a 9-sliced sprite, 1 for the default
+// single-quad path. Used by the prepare loop to size the instance buffer
+// before packing; the actual per-instance writes come from
+// `packSpriteInstance`'s return value (`consumed / SPRITE_INSTANCE_FLOAT_COUNT`).
+const instanceCountForSprite = (sprite: Sprite): number =>
+  sprite.imageMode !== undefined && sprite.imageMode.kind === 'sliced' ? 9 : 1;

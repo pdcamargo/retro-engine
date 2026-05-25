@@ -278,20 +278,24 @@ export {
 export type {
   AtlasAnimationMode,
   AtlasAnimationOptions,
+  SliceScaleMode,
   SpriteAlphaBucket,
   SpriteAnchor,
   SpriteBatch,
+  SpriteImageMode,
   SpriteKey,
   SpriteOptions,
   SpriteSpecializeContext,
   TextureAtlasFromGridOptions,
   TextureAtlasLayoutAssetEvent,
   TextureAtlasLayoutHandle,
+  TextureSlicerOptions,
 } from './sprite';
 export {
   AtlasAnimation,
   atlasAnimationSystem,
   atlasSyncSystem,
+  BorderRect,
   calculateSpriteBoundsSystem,
   packSpriteInstance,
   Rect,
@@ -307,6 +311,7 @@ export {
   TextureAtlas,
   TextureAtlasLayout,
   TextureAtlasLayouts,
+  TextureSlicer,
 } from './sprite';
 
 /**

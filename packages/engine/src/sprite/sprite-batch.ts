@@ -3,6 +3,7 @@ import type { Mat4 } from '@retro-engine/math';
 import type { ImageHandle } from '../image/images';
 
 import { resolveAnchor, type Sprite } from './sprite';
+import type { TextureSlicer } from './texture-slicer';
 
 /**
  * Per-instance byte size for a packed sprite. 11 `f32` slots — see
@@ -64,9 +65,11 @@ export class SpritePreparedBatches {
 /**
  * Pack one sprite's per-instance data into `f32View` + `u32View` at the
  * supplied float index. `f32View` and `u32View` must alias the same
- * underlying `ArrayBuffer`. Returns the number of f32 slots consumed (always
- * {@link SPRITE_INSTANCE_FLOAT_COUNT}, exported for callers that step the
- * write cursor).
+ * underlying `ArrayBuffer`. Returns the number of f32 slots consumed —
+ * {@link SPRITE_INSTANCE_FLOAT_COUNT} for a plain sprite, or `9 ×
+ * SPRITE_INSTANCE_FLOAT_COUNT` for a sprite carrying
+ * `imageMode: { kind: 'sliced', ... }` (the function emits one instance per
+ * slice region in fixed BL→BM→BR→ML→MM→MR→TL→TM→TR order).
  *
  * Per-instance layout (44 bytes):
  *
@@ -93,6 +96,19 @@ export const packSpriteInstance = (
   u32View: Uint32Array,
   floatIndex: number,
 ): number => {
+  const mode = sprite.imageMode;
+  if (mode !== undefined && mode.kind === 'sliced') {
+    return packSlicedSpriteInstances(
+      sprite,
+      mode.slicer,
+      gtMatrix,
+      imageSize,
+      f32View,
+      u32View,
+      floatIndex,
+    );
+  }
+
   const width = sprite.customSize !== undefined ? sprite.customSize[0]! : imageSize.width;
   const height = sprite.customSize !== undefined ? sprite.customSize[1]! : imageSize.height;
 
@@ -171,4 +187,146 @@ const clampUnitToByte = (v: number): number => {
   if (!(v > 0)) return 0;
   if (v >= 1) return 255;
   return Math.round(v * 255);
+};
+
+/**
+ * Pack one 9-sliced sprite into nine per-instance records. Emits in fixed
+ * BL → BM → BR → ML → MM → MR → TL → TM → TR order (bottom-up, left-to-right
+ * within each row; Y is up in the engine's footprint-local space). Returns
+ * `9 * SPRITE_INSTANCE_FLOAT_COUNT`.
+ *
+ * Border units are source-image pixels: an 8-pixel border carves an 8-pixel
+ * inset off the sprite's source rect regardless of whether `sprite.rect`
+ * names the full image or an atlas tile (the atlas image and the tile share
+ * the same pixel scale). Destination corners stay at the border's pixel size
+ * in world units; edges and centre stretch to fill the remaining footprint
+ * (`customSize` or `imageSize` if undefined).
+ *
+ * If the footprint cannot accommodate the borders
+ * (`border.left + border.right > W` or analogous on Y), the inner splits
+ * cross and the affected slices degenerate to zero / negative basis — the
+ * vertex shader produces empty quads rather than throwing.
+ *
+ * @internal
+ */
+const packSlicedSpriteInstances = (
+  sprite: Sprite,
+  slicer: TextureSlicer,
+  gtMatrix: Mat4,
+  imageSize: { readonly width: number; readonly height: number },
+  f32View: Float32Array,
+  u32View: Uint32Array,
+  floatIndex: number,
+): number => {
+  const W = sprite.customSize !== undefined ? sprite.customSize[0]! : imageSize.width;
+  const H = sprite.customSize !== undefined ? sprite.customSize[1]! : imageSize.height;
+
+  // World affine — same layout as the single-quad path.
+  const ax = gtMatrix[0] as number;
+  const ay = gtMatrix[1] as number;
+  const bx = gtMatrix[4] as number;
+  const by = gtMatrix[5] as number;
+  const tx = gtMatrix[12] as number;
+  const ty = gtMatrix[13] as number;
+
+  const fullBasisXx = W * ax;
+  const fullBasisXy = W * ay;
+  const fullBasisYx = H * bx;
+  const fullBasisYy = H * by;
+
+  const [anchorX, anchorY] = resolveAnchor(sprite.anchor);
+
+  // Destination column / row boundaries in footprint-local [0, 1]² (Y-up).
+  // Four x-boundaries (0, dxL, dxR, 1) frame three columns; same for rows.
+  const border = slicer.border;
+  const dxL = border.left / W;
+  const dxR = 1 - border.right / W;
+  const dyB = border.bottom / H;
+  const dyT = 1 - border.top / H;
+
+  // Source UV column / row boundaries inside `sprite.rect` (defaults to
+  // [0, 1]² when undefined). Pixel-to-UV conversion uses the full source
+  // image's pixel size, not the sub-rect's, so atlassed sprites carve at
+  // the same physical pixel inset as standalone sprites.
+  let uMinSrc = 0;
+  let vMinSrc = 0;
+  let uMaxSrc = 1;
+  let vMaxSrc = 1;
+  if (sprite.rect !== undefined) {
+    uMinSrc = sprite.rect.min[0] as number;
+    vMinSrc = sprite.rect.min[1] as number;
+    uMaxSrc = sprite.rect.max[0] as number;
+    vMaxSrc = sprite.rect.max[1] as number;
+  }
+  const uL = uMinSrc + border.left / imageSize.width;
+  const uR = uMaxSrc - border.right / imageSize.width;
+  const vB = vMinSrc + border.bottom / imageSize.height;
+  const vT = vMaxSrc - border.top / imageSize.height;
+
+  const xLocal = [0, dxL, dxR, 1] as const;
+  const yLocal = [0, dyB, dyT, 1] as const;
+  const uSrc = [uMinSrc, uL, uR, uMaxSrc] as const;
+  const vSrc = [vMinSrc, vB, vT, vMaxSrc] as const;
+
+  const flipX = sprite.flipX;
+  const flipY = sprite.flipY;
+
+  const r = clampUnitToByte(sprite.color[0] as number);
+  const g = clampUnitToByte(sprite.color[1] as number);
+  const b = clampUnitToByte(sprite.color[2] as number);
+  const a = clampUnitToByte(sprite.color[3] as number);
+  const packedColor = (r | (g << 8) | (b << 16) | (a << 24)) >>> 0;
+
+  let cursor = floatIndex;
+  for (let row = 0; row < 3; row++) {
+    const yLo = yLocal[row]!;
+    const yHi = yLocal[row + 1]!;
+    let vLo = vSrc[row]!;
+    let vHi = vSrc[row + 1]!;
+    if (flipY) {
+      const t = vLo;
+      vLo = vHi;
+      vHi = t;
+    }
+    const ySpan = yHi - yLo;
+    const subBasisYx = ySpan * fullBasisYx;
+    const subBasisYy = ySpan * fullBasisYy;
+
+    for (let col = 0; col < 3; col++) {
+      const xLo = xLocal[col]!;
+      const xHi = xLocal[col + 1]!;
+      let uLo = uSrc[col]!;
+      let uHi = uSrc[col + 1]!;
+      if (flipX) {
+        const t = uLo;
+        uLo = uHi;
+        uHi = t;
+      }
+      const xSpan = xHi - xLo;
+      const subBasisXx = xSpan * fullBasisXx;
+      const subBasisXy = xSpan * fullBasisXy;
+
+      // Sub-quad's (0, 0) corner sits at footprint-local (xLo, yLo). The
+      // vertex shader writes `center + corner.x * basisX + corner.y * basisY`,
+      // so `center` must be the world position of that sub-quad's (0, 0)
+      // corner — derive by replacing the single-quad path's anchor subtract
+      // with `(anchor − sliceOrigin) · fullBasis`.
+      const subCenterX = tx - (anchorX - xLo) * fullBasisXx - (anchorY - yLo) * fullBasisYx;
+      const subCenterY = ty - (anchorX - xLo) * fullBasisXy - (anchorY - yLo) * fullBasisYy;
+
+      f32View[cursor + 0] = subCenterX;
+      f32View[cursor + 1] = subCenterY;
+      f32View[cursor + 2] = subBasisXx;
+      f32View[cursor + 3] = subBasisXy;
+      f32View[cursor + 4] = subBasisYx;
+      f32View[cursor + 5] = subBasisYy;
+      f32View[cursor + 6] = uLo;
+      f32View[cursor + 7] = vLo;
+      f32View[cursor + 8] = uHi;
+      f32View[cursor + 9] = vHi;
+      u32View[cursor + 10] = packedColor;
+      cursor += SPRITE_INSTANCE_FLOAT_COUNT;
+    }
+  }
+  return cursor - floatIndex;
 };
