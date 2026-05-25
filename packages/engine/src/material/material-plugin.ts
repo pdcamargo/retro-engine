@@ -37,10 +37,10 @@ import { alphaModeKey } from './material';
 import type { MaterialHandle } from './materials';
 import { Materials } from './materials';
 import { MeshMaterial3d } from './mesh-material-3d';
+import { MeshTransformGcPlugin } from './gc-entity-transforms';
 import {
   EntityTransformGpuCache,
   ensureEntityTransform,
-  gcEntityTransforms,
 } from './mesh-3d-transforms';
 import type { PreparedMaterial } from './prepare-bind-group';
 import { prepareBindGroup, schemaToBindGroupLayout } from './prepare-bind-group';
@@ -160,6 +160,7 @@ export class MaterialPlugin<M extends Material> implements PluginObject {
     if (app.getResource(EntityTransformGpuCache) === undefined) {
       app.insertResource(new EntityTransformGpuCache());
     }
+    app.addPlugin(new MeshTransformGcPlugin());
     if (app.getResource(ViewPhases3d) === undefined) {
       app.insertResource(new ViewPhases3d());
     }
@@ -392,7 +393,6 @@ class MaterialPluginState<M extends Material> {
     }
     if (cameras.views.length === 0) return;
 
-    const liveEntities = new Set<Entity>();
     const mainWorldMaterials = app.getResource(this.plugin.Materials) as
       | Materials<M>
       | undefined;
@@ -419,7 +419,6 @@ class MaterialPluginState<M extends Material> {
         const prepared = renderMaterials.get(meshMat.handle);
         if (prepared === undefined) continue;
 
-        liveEntities.add(entity);
         const entityBindGroup = ensureEntityTransform(
           entityTransforms,
           app.renderer,
@@ -482,7 +481,6 @@ class MaterialPluginState<M extends Material> {
         }
       }
     }
-    gcEntityTransforms(entityTransforms, liveEntities);
   }
 
   /**

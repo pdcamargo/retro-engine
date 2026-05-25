@@ -33,12 +33,17 @@ export const ENTITY_TRANSFORM_BUFFER_SIZE = 128 as const;
 
 /**
  * Render-world cache of per-entity `@group(1)` resources: one buffer + one
- * bind group per `Mesh3d` entity. Reused across frames; the buffer contents
- * are re-uploaded each frame from the entity's `GlobalTransform`.
+ * bind group per drawable entity. Shared by every material plugin (3D + 2D);
+ * the cache is keyed by entity, not by material. Reused across frames; the
+ * buffer contents are re-uploaded each frame from the entity's
+ * `GlobalTransform`.
  *
- * Entries for entities that did not appear in this frame's queue pass are
- * garbage-collected at the end of the pass. Bind groups and buffers are
- * destroyed when GC'd.
+ * Every call to {@link ensureEntityTransform} records the entity in
+ * `liveThisFrame`. A separate post-queue system
+ * (`gcEntityTransformsSystem`, scheduled in `RenderSet.PhaseSort`) drops
+ * resources for entities that did not appear in any queue this frame, then
+ * clears the set for the next frame. The split means multiple material
+ * plugins sharing the cache cannot evict each other's live entries.
  */
 export class EntityTransformGpuCache {
   /** `@group(1)` bind-group layout. Lazily created on first use; shared across all materials. */
@@ -50,6 +55,20 @@ export class EntityTransformGpuCache {
   > = new Map();
   /** Scratch buffer reused for every entity upload. 128 bytes / 32 f32 slots. */
   readonly scratch: Float32Array = new Float32Array(32);
+  /**
+   * Set of entities touched by any material queue this frame. Populated by
+   * {@link ensureEntityTransform}; consumed and cleared by
+   * `gcEntityTransformsSystem` once per frame after all queues have run.
+   */
+  readonly liveThisFrame: Set<Entity> = new Set();
+  /**
+   * `true` once `MeshTransformGcPlugin` has registered the per-frame GC
+   * system against an App. Used by the plugin itself to keep registration
+   * idempotent across multiple material plugins inserting it.
+   *
+   * @internal
+   */
+  gcSystemRegistered = false;
 
   getOrCreateLayout(renderer: Renderer): BindGroupLayout {
     if (this.layout !== undefined) return this.layout;
@@ -71,8 +90,8 @@ const scratchInverse = mat4.identity();
 
 /**
  * Ensure a `(buffer, bindGroup)` slot exists for `entity`, upload `model` and
- * its inverse-transpose into the buffer, and return the bind group ready to
- * bind at `@group(1)`.
+ * its inverse-transpose into the buffer, mark the entity live for this
+ * frame's GC pass, and return the bind group ready to bind at `@group(1)`.
  */
 export const ensureEntityTransform = (
   cache: EntityTransformGpuCache,
@@ -80,6 +99,7 @@ export const ensureEntityTransform = (
   entity: Entity,
   model: Mat4,
 ): BindGroup => {
+  cache.liveThisFrame.add(entity);
   const layout = cache.getOrCreateLayout(renderer);
   let slots = cache.perEntity.get(entity);
   if (slots === undefined) {
@@ -105,18 +125,19 @@ export const ensureEntityTransform = (
 };
 
 /**
- * Drop cached resources for entities not present in `liveEntities`. Called at
- * the end of the queue pass each frame.
+ * Drop cached resources for entities not touched by any material queue this
+ * frame, then clear the live-frame set for the next frame. Run once per frame
+ * by `gcEntityTransformsSystem` after every queue system.
  */
 export const gcEntityTransforms = (
   cache: EntityTransformGpuCache,
-  liveEntities: ReadonlySet<Entity>,
 ): void => {
   for (const [entity, slots] of cache.perEntity) {
-    if (!liveEntities.has(entity)) {
+    if (!cache.liveThisFrame.has(entity)) {
       slots.bindGroup.destroy();
       slots.buffer.destroy();
       cache.perEntity.delete(entity);
     }
   }
+  cache.liveThisFrame.clear();
 };
