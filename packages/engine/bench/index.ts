@@ -19,6 +19,7 @@ import './sprite-batch.bench';
 import './sprite-slice.bench';
 import './atlas-sync.bench';
 import './atlas-animation.bench';
+import './material2d-prepare.bench';
 
 interface NormalizedBench {
   readonly key: string;
