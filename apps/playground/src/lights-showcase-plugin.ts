@@ -131,17 +131,19 @@ export const lightsShowcasePlugin: Plugin = (app) => {
         new Transform(vec3.create(180, -110, 0)),
       );
 
-      // Orbiting accent light — circles a point in the bottom-left quadrant
-      // each frame so the dynamic-lighting path is obvious.
+      // Orbiting accent light — sweeps across the full grid each frame so
+      // the dynamic-lighting path is obvious. Anchored at the grid centre
+      // with a 220-unit radius and ~2.4 rad/s angular speed, so it traces
+      // a circle that touches every quadrant in roughly 2.5 seconds.
       cmd.spawn(
         new PointLight2d({
           color: vec3.create(0.95, 1, 0.5),
-          intensity: 1.6,
-          range: 180,
+          intensity: 2.4,
+          range: 240,
           radius: 8,
         }),
-        new Transform(vec3.create(-180, -110, 0)),
-        new Orbit(-180, -110, 80, 1.3),
+        new Transform(vec3.create(220, 0, 0)),
+        new Orbit(0, 0, 220, 2.4),
       );
 
       cmd.spawn(
@@ -153,12 +155,18 @@ export const lightsShowcasePlugin: Plugin = (app) => {
     },
   );
 
+  // In-place writes to `transform.translation` need an explicit
+  // markChanged so the `postUpdate` Transform → GlobalTransform
+  // propagation system picks the orbit up; the lighting queue reads
+  // `gt.matrix[12/13]`, so without this mark the world position never
+  // refreshes and the orbit is invisible.
   app.addSystem('update', [Query([Transform, Orbit]), ResMut(Time)], (orbiters, time) => {
     const dt = time.virtual.delta;
-    for (const [, transform, orbit] of orbiters.entries()) {
+    for (const [entity, transform, orbit] of orbiters.entries()) {
       orbit.phase += orbit.speed * dt;
       transform.translation[0] = orbit.anchorX + Math.cos(orbit.phase) * orbit.radius;
       transform.translation[1] = orbit.anchorY + Math.sin(orbit.phase) * orbit.radius;
+      app.world.markChanged(entity, Transform);
     }
   });
 };
