@@ -10,6 +10,7 @@ import { checkVisibilitySystem } from './check-visibility';
 import { updateFrustaSystem } from './update-frusta';
 import {
   InheritedVisibility,
+  NoFrustumCulling,
   ViewVisibility,
   Visibility,
 } from './visibility';
@@ -71,7 +72,10 @@ export class VisibilityPlugin implements PluginObject {
 
     app.addSystem(
       'postUpdate',
-      [Query([Camera, Frustum]), Query([InheritedVisibility, ViewVisibility])],
+      [
+        Query([Camera, Frustum]),
+        Query([InheritedVisibility, ViewVisibility], { has: [NoFrustumCulling] }),
+      ],
       (cameras, renderables) => {
         checkVisibilitySystem(app.world, cameras, renderables);
       },

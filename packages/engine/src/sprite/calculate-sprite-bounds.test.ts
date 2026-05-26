@@ -14,7 +14,7 @@ import {
   TextureAtlasLayout,
   TextureAtlasLayouts,
 } from '../index';
-import { makeCapturingRenderer, makeStubCanvas } from '../test-utils';
+import { makeCapturingRenderer, makeRenderingRenderer, makeStubCanvas } from '../test-utils';
 
 describe('calculateSpriteBoundsSystem (integration)', () => {
   it('writes Aabb from sprite.customSize when set, anchor-centered by default', async () => {
@@ -114,5 +114,27 @@ describe('calculateSpriteBoundsSystem (integration)', () => {
     await app.run();
 
     expect(app.world.getComponent(e, Aabb)).toBeUndefined();
+  });
+
+  it('is change-gated: skips an unchanged sprite, refreshes on markChanged(Sprite)', () => {
+    const app = new App({ renderer: makeRenderingRenderer(), canvas: makeStubCanvas() });
+    app.addPlugin(new SpritePlugin());
+
+    const sprite = new Sprite({ color: vec4.create(1, 1, 1, 1), customSize: vec2.create(32, 24) });
+    const e = app.world.spawn(sprite);
+
+    // Frame the Sprite is added: bounds written.
+    app.advanceFrame();
+    expect(app.world.getComponent(e, Aabb)!.halfExtents[0]).toBe(16);
+
+    // Mutate the footprint in place without signalling — bounds must NOT refresh.
+    sprite.customSize = vec2.create(100, 100);
+    app.advanceFrame();
+    expect(app.world.getComponent(e, Aabb)!.halfExtents[0]).toBe(16);
+
+    // markChanged re-runs the writer for that entity.
+    app.world.markChanged(e, Sprite);
+    app.advanceFrame();
+    expect(app.world.getComponent(e, Aabb)!.halfExtents[0]).toBe(50);
   });
 });

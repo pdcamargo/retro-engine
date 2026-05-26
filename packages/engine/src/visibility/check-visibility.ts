@@ -8,7 +8,8 @@ import { InheritedVisibility, NoFrustumCulling, ViewVisibility } from './visibil
 
 type CamerasQuery = QueryHandle<readonly [typeof Camera, typeof Frustum]>;
 type RenderablesQuery = QueryHandle<
-  readonly [typeof InheritedVisibility, typeof ViewVisibility]
+  readonly [typeof InheritedVisibility, typeof ViewVisibility],
+  { has: readonly (typeof NoFrustumCulling)[] }
 >;
 
 interface ActiveCameraCullingInfo {
@@ -76,6 +77,9 @@ export const checkVisibilitySystem = (
     const entity = entry[0] as Entity;
     const inherited = entry[1];
     const view = entry[2];
+    // `has: [NoFrustumCulling]` surfaces presence as a row flag — cheaper than a
+    // per-entity `getComponent`, and the marker carries no data we need.
+    const hasNoFrustumCulling = entry[3] as boolean;
 
     if (!inherited.visible) {
       view.visible = false;
@@ -84,12 +88,11 @@ export const checkVisibilitySystem = (
 
     const entityLayers = world.getComponent(entity, RenderLayers);
     const entityLayerMask = entityLayers?.mask ?? RenderLayers.DEFAULT_MASK;
-    const skipFrustum =
-      world.getComponent(entity, NoFrustumCulling) !== undefined ||
-      world.getComponent(entity, Aabb) === undefined ||
-      world.getComponent(entity, GlobalTransform) === undefined;
-    const localAabb = skipFrustum ? undefined : world.getComponent(entity, Aabb);
-    const transform = skipFrustum ? undefined : world.getComponent(entity, GlobalTransform);
+    // Fetch the frustum inputs once (not twice as before), and only when the
+    // entity opts into culling.
+    const localAabb = hasNoFrustumCulling ? undefined : world.getComponent(entity, Aabb);
+    const transform = hasNoFrustumCulling ? undefined : world.getComponent(entity, GlobalTransform);
+    const skipFrustum = hasNoFrustumCulling || localAabb === undefined || transform === undefined;
 
     let visible = false;
     for (const cam of active) {

@@ -113,9 +113,13 @@ export class SpritePlugin implements PluginObject {
       readonly [typeof Sprite, typeof TextureAtlas],
       { changed: readonly (typeof TextureAtlas)[] }
     >;
-    type SpriteBoundsQuery = QueryHandle<
+    type SpriteBoundsChangedQuery = QueryHandle<
       readonly [typeof Sprite],
-      { without: readonly (typeof NoFrustumCulling)[] }
+      { without: readonly (typeof NoFrustumCulling)[]; changed: readonly (typeof Sprite)[] }
+    >;
+    type SpriteBoundsAtlasQuery = QueryHandle<
+      readonly [typeof Sprite],
+      { without: readonly (typeof NoFrustumCulling)[]; changed: readonly (typeof TextureAtlas)[] }
     >;
 
     app.addSystem(
@@ -152,13 +156,15 @@ export class SpritePlugin implements PluginObject {
       [
         Res(TextureAtlasLayouts),
         Res(Images),
-        Query([Sprite], { without: [NoFrustumCulling] }),
+        Query([Sprite], { without: [NoFrustumCulling], changed: [Sprite] }),
+        Query([Sprite], { without: [NoFrustumCulling], changed: [TextureAtlas] }),
       ],
-      (layouts, images, spritesQ) => {
+      (layouts, images, changedSprites, changedAtlassed) => {
         calculateSpriteBoundsSystem(
           layouts as TextureAtlasLayouts,
           images as Images,
-          spritesQ as unknown as SpriteBoundsQuery,
+          changedSprites as unknown as SpriteBoundsChangedQuery,
+          changedAtlassed as unknown as SpriteBoundsAtlasQuery,
           app.world,
         );
       },

@@ -18,8 +18,8 @@ interface PendingAabbInsert {
  *
  * Registered by `SpritePlugin` in `'postUpdate'`, ordered `after:
  * ['atlas-sync']` so atlassed sprites have their `rect` set before bounds
- * computation. Iterates every `Sprite` entity without {@link NoFrustumCulling},
- * derives a local-space `Aabb` from the sprite's footprint, and inserts /
+ * computation. For each matched `Sprite` entity without {@link NoFrustumCulling}
+ * it derives a local-space `Aabb` from the sprite's footprint and inserts /
  * overwrites the entity's `Aabb` component. `checkVisibilitySystem` then
  * transforms the AABB into world space each frame and runs the frustum test.
  *
@@ -40,34 +40,49 @@ interface PendingAabbInsert {
  * sprite that visibly leaves the camera frustum is also reported as outside
  * by `frustumIntersectsAabb`.
  *
- * Entities carrying `NoFrustumCulling` are skipped — that marker is the
- * documented "I manage bounds myself" escape hatch, and `checkVisibilitySystem`
- * also short-circuits the frustum test for them.
+ * A sprite's footprint depends only on its `Sprite` and (when atlassed) its
+ * `TextureAtlas`, so the system is change-gated on both: an entity is visited
+ * on the frame either component is added or flagged changed, not every frame.
+ * The two query handles are the `changed: [Sprite]` and `changed: [TextureAtlas]`
+ * slices of the cullable sprites; their union (deduplicated) is processed.
+ * Changing an underlying `Image`'s dimensions or a `TextureAtlasLayout` in
+ * place does not refresh bounds on its own — re-insert `Sprite` (or
+ * `world.markChanged(entity, Sprite)`) on the affected entities.
+ *
+ * Entities carrying `NoFrustumCulling` are excluded by the query — that marker
+ * is the documented "I manage bounds myself" escape hatch, and
+ * `checkVisibilitySystem` also short-circuits the frustum test for them.
  *
  * @param layouts Main-world {@link TextureAtlasLayouts} registry.
  * @param images Main-world {@link Images} registry.
- * @param sprites Query handle over rows `(Sprite,)` without
- *   {@link NoFrustumCulling}.
+ * @param changedSprites Cullable sprites whose `Sprite` changed this frame.
+ * @param changedAtlassed Cullable sprites whose `TextureAtlas` changed this frame.
  * @param world The main world, used to insert / overwrite `Aabb` on the
  *   matched entities.
  */
 export const calculateSpriteBoundsSystem = (
   layouts: TextureAtlasLayouts,
   images: Images,
-  sprites: QueryHandle<
+  changedSprites: QueryHandle<
     readonly [typeof Sprite],
-    { without: readonly (typeof NoFrustumCulling)[] }
+    { without: readonly (typeof NoFrustumCulling)[]; changed: readonly (typeof Sprite)[] }
+  >,
+  changedAtlassed: QueryHandle<
+    readonly [typeof Sprite],
+    { without: readonly (typeof NoFrustumCulling)[]; changed: readonly (typeof TextureAtlas)[] }
   >,
   world: World,
 ): void => {
   // Defer insert until after iteration. `world.insertBundle` is a structural
   // mutation that can move the entity to a new archetype, swap-removing the
-  // row from the archetype the query is currently iterating — same hazard
+  // row from the archetype a query is currently iterating — same hazard
   // documented on `calculateBoundsSystem`.
   const pending: PendingAabbInsert[] = [];
-  for (const row of sprites.entries()) {
-    const entity = row[0] as Entity;
-    const sprite = row[1] as Sprite;
+  const seen = new Set<Entity>();
+
+  const consider = (entity: Entity, sprite: Sprite): void => {
+    if (seen.has(entity)) return;
+    seen.add(entity);
 
     let width: number;
     let height: number;
@@ -78,9 +93,9 @@ export const calculateSpriteBoundsSystem = (
       const atlas = world.getComponent(entity, TextureAtlas);
       if (atlas !== undefined) {
         const layout = layouts.get(atlas.layout);
-        if (layout === undefined) continue;
+        if (layout === undefined) return;
         const rect = layout.textures[atlas.index];
-        if (rect === undefined) continue;
+        if (rect === undefined) return;
         const layoutW = layout.size[0] as number;
         const layoutH = layout.size[1] as number;
         const minU = rect.min[0] as number;
@@ -92,7 +107,7 @@ export const calculateSpriteBoundsSystem = (
       } else {
         const handle = sprite.image !== undefined ? sprite.image : images.WHITE;
         const image = images.get(handle);
-        if (image === undefined) continue;
+        if (image === undefined) return;
         width = image.width;
         height = image.height;
       }
@@ -106,7 +121,11 @@ export const calculateSpriteBoundsSystem = (
       vec3.create(width * 0.5, height * 0.5, 0),
     );
     pending.push({ entity, aabb });
-  }
+  };
+
+  for (const row of changedSprites.entries()) consider(row[0] as Entity, row[1] as Sprite);
+  for (const row of changedAtlassed.entries()) consider(row[0] as Entity, row[1] as Sprite);
+
   for (const { entity, aabb } of pending) {
     world.insertBundle(entity, [aabb]);
   }
