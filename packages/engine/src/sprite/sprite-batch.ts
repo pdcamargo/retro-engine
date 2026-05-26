@@ -34,9 +34,12 @@ export type SpriteAlphaBucket = 'opaque' | 'blend';
  * closure binds the batch's image, the instance-buffer slice, and records
  * `drawIndexed(6, count, 0, 0, baseInstance)`.
  *
- * `worldZ` is the *world-space* Z of the first sprite in the batch — the
- * queue system multiplies by the per-camera view matrix to derive the
- * camera-space `sortDepth` for the phase-item it pushes.
+ * Sprites packed into the same batch share `(image, bucket)` and are
+ * contiguous in the back-to-front pre-batch sort. The prepare step guarantees
+ * that, within a bucket, no batch's sprites overlap the `worldZ` range of
+ * another batch — a foreign-image sprite at an intervening Z opens a new
+ * batch. Batch identity is therefore not stable frame-to-frame; nothing
+ * downstream interns it.
  *
  * @internal
  */
@@ -47,7 +50,13 @@ export interface SpriteBatch {
   readonly firstInstance: number;
   /** Number of sprites in this batch. */
   readonly count: number;
-  /** World-space Z of the batch's first sprite, for per-camera sort key derivation. */
+  /**
+   * Maximum `worldZ` across the batch's sprites — equal to the first packed
+   * instance's Z after the back-to-front pre-batch sort. The queue system
+   * multiplies by the per-camera view matrix to derive the camera-space
+   * `sortDepth` for the phase item it pushes; per-camera direction comes from
+   * the view matrix's `v[10]`.
+   */
   readonly worldZ: number;
 }
 

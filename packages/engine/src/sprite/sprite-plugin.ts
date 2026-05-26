@@ -1,9 +1,8 @@
 import type { Entity, Query as QueryHandle } from '@retro-engine/ecs';
-import type { Mat4 } from '@retro-engine/math';
 import type { RenderPassEncoder } from '@retro-engine/renderer-core';
 
 import { SortedCameras } from '../camera/sorted-cameras';
-import { Images, type ImageHandle } from '../image/images';
+import { Images } from '../image/images';
 import { RenderImages } from '../image/image-plugin';
 import type { App, RenderContext } from '../index';
 import type { PluginObject } from '../plugin';
@@ -22,12 +21,14 @@ import { atlasSyncSystem } from './atlas-sync';
 import { calculateSpriteBoundsSystem } from './calculate-sprite-bounds';
 import { Sprite } from './sprite';
 import {
-  packSpriteInstance,
-  SPRITE_INSTANCE_FLOAT_COUNT,
   type SpriteAlphaBucket,
-  type SpriteBatch,
   SpritePreparedBatches,
 } from './sprite-batch';
+import {
+  instanceCountForSprite,
+  type PerSpriteEntry,
+  sortAndEmitSpriteBatches,
+} from './sprite-batch-prepare';
 import { SpriteInstanceBuffer } from './sprite-instance-buffer';
 import { SpritePipeline } from './sprite-pipeline';
 import { SPRITE_WGSL } from './sprite.wgsl';
@@ -240,14 +241,6 @@ export class SpritePlugin implements PluginObject {
   }
 }
 
-interface PerSpriteEntry {
-  readonly entity: Entity;
-  readonly sprite: Sprite;
-  readonly gt: GlobalTransform;
-  readonly bucket: SpriteAlphaBucket;
-  readonly imageHandle: ImageHandle;
-}
-
 const prepareSprites = (
   app: App,
   sprites: QueryHandle<readonly [typeof Sprite, typeof GlobalTransform, typeof ViewVisibility]>,
@@ -268,25 +261,13 @@ const prepareSprites = (
     if (!vis.visible) continue;
     const resolvedHandle = sprite.image !== undefined ? sprite.image : images.WHITE;
     if (renderImages.get(resolvedHandle) === undefined) continue;
-    const bucket: SpriteAlphaBucket = (sprite.color[3] as number) >= 1 ? 'opaque' : 'blend';
-    entries.push({ entity, sprite, gt, bucket, imageHandle: resolvedHandle });
+    const isOpaque = (sprite.color[3] as number) >= 1;
+    const bucket: SpriteAlphaBucket = isOpaque ? 'opaque' : 'blend';
+    const bucketKey: 0 | 1 = isOpaque ? 0 : 1;
+    const worldZ = gt.matrix[14] as number;
+    entries.push({ entity, sprite, gt, bucket, bucketKey, imageHandle: resolvedHandle, worldZ });
   }
   if (entries.length === 0) return;
-
-  // Group by (image, bucket). Stable insertion order: the first sprite seen
-  // for each key establishes the batch position.
-  const groups = new Map<string, PerSpriteEntry[]>();
-  const order: string[] = [];
-  for (const e of entries) {
-    const key = `${String(e.imageHandle)}|${e.bucket}`;
-    let bucket = groups.get(key);
-    if (bucket === undefined) {
-      bucket = [];
-      groups.set(key, bucket);
-      order.push(key);
-    }
-    bucket.push(e);
-  }
 
   // Grow the instance buffer to fit every visible sprite. A 9-sliced sprite
   // contributes 9 instances; the default single-quad path contributes 1. The
@@ -297,42 +278,18 @@ const prepareSprites = (
     totalInstances += instanceCountForSprite(e.sprite);
   }
   instanceBuffer.ensureCapacity(app.renderer, totalInstances);
-  const f32 = instanceBuffer.scratchF32;
-  const u32 = instanceBuffer.scratchU32;
 
-  let cursorFloats = 0;
-  let cursorInstances = 0;
-  for (const key of order) {
-    const group = groups.get(key)!;
-    const first = group[0]!;
-    const sourceImage = images.get(first.imageHandle);
-    const imageSize = sourceImage !== undefined
-      ? { width: sourceImage.width, height: sourceImage.height }
-      : { width: 1, height: 1 };
-    const startInstance = cursorInstances;
-    let worldZ = 0;
-    for (const e of group) {
-      const matrix = e.gt.matrix as Mat4;
-      if (e === first) worldZ = matrix[14] as number;
-      const eImage = images.get(e.imageHandle);
-      const eSize = eImage !== undefined
-        ? { width: eImage.width, height: eImage.height }
-        : imageSize;
-      const consumed = packSpriteInstance(e.sprite, matrix, eSize, f32, u32, cursorFloats);
-      cursorFloats += consumed;
-      // `consumed` is always a multiple of SPRITE_INSTANCE_FLOAT_COUNT — 1×
-      // for the default sprite path, 9× for 9-sliced. Integer-exact.
-      cursorInstances += consumed / SPRITE_INSTANCE_FLOAT_COUNT;
-    }
-    const batch: SpriteBatch = {
-      image: first.imageHandle,
-      bucket: first.bucket,
-      firstInstance: startInstance,
-      count: cursorInstances - startInstance,
-      worldZ,
-    };
-    prepared.batches.push(batch);
-  }
+  // Sort by (bucket, -worldZ, image) and walk-emit batches. Within each
+  // bucket the back-most sprite lands first; consecutive entries that share
+  // (image, bucket) collapse into one batch. Sprites in foreign images at
+  // intervening Z values break the run automatically.
+  const { cursorFloats, cursorInstances } = sortAndEmitSpriteBatches(
+    entries,
+    images,
+    instanceBuffer.scratchF32,
+    instanceBuffer.scratchU32,
+    prepared.batches,
+  );
 
   instanceBuffer.count = cursorInstances;
   // Single per-frame upload. The packed scratch is sized >= byteLength; write
@@ -340,7 +297,7 @@ const prepareSprites = (
   // `BufferSource` — `subarray` always returns a view over the same
   // (non-shared) `ArrayBuffer` we allocated in `sprite-instance-buffer.ts`.
   if (cursorFloats > 0 && instanceBuffer.buffer !== undefined) {
-    const view = f32.subarray(0, cursorFloats);
+    const view = instanceBuffer.scratchF32.subarray(0, cursorFloats);
     app.renderer.writeBuffer(instanceBuffer.buffer, 0, view as unknown as BufferSource);
   }
 };
@@ -418,9 +375,3 @@ const queueSprites = (
   }
 };
 
-// Per-entity instance count: 9 for a 9-sliced sprite, 1 for the default
-// single-quad path. Used by the prepare loop to size the instance buffer
-// before packing; the actual per-instance writes come from
-// `packSpriteInstance`'s return value (`consumed / SPRITE_INSTANCE_FLOAT_COUNT`).
-const instanceCountForSprite = (sprite: Sprite): number =>
-  sprite.imageMode !== undefined && sprite.imageMode.kind === 'sliced' ? 9 : 1;
