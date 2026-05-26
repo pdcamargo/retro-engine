@@ -159,17 +159,12 @@ export {
 } from './image';
 export {
   alphaModeKey,
-  ENTITY_TRANSFORM_BUFFER_SIZE,
-  EntityTransformGpuCache,
-  ensureEntityTransform,
   ExtendedMaterial,
   forExtendedMaterial,
-  gcEntityTransforms,
   MaterialPlugin,
   Materials,
   MaterialSchema,
   MeshMaterial3d,
-  MeshTransformGcPlugin,
   prepareBindGroup,
   RenderMaterials,
   schemaToBindGroupLayout,

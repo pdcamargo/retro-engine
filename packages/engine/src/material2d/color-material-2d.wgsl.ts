@@ -8,17 +8,16 @@
  *
  * - `@group(0)`: view uniform (auto-bound by the Core2d phase node). Imported
  *   via `#import retro_engine::view`.
- * - `@group(1)`: per-entity model + inverse-transpose-model. The 2D fragment
- *   shader does not consume the inverse-transpose, but the struct shape
- *   matches the engine's shared `EntityTransformGpuCache` 128-byte UBO so the
- *   cache can be reused across 2D and 3D meshes.
- * - `@group(2)`: material — packed UBO with `color: vec4f` at offset 0 and
+ * - `@group(1)`: material — packed UBO with `color: vec4f` at offset 0 and
  *   `alpha_cutoff: f32` at offset 16.
  *
- * Vertex layout consumes the engine's standard `Mesh.POSITION + NORMAL + UV_0`
- * attribute order — every Phase 6 2D primitive (Rectangle / Circle /
- * RegularPolygon) emits this shape. `NORMAL` and `UV_0` are unused by the
- * fragment but declared so the vertex layout matches all primitives.
+ * The per-entity model matrix arrives as per-instance vertex attributes at
+ * `@location(8..11)` (vertex buffer slot 1, `stepMode: 'instance'`); 2D ignores
+ * the inverse-transpose columns the instance buffer also carries. Vertex slot 0
+ * consumes the engine's standard `Mesh.POSITION + NORMAL + UV_0` order — every
+ * 2D primitive (Rectangle / Circle / RegularPolygon) emits this shape;
+ * `NORMAL` and `UV_0` are unused by the fragment but declared so the vertex
+ * layout matches all primitives.
  *
  * The fragment branch on `alpha_cutoff` is uniform control flow — the GPU
  * evaluates the condition once per draw, not once per pixel. Mask-mode
@@ -28,22 +27,20 @@
 export const COLOR_MATERIAL_2D_WGSL = /* wgsl */ `
 #import retro_engine::view
 
-struct EntityTransform {
-  model: mat4x4<f32>,
-  inverse_transpose_model: mat4x4<f32>,
-};
-@group(1) @binding(0) var<uniform> entity: EntityTransform;
-
 struct ColorMaterial2dUniform {
   color: vec4<f32>,
   alpha_cutoff: f32,
 };
-@group(2) @binding(0) var<uniform> material: ColorMaterial2dUniform;
+@group(1) @binding(0) var<uniform> material: ColorMaterial2dUniform;
 
 struct VsIn {
   @location(0) position: vec3<f32>,
   @location(1) normal: vec3<f32>,
   @location(2) uv: vec2<f32>,
+  @location(8) model_c0: vec4<f32>,
+  @location(9) model_c1: vec4<f32>,
+  @location(10) model_c2: vec4<f32>,
+  @location(11) model_c3: vec4<f32>,
 };
 
 struct VsOut {
@@ -53,7 +50,8 @@ struct VsOut {
 @vertex
 fn vs_main(input: VsIn) -> VsOut {
   var out: VsOut;
-  let world_position = entity.model * vec4<f32>(input.position, 1.0);
+  let model = mat4x4<f32>(input.model_c0, input.model_c1, input.model_c2, input.model_c3);
+  let world_position = model * vec4<f32>(input.position, 1.0);
   out.clip_position = view.view_proj * world_position;
   return out;
 }

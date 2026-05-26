@@ -1,11 +1,8 @@
-import type { Entity, Query as QueryHandle } from '@retro-engine/ecs';
+import type { Query as QueryHandle } from '@retro-engine/ecs';
 import type { Mat4 } from '@retro-engine/math';
 import type {
-  BindGroup,
   BindGroupLayout,
   PipelineLayout,
-  RenderPassEncoder,
-  RenderPipeline,
   RenderPipelineDescriptor,
   ShaderModule,
   TextureFormat,
@@ -16,8 +13,8 @@ import { ViewBindGroupCache } from '../camera/extracted';
 import { SortedCameras } from '../camera/sorted-cameras';
 import { Images } from '../image/images';
 import { RenderImages } from '../image/image-plugin';
-import type { App, RenderContext } from '../index';
-import type { AllocatorSlice, MeshHandle, RenderMesh } from '../mesh';
+import type { App } from '../index';
+import type { AllocatorSlice, MeshHandle } from '../mesh';
 import { MeshAllocator, Meshes, Mesh3d, RenderMeshes } from '../mesh';
 import type { PluginObject } from '../plugin';
 import { RenderSet } from '../render-set';
@@ -37,11 +34,10 @@ import { alphaModeKey } from './material';
 import type { MaterialHandle } from './materials';
 import { Materials } from './materials';
 import { MeshMaterial3d } from './mesh-material-3d';
-import { MeshTransformGcPlugin } from './gc-entity-transforms';
-import {
-  EntityTransformGpuCache,
-  ensureEntityTransform,
-} from './mesh-3d-transforms';
+import { INSTANCE_LAYOUT } from './instance-layout';
+import { MeshInstanceBuffer } from './mesh-instance-buffer';
+import type { AlphaBucket, InstanceEntry } from './instance-batching';
+import { makeInstancedDraw, packInstancedBatches } from './instance-batching';
 import type { PreparedMaterial } from './prepare-bind-group';
 import { prepareBindGroup, schemaToBindGroupLayout } from './prepare-bind-group';
 import { RenderMaterials } from './render-materials';
@@ -88,8 +84,6 @@ export type MaterialPluginOptions = Record<string, never>;
  *   `StandardMaterial` at runtime despite TypeScript's erased generics.
  * - Inserts the {@link Materials} resource (main world) and
  *   {@link RenderMaterials} resource (render world).
- * - Inserts a shared {@link EntityTransformGpuCache} resource (idempotent —
- *   re-adding via a second `MaterialPlugin` is a no-op).
  * - Builds the material's `BindGroupLayout` from `M.bindGroup` (ADR-0027).
  * - Resolves vertex / fragment shaders against `ShaderRegistry` via the
  *   material's `vertexShader()` / `fragmentShader()` `ShaderRef`s.
@@ -157,10 +151,6 @@ export class MaterialPlugin<M extends Material> implements PluginObject {
     }
     app.insertResource(new this.Materials());
     app.insertResource(new this.RenderMaterials());
-    if (app.getResource(EntityTransformGpuCache) === undefined) {
-      app.insertResource(new EntityTransformGpuCache());
-    }
-    app.addPlugin(new MeshTransformGcPlugin());
     if (app.getResource(ViewPhases3d) === undefined) {
       app.insertResource(new ViewPhases3d());
     }
@@ -197,8 +187,9 @@ export class MaterialPlugin<M extends Material> implements PluginObject {
     );
 
     // Queue: iterate visible (Mesh3d, MeshMaterial3d<M>, GlobalTransform,
-    // ViewVisibility) entities × active cameras; build per-entity transform
-    // bind groups; specialize the pipeline; push phase items.
+    // ViewVisibility) entities × active cameras; batch by (mesh, material);
+    // pack per-instance transforms; specialize the pipeline; push one phase
+    // item per instanced batch.
     type MmCtor = new (h: MaterialHandle<M>) => MeshMaterial3d<M>;
     type RenderablesQuery = QueryHandle<
       readonly [typeof Mesh3d, MmCtor, typeof GlobalTransform, typeof ViewVisibility]
@@ -212,7 +203,6 @@ export class MaterialPlugin<M extends Material> implements PluginObject {
         Res(Meshes),
         Res(RenderMeshes),
         Res(MeshAllocator),
-        ResMut(EntityTransformGpuCache),
         ResMut(ViewPhases3d),
         Res(ViewBindGroupCache),
       ],
@@ -223,7 +213,6 @@ export class MaterialPlugin<M extends Material> implements PluginObject {
         meshes,
         renderMeshes,
         allocator,
-        entityTransforms,
         phases,
         viewBindGroupCache,
       ) => {
@@ -236,7 +225,6 @@ export class MaterialPlugin<M extends Material> implements PluginObject {
           meshes as unknown as Meshes,
           renderMeshes as unknown as RenderMeshes,
           allocator as unknown as MeshAllocator,
-          entityTransforms,
           phases,
           viewBindGroupCache as unknown as ViewBindGroupCache,
         );
@@ -260,6 +248,13 @@ interface SpecializeContext {
  * @internal
  */
 class MaterialPluginState<M extends Material> {
+  /**
+   * Buckets whose draw order is significant. 3D opaque / alpha-mask group
+   * freely — the depth buffer resolves overlap — so only transparent stays
+   * depth-ordered.
+   */
+  static readonly depthOrderedBuckets: ReadonlySet<AlphaBucket> = new Set<AlphaBucket>(['blend']);
+
   readonly plugin: MaterialPlugin<M>;
   bindGroupLayout!: BindGroupLayout;
   vertexModule!: ShaderModule;
@@ -268,6 +263,7 @@ class MaterialPluginState<M extends Material> {
   fragmentEntryPoint = 'fs_main';
   pipelineLayout: PipelineLayout | undefined;
   specialized!: SpecializedRenderPipelines<SpecializeContext>;
+  readonly instanceBuffer = new MeshInstanceBuffer();
   scratch = new ArrayBuffer(1024);
   app!: App;
   initialised = false;
@@ -379,13 +375,9 @@ class MaterialPluginState<M extends Material> {
     _meshes: Meshes,
     renderMeshes: RenderMeshes,
     allocator: MeshAllocator,
-    entityTransforms: EntityTransformGpuCache,
     phases: ViewPhases3d,
     viewBindGroupCache: ViewBindGroupCache,
   ): void {
-    // Ensure entity-transform layout exists before any pipeline is built —
-    // specialize() reads it. Calling getOrCreateLayout is idempotent.
-    entityTransforms.getOrCreateLayout(app.renderer);
     if (viewBindGroupCache.layout === undefined) {
       // CameraPlugin.prepareCameras lazily allocates the view layout on first
       // active camera. In a camera-less frame there's nothing to draw.
@@ -397,10 +389,16 @@ class MaterialPluginState<M extends Material> {
       | Materials<M>
       | undefined;
 
+    // Collect one entry per (visible entity × view), then batch by
+    // (mesh, material). Pipeline / material bind group / mesh slices are
+    // constant across a group, so the batch carries them once.
+    const entries: InstanceEntry[] = [];
     for (const view of cameras.views) {
       const cameraEntity = view.sourceEntity;
+      const colorFormat = view.target.format;
+      const depthFormat = view.depth?.format;
+      const v = view.viewMatrix as Float32Array;
       for (const row of renderables.entries()) {
-        const entity = row[0] as Entity;
         const mesh3d = row[1] as Mesh3d;
         const meshMat = row[2] as MeshMaterial3d<M>;
         const gt = row[3] as GlobalTransform;
@@ -419,66 +417,68 @@ class MaterialPluginState<M extends Material> {
         const prepared = renderMaterials.get(meshMat.handle);
         if (prepared === undefined) continue;
 
-        const entityBindGroup = ensureEntityTransform(
-          entityTransforms,
-          app.renderer,
-          entity,
-          gt.matrix as Mat4,
-        );
-
         const materialInstance = mainWorldMaterials?.get(meshMat.handle);
         const alphaMode = materialInstance?.alphaMode?.() ?? 'opaque';
         const depthBias = materialInstance?.depthBias?.() ?? 0;
 
         const layout = renderMesh.layout.layout;
-        const vertexLayoutDigest = vertexLayoutDigestFor(layout);
         const key: MaterialPipelineKey = {
           msaaSamples: 1,
           hdr: false,
-          vertexLayoutDigest,
+          vertexLayoutDigest: vertexLayoutDigestFor(layout),
           alphaMode,
         };
-        const colorFormat = view.target.format;
-        const depthFormat = view.depth?.format;
-        const pipeline = this.specialized.get({
-          key,
-          colorFormat,
-          depthFormat,
-          depthBias,
-          layout,
-        });
+        const pipeline = this.specialized.get({ key, colorFormat, depthFormat, depthBias, layout });
 
         // Camera-space depth (negative is in front of the camera; absolute
-        // value is monotonic with distance). Use the row that picks Z out of
-        // the world-space position: view-matrix row 2 (column-major: m[2],
-        // m[6], m[10], m[14]).
+        // value is monotonic with distance). View-matrix row 2 picks Z out of
+        // the world-space position (column-major: m[2], m[6], m[10], m[14]).
         const worldX = gt.matrix[12] as number;
         const worldY = gt.matrix[13] as number;
         const worldZ = gt.matrix[14] as number;
-        const v = view.viewMatrix as Float32Array;
         const sortDepth =
           (v[2] as number) * worldX +
           (v[6] as number) * worldY +
           (v[10] as number) * worldZ +
           (v[14] as number);
 
-        const draw = makeDrawClosure({
-          pipeline,
-          entityBindGroup,
-          materialBindGroup: prepared.bindGroup,
-          vertexSlice,
-          indexSlice,
-          renderMesh,
+        const bucket: AlphaBucket =
+          alphaMode === 'opaque' ? 'opaque' : alphaMode === 'blend' ? 'blend' : 'mask';
+        entries.push({
+          cameraEntity,
+          bucket,
+          groupKey: `${mesh3d.handle}/${meshMat.handle}`,
+          depth: sortDepth,
+          model: gt.matrix as Mat4,
+          payload: { pipeline, materialBindGroup: prepared.bindGroup, vertexSlice, indexSlice, renderMesh },
         });
+      }
+    }
+    if (entries.length === 0) return;
 
-        const item: PhaseItem3d = { sourceEntity: entity, sortDepth, draw };
-        if (alphaMode === 'opaque') {
-          phases.pushOpaque(cameraEntity, item);
-        } else if (alphaMode === 'blend') {
-          phases.pushTransparent(cameraEntity, item);
-        } else {
-          phases.pushAlphaMask(cameraEntity, item);
-        }
+    // Opaque / alpha-mask group freely (the depth buffer resolves order); only
+    // transparent must stay depth-ordered.
+    this.instanceBuffer.ensureCapacity(app.renderer, entries.length);
+    const { batches, cursorFloats } = packInstancedBatches(
+      entries,
+      MaterialPluginState.depthOrderedBuckets,
+      this.instanceBuffer.scratchF32,
+    );
+    this.instanceBuffer.count = entries.length;
+    const buffer = this.instanceBuffer.buffer!;
+    if (cursorFloats > 0) {
+      app.renderer.writeBuffer(buffer, 0, this.instanceBuffer.scratchF32.subarray(0, cursorFloats) as unknown as BufferSource);
+    }
+
+    for (const batch of batches) {
+      const draw = makeInstancedDraw(batch.payload, buffer, batch.firstInstance, batch.count);
+      const item: PhaseItem3d = { sourceEntity: batch.cameraEntity, sortDepth: batch.sortDepth, draw };
+      if (batch.bucket === 'opaque') {
+        phases.pushOpaque(batch.cameraEntity, item);
+      } else if (batch.bucket === 'blend') {
+        phases.pushTransparent(batch.cameraEntity, item);
+      } else {
+        phases.pushAlphaMask(batch.cameraEntity, item);
       }
     }
   }
@@ -490,16 +490,13 @@ class MaterialPluginState<M extends Material> {
    */
   specialize(ctx: SpecializeContext): RenderPipelineDescriptor {
     const renderer = this.app.renderer;
-    const entityTransformLayout = this.app
-      .getResource(EntityTransformGpuCache)!
-      .getOrCreateLayout(renderer);
     const viewLayout = (this.app.getResource(ViewBindGroupCache) as ViewBindGroupCache)
       .layout!;
 
     if (this.pipelineLayout === undefined) {
       this.pipelineLayout = renderer.createPipelineLayout({
         label: `material#${this.materialClass.name}`,
-        bindGroupLayouts: [viewLayout, entityTransformLayout, this.bindGroupLayout],
+        bindGroupLayouts: [viewLayout, this.bindGroupLayout],
       });
     }
 
@@ -510,7 +507,7 @@ class MaterialPluginState<M extends Material> {
       vertex: {
         module: this.vertexModule,
         entryPoint: this.vertexEntryPoint,
-        buffers: [ctx.layout],
+        buffers: [ctx.layout, INSTANCE_LAYOUT],
       },
       fragment: {
         module: this.fragmentModule,
@@ -586,50 +583,6 @@ const vertexLayoutDigestFor = (layout: VertexBufferLayout): string => {
   vertexLayoutDigestCache.set(layout, digest);
   return digest;
 };
-
-interface DrawClosureArgs {
-  pipeline: RenderPipeline;
-  entityBindGroup: BindGroup;
-  materialBindGroup: BindGroup;
-  vertexSlice: AllocatorSlice;
-  indexSlice: AllocatorSlice | undefined;
-  renderMesh: RenderMesh;
-}
-
-const makeDrawClosure =
-  ({
-    pipeline,
-    entityBindGroup,
-    materialBindGroup,
-    vertexSlice,
-    indexSlice,
-    renderMesh,
-  }: DrawClosureArgs) =>
-  (pass: RenderPassEncoder, _ctx: RenderContext): void => {
-    pass.setPipeline(pipeline);
-    pass.setBindGroup(1, entityBindGroup);
-    pass.setBindGroup(2, materialBindGroup);
-    // Slab-allocated meshes share one vertex / index buffer; the slot is
-    // picked via `baseVertex` (added to every index read) and `firstIndex`
-    // (offset into the index buffer in elements). Binding at `slice.offset`
-    // bytes AND adding `baseVertex` would double-count and read past the
-    // slot. Bind the whole slab at offset 0 and rely on the indices —
-    // matches the pattern AllocatorSlice's TSDoc documents.
-    pass.setVertexBuffer(0, vertexSlice.buffer);
-    if (renderMesh.bufferInfo.kind === 'indexed') {
-      const idx = indexSlice!;
-      pass.setIndexBuffer(idx.buffer, renderMesh.bufferInfo.indexFormat);
-      pass.drawIndexed(
-        renderMesh.bufferInfo.indexCount,
-        1,
-        idx.baseVertex,
-        vertexSlice.baseVertex,
-        0,
-      );
-    } else {
-      pass.draw(renderMesh.vertexCount, 1, vertexSlice.baseVertex, 0);
-    }
-  };
 
 // Suppress unused-binding lint: the marker types `PreparedMaterial` and
 // `MeshHandle` are imported for documentation TSDoc links above but not

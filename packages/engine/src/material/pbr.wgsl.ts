@@ -19,8 +19,7 @@
  *
  * - `@group(0)`: view uniform (auto-bound by the Core3d phase node). Imported
  *   via `#import retro_engine::view`.
- * - `@group(1)`: per-entity model + inverse-transpose-model.
- * - `@group(2)`: material data:
+ * - `@group(1)`: material data:
  *   - `@binding(0)` uniform `StandardMaterialUniform`.
  *   - `@binding(1)` `base_color_texture: texture_2d<f32>`.
  *   - `@binding(2)` `material_sampler: sampler`.
@@ -32,16 +31,13 @@
  *   - `@binding(5)` `emissive_texture: texture_2d<f32>`.
  *   - `@binding(6)` `occlusion_texture: texture_2d<f32>`.
  *
- * Vertex layout consumes `POSITION + NORMAL + UV_0`. Tangents are deferred.
+ * The per-entity model matrix and its inverse-transpose arrive as per-instance
+ * vertex attributes at `@location(8..11)` and `@location(12..15)` (vertex
+ * buffer slot 1, `stepMode: 'instance'`). Vertex slot 0 consumes
+ * `POSITION + NORMAL + UV_0`. Tangents are deferred.
  */
 export const PBR_WGSL = /* wgsl */ `
 #import retro_engine::view
-
-struct EntityTransform {
-  model: mat4x4<f32>,
-  inverse_transpose_model: mat4x4<f32>,
-};
-@group(1) @binding(0) var<uniform> entity: EntityTransform;
 
 struct StandardMaterialUniform {
   base_color: vec4<f32>,
@@ -52,18 +48,26 @@ struct StandardMaterialUniform {
   alpha_cutoff: f32,
 };
 
-@group(2) @binding(0) var<uniform> material: StandardMaterialUniform;
-@group(2) @binding(1) var base_color_texture: texture_2d<f32>;
-@group(2) @binding(2) var material_sampler: sampler;
-@group(2) @binding(3) var metallic_roughness_texture: texture_2d<f32>;
-@group(2) @binding(4) var normal_map_texture: texture_2d<f32>;
-@group(2) @binding(5) var emissive_texture: texture_2d<f32>;
-@group(2) @binding(6) var occlusion_texture: texture_2d<f32>;
+@group(1) @binding(0) var<uniform> material: StandardMaterialUniform;
+@group(1) @binding(1) var base_color_texture: texture_2d<f32>;
+@group(1) @binding(2) var material_sampler: sampler;
+@group(1) @binding(3) var metallic_roughness_texture: texture_2d<f32>;
+@group(1) @binding(4) var normal_map_texture: texture_2d<f32>;
+@group(1) @binding(5) var emissive_texture: texture_2d<f32>;
+@group(1) @binding(6) var occlusion_texture: texture_2d<f32>;
 
 struct VsIn {
   @location(0) position: vec3<f32>,
   @location(1) normal: vec3<f32>,
   @location(2) uv: vec2<f32>,
+  @location(8) model_c0: vec4<f32>,
+  @location(9) model_c1: vec4<f32>,
+  @location(10) model_c2: vec4<f32>,
+  @location(11) model_c3: vec4<f32>,
+  @location(12) inv_t_c0: vec4<f32>,
+  @location(13) inv_t_c1: vec4<f32>,
+  @location(14) inv_t_c2: vec4<f32>,
+  @location(15) inv_t_c3: vec4<f32>,
 };
 
 struct VsOut {
@@ -76,10 +80,12 @@ struct VsOut {
 @vertex
 fn vs_main(in: VsIn) -> VsOut {
   var out: VsOut;
-  let world_pos = entity.model * vec4<f32>(in.position, 1.0);
+  let model = mat4x4<f32>(in.model_c0, in.model_c1, in.model_c2, in.model_c3);
+  let inverse_transpose_model = mat4x4<f32>(in.inv_t_c0, in.inv_t_c1, in.inv_t_c2, in.inv_t_c3);
+  let world_pos = model * vec4<f32>(in.position, 1.0);
   out.world_position = world_pos.xyz;
   out.world_normal = normalize(
-    (entity.inverse_transpose_model * vec4<f32>(in.normal, 0.0)).xyz
+    (inverse_transpose_model * vec4<f32>(in.normal, 0.0)).xyz
   );
   out.uv = in.uv;
   out.clip_position = view.view_proj * world_pos;

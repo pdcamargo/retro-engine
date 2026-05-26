@@ -39,15 +39,6 @@ export {
 
 export { MeshMaterial3d } from './mesh-material-3d';
 
-export {
-  ENTITY_TRANSFORM_BUFFER_SIZE,
-  EntityTransformGpuCache,
-  ensureEntityTransform,
-  gcEntityTransforms,
-} from './mesh-3d-transforms';
-
-export { MeshTransformGcPlugin } from './gc-entity-transforms';
-
 export type { MaterialCtor, MaterialPluginOptions } from './material-plugin';
 export { MaterialPlugin } from './material-plugin';
 

@@ -9,35 +9,34 @@
  *
  * - `@group(0)`: view uniform (auto-bound by the Core3d phase node). Imported
  *   via `#import retro_engine::view`.
- * - `@group(1)`: per-entity model + inverse-transpose-model.
- * - `@group(2)`: material — `color: vec4f` packed at binding 0, color texture
+ * - `@group(1)`: material — `color: vec4f` packed at binding 0, color texture
  *   at binding 1, sampler at binding 2.
  *
- * Vertex layout consumes the engine's standard `Mesh.POSITION + NORMAL + UV_0`
- * attribute order. `NORMAL` is unused by the fragment but kept in the layout
- * so `UnlitMaterial` and `StandardMaterial` share a single vertex-buffer
- * shape.
+ * The per-entity model matrix arrives as per-instance vertex attributes at
+ * `@location(8..11)` (vertex buffer slot 1, `stepMode: 'instance'`); unlit does
+ * not transform normals, so it ignores the inverse-transpose columns the
+ * instance buffer also carries. Vertex slot 0 consumes the engine's standard
+ * `Mesh.POSITION + NORMAL + UV_0` order (`NORMAL` is kept so `UnlitMaterial`
+ * and `StandardMaterial` share one vertex-buffer shape).
  */
 export const UNLIT_WGSL = /* wgsl */ `
 #import retro_engine::view
 
-struct EntityTransform {
-  model: mat4x4<f32>,
-  inverse_transpose_model: mat4x4<f32>,
-};
-@group(1) @binding(0) var<uniform> entity: EntityTransform;
-
 struct UnlitMaterialUniform {
   color: vec4<f32>,
 };
-@group(2) @binding(0) var<uniform> material: UnlitMaterialUniform;
-@group(2) @binding(1) var color_texture: texture_2d<f32>;
-@group(2) @binding(2) var color_sampler: sampler;
+@group(1) @binding(0) var<uniform> material: UnlitMaterialUniform;
+@group(1) @binding(1) var color_texture: texture_2d<f32>;
+@group(1) @binding(2) var color_sampler: sampler;
 
 struct VsIn {
   @location(0) position: vec3<f32>,
   @location(1) normal: vec3<f32>,
   @location(2) uv: vec2<f32>,
+  @location(8) model_c0: vec4<f32>,
+  @location(9) model_c1: vec4<f32>,
+  @location(10) model_c2: vec4<f32>,
+  @location(11) model_c3: vec4<f32>,
 };
 
 struct VsOut {
@@ -48,7 +47,8 @@ struct VsOut {
 @vertex
 fn vs_main(input: VsIn) -> VsOut {
   var out: VsOut;
-  let world_position = entity.model * vec4<f32>(input.position, 1.0);
+  let model = mat4x4<f32>(input.model_c0, input.model_c1, input.model_c2, input.model_c3);
+  let world_position = model * vec4<f32>(input.position, 1.0);
   out.clip_position = view.view_proj * world_position;
   out.uv = input.uv;
   return out;

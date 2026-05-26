@@ -1,11 +1,8 @@
-import type { Entity, Query as QueryHandle } from '@retro-engine/ecs';
+import type { Query as QueryHandle } from '@retro-engine/ecs';
 import type { Mat4 } from '@retro-engine/math';
 import type {
-  BindGroup,
   BindGroupLayout,
   PipelineLayout,
-  RenderPassEncoder,
-  RenderPipeline,
   RenderPipelineDescriptor,
   ShaderModule,
   TextureFormat,
@@ -16,22 +13,21 @@ import { ViewBindGroupCache } from '../camera/extracted';
 import { SortedCameras } from '../camera/sorted-cameras';
 import { Images } from '../image/images';
 import { RenderImages } from '../image/image-plugin';
-import type { App, RenderContext } from '../index';
-import { MeshTransformGcPlugin } from '../material/gc-entity-transforms';
+import type { App } from '../index';
 import type { AlphaMode } from '../material/material';
 import type { MaterialHandle } from '../material/materials';
 import { Materials } from '../material/materials';
-import {
-  EntityTransformGpuCache,
-  ensureEntityTransform,
-} from '../material/mesh-3d-transforms';
+import { INSTANCE_LAYOUT } from '../material/instance-layout';
+import { MeshInstanceBuffer } from '../material/mesh-instance-buffer';
+import type { AlphaBucket, InstanceEntry } from '../material/instance-batching';
+import { makeInstancedDraw, packInstancedBatches } from '../material/instance-batching';
 import type { PreparedMaterial } from '../material/prepare-bind-group';
 import {
   prepareBindGroup,
   schemaToBindGroupLayout,
 } from '../material/prepare-bind-group';
 import { RenderMaterials } from '../material/render-materials';
-import type { AllocatorSlice, MeshHandle, RenderMesh } from '../mesh';
+import type { AllocatorSlice, MeshHandle } from '../mesh';
 import { Mesh2d, MeshAllocator, Meshes, RenderMeshes } from '../mesh';
 import type { PluginObject } from '../plugin';
 import { RenderSet } from '../render-set';
@@ -77,9 +73,6 @@ export type Material2dPluginOptions = Record<string, never>;
  *   at runtime despite TypeScript's erased generics.
  * - Inserts the `Materials2d<M>` resource (main world) and `RenderMaterials2d<M>`
  *   resource (render world).
- * - Inserts the shared {@link EntityTransformGpuCache} resource and registers
- *   the {@link MeshTransformGcPlugin} (idempotent — re-adding via a second
- *   `Material2dPlugin` / `MaterialPlugin` is a no-op).
  * - Inserts the shared {@link ViewPhases2d} resource (idempotent — shared with
  *   `SpritePlugin`).
  * - Builds the material's `BindGroupLayout` from `M.bindGroup`.
@@ -149,10 +142,6 @@ export class Material2dPlugin<M extends Material2d> implements PluginObject {
     }
     app.insertResource(new this.Materials2d());
     app.insertResource(new this.RenderMaterials2d());
-    if (app.getResource(EntityTransformGpuCache) === undefined) {
-      app.insertResource(new EntityTransformGpuCache());
-    }
-    app.addPlugin(new MeshTransformGcPlugin());
     if (app.getResource(ViewPhases2d) === undefined) {
       app.insertResource(new ViewPhases2d());
     }
@@ -185,9 +174,9 @@ export class Material2dPlugin<M extends Material2d> implements PluginObject {
     );
 
     // Queue: iterate visible (Mesh2d, MeshMaterial2d<M>, GlobalTransform,
-    // ViewVisibility) entities × active 2D cameras; build per-entity transform
-    // bind groups (shared with 3D via the same cache); specialize the pipeline;
-    // push phase items into ViewPhases2d.
+    // ViewVisibility) entities × active 2D cameras; batch by (mesh, material),
+    // pack per-instance transforms, specialize the pipeline, push one phase
+    // item per instanced batch into ViewPhases2d.
     type MmCtor = new (h: MaterialHandle<M>) => MeshMaterial2d<M>;
     type RenderablesQuery = QueryHandle<
       readonly [typeof Mesh2d, MmCtor, typeof GlobalTransform, typeof ViewVisibility]
@@ -201,7 +190,6 @@ export class Material2dPlugin<M extends Material2d> implements PluginObject {
         Res(Meshes),
         Res(RenderMeshes),
         Res(MeshAllocator),
-        ResMut(EntityTransformGpuCache),
         ResMut(ViewPhases2d),
         Res(ViewBindGroupCache),
       ],
@@ -212,7 +200,6 @@ export class Material2dPlugin<M extends Material2d> implements PluginObject {
         meshes,
         renderMeshes,
         allocator,
-        entityTransforms,
         phases,
         viewBindGroupCache,
       ) => {
@@ -225,7 +212,6 @@ export class Material2dPlugin<M extends Material2d> implements PluginObject {
           meshes as unknown as Meshes,
           renderMeshes as unknown as RenderMeshes,
           allocator as unknown as MeshAllocator,
-          entityTransforms,
           phases,
           viewBindGroupCache as unknown as ViewBindGroupCache,
         );
@@ -235,7 +221,7 @@ export class Material2dPlugin<M extends Material2d> implements PluginObject {
   }
 }
 
-const alphaBucketOf = (mode: AlphaMode): 'opaque' | 'mask' | 'blend' => {
+const alphaBucketOf = (mode: AlphaMode): AlphaBucket => {
   if (mode === 'opaque') return 'opaque';
   if (mode === 'blend') return 'blend';
   return 'mask';
@@ -252,6 +238,17 @@ interface SpecializeContext2d {
  * @internal
  */
 class Material2dPluginState<M extends Material2d> {
+  /**
+   * 2D has no depth buffer — the opaque/alpha-mask/transparent passes all
+   * paint back-to-front — so every bucket must stay depth-ordered (only
+   * adjacent same-key runs may be instanced).
+   */
+  static readonly depthOrderedBuckets: ReadonlySet<AlphaBucket> = new Set<AlphaBucket>([
+    'opaque',
+    'mask',
+    'blend',
+  ]);
+
   readonly plugin: Material2dPlugin<M>;
   bindGroupLayout!: BindGroupLayout;
   vertexModule!: ShaderModule;
@@ -260,6 +257,7 @@ class Material2dPluginState<M extends Material2d> {
   fragmentEntryPoint = 'fs_main';
   pipelineLayout: PipelineLayout | undefined;
   specialized!: SpecializedRenderPipelines<SpecializeContext2d>;
+  readonly instanceBuffer = new MeshInstanceBuffer();
   scratch = new ArrayBuffer(1024);
   app!: App;
   initialised = false;
@@ -370,11 +368,9 @@ class Material2dPluginState<M extends Material2d> {
     _meshes: Meshes,
     renderMeshes: RenderMeshes,
     allocator: MeshAllocator,
-    entityTransforms: EntityTransformGpuCache,
     phases: ViewPhases2d,
     viewBindGroupCache: ViewBindGroupCache,
   ): void {
-    entityTransforms.getOrCreateLayout(app.renderer);
     if (viewBindGroupCache.layout === undefined) return;
     if (cameras.views.length === 0) return;
 
@@ -382,6 +378,7 @@ class Material2dPluginState<M extends Material2d> {
       | Materials<M>
       | undefined;
 
+    const entries: InstanceEntry[] = [];
     for (const view of cameras.views) {
       if (view.subGraph !== Core2dLabel) continue;
       const cameraEntity = view.sourceEntity;
@@ -389,7 +386,6 @@ class Material2dPluginState<M extends Material2d> {
       const v = view.viewMatrix as Float32Array;
 
       for (const row of renderables.entries()) {
-        const entity = row[0] as Entity;
         const mesh2d = row[1] as Mesh2d;
         const meshMat = row[2] as MeshMaterial2d<M>;
         const gt = row[3] as GlobalTransform;
@@ -408,32 +404,17 @@ class Material2dPluginState<M extends Material2d> {
         const prepared = renderMaterials.get(meshMat.handle);
         if (prepared === undefined) continue;
 
-        const entityBindGroup = ensureEntityTransform(
-          entityTransforms,
-          app.renderer,
-          entity,
-          gt.matrix as Mat4,
-        );
-
         const materialInstance = mainWorldMaterials?.get(meshMat.handle);
         const alphaMode = materialInstance?.alphaMode?.() ?? 'opaque';
         const alphaBucket = alphaBucketOf(alphaMode);
 
-        const key: MaterialPipelineKey2d = {
-          surfaceFormat,
-          msaaSamples: 1,
-          hdr: false,
-          alphaBucket,
-        };
-        const pipeline = this.specialized.get({
-          key,
-          layout: renderMesh.layout.layout,
-        });
+        const key: MaterialPipelineKey2d = { surfaceFormat, msaaSamples: 1, hdr: false, alphaBucket };
+        const pipeline = this.specialized.get({ key, layout: renderMesh.layout.layout });
 
-        // Full 4-term camera-space-Z computation (mirrors MaterialPlugin's
-        // 3D path; not the sprite plugin's 2-term shortcut). The extra two
-        // terms are zero for an axis-aligned ortho Camera2d but non-zero
-        // for a tilted Camera2d — which custom plugins are free to spawn.
+        // Full 4-term camera-space-Z computation (mirrors MaterialPlugin's 3D
+        // path; not the sprite plugin's 2-term shortcut). The extra two terms
+        // are zero for an axis-aligned ortho Camera2d but non-zero for a tilted
+        // Camera2d — which custom plugins are free to spawn.
         const worldX = gt.matrix[12] as number;
         const worldY = gt.matrix[13] as number;
         const worldZ = gt.matrix[14] as number;
@@ -443,23 +424,39 @@ class Material2dPluginState<M extends Material2d> {
           (v[10] as number) * worldZ +
           (v[14] as number);
 
-        const draw = makeDraw2dClosure({
-          pipeline,
-          entityBindGroup,
-          materialBindGroup: prepared.bindGroup,
-          vertexSlice,
-          indexSlice,
-          renderMesh,
+        entries.push({
+          cameraEntity,
+          bucket: alphaBucket,
+          groupKey: `${mesh2d.handle}/${meshMat.handle}`,
+          depth: sortDepth,
+          model: gt.matrix as Mat4,
+          payload: { pipeline, materialBindGroup: prepared.bindGroup, vertexSlice, indexSlice, renderMesh },
         });
+      }
+    }
+    if (entries.length === 0) return;
 
-        const item: PhaseItem2d = { sourceEntity: entity, sortDepth, draw };
-        if (alphaBucket === 'opaque') {
-          phases.pushOpaque(cameraEntity, item);
-        } else if (alphaBucket === 'mask') {
-          phases.pushAlphaMask(cameraEntity, item);
-        } else {
-          phases.pushTransparent(cameraEntity, item);
-        }
+    this.instanceBuffer.ensureCapacity(app.renderer, entries.length);
+    const { batches, cursorFloats } = packInstancedBatches(
+      entries,
+      Material2dPluginState.depthOrderedBuckets,
+      this.instanceBuffer.scratchF32,
+    );
+    this.instanceBuffer.count = entries.length;
+    const buffer = this.instanceBuffer.buffer!;
+    if (cursorFloats > 0) {
+      app.renderer.writeBuffer(buffer, 0, this.instanceBuffer.scratchF32.subarray(0, cursorFloats) as unknown as BufferSource);
+    }
+
+    for (const batch of batches) {
+      const draw = makeInstancedDraw(batch.payload, buffer, batch.firstInstance, batch.count);
+      const item: PhaseItem2d = { sourceEntity: batch.cameraEntity, sortDepth: batch.sortDepth, draw };
+      if (batch.bucket === 'opaque') {
+        phases.pushOpaque(batch.cameraEntity, item);
+      } else if (batch.bucket === 'mask') {
+        phases.pushAlphaMask(batch.cameraEntity, item);
+      } else {
+        phases.pushTransparent(batch.cameraEntity, item);
       }
     }
   }
@@ -471,16 +468,13 @@ class Material2dPluginState<M extends Material2d> {
    */
   specialize(ctx: SpecializeContext2d): RenderPipelineDescriptor {
     const renderer = this.app.renderer;
-    const entityTransformLayout = this.app
-      .getResource(EntityTransformGpuCache)!
-      .getOrCreateLayout(renderer);
     const viewLayout = (this.app.getResource(ViewBindGroupCache) as ViewBindGroupCache)
       .layout!;
 
     if (this.pipelineLayout === undefined) {
       this.pipelineLayout = renderer.createPipelineLayout({
         label: `material-2d#${this.materialClass.name}`,
-        bindGroupLayouts: [viewLayout, entityTransformLayout, this.bindGroupLayout],
+        bindGroupLayouts: [viewLayout, this.bindGroupLayout],
       });
     }
 
@@ -491,7 +485,7 @@ class Material2dPluginState<M extends Material2d> {
       vertex: {
         module: this.vertexModule,
         entryPoint: this.vertexEntryPoint,
-        buffers: [ctx.layout],
+        buffers: [ctx.layout, INSTANCE_LAYOUT],
       },
       fragment: {
         module: this.fragmentModule,
@@ -546,44 +540,6 @@ const compileShaderFromRef = (
   }
   return cache.compileShader(new Shader(source, { label: ref.name }));
 };
-
-interface DrawClosureArgs {
-  pipeline: RenderPipeline;
-  entityBindGroup: BindGroup;
-  materialBindGroup: BindGroup;
-  vertexSlice: AllocatorSlice;
-  indexSlice: AllocatorSlice | undefined;
-  renderMesh: RenderMesh;
-}
-
-const makeDraw2dClosure =
-  ({
-    pipeline,
-    entityBindGroup,
-    materialBindGroup,
-    vertexSlice,
-    indexSlice,
-    renderMesh,
-  }: DrawClosureArgs) =>
-  (pass: RenderPassEncoder, _ctx: RenderContext): void => {
-    pass.setPipeline(pipeline);
-    pass.setBindGroup(1, entityBindGroup);
-    pass.setBindGroup(2, materialBindGroup);
-    pass.setVertexBuffer(0, vertexSlice.buffer);
-    if (renderMesh.bufferInfo.kind === 'indexed') {
-      const idx = indexSlice!;
-      pass.setIndexBuffer(idx.buffer, renderMesh.bufferInfo.indexFormat);
-      pass.drawIndexed(
-        renderMesh.bufferInfo.indexCount,
-        1,
-        idx.baseVertex,
-        vertexSlice.baseVertex,
-        0,
-      );
-    } else {
-      pass.draw(renderMesh.vertexCount, 1, vertexSlice.baseVertex, 0);
-    }
-  };
 
 // Suppress unused-binding lint: imported for documentation TSDoc references.
 void (null as unknown as PreparedMaterial);

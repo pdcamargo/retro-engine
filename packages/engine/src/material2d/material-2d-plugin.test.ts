@@ -5,7 +5,6 @@ import { vec4 } from '@retro-engine/math';
 import {
   App,
   Camera2d,
-  EntityTransformGpuCache,
   Mesh2d,
   Meshes,
   Rectangle,
@@ -46,7 +45,6 @@ describe('Material2dPlugin<ColorMaterial2d>', () => {
     app.addPlugin(plugin);
     expect(app.getResource(plugin.Materials2d)).toBeDefined();
     expect(app.getResource(plugin.RenderMaterials2d)).toBeDefined();
-    expect(app.getResource(EntityTransformGpuCache)).toBeDefined();
     expect(app.getResource(ViewPhases2d)).toBeDefined();
   });
 
