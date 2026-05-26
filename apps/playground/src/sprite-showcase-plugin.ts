@@ -1,4 +1,5 @@
-// Visual harness for Phase 8.1's sprite pipeline (ADR-0031).
+// Visual harness for Phase 8.1's sprite pipeline (ADR-0031) plus the
+// Phase 8.8 Z-aware batching path (ADR-0036).
 //
 // Spawns a 4×4 grid of `Sprite`s — half referencing a 16×16 checker image,
 // half using the `Images.WHITE` fallback path so each one is a tint-only
@@ -6,6 +7,15 @@
 // affine handles rotation; another subset uses `flipX` to verify the UV
 // flip path; a few use a `Rect` sub-region to verify atlas-ready UV
 // override.
+//
+// Bottom-right quadrant carries a Z-parallax sub-scene: five overlapping
+// sprites of the same checker image at Z = 10 / 5 / 0 / -5 / -10. Without
+// Phase 8.8 the five sprites collapsed into one batch sorted by the first
+// sprite's Z and the within-batch order was entity-spawn order — the wrong
+// answer for parallax. With the Z-aware sort, all five still batch into a
+// single draw (one image, one alpha bucket) but the per-instance order
+// matches back-to-front Z; the Z = -10 sprite (bottom-right tint) ends up
+// painting on top.
 
 import { quat, vec2, vec3, vec4 } from '@retro-engine/math';
 import type { Plugin } from '@retro-engine/engine';
@@ -38,6 +48,7 @@ interface Placement {
   flipY?: boolean;
   rect?: Rect;
   rotates?: boolean;
+  z?: number;
 }
 
 const placements = (): Placement[] => {
@@ -74,6 +85,32 @@ const placements = (): Placement[] => {
   ];
 };
 
+const parallaxPlacements = (): Placement[] => {
+  // Five overlapping checker sprites in the bottom-right quadrant, each
+  // offset on a diagonal so the staircase reads visually. All five share
+  // the checker image — they collapse into one (image, alphaBucket) batch.
+  // The within-batch order comes from the Phase 8.8 Z sort: Z=10 (farthest)
+  // draws first into the back; Z=-10 (nearest) draws last on top.
+  const baseX = 220;
+  const baseY = -180;
+  const step = 22;
+  const z = [10, 5, 0, -5, -10] as const;
+  const tints: readonly (readonly [number, number, number, number])[] = [
+    [0.95, 0.35, 0.35, 1], // red — Z=10, in the back
+    [0.95, 0.65, 0.35, 1], // orange — Z=5
+    [0.95, 0.95, 0.35, 1], // yellow — Z=0
+    [0.4, 0.9, 0.45, 1],   // green — Z=-5
+    [0.4, 0.45, 0.95, 1],  // blue — Z=-10, on top
+  ];
+  return z.map((zValue, i) => ({
+    position: [baseX - zValue * (step / 5), baseY + zValue * (step / 5)] as const,
+    size: [80, 80] as const,
+    color: tints[i]!,
+    usesChecker: true,
+    z: zValue,
+  }));
+};
+
 /**
  * Playground showcase: spawn a 4×4 grid of sprites that exercises the sprite
  * pipeline's tint / flip / rect / rotation / fallback-image paths. The
@@ -98,7 +135,8 @@ export const spriteShowcasePlugin: Plugin = (app) => {
         ),
       );
 
-      for (const place of placements()) {
+      const allPlacements = [...placements(), ...parallaxPlacements()];
+      for (const place of allPlacements) {
         const components: object[] = [
           new Sprite({
             ...(place.usesChecker ? { image: checker } : {}),
@@ -108,7 +146,7 @@ export const spriteShowcasePlugin: Plugin = (app) => {
             ...(place.flipY ? { flipY: true } : {}),
             ...(place.rect ? { rect: place.rect } : {}),
           }),
-          new Transform(vec3.create(place.position[0], place.position[1], 0)),
+          new Transform(vec3.create(place.position[0], place.position[1], place.z ?? 0)),
         ];
         if (place.rotates) components.push(new Spin());
         cmd.spawn(...components);
@@ -119,7 +157,9 @@ export const spriteShowcasePlugin: Plugin = (app) => {
           clearColor: ClearColorConfig.custom({ r: 0.05, g: 0.07, b: 0.1, a: 1 }),
         }),
       );
-      log.info('spawned 16 sprites (8 checker, 8 solid) — 4 rotating, 1 flipped, 1 rect-cropped');
+      log.info(
+        `spawned ${allPlacements.length} sprites (16-cell grid + 5 Z-parallax cluster) — 4 rotating, 1 flipped, 1 rect-cropped`,
+      );
     },
   );
 
