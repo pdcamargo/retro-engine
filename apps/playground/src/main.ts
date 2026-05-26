@@ -7,6 +7,7 @@ import { primitivesShowcasePlugin } from './primitives-showcase-plugin';
 import { shapesShowcasePlugin } from './shapes-showcase-plugin';
 import { sliceShowcasePlugin } from './slice-showcase-plugin';
 import { spriteShowcasePlugin } from './sprite-showcase-plugin';
+import { stressShowcasePlugin } from './stress-showcase-plugin';
 
 const canvas = document.getElementById('playground-canvas');
 if (!(canvas instanceof HTMLCanvasElement)) {
@@ -18,6 +19,7 @@ if (!(canvas instanceof HTMLCanvasElement)) {
 //   `?mode=atlas`   → Phase 8.2 texture-atlas showcase (ADR-0032).
 //   `?mode=sprites` → Phase 8.1 sprite pipeline showcase (ADR-0031).
 //   `?mode=shapes`  → Phase 8.7 Material2d showcase (ADR-0035).
+//   `?mode=stress`  → mixed-load FPS harness (size=small|medium|large).
 //   anything else   → Phase 7.5 primitives demo.
 // All demos stay discoverable from one bundle.
 const mode = new URLSearchParams(window.location.search).get('mode');
@@ -30,7 +32,9 @@ const showcase =
         ? spriteShowcasePlugin
         : mode === 'shapes'
           ? shapesShowcasePlugin
-          : primitivesShowcasePlugin;
+          : mode === 'stress'
+            ? stressShowcasePlugin
+            : primitivesShowcasePlugin;
 
 const renderer = createWebGPURenderer(canvas);
 const app = new App({
