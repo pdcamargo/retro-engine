@@ -12,6 +12,7 @@ export {
   SpritePreparedBatches,
 } from './sprite-batch';
 export { SpriteInstanceBuffer } from './sprite-instance-buffer';
+export { RetainedSpriteBuffer } from './sprite-prepare-retained';
 export type { SpriteKey, SpriteSpecializeContext } from './sprite-pipeline';
 export { SpritePipeline } from './sprite-pipeline';
 export { SpritePlugin } from './sprite-plugin';

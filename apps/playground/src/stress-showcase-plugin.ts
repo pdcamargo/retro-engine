@@ -76,6 +76,12 @@ const parseSize = (): SizePreset => {
   return 'small';
 };
 
+// `?retained=1` opts the sprite + mesh plugins into the change-gated retained
+// instance prepare (ADR-0039); omitted/`0` keeps the per-frame full-repack path.
+// A/B switch for comparing the two before the default flips.
+const parseRetained = (): boolean =>
+  new URLSearchParams(window.location.search).get('retained') === '1';
+
 // Deterministic PRNG so successive page loads see identical scatter; lets
 // the user re-run a size preset and compare FPS without scatter-noise being
 // a confound. mulberry32 is overkill but matches the engine's bench style.
@@ -185,16 +191,18 @@ export const stressShowcasePlugin: Plugin = (app) => {
   const log = app.logger.child('stress');
   const size = parseSize();
   const counts = COUNTS[size];
+  const retained = parseRetained();
+  log.info(`stress preset size=${size} retained=${retained}`);
 
-  const unlitPlugin = new MaterialPlugin(UnlitMaterial);
+  const unlitPlugin = new MaterialPlugin(UnlitMaterial, { retained });
   app.addPlugin(new UnlitMaterialPlugin());
   app.addPlugin(unlitPlugin);
 
-  const colorPlugin = new Material2dPlugin(ColorMaterial2d);
+  const colorPlugin = new Material2dPlugin(ColorMaterial2d, { retained });
   app.addPlugin(new ColorMaterial2dPlugin());
   app.addPlugin(colorPlugin);
 
-  app.addPlugin(new SpritePlugin());
+  app.addPlugin(new SpritePlugin({ retained }));
 
   app.insertResource(new FpsAccumulator());
 

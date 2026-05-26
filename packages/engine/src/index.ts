@@ -318,6 +318,7 @@ export {
   packSpriteInstance,
   Rect,
   resolveAnchor,
+  RetainedSpriteBuffer,
   SPRITE_INSTANCE_BYTE_SIZE,
   SPRITE_INSTANCE_FLOAT_COUNT,
   SPRITE_WGSL,

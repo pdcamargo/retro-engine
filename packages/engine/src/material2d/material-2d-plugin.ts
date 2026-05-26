@@ -1,4 +1,4 @@
-import type { Query as QueryHandle } from '@retro-engine/ecs';
+import type { ComponentType, Entity, Query as QueryHandle } from '@retro-engine/ecs';
 import type { Mat4 } from '@retro-engine/math';
 import type {
   BindGroupLayout,
@@ -19,8 +19,9 @@ import type { MaterialHandle } from '../material/materials';
 import { Materials } from '../material/materials';
 import { INSTANCE_LAYOUT } from '../material/instance-layout';
 import { MeshInstanceBuffer } from '../material/mesh-instance-buffer';
-import type { AlphaBucket, InstanceEntry } from '../material/instance-batching';
+import type { AlphaBucket, InstanceEntry, InstancedDrawPayload } from '../material/instance-batching';
 import { makeInstancedDraw, packInstancedBatches } from '../material/instance-batching';
+import { prepareMeshRetained, RetainedMeshBuffer } from '../material/mesh-prepare-retained';
 import type { PreparedMaterial } from '../material/prepare-bind-group';
 import {
   prepareBindGroup,
@@ -49,8 +50,14 @@ import type {
 } from './material-2d';
 import { MeshMaterial2d } from './mesh-material-2d';
 
-/** Optional configuration for {@link Material2dPlugin}. None for Phase 8.7. */
-export type Material2dPluginOptions = Record<string, never>;
+/** Optional configuration for {@link Material2dPlugin}. */
+export interface Material2dPluginOptions {
+  /**
+   * Use the retained, change-gated instance prepare path (incremental uploads)
+   * instead of the per-frame full repack. Defaults to `false`.
+   */
+  readonly retained?: boolean;
+}
 
 /**
  * Engine plugin owning one Material2d type's data + draw pipeline.
@@ -96,9 +103,11 @@ export class Material2dPlugin<M extends Material2d> implements PluginObject {
   readonly RenderMaterials2d: new () => RenderMaterials<M>;
   /** Per-type subclass of {@link MeshMaterial2d} — spawn `new plugin.MeshMaterial2d(handle)`. */
   readonly MeshMaterial2d: new (handle: MaterialHandle<M>) => MeshMaterial2d<M>;
+  private readonly retained: boolean;
 
-  constructor(materialClass: Material2dCtor<M>, _options?: Material2dPluginOptions) {
+  constructor(materialClass: Material2dCtor<M>, options?: Material2dPluginOptions) {
     this.materialClass = materialClass;
+    this.retained = options?.retained ?? false;
 
     const MaterialsBase = Materials as unknown as new () => Materials<M>;
     const MaterialsSubclass = class extends MaterialsBase {};
@@ -170,8 +179,13 @@ export class Material2dPlugin<M extends Material2d> implements PluginObject {
           renderImages as RenderImages,
         );
       },
-      { set: RenderSet.Prepare, after: ['image-prepare'] },
+      { set: RenderSet.Prepare, label: 'material-2d-prepare', after: ['image-prepare'] },
     );
+
+    if (this.retained) {
+      this.registerRetained(app, state, MeshMaterialCtor, RenderMaterialsCtor);
+      return;
+    }
 
     // Queue: iterate visible (Mesh2d, MeshMaterial2d<M>, GlobalTransform,
     // ViewVisibility) entities × active 2D cameras; batch by (mesh, material),
@@ -210,6 +224,62 @@ export class Material2dPlugin<M extends Material2d> implements PluginObject {
           cameras as unknown as SortedCameras,
           renderMaterials as unknown as RenderMaterials<M>,
           meshes as unknown as Meshes,
+          renderMeshes as unknown as RenderMeshes,
+          allocator as unknown as MeshAllocator,
+          phases,
+          viewBindGroupCache as unknown as ViewBindGroupCache,
+        );
+      },
+      { set: RenderSet.Queue },
+    );
+  }
+
+  /**
+   * Register the retained, change-gated instance prepare + a thin queue that
+   * emits phase items from the per-camera ordered buffers.
+   */
+  private registerRetained(
+    app: App,
+    state: Material2dPluginState<M>,
+    MeshMaterialCtor: new (h: MaterialHandle<M>) => MeshMaterial2d<M>,
+    RenderMaterialsCtor: new () => RenderMaterials<M>,
+  ): void {
+    app.addSystem(
+      'render',
+      [Res(SortedCameras), Res(RenderMaterialsCtor), Res(RenderMeshes), Res(MeshAllocator)],
+      (cameras, renderMaterials, renderMeshes, allocator) => {
+        state.ensureInitialised(app);
+        prepareMeshRetained(app.world, app.renderer, state.retainedBuffer, {
+          meshType: Mesh2d as unknown as ComponentType,
+          materialType: MeshMaterialCtor as unknown as ComponentType,
+          cameras: cameras as unknown as SortedCameras,
+          subGraphLabel: Core2dLabel,
+          deps: {
+            renderMeshes: renderMeshes as unknown as RenderMeshes,
+            allocator: allocator as unknown as MeshAllocator,
+            renderMaterials: renderMaterials as unknown as RenderMaterials<M>,
+            mainWorldMaterials: app.getResource(this.Materials2d),
+          },
+        });
+      },
+      { set: RenderSet.Prepare, label: 'material-2d-instance-prepare', after: ['material-2d-prepare'] },
+    );
+
+    app.addSystem(
+      'render',
+      [
+        Res(SortedCameras),
+        Res(RenderMaterialsCtor),
+        Res(RenderMeshes),
+        Res(MeshAllocator),
+        ResMut(ViewPhases2d),
+        Res(ViewBindGroupCache),
+      ],
+      (cameras, renderMaterials, renderMeshes, allocator, phases, viewBindGroupCache) => {
+        state.ensureInitialised(app);
+        state.queueMaterialsRetained(
+          cameras as unknown as SortedCameras,
+          renderMaterials as unknown as RenderMaterials<M>,
           renderMeshes as unknown as RenderMeshes,
           allocator as unknown as MeshAllocator,
           phases,
@@ -258,6 +328,7 @@ class Material2dPluginState<M extends Material2d> {
   pipelineLayout: PipelineLayout | undefined;
   specialized!: SpecializedRenderPipelines<SpecializeContext2d>;
   readonly instanceBuffer = new MeshInstanceBuffer();
+  readonly retainedBuffer = new RetainedMeshBuffer<M>(Material2dPluginState.depthOrderedBuckets);
   scratch = new ArrayBuffer(1024);
   app!: App;
   initialised = false;
@@ -457,6 +528,67 @@ class Material2dPluginState<M extends Material2d> {
         phases.pushAlphaMask(batch.cameraEntity, item);
       } else {
         phases.pushTransparent(batch.cameraEntity, item);
+      }
+    }
+  }
+
+  /**
+   * Retained-path queue: emit one phase item per batch in each Core2d camera's
+   * retained ordered buffer. Payloads are resolved per batch — O(batches), not
+   * O(instances) — and the instance bytes come from the retained buffer the
+   * prepare step maintains.
+   */
+  queueMaterialsRetained(
+    cameras: SortedCameras,
+    renderMaterials: RenderMaterials<M>,
+    renderMeshes: RenderMeshes,
+    allocator: MeshAllocator,
+    phases: ViewPhases2d,
+    viewBindGroupCache: ViewBindGroupCache,
+  ): void {
+    if (viewBindGroupCache.layout === undefined) return;
+    if (cameras.views.length === 0) return;
+
+    for (const view of cameras.views) {
+      if (view.subGraph !== Core2dLabel) continue;
+      const index = this.retainedBuffer.indexByCamera.get(view.sourceEntity as Entity);
+      if (index === undefined) continue;
+      const buffer = index.ordered.buffer;
+      if (buffer === undefined) continue;
+      const surfaceFormat = view.target.format;
+
+      for (const batch of index.batches) {
+        const { meshHandle, materialHandle, bucket, depth } = batch.key;
+        const renderMesh = renderMeshes.get(meshHandle);
+        if (renderMesh === undefined) continue;
+        const vertexSlice = allocator.vertexSlice(meshHandle);
+        if (vertexSlice === undefined) continue;
+        let indexSlice: AllocatorSlice | undefined;
+        if (renderMesh.bufferInfo.kind === 'indexed') {
+          indexSlice = allocator.indexSlice(meshHandle);
+          if (indexSlice === undefined) continue;
+        }
+        const prepared = renderMaterials.get(materialHandle);
+        if (prepared === undefined) continue;
+
+        const key: MaterialPipelineKey2d = { surfaceFormat, msaaSamples: 1, hdr: false, alphaBucket: bucket };
+        const pipeline = this.specialized.get({ key, layout: renderMesh.layout.layout });
+        const payload: InstancedDrawPayload = {
+          pipeline,
+          materialBindGroup: prepared.bindGroup,
+          vertexSlice,
+          indexSlice,
+          renderMesh,
+        };
+        const draw = makeInstancedDraw(payload, buffer, batch.firstInstance, batch.count);
+        const item: PhaseItem2d = { sourceEntity: view.sourceEntity, sortDepth: depth, draw };
+        if (bucket === 'opaque') {
+          phases.pushOpaque(view.sourceEntity, item);
+        } else if (bucket === 'mask') {
+          phases.pushAlphaMask(view.sourceEntity, item);
+        } else {
+          phases.pushTransparent(view.sourceEntity, item);
+        }
       }
     }
   }

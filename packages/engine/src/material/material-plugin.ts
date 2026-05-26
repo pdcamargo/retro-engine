@@ -1,4 +1,4 @@
-import type { Query as QueryHandle } from '@retro-engine/ecs';
+import type { ComponentType, Entity, Query as QueryHandle } from '@retro-engine/ecs';
 import type { Mat4 } from '@retro-engine/math';
 import type {
   BindGroupLayout,
@@ -18,6 +18,7 @@ import type { AllocatorSlice, MeshHandle } from '../mesh';
 import { MeshAllocator, Meshes, Mesh3d, RenderMeshes } from '../mesh';
 import type { PluginObject } from '../plugin';
 import { RenderSet } from '../render-set';
+import { Core3dLabel } from '../render-graph/core-3d';
 import type { PhaseItem3d } from '../render-graph/phase-3d';
 import { ViewPhases3d } from '../render-graph/phase-3d';
 import { PipelineCache } from '../shader/pipeline-cache';
@@ -36,8 +37,9 @@ import { Materials } from './materials';
 import { MeshMaterial3d } from './mesh-material-3d';
 import { INSTANCE_LAYOUT } from './instance-layout';
 import { MeshInstanceBuffer } from './mesh-instance-buffer';
-import type { AlphaBucket, InstanceEntry } from './instance-batching';
+import type { AlphaBucket, InstanceEntry, InstancedDrawPayload } from './instance-batching';
 import { makeInstancedDraw, packInstancedBatches } from './instance-batching';
+import { prepareMeshRetained, RetainedMeshBuffer } from './mesh-prepare-retained';
 import type { PreparedMaterial } from './prepare-bind-group';
 import { prepareBindGroup, schemaToBindGroupLayout } from './prepare-bind-group';
 import { RenderMaterials } from './render-materials';
@@ -61,8 +63,14 @@ export interface MaterialCtor<M extends Material> {
   ): void;
 }
 
-/** Optional configuration for {@link MaterialPlugin}. None for Phase 7. */
-export type MaterialPluginOptions = Record<string, never>;
+/** Optional configuration for {@link MaterialPlugin}. */
+export interface MaterialPluginOptions {
+  /**
+   * Use the retained, change-gated instance prepare path (incremental uploads)
+   * instead of the per-frame full repack. Defaults to `false`.
+   */
+  readonly retained?: boolean;
+}
 
 /**
  * Engine plugin owning one material type's data + draw pipeline.
@@ -105,9 +113,11 @@ export class MaterialPlugin<M extends Material> implements PluginObject {
   readonly RenderMaterials: new () => RenderMaterials<M>;
   /** Per-type subclass of {@link MeshMaterial3d} — spawn `new plugin.MeshMaterial3d(handle)`. */
   readonly MeshMaterial3d: new (handle: MaterialHandle<M>) => MeshMaterial3d<M>;
+  private readonly retained: boolean;
 
-  constructor(materialClass: MaterialCtor<M>, _options?: MaterialPluginOptions) {
+  constructor(materialClass: MaterialCtor<M>, options?: MaterialPluginOptions) {
     this.materialClass = materialClass;
+    this.retained = options?.retained ?? false;
 
     const MaterialsBase = Materials as unknown as new () => Materials<M>;
     const MaterialsSubclass = class extends MaterialsBase {};
@@ -183,8 +193,13 @@ export class MaterialPlugin<M extends Material> implements PluginObject {
           renderImages as RenderImages,
         );
       },
-      { set: RenderSet.Prepare, after: ['image-prepare'] },
+      { set: RenderSet.Prepare, label: 'material-prepare', after: ['image-prepare'] },
     );
+
+    if (this.retained) {
+      this.registerRetained(app, state, MeshMaterialCtor, RenderMaterialsCtor);
+      return;
+    }
 
     // Queue: iterate visible (Mesh3d, MeshMaterial3d<M>, GlobalTransform,
     // ViewVisibility) entities × active cameras; batch by (mesh, material);
@@ -232,6 +247,63 @@ export class MaterialPlugin<M extends Material> implements PluginObject {
       { set: RenderSet.Queue },
     );
   }
+
+  /**
+   * Register the retained, change-gated instance prepare + a thin queue that
+   * emits phase items from the per-camera ordered buffers.
+   */
+  private registerRetained(
+    app: App,
+    state: MaterialPluginState<M>,
+    MeshMaterialCtor: new (h: MaterialHandle<M>) => MeshMaterial3d<M>,
+    RenderMaterialsCtor: new () => RenderMaterials<M>,
+  ): void {
+    app.addSystem(
+      'render',
+      [Res(SortedCameras), Res(RenderMaterialsCtor), Res(RenderMeshes), Res(MeshAllocator)],
+      (cameras, renderMaterials, renderMeshes, allocator) => {
+        state.ensureInitialised(app);
+        prepareMeshRetained(app.world, app.renderer, state.retainedBuffer, {
+          meshType: Mesh3d as unknown as ComponentType,
+          materialType: MeshMaterialCtor as unknown as ComponentType,
+          cameras: cameras as unknown as SortedCameras,
+          subGraphLabel: Core3dLabel,
+          deps: {
+            renderMeshes: renderMeshes as unknown as RenderMeshes,
+            allocator: allocator as unknown as MeshAllocator,
+            renderMaterials: renderMaterials as unknown as RenderMaterials<M>,
+            mainWorldMaterials: app.getResource(this.Materials),
+          },
+        });
+      },
+      { set: RenderSet.Prepare, label: 'material-instance-prepare', after: ['material-prepare'] },
+    );
+
+    app.addSystem(
+      'render',
+      [
+        Res(SortedCameras),
+        Res(RenderMaterialsCtor),
+        Res(RenderMeshes),
+        Res(MeshAllocator),
+        ResMut(ViewPhases3d),
+        Res(ViewBindGroupCache),
+      ],
+      (cameras, renderMaterials, renderMeshes, allocator, phases, viewBindGroupCache) => {
+        state.ensureInitialised(app);
+        state.queueMaterialsRetained(
+          app,
+          cameras as unknown as SortedCameras,
+          renderMaterials as unknown as RenderMaterials<M>,
+          renderMeshes as unknown as RenderMeshes,
+          allocator as unknown as MeshAllocator,
+          phases,
+          viewBindGroupCache as unknown as ViewBindGroupCache,
+        );
+      },
+      { set: RenderSet.Queue },
+    );
+  }
 }
 
 interface SpecializeContext {
@@ -264,6 +336,7 @@ class MaterialPluginState<M extends Material> {
   pipelineLayout: PipelineLayout | undefined;
   specialized!: SpecializedRenderPipelines<SpecializeContext>;
   readonly instanceBuffer = new MeshInstanceBuffer();
+  readonly retainedBuffer = new RetainedMeshBuffer<M>(MaterialPluginState.depthOrderedBuckets);
   scratch = new ArrayBuffer(1024);
   app!: App;
   initialised = false;
@@ -479,6 +552,79 @@ class MaterialPluginState<M extends Material> {
         phases.pushTransparent(batch.cameraEntity, item);
       } else {
         phases.pushAlphaMask(batch.cameraEntity, item);
+      }
+    }
+  }
+
+  /**
+   * Retained-path queue: emit one phase item per batch in each Core3d camera's
+   * retained ordered buffer. Payloads (pipeline, bind group, mesh slices) are
+   * resolved per batch — O(batches), not O(instances) — and the instance bytes
+   * come from the retained buffer the prepare step maintains.
+   */
+  queueMaterialsRetained(
+    app: App,
+    cameras: SortedCameras,
+    renderMaterials: RenderMaterials<M>,
+    renderMeshes: RenderMeshes,
+    allocator: MeshAllocator,
+    phases: ViewPhases3d,
+    viewBindGroupCache: ViewBindGroupCache,
+  ): void {
+    if (viewBindGroupCache.layout === undefined) return;
+    if (cameras.views.length === 0) return;
+    const mainWorldMaterials = app.getResource(this.plugin.Materials) as Materials<M> | undefined;
+
+    for (const view of cameras.views) {
+      if (view.subGraph !== Core3dLabel) continue;
+      const index = this.retainedBuffer.indexByCamera.get(view.sourceEntity as Entity);
+      if (index === undefined) continue;
+      const buffer = index.ordered.buffer;
+      if (buffer === undefined) continue;
+      const colorFormat = view.target.format;
+      const depthFormat = view.depth?.format;
+
+      for (const batch of index.batches) {
+        const { meshHandle, materialHandle, bucket, depth } = batch.key;
+        const renderMesh = renderMeshes.get(meshHandle);
+        if (renderMesh === undefined) continue;
+        const vertexSlice = allocator.vertexSlice(meshHandle);
+        if (vertexSlice === undefined) continue;
+        let indexSlice: AllocatorSlice | undefined;
+        if (renderMesh.bufferInfo.kind === 'indexed') {
+          indexSlice = allocator.indexSlice(meshHandle);
+          if (indexSlice === undefined) continue;
+        }
+        const prepared = renderMaterials.get(materialHandle);
+        if (prepared === undefined) continue;
+
+        const materialInstance = mainWorldMaterials?.get(materialHandle);
+        const alphaMode = materialInstance?.alphaMode?.() ?? 'opaque';
+        const depthBias = materialInstance?.depthBias?.() ?? 0;
+        const layout = renderMesh.layout.layout;
+        const key: MaterialPipelineKey = {
+          msaaSamples: 1,
+          hdr: false,
+          vertexLayoutDigest: vertexLayoutDigestFor(layout),
+          alphaMode,
+        };
+        const pipeline = this.specialized.get({ key, colorFormat, depthFormat, depthBias, layout });
+        const payload: InstancedDrawPayload = {
+          pipeline,
+          materialBindGroup: prepared.bindGroup,
+          vertexSlice,
+          indexSlice,
+          renderMesh,
+        };
+        const draw = makeInstancedDraw(payload, buffer, batch.firstInstance, batch.count);
+        const item: PhaseItem3d = { sourceEntity: view.sourceEntity, sortDepth: depth, draw };
+        if (bucket === 'opaque') {
+          phases.pushOpaque(view.sourceEntity, item);
+        } else if (bucket === 'blend') {
+          phases.pushTransparent(view.sourceEntity, item);
+        } else {
+          phases.pushAlphaMask(view.sourceEntity, item);
+        }
       }
     }
   }

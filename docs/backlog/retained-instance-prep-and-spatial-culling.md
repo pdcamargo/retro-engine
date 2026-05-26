@@ -2,6 +2,20 @@
 
 - **Created:** 2026-05-26
 
+## Status
+
+- **Item 1 (retained prep): implemented, opt-in, not yet activated.** Sealed by
+  [ADR-0039](../adr/ADR-0039-retained-instance-preparation.md). Shipped behind a
+  `{ retained }` flag on `SpritePlugin` / `MaterialPlugin` / `Material2dPlugin`
+  (default `false`), byte-parity-tested against the per-frame path, with a
+  full-rebuild-vs-retained bench. **Pending:** re-trace the "large" preset at
+  fullscreen + small window, then flip the defaults and retire the legacy path
+  (the trace at capture time was 100% CPU-bound; the re-trace confirms the new
+  wall before Item 2).
+- **Item 2 (culling): direction confirmed as a spatial grid/BVH** (the scalable,
+  moving-camera-ready structure), not the cheaper change-gated cull. Scope
+  sealed from the post-Item-1 re-trace in its own ADR.
+
 ## Context
 
 After GPU instancing landed (ADR-0038), a Performance trace of the

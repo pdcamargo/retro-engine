@@ -29,6 +29,11 @@ import {
   type PerSpriteEntry,
   sortAndEmitSpriteBatches,
 } from './sprite-batch-prepare';
+import {
+  prepareSpritesRetained,
+  queueSpritesRetained,
+  RetainedSpriteBuffer,
+} from './sprite-prepare-retained';
 import { SpriteInstanceBuffer } from './sprite-instance-buffer';
 import { SpritePipeline } from './sprite-pipeline';
 import { SPRITE_WGSL } from './sprite.wgsl';
@@ -67,6 +72,17 @@ import { TextureAtlasLayouts } from './texture-atlas-layouts';
  * same `ViewPhases2d` resource.
  */
 export class SpritePlugin implements PluginObject {
+  private readonly retained: boolean;
+
+  /**
+   * @param options.retained Use the retained, change-gated prepare path
+   *   (incremental instance uploads) instead of the per-frame full repack.
+   *   Defaults to `false`.
+   */
+  constructor(options?: { readonly retained?: boolean }) {
+    this.retained = options?.retained ?? false;
+  }
+
   name(): string {
     return 'SpritePlugin';
   }
@@ -84,11 +100,17 @@ export class SpritePlugin implements PluginObject {
     if (app.getResource(SpritePipeline) === undefined) {
       app.insertResource(new SpritePipeline());
     }
-    if (app.getResource(SpriteInstanceBuffer) === undefined) {
-      app.insertResource(new SpriteInstanceBuffer());
-    }
-    if (app.getResource(SpritePreparedBatches) === undefined) {
-      app.insertResource(new SpritePreparedBatches());
+    if (this.retained) {
+      if (app.getResource(RetainedSpriteBuffer) === undefined) {
+        app.insertResource(new RetainedSpriteBuffer());
+      }
+    } else {
+      if (app.getResource(SpriteInstanceBuffer) === undefined) {
+        app.insertResource(new SpriteInstanceBuffer());
+      }
+      if (app.getResource(SpritePreparedBatches) === undefined) {
+        app.insertResource(new SpritePreparedBatches());
+      }
     }
     if (app.getResource(ViewPhases2d) === undefined) {
       app.insertResource(new ViewPhases2d());
@@ -171,6 +193,11 @@ export class SpritePlugin implements PluginObject {
       { label: 'sprite-bounds', after: ['atlas-sync'] },
     );
 
+    if (this.retained) {
+      this.registerRetained(app);
+      return;
+    }
+
     type SpriteQuery = QueryHandle<
       readonly [typeof Sprite, typeof GlobalTransform, typeof ViewVisibility]
     >;
@@ -240,6 +267,49 @@ export class SpritePlugin implements PluginObject {
           instanceBuffer as SpriteInstanceBuffer,
           prepared as SpritePreparedBatches,
           phases,
+        );
+      },
+      { set: RenderSet.Queue, label: 'sprite-queue', after: ['sprite-prepare'] },
+    );
+  }
+
+  /** Register the retained, change-gated prepare + queue render systems. */
+  private registerRetained(app: App): void {
+    app.addSystem(
+      'render',
+      [Res(Images), Res(RenderImages), ResMut(SpritePipeline), ResMut(RetainedSpriteBuffer)],
+      (images, renderImages, pipeline, retained) => {
+        if (!(pipeline as SpritePipeline).ensureInitialised(app)) return;
+        prepareSpritesRetained(
+          app.world,
+          app.renderer,
+          retained as RetainedSpriteBuffer,
+          images as Images,
+          renderImages as RenderImages,
+        );
+      },
+      { set: RenderSet.Prepare, label: 'sprite-prepare', after: ['image-prepare'] },
+    );
+
+    app.addSystem(
+      'render',
+      [
+        Res(SortedCameras),
+        Res(Images),
+        Res(RenderImages),
+        ResMut(SpritePipeline),
+        ResMut(RetainedSpriteBuffer),
+        ResMut(ViewPhases2d),
+      ],
+      (cameras, images, renderImages, pipeline, retained, phases) => {
+        queueSpritesRetained(
+          app,
+          cameras as unknown as SortedCameras,
+          images as Images,
+          renderImages as RenderImages,
+          pipeline as SpritePipeline,
+          retained as RetainedSpriteBuffer,
+          phases as ViewPhases2d,
         );
       },
       { set: RenderSet.Queue, label: 'sprite-queue', after: ['sprite-prepare'] },
