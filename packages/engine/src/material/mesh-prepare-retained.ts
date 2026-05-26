@@ -2,6 +2,7 @@ import type { ComponentType, Entity, World } from '@retro-engine/ecs';
 import type { Mat4 } from '@retro-engine/math';
 import type { Renderer } from '@retro-engine/renderer-core';
 
+import { Camera } from '../camera/camera';
 import type { SortedCameras } from '../camera/sorted-cameras';
 import { SortedSlotIndex } from '../instance/retained-draw-order';
 import { RetainedInstanceBuffer } from '../instance/retained-instance-buffer';
@@ -177,10 +178,16 @@ export const prepareMeshRetained = <M extends Material>(
   packEntities.length = 0;
   packMatrices.length = 0;
 
-  // 1. Changed sets: transforms (incl. cameras) for byte/depth, and (mesh,
-  //    material) handle changes for re-grouping.
+  // 1. Changed sets, each scoped to the rows it must touch — NOT a full-world
+  //    `Changed<GlobalTransform>` scan. Renderable transforms (byte repack +
+  //    depth) and (mesh, material) handle changes (re-grouping) scope to this
+  //    path's archetype; camera moves (depth recompute) scope to camera
+  //    entities. This keeps each scan O(this path's entities), so the 3D and 2D
+  //    prepares no longer each walk every transform in the scene.
   const changedTransforms = new Set<Entity>();
-  for (const row of world.query([GlobalTransform], { changed: [GlobalTransform] }, since).entries()) {
+  for (const row of world
+    .query([meshType, materialType, GlobalTransform, ViewVisibility], { changed: [GlobalTransform] }, since)
+    .entries()) {
     changedTransforms.add(row[0] as Entity);
   }
   const changedGroup = new Set<Entity>();
@@ -193,6 +200,10 @@ export const prepareMeshRetained = <M extends Material>(
     .query([meshType, materialType, GlobalTransform, ViewVisibility], { changed: [materialType] }, since)
     .entries()) {
     changedGroup.add(row[0] as Entity);
+  }
+  const movedCameras = new Set<Entity>();
+  for (const row of world.query([Camera, GlobalTransform], { changed: [GlobalTransform] }, since).entries()) {
+    movedCameras.add(row[0] as Entity);
   }
 
   // 2. Structural walk (once, camera-independent): allocate slots, capture the
@@ -263,7 +274,7 @@ export const prepareMeshRetained = <M extends Material>(
     const v = view.viewMatrix as Float32Array;
     const index = retained.indexFor(camera);
 
-    if (changedTransforms.has(camera)) {
+    if (movedCameras.has(camera)) {
       index.recomputeKeys((k) => ({ ...k, depth: viewDepth(v, k.worldX, k.worldY, k.worldZ) }));
     }
 
