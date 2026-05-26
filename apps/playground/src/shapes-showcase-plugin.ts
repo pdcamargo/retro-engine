@@ -7,9 +7,11 @@
 //   varying hues. Demonstrates the plain `Material2d → Opaque2d` path.
 // - Two blend-mode columns (alpha < 1, `alphaMode: 'blend'`) that overlap
 //   each other and the grid. Exercises the `Transparent2d` path.
-// - One mask-mode shape (alpha just below the 0.5 cutoff in some pixels via
-//   a sub-1 color.a value) — visually a hard-edged disc, demonstrates the
-//   previously-empty `AlphaMask2d` slot lighting up.
+// - Two side-by-side mask-mode discs at `alphaMode: { kind: 'mask',
+//   cutoff: 0.5 }`. Left disc's color alpha is 0.6 (≥ cutoff → renders);
+//   right disc's color alpha is 0.4 (< cutoff → every fragment discarded
+//   → invisible). One disc rendered where two were declared proves the
+//   `AlphaMask2d` phase's discard path is engaged, not just routed.
 // - Z-parallax sub-scene: three overlapping squares at Z=-10 / 0 / 10.
 //   With the Phase 8.7 Core2d sort fix the Z=-10 square draws last (on top
 //   of Z=0, on top of Z=10); pre-fix the order would have been reversed.
@@ -112,15 +114,27 @@ const blendOverlayPlacements = (): Placement[] => {
   ];
 };
 
-const maskPlacement = (): Placement => ({
-  meshable: new Circle({ radius: 40 }),
-  position: [0, 200, 0],
-  // alpha = 0.6 ≥ cutoff 0.5 ⇒ the disc renders. (A swap to 0.4 would
-  // discard every fragment — the disc would vanish, proving the discard
-  // path is engaged.)
-  color: [1.0, 0.9, 0.4, 0.6],
-  alphaMode: { kind: 'mask', cutoff: 0.5 },
-});
+const maskPlacements = (): Placement[] => [
+  // Two side-by-side discs, both `alphaMode: { kind: 'mask', cutoff: 0.5 }`.
+  // ColorMaterial2d's shader is uniform-color, so the discard either fires
+  // for every fragment or none — the visible pair makes that binary
+  // outcome obvious. Left disc has alpha 0.6 ≥ 0.5 cutoff and renders;
+  // right disc has alpha 0.4 < 0.5 cutoff and is entirely discarded (no
+  // pixels survive the fragment), so the viewer sees one disc where two
+  // were declared. Proves the AlphaMask2d phase's discard path engaged.
+  {
+    meshable: new Circle({ radius: 40 }),
+    position: [-50, 200, 0],
+    color: [1.0, 0.9, 0.4, 0.6],
+    alphaMode: { kind: 'mask', cutoff: 0.5 },
+  },
+  {
+    meshable: new Circle({ radius: 40 }),
+    position: [50, 200, 0],
+    color: [1.0, 0.4, 0.4, 0.4],
+    alphaMode: { kind: 'mask', cutoff: 0.5 },
+  },
+];
 
 const parallaxPlacements = (): Placement[] => {
   // Three overlapping rectangles in the bottom-right quadrant, each offset
@@ -165,7 +179,7 @@ export const shapesShowcasePlugin: Plugin = (app) => {
       const all: Placement[] = [
         ...gridPlacements(),
         ...blendOverlayPlacements(),
-        maskPlacement(),
+        ...maskPlacements(),
         ...parallaxPlacements(),
       ];
 
