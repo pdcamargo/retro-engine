@@ -1,6 +1,8 @@
+import type { Entity } from '@retro-engine/ecs';
 import type { ColorAttachment, RenderPassDescriptor } from '@retro-engine/renderer-core';
 
 import type { RenderContext } from '../index';
+import { ViewLight2dTargets } from '../light2d/light-2d-targets';
 
 import type { NodeRunContext, ViewNode } from './node';
 import { ViewPhases2d } from './phase-2d';
@@ -53,8 +55,17 @@ export const OpaquePass2dNode: ViewNode = {
       );
     }
     const phases = ctx.app.getResource(ViewPhases2d);
+    // When a Light2dPlugin is installed and has allocated a baseColor target
+    // for this camera, redirect the opaque pass into that intermediate
+    // texture so the composite pass can multiply it by the accumulated
+    // lighting before the result reaches the camera's actual color target.
+    // Absent the lighting plugin (no resource, or no entry for this
+    // camera), the pass writes directly to `view.target.view` exactly as
+    // it did pre-Phase-9.
+    const targets = ctx.app.getResource(ViewLight2dTargets);
+    const colorView = targets?.perCamera.get(view.sourceEntity as Entity)?.baseColorView ?? view.target.view;
     const colorAttachment: ColorAttachment = {
-      view: view.target.view,
+      view: colorView,
       loadOp: view.loadOp,
       storeOp: 'store',
       ...(view.clearColor !== undefined ? { clearValue: view.clearColor } : {}),
@@ -68,7 +79,7 @@ export const OpaquePass2dNode: ViewNode = {
     const renderCtx: RenderContext = {
       encoder,
       pass,
-      surfaceView: view.target.view,
+      surfaceView: colorView,
       camera: view,
     };
     if (phases !== undefined) {

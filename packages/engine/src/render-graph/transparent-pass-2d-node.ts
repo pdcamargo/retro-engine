@@ -1,6 +1,8 @@
+import type { Entity } from '@retro-engine/ecs';
 import type { ColorAttachment, RenderPassDescriptor } from '@retro-engine/renderer-core';
 
 import type { RenderContext } from '../index';
+import { ViewLight2dTargets } from '../light2d/light-2d-targets';
 
 import type { NodeRunContext, ViewNode } from './node';
 import { ViewPhases2d } from './phase-2d';
@@ -45,8 +47,14 @@ export const TransparentPass2dNode: ViewNode = {
     const transparent = phases?.transparent.get(view.sourceEntity);
     if (transparent === undefined || transparent.length === 0) return;
 
+    // Mirror the opaque pass's lighting-aware target redirect: when a
+    // Light2dPlugin has allocated a baseColor texture for this camera,
+    // the transparent pass composites on top of the opaque pass's
+    // intermediate output rather than the surface.
+    const targets = ctx.app.getResource(ViewLight2dTargets);
+    const colorView = targets?.perCamera.get(view.sourceEntity as Entity)?.baseColorView ?? view.target.view;
     const colorAttachment: ColorAttachment = {
-      view: view.target.view,
+      view: colorView,
       loadOp: 'load',
       storeOp: 'store',
     };
@@ -59,7 +67,7 @@ export const TransparentPass2dNode: ViewNode = {
     const renderCtx: RenderContext = {
       encoder,
       pass,
-      surfaceView: view.target.view,
+      surfaceView: colorView,
       camera: view,
     };
     transparent.sort((a, b) => b.sortDepth - a.sortDepth);

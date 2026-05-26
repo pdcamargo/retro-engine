@@ -13,6 +13,14 @@ export { buildCore2dSubGraph, Core2dLabel } from './core-2d';
 export { buildCore3dSubGraph, Core3dLabel } from './core-3d';
 export { CameraDriverLabel, CameraDriverNode } from './camera-driver-node';
 export { MainPassLabel, MainPassNode } from './main-pass-node';
+export {
+  Light2dAccumulationPass2dLabel,
+  Light2dAccumulationPass2dNode,
+} from './light2d-accumulation-pass-2d-node';
+export {
+  Light2dCompositePass2dLabel,
+  Light2dCompositePass2dNode,
+} from './light2d-composite-pass-2d-node';
 export { OpaquePass2dLabel, OpaquePass2dNode } from './opaque-pass-2d-node';
 export { OpaquePass3dLabel, OpaquePass3dNode } from './opaque-pass-3d-node';
 export {

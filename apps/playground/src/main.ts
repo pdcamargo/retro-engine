@@ -2,6 +2,7 @@ import { App } from '@retro-engine/engine';
 import { createWebGPURenderer } from '@retro-engine/renderer-webgpu';
 
 import { atlasShowcasePlugin } from './atlas-showcase-plugin';
+import { lightsShowcasePlugin } from './lights-showcase-plugin';
 import { LoggingPlugin } from './logging-plugin';
 import { primitivesShowcasePlugin } from './primitives-showcase-plugin';
 import { shapesShowcasePlugin } from './shapes-showcase-plugin';
@@ -20,6 +21,7 @@ if (!(canvas instanceof HTMLCanvasElement)) {
 //   `?mode=sprites` → Phase 8.1 sprite pipeline showcase (ADR-0031).
 //   `?mode=shapes`  → Phase 8.7 Material2d showcase (ADR-0035).
 //   `?mode=stress`  → mixed-load FPS harness (size=small|medium|large).
+//   `?mode=lights`  → Phase 9.1 PointLight2d showcase (ADR-0037).
 //   anything else   → Phase 7.5 primitives demo.
 // All demos stay discoverable from one bundle.
 const mode = new URLSearchParams(window.location.search).get('mode');
@@ -34,7 +36,9 @@ const showcase =
           ? shapesShowcasePlugin
           : mode === 'stress'
             ? stressShowcasePlugin
-            : primitivesShowcasePlugin;
+            : mode === 'lights'
+              ? lightsShowcasePlugin
+              : primitivesShowcasePlugin;
 
 const renderer = createWebGPURenderer(canvas);
 const app = new App({

@@ -277,6 +277,10 @@ export {
   createLabel,
   EMPTY_SLOT_VALUES,
   isViewNode,
+  Light2dAccumulationPass2dLabel,
+  Light2dAccumulationPass2dNode,
+  Light2dCompositePass2dLabel,
+  Light2dCompositePass2dNode,
   MainPassLabel,
   MainPassNode,
   OpaquePass2dLabel,
@@ -332,6 +336,29 @@ export {
   TextureAtlasLayouts,
   TextureSlicer,
 } from './sprite';
+export type {
+  Light2dBatch,
+  Light2dCameraTargets,
+  Light2dCompositeKey,
+  Light2dCompositeMode,
+  PointLight2dOptions,
+} from './light2d';
+export {
+  LIGHT2D_ACCUM_FORMAT,
+  LIGHT2D_ACCUMULATION_WGSL,
+  LIGHT2D_COMPOSITE_WGSL,
+  LIGHT2D_INSTANCE_BYTE_SIZE,
+  LIGHT2D_INSTANCE_FLOAT_COUNT,
+  Light2dInstanceBuffer,
+  Light2dPipeline,
+  Light2dPlugin,
+  Light2dPreparedBatches,
+  Light2dSettings,
+  packLightInstance,
+  PointLight2d,
+  prepareLight2dTargets,
+  ViewLight2dTargets,
+} from './light2d';
 
 /**
  * Named stage in the schedule — when a system runs within a frame.

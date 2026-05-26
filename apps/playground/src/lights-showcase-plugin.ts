@@ -1,0 +1,164 @@
+// Visual harness for Phase 9.1's 2D lighting pipeline (ADR-0037).
+//
+// Twelve checker sprites arranged in a 4×3 grid form a static scene. Three
+// `PointLight2d` entities sit at distinct grid positions with distinct
+// colours: warm white at top-left, cool blue at the centre, magenta at
+// bottom-right. A fourth, smaller orbit-light circles a fixed anchor each
+// frame via a `Spin`-style marker so the lighting is obviously dynamic.
+//
+// `Light2dSettings.ambient` is set to a dim grey so unlit zones read as
+// "in shadow" rather than "broken" — without ambient the multiply
+// composite would clamp those regions to black.
+
+import { vec2, vec3, vec4 } from '@retro-engine/math';
+import type { Plugin } from '@retro-engine/engine';
+import {
+  Camera2d,
+  ClearColorConfig,
+  Commands,
+  Image,
+  Images,
+  Light2dPlugin,
+  Light2dSettings,
+  PointLight2d,
+  Query,
+  ResMut,
+  Sprite,
+  SpritePlugin,
+  Time,
+  Transform,
+} from '@retro-engine/engine';
+
+/** Marker component: light entities that orbit a fixed anchor point. */
+class Orbit {
+  constructor(
+    public readonly anchorX: number,
+    public readonly anchorY: number,
+    public readonly radius: number,
+    public readonly speed: number = 1.0,
+    public phase: number = 0,
+  ) {}
+}
+
+const placements = (): { position: readonly [number, number]; tint: readonly [number, number, number, number] }[] => {
+  // 4 columns × 3 rows.
+  const cell = (col: number, row: number): [number, number] => [
+    (col - 1.5) * 110,
+    (row - 1) * 110,
+  ];
+  return [
+    { position: cell(0, 0), tint: [1, 1, 1, 1] },
+    { position: cell(1, 0), tint: [1, 1, 1, 1] },
+    { position: cell(2, 0), tint: [1, 1, 1, 1] },
+    { position: cell(3, 0), tint: [1, 1, 1, 1] },
+    { position: cell(0, 1), tint: [1, 1, 1, 1] },
+    { position: cell(1, 1), tint: [1, 1, 1, 1] },
+    { position: cell(2, 1), tint: [1, 1, 1, 1] },
+    { position: cell(3, 1), tint: [1, 1, 1, 1] },
+    { position: cell(0, 2), tint: [1, 1, 1, 1] },
+    { position: cell(1, 2), tint: [1, 1, 1, 1] },
+    { position: cell(2, 2), tint: [1, 1, 1, 1] },
+    { position: cell(3, 2), tint: [1, 1, 1, 1] },
+  ];
+};
+
+/**
+ * Playground showcase: spawn 12 checker-tinted sprites in a 4×3 grid plus
+ * four `PointLight2d` entities — three static (warm white, cool blue,
+ * magenta), one orbiting a fixed anchor to demonstrate dynamic lighting.
+ * `Light2dSettings.ambient` is a low grey so unlit regions are dim rather
+ * than black.
+ */
+export const lightsShowcasePlugin: Plugin = (app) => {
+  const log = app.logger.child('lights-showcase');
+  app.addPlugin(new SpritePlugin());
+  app.addPlugin(new Light2dPlugin());
+
+  app.addSystem(
+    'startup',
+    [Commands, ResMut(Images), ResMut(Light2dSettings)],
+    (cmd, images, settings) => {
+      // Dim grey ambient so the unlit cells read as "in shadow."
+      settings.ambient = vec4.create(0.15, 0.15, 0.15, 1);
+
+      const checker = images.add(
+        Image.checker(
+          16,
+          vec4.create(0.95, 0.95, 0.95, 1),
+          vec4.create(0.35, 0.35, 0.4, 1),
+          undefined,
+          'lights-showcase-checker',
+        ),
+      );
+
+      for (const place of placements()) {
+        cmd.spawn(
+          new Sprite({
+            image: checker,
+            color: vec4.create(...place.tint),
+            customSize: vec2.create(96, 96),
+          }),
+          new Transform(vec3.create(place.position[0], place.position[1], 0)),
+        );
+      }
+
+      // Three static lights at distinct corners with distinct colours.
+      cmd.spawn(
+        new PointLight2d({
+          color: vec3.create(1, 0.85, 0.55),
+          intensity: 2.2,
+          range: 240,
+          radius: 16,
+        }),
+        new Transform(vec3.create(-180, 110, 0)),
+      );
+      cmd.spawn(
+        new PointLight2d({
+          color: vec3.create(0.45, 0.7, 1),
+          intensity: 1.8,
+          range: 260,
+          radius: 12,
+        }),
+        new Transform(vec3.create(0, 0, 0)),
+      );
+      cmd.spawn(
+        new PointLight2d({
+          color: vec3.create(1, 0.45, 0.85),
+          intensity: 1.9,
+          range: 220,
+          radius: 14,
+        }),
+        new Transform(vec3.create(180, -110, 0)),
+      );
+
+      // Orbiting accent light — circles a point in the bottom-left quadrant
+      // each frame so the dynamic-lighting path is obvious.
+      cmd.spawn(
+        new PointLight2d({
+          color: vec3.create(0.95, 1, 0.5),
+          intensity: 1.6,
+          range: 180,
+          radius: 8,
+        }),
+        new Transform(vec3.create(-180, -110, 0)),
+        new Orbit(-180, -110, 80, 1.3),
+      );
+
+      cmd.spawn(
+        ...Camera2d({
+          clearColor: ClearColorConfig.custom({ r: 0, g: 0, b: 0, a: 1 }),
+        }),
+      );
+      log.info('spawned 12 sprites + 4 PointLight2d (3 static, 1 orbiting)');
+    },
+  );
+
+  app.addSystem('update', [Query([Transform, Orbit]), ResMut(Time)], (orbiters, time) => {
+    const dt = time.virtual.delta;
+    for (const [, transform, orbit] of orbiters.entries()) {
+      orbit.phase += orbit.speed * dt;
+      transform.translation[0] = orbit.anchorX + Math.cos(orbit.phase) * orbit.radius;
+      transform.translation[1] = orbit.anchorY + Math.sin(orbit.phase) * orbit.radius;
+    }
+  });
+};
