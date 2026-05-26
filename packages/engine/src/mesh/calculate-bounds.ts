@@ -19,27 +19,37 @@ interface PendingAabbInsert {
  * by `VisibilityPlugin`'s documented order
  * (`CalculateBounds → UpdateFrusta → VisibilityPropagate → CheckVisibility`).
  *
- * Body: iterate every `Mesh3d` entity without {@link NoFrustumCulling}, look
- * up the underlying `Mesh` via the main-world `Meshes` registry, compute its
- * local-space AABB, and insert / overwrite the entity's `Aabb` component.
- * Entities carrying `NoFrustumCulling` are skipped — that marker is the
- * documented "I manage bounds myself" escape hatch, and `checkVisibilitySystem`
- * also short-circuits the frustum test for them.
+ * Body: iterate the `Mesh3d` entities the query yields (those without
+ * {@link NoFrustumCulling}), look up the underlying `Mesh` via the main-world
+ * `Meshes` registry, compute its local-space AABB, and insert / overwrite the
+ * entity's `Aabb` component. Entities carrying `NoFrustumCulling` are skipped —
+ * that marker is the documented "I manage bounds myself" escape hatch, and
+ * `checkVisibilitySystem` also short-circuits the frustum test for them.
  *
- * Re-runs every frame for now. A `Mesh.computeAabb()` walk is O(vertices);
- * with a few hundred mesh entities this is sub-millisecond. An
- * `Added<Mesh3d> | Changed<Mesh3d>`-gated form is a follow-up optimization
- * once a profile shows it's worth the change-detection plumbing.
+ * The query is change-gated on `Mesh3d`. A `Mesh.computeAabb()` walk is
+ * O(vertices), and a mesh's local-space bounds only move when its geometry
+ * does — re-deriving them every frame is wasted work that scales with scene
+ * size. An entity is therefore visited on the frame its `Mesh3d` is added and
+ * again only when `Mesh3d` is flagged changed.
+ *
+ * One consequence: editing a `Mesh`'s vertex data in place while keeping the
+ * same handle does not refresh bounds on its own, because the gate keys on the
+ * `Mesh3d` component, not on the `Mesh` asset. Signal such an edit by
+ * re-inserting `Mesh3d` on each affected entity (or `world.markChanged(entity,
+ * Mesh3d)`).
  *
  * @param meshes Main-world {@link Meshes} resource — the asset registry.
- * @param meshables Query handle over rows `(Mesh3d,)` without
- *   {@link NoFrustumCulling}.
+ * @param meshables Query handle over rows `(Mesh3d,)`, without
+ *   {@link NoFrustumCulling}, gated on changed `Mesh3d`.
  * @param world The main world, used to insert / overwrite `Aabb` on the
  *   matched entities.
  */
 export const calculateBoundsSystem = (
   meshes: { get(handle: MeshHandle): Mesh | undefined },
-  meshables: QueryHandle<readonly [typeof Mesh3d], { without: readonly (typeof NoFrustumCulling)[] }>,
+  meshables: QueryHandle<
+    readonly [typeof Mesh3d],
+    { without: readonly (typeof NoFrustumCulling)[]; changed: readonly (typeof Mesh3d)[] }
+  >,
   world: World,
 ): void => {
   // Collect first, mutate after. `world.insertBundle(entity, [aabb])` is a

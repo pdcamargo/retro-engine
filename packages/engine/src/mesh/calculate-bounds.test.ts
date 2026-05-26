@@ -47,4 +47,33 @@ describe('calculateBoundsSystem', () => {
     expect(aabb!.halfExtents[1]).toBeCloseTo(2);
     expect(aabb!.halfExtents[2]).toBeCloseTo(3);
   });
+
+  it('is change-gated: skips an unchanged Mesh3d, refreshes on markChanged', () => {
+    const app = new App({ renderer: makeRenderingRenderer() });
+    const meshes = app.getResource(Meshes)!;
+    const mesh = new Mesh().insertAttribute(
+      MeshAttribute.POSITION,
+      new Float32Array([-1, -1, -1, 1, 1, 1, 0, 0, 0]),
+    );
+    const handle = meshes.add(mesh);
+    const entity = app.world.spawn(new Mesh3d(handle), new Transform());
+
+    // Frame the Mesh3d is added: the entity is visited and bounds are written.
+    app.advanceFrame();
+    expect(app.world.entity(entity).get<Aabb>(Aabb)!.halfExtents[0]).toBeCloseTo(1);
+
+    // Edit the mesh geometry in place under the same handle. The gate keys on
+    // Mesh3d, not on the Mesh asset, so this alone must NOT refresh bounds.
+    mesh.insertAttribute(
+      MeshAttribute.POSITION,
+      new Float32Array([-4, -4, -4, 4, 4, 4, 0, 0, 0]),
+    );
+    app.advanceFrame();
+    expect(app.world.entity(entity).get<Aabb>(Aabb)!.halfExtents[0]).toBeCloseTo(1);
+
+    // Signalling the change re-runs the writer for that entity.
+    app.world.markChanged(entity, Mesh3d);
+    app.advanceFrame();
+    expect(app.world.entity(entity).get<Aabb>(Aabb)!.halfExtents[0]).toBeCloseTo(4);
+  });
 });

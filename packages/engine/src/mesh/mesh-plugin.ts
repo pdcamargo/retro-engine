@@ -106,12 +106,14 @@ export class MeshPlugin implements PluginObject {
 
     // Head of VisibilityPlugin's documented order:
     // `CalculateBounds → UpdateFrusta → VisibilityPropagate → CheckVisibility`.
-    // Iterate every `Mesh3d` entity without `NoFrustumCulling`, look up the
-    // mesh asset, and write a local-space `Aabb` so the frustum test downstream
-    // has something to clip against.
+    // Iterate `Mesh3d` entities without `NoFrustumCulling`, look up the mesh
+    // asset, and write a local-space `Aabb` so the frustum test downstream has
+    // something to clip against. Change-gated on `Mesh3d`: local bounds only
+    // move when geometry does, so an entity is visited on add and on change,
+    // not every frame (see calculateBoundsSystem for the in-place-edit caveat).
     app.addSystem(
       'postUpdate',
-      [Res(Meshes), Query([Mesh3d], { without: [NoFrustumCulling] })],
+      [Res(Meshes), Query([Mesh3d], { without: [NoFrustumCulling], changed: [Mesh3d] })],
       (meshes, meshables) => {
         calculateBoundsSystem(meshes, meshables, app.world);
       },
