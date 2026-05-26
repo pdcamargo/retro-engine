@@ -69,21 +69,24 @@ export const checkVisibilitySystem = (
   }
 
   if (active.length === 0) {
-    for (const [, , view] of renderables.entries()) view.visible = false;
+    renderables.forEach((entry) => {
+      (entry[2] as ViewVisibility).visible = false;
+    });
     return;
   }
 
-  for (const entry of renderables.entries()) {
+  // Non-allocating per-entity pass — this touches every renderable each frame.
+  renderables.forEach((entry) => {
     const entity = entry[0] as Entity;
-    const inherited = entry[1];
-    const view = entry[2];
+    const inherited = entry[1] as InheritedVisibility;
+    const view = entry[2] as ViewVisibility;
     // `has: [NoFrustumCulling]` surfaces presence as a row flag — cheaper than a
     // per-entity `getComponent`, and the marker carries no data we need.
     const hasNoFrustumCulling = entry[3] as boolean;
 
     if (!inherited.visible) {
       view.visible = false;
-      continue;
+      return;
     }
 
     const entityLayers = world.getComponent(entity, RenderLayers);
@@ -108,5 +111,5 @@ export const checkVisibilitySystem = (
       }
     }
     view.visible = visible;
-  }
+  });
 };

@@ -135,3 +135,39 @@ summary(() => {
     };
   });
 });
+
+// Allocating .entries() vs non-allocating .forEach() over entity + 3 components
+// — the hot-path shape every per-frame system iterates. forEach reuses one row
+// buffer (no per-row tuple, no generator); the gap is the allocation + generator
+// overhead this work exists to remove.
+summary(() => {
+  const build = (): World => {
+    const world = new World();
+    for (let i = 0; i < 100_000; i += 1) {
+      world.spawn(new Position(i, i), new Velocity(1, 0), new Health(100));
+    }
+    return world;
+  };
+
+  bench('entries() entity+3cmp @ 100k (allocating)', function* () {
+    const q = build().query([Position, Velocity, Health]);
+    yield () => {
+      let sum = 0;
+      for (const e of q.entries()) {
+        sum += (e[1] as Position).x + (e[2] as Velocity).vx + (e[3] as Health).hp;
+      }
+      return sum;
+    };
+  });
+
+  bench('forEach entity+3cmp @ 100k (non-allocating)', function* () {
+    const q = build().query([Position, Velocity, Health]);
+    yield () => {
+      let sum = 0;
+      q.forEach((e) => {
+        sum += (e[1] as Position).x + (e[2] as Velocity).vx + (e[3] as Health).hp;
+      });
+      return sum;
+    };
+  });
+});

@@ -138,14 +138,14 @@ export const prepareSpritesRetained = (
   packSprites.length = 0;
   packGts.length = 0;
 
-  for (const row of world.query([Sprite, GlobalTransform, ViewVisibility]).entries()) {
+  world.query([Sprite, GlobalTransform, ViewVisibility]).forEach((row) => {
     const entity = row[0] as Entity;
     const sprite = row[1] as Sprite;
     const gt = row[2] as GlobalTransform;
     const vis = row[3] as ViewVisibility;
-    if (!vis.visible) continue;
+    if (!vis.visible) return;
     const resolvedHandle = sprite.image !== undefined ? sprite.image : images.WHITE;
-    if (renderImages.get(resolvedHandle) === undefined) continue; // image not uploaded yet
+    if (renderImages.get(resolvedHandle) === undefined) return; // image not uploaded yet
     seen.add(entity);
 
     const len = instanceCountForSprite(sprite);
@@ -169,7 +169,7 @@ export const prepareSpritesRetained = (
       packSprites.push(sprite);
       packGts.push(gt);
     }
-  }
+  });
 
   // 3. Grow the slot scratch to the finalized capacity, then pack the queued
   //    sprites into their stable slots and (re)register them with the index.

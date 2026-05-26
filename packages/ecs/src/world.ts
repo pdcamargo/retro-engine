@@ -504,64 +504,13 @@ export class World {
     filters: F | undefined,
     sinceTick: number,
   ): IterableIterator<QueryRow<Ts, F>> {
-    const withFilter = filters?.with;
-    const withoutFilter = filters?.without;
     const hasFilter = filters?.has;
     const changedFilter = filters?.changed;
     const addedFilter = filters?.added;
-    const explicitDisabled = withFilter?.includes(Disabled) ?? false;
+    const explicitDisabled = filters?.with?.includes(Disabled) ?? false;
 
     for (const archetype of this.archetypeByKey.values()) {
-      if (archetype.entities.length === 0) continue;
-      if (!explicitDisabled && archetype.typeSet.has(Disabled)) continue;
-
-      let matches = true;
-      for (const t of types) {
-        if (!archetype.typeSet.has(t)) {
-          matches = false;
-          break;
-        }
-      }
-      if (!matches) continue;
-
-      if (withFilter) {
-        for (const t of withFilter) {
-          if (!archetype.typeSet.has(t)) {
-            matches = false;
-            break;
-          }
-        }
-        if (!matches) continue;
-      }
-
-      if (withoutFilter) {
-        for (const t of withoutFilter) {
-          if (archetype.typeSet.has(t)) {
-            matches = false;
-            break;
-          }
-        }
-        if (!matches) continue;
-      }
-
-      if (changedFilter) {
-        for (const t of changedFilter) {
-          if (!archetype.typeSet.has(t)) {
-            matches = false;
-            break;
-          }
-        }
-        if (!matches) continue;
-      }
-      if (addedFilter) {
-        for (const t of addedFilter) {
-          if (!archetype.typeSet.has(t)) {
-            matches = false;
-            break;
-          }
-        }
-        if (!matches) continue;
-      }
+      if (!this.archetypeMatches(archetype, types, filters, explicitDisabled)) continue;
 
       const cols: unknown[][] = types.map((t) => archetype.columns.get(t)!);
       const hasFlags = hasFilter ? hasFilter.map((t) => archetype.typeSet.has(t)) : [];
@@ -584,6 +533,29 @@ export class World {
   }
 
   /**
+   * Archetype-level match test shared by every query backend: the archetype
+   * must be non-empty, respect the `Disabled` opt-in, contain every queried
+   * type, satisfy `with` / `without`, and (for `changed` / `added`) contain
+   * each gated type. Per-row tick checks happen separately.
+   */
+  private archetypeMatches(
+    archetype: Archetype,
+    types: readonly ComponentType[],
+    filters: QueryFilters | undefined,
+    explicitDisabled: boolean,
+  ): boolean {
+    if (archetype.entities.length === 0) return false;
+    if (!explicitDisabled && archetype.typeSet.has(Disabled)) return false;
+    for (const t of types) if (!archetype.typeSet.has(t)) return false;
+    if (filters === undefined) return true;
+    if (filters.with) for (const t of filters.with) if (!archetype.typeSet.has(t)) return false;
+    if (filters.without) for (const t of filters.without) if (archetype.typeSet.has(t)) return false;
+    if (filters.changed) for (const t of filters.changed) if (!archetype.typeSet.has(t)) return false;
+    if (filters.added) for (const t of filters.added) if (!archetype.typeSet.has(t)) return false;
+    return true;
+  }
+
+  /**
    * @internal Entity-augmented iterator backend used by {@link Query.entries}.
    * Mirrors {@link World.iterateQuery} but prefixes each yielded tuple with
    * the row's `Entity`.
@@ -596,64 +568,13 @@ export class World {
     filters: F | undefined,
     sinceTick: number,
   ): IterableIterator<QueryEntry<Ts, F>> {
-    const withFilter = filters?.with;
-    const withoutFilter = filters?.without;
     const hasFilter = filters?.has;
     const changedFilter = filters?.changed;
     const addedFilter = filters?.added;
-    const explicitDisabled = withFilter?.includes(Disabled) ?? false;
+    const explicitDisabled = filters?.with?.includes(Disabled) ?? false;
 
     for (const archetype of this.archetypeByKey.values()) {
-      if (archetype.entities.length === 0) continue;
-      if (!explicitDisabled && archetype.typeSet.has(Disabled)) continue;
-
-      let matches = true;
-      for (const t of types) {
-        if (!archetype.typeSet.has(t)) {
-          matches = false;
-          break;
-        }
-      }
-      if (!matches) continue;
-
-      if (withFilter) {
-        for (const t of withFilter) {
-          if (!archetype.typeSet.has(t)) {
-            matches = false;
-            break;
-          }
-        }
-        if (!matches) continue;
-      }
-
-      if (withoutFilter) {
-        for (const t of withoutFilter) {
-          if (archetype.typeSet.has(t)) {
-            matches = false;
-            break;
-          }
-        }
-        if (!matches) continue;
-      }
-
-      if (changedFilter) {
-        for (const t of changedFilter) {
-          if (!archetype.typeSet.has(t)) {
-            matches = false;
-            break;
-          }
-        }
-        if (!matches) continue;
-      }
-      if (addedFilter) {
-        for (const t of addedFilter) {
-          if (!archetype.typeSet.has(t)) {
-            matches = false;
-            break;
-          }
-        }
-        if (!matches) continue;
-      }
+      if (!this.archetypeMatches(archetype, types, filters, explicitDisabled)) continue;
 
       const cols: unknown[][] = types.map((t) => archetype.columns.get(t)!);
       const hasFlags = hasFilter ? hasFilter.map((t) => archetype.typeSet.has(t)) : [];
@@ -672,6 +593,53 @@ export class World {
         for (let i = 0; i < ncols; i++) row.push(cols[i]![r]);
         for (let j = 0; j < nflags; j++) row.push(hasFlags[j]);
         yield row as QueryEntry<Ts, F>;
+      }
+    }
+  }
+
+  /**
+   * Non-allocating entity-augmented iteration backend used by
+   * {@link Query.forEach}. Same matched rows as {@link iterateQueryEntries},
+   * but reuses one row buffer across every row and invokes `cb` instead of
+   * yielding — no per-row array, no generator. The row passed to `cb` is
+   * **transient**: read it within the callback; never retain it (it is
+   * overwritten on the next row). Use {@link iterateQueryEntries} when a row
+   * must outlive the iteration.
+   *
+   * @internal
+   */
+  forEachEntry<const Ts extends readonly ComponentType[], F extends QueryFilters | undefined>(
+    types: Ts,
+    filters: F | undefined,
+    sinceTick: number,
+    cb: (entry: QueryEntry<Ts, F>) => void,
+  ): void {
+    const hasFilter = filters?.has;
+    const changedFilter = filters?.changed;
+    const addedFilter = filters?.added;
+    const explicitDisabled = filters?.with?.includes(Disabled) ?? false;
+    const ncols = types.length;
+    const nflags = hasFilter?.length ?? 0;
+    const row: unknown[] = Array.from({ length: 1 + ncols + nflags }); // reused across all rows
+
+    for (const archetype of this.archetypeByKey.values()) {
+      if (!this.archetypeMatches(archetype, types, filters, explicitDisabled)) continue;
+
+      const cols: unknown[][] = types.map((t) => archetype.columns.get(t)!);
+      const hasFlags = hasFilter ? hasFilter.map((t) => archetype.typeSet.has(t)) : [];
+      const entities = archetype.entities;
+      const rowCount = entities.length;
+      for (let r = 0; r < rowCount; r++) {
+        if (changedFilter && !this.rowPassesChanged(archetype, changedFilter, r, sinceTick)) {
+          continue;
+        }
+        if (addedFilter && !this.rowPassesAdded(archetype, addedFilter, r, sinceTick)) {
+          continue;
+        }
+        row[0] = entities[r]!;
+        for (let i = 0; i < ncols; i++) row[i + 1] = cols[i]![r];
+        for (let j = 0; j < nflags; j++) row[1 + ncols + j] = hasFlags[j]!;
+        cb(row as unknown as QueryEntry<Ts, F>);
       }
     }
   }

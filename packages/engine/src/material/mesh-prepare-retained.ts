@@ -213,21 +213,21 @@ export const prepareMeshRetained = <M extends Material>(
   seen.clear();
   active.length = 0;
 
-  for (const row of world.query([meshType, materialType, GlobalTransform, ViewVisibility]).entries()) {
+  world.query([meshType, materialType, GlobalTransform, ViewVisibility]).forEach((row) => {
     const entity = row[0] as Entity;
     const mesh = row[1] as { handle: MeshHandle };
     const material = row[2] as { handle: MaterialHandle<M> };
     const gt = row[3] as GlobalTransform;
     const vis = row[4] as ViewVisibility;
-    if (!vis.visible) continue;
+    if (!vis.visible) return;
 
     const renderMesh = renderMeshes.get(mesh.handle);
-    if (renderMesh === undefined) continue;
-    if (allocator.vertexSlice(mesh.handle) === undefined) continue;
+    if (renderMesh === undefined) return;
+    if (allocator.vertexSlice(mesh.handle) === undefined) return;
     if (renderMesh.bufferInfo.kind === 'indexed' && allocator.indexSlice(mesh.handle) === undefined) {
-      continue;
+      return;
     }
-    if (renderMaterials.get(material.handle) === undefined) continue;
+    if (renderMaterials.get(material.handle) === undefined) return;
     seen.add(entity);
 
     const instance = mainWorldMaterials?.get(material.handle);
@@ -255,7 +255,7 @@ export const prepareMeshRetained = <M extends Material>(
       packEntities.push(entity);
       packMatrices.push(gt.matrix as Mat4);
     }
-  }
+  });
 
   // 3. Grow slot scratch, then pack the queued transforms into their slots.
   slotBuf.ensureCapacity(renderer);

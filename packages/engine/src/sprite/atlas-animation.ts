@@ -123,14 +123,14 @@ export const atlasAnimationSystem = (
   world: World,
 ): void => {
   const dt = time.virtual.delta;
-  for (const row of query.entries()) {
+  query.forEach((row) => {
     const entity = row[0] as Entity;
     const anim = row[1] as AtlasAnimation;
     const atlas = row[2] as TextureAtlas;
-    if (anim.paused) continue;
+    if (anim.paused) return;
     // Ill-formed ranges silently skip rather than throw — animator state is
     // gameplay-mutable and a tooling edit shouldn't crash the frame.
-    if (anim.lastIndex < anim.firstIndex) continue;
+    if (anim.lastIndex < anim.firstIndex) return;
 
     anim.elapsedSec += dt;
     const len = anim.lastIndex - anim.firstIndex + 1;
@@ -166,5 +166,5 @@ export const atlasAnimationSystem = (
       atlas.index = target;
       world.markChanged(entity, TextureAtlas);
     }
-  }
+  });
 };

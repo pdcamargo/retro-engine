@@ -98,6 +98,29 @@ export class Query<
     yield* this.world.iterateQueryEntries(this.types, this.filters, this.sinceTick);
   }
 
+  /**
+   * Non-allocating counterpart to {@link entries}: invokes `cb` once per
+   * matching row with the same `[Entity, ...components, ...has-flags]` tuple,
+   * but **reuses a single row buffer** across all rows — no per-row array, no
+   * generator. The hot path for systems that touch every entity each frame.
+   *
+   * The tuple is **transient**: read what you need inside the callback; do not
+   * store or close over it past the call (it is overwritten on the next row).
+   * If a row must outlive iteration, use {@link entries} (which allocates a
+   * fresh tuple per row) or copy the values out.
+   *
+   * @example
+   * ```ts
+   * world.query([Transform, ViewVisibility]).forEach((entry) => {
+   *   const transform = entry[1] as Transform;
+   *   // ...read now; don't retain `entry`.
+   * });
+   * ```
+   */
+  forEach(cb: (entry: QueryEntry<Ts, F>) => void): void {
+    this.world.forEachEntry(this.types, this.filters, this.sinceTick, cb);
+  }
+
   /** First matching row, or `undefined` if no rows match. */
   first(): QueryRow<Ts, F> | undefined {
     for (const row of this) return row;
