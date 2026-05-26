@@ -16,6 +16,7 @@ import './shader.bench';
 import './render-graph.bench';
 import './mesh-allocator.bench';
 import './sprite-batch.bench';
+import './sprite-batch-z-sort.bench';
 import './sprite-slice.bench';
 import './atlas-sync.bench';
 import './atlas-animation.bench';
