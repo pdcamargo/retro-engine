@@ -192,7 +192,7 @@ describe('Light2dPlugin (integration)', () => {
     expect(buf.scratchF32[2]).toBe(200);
     expect(buf.scratchF32[3]).toBe(12);
     expect(buf.scratchF32[7]).toBe(1.5);
-    expect(LIGHT2D_INSTANCE_FLOAT_COUNT).toBe(13);
+    expect(LIGHT2D_INSTANCE_FLOAT_COUNT).toBe(14);
   });
 
   it('packs each light kind with its discriminator and per-kind params', async () => {

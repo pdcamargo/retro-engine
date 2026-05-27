@@ -5,6 +5,7 @@ import { Light2dPipeline } from '../light2d/light-2d-pipeline';
 import { Light2dPreparedBatches } from '../light2d/light-2d-batch';
 import { Light2dInstanceBuffer } from '../light2d/light-2d-instance-buffer';
 import { Light2dSettings } from '../light2d/light-2d-settings';
+import { Light2dShadowState } from '../light2d/light-2d-shadow';
 import { ViewLight2dTargets } from '../light2d/light-2d-targets';
 
 import { Core2dLabel } from './core-2d';
@@ -92,10 +93,13 @@ export const Light2dAccumulationPass2dNode: ViewNode = {
     const pipeline = ctx.app.getResource(Light2dPipeline);
     const prepared = ctx.app.getResource(Light2dPreparedBatches);
     const instanceBuffer = ctx.app.getResource(Light2dInstanceBuffer);
+    const shadow = ctx.app.getResource(Light2dShadowState);
     if (
       pipeline === undefined ||
       prepared === undefined ||
       instanceBuffer === undefined ||
+      shadow === undefined ||
+      shadow.accumBindGroup === undefined ||
       pipeline.accumulationPipeline === undefined ||
       pipeline.quadVertexBuffer === undefined ||
       pipeline.quadIndexBuffer === undefined ||
@@ -110,6 +114,7 @@ export const Light2dAccumulationPass2dNode: ViewNode = {
       return;
     }
     pass.setPipeline(pipeline.accumulationPipeline);
+    pass.setBindGroup(1, shadow.accumBindGroup);
     pass.setVertexBuffer(0, pipeline.quadVertexBuffer);
     pass.setVertexBuffer(1, instanceBuffer.buffer);
     pass.setIndexBuffer(pipeline.quadIndexBuffer, 'uint16');

@@ -30,16 +30,17 @@ export const Light2dKind = {
  * | 16..31 | 4..7     | float32x4 | 3           | `color.rgb + intensity`                  |
  * | 32..47 | 8..11    | float32x4 | 4           | spot cone `dir.xy + cosInner + cosOuter` |
  * | 48..51 | 12       | float32   | 5           | `kind` ({@link Light2dKind})             |
+ * | 52..55 | 13       | float32   | 6           | `shadowRow` (atlas row, or `-1` = unshadowed) |
  *
- * The vertex shader reads four `@location()` attributes summing to 52 bytes;
+ * The vertex shader reads five `@location()` attributes summing to 56 bytes;
  * the pipeline's `arrayStride` must equal this constant.
  *
  * @internal
  */
-export const LIGHT2D_INSTANCE_BYTE_SIZE = 52 as const;
+export const LIGHT2D_INSTANCE_BYTE_SIZE = 56 as const;
 
-/** 13 = `LIGHT2D_INSTANCE_BYTE_SIZE / 4`. */
-export const LIGHT2D_INSTANCE_FLOAT_COUNT = 13 as const;
+/** 14 = `LIGHT2D_INSTANCE_BYTE_SIZE / 4`. */
+export const LIGHT2D_INSTANCE_FLOAT_COUNT = 14 as const;
 
 /**
  * Per-camera per-frame batch record produced by the lighting queue system.
@@ -99,6 +100,7 @@ const writeColorIntensity = (
 export const packLightInstance = (
   light: PointLight2d,
   gtMatrix: Mat4,
+  shadowRow: number,
   f32View: Float32Array,
   floatIndex: number,
 ): number => {
@@ -113,6 +115,7 @@ export const packLightInstance = (
   f32View[floatIndex + 10] = 0;
   f32View[floatIndex + 11] = 0;
   f32View[floatIndex + 12] = Light2dKind.Point;
+  f32View[floatIndex + 13] = shadowRow;
   return LIGHT2D_INSTANCE_FLOAT_COUNT;
 };
 
@@ -127,6 +130,7 @@ export const packLightInstance = (
 export const packSpotLightInstance = (
   light: SpotLight2d,
   gtMatrix: Mat4,
+  shadowRow: number,
   f32View: Float32Array,
   floatIndex: number,
 ): number => {
@@ -143,6 +147,7 @@ export const packSpotLightInstance = (
   f32View[floatIndex + 10] = Math.cos(light.innerAngle);
   f32View[floatIndex + 11] = Math.cos(light.outerAngle);
   f32View[floatIndex + 12] = Light2dKind.Spot;
+  f32View[floatIndex + 13] = shadowRow;
   return LIGHT2D_INSTANCE_FLOAT_COUNT;
 };
 
@@ -171,6 +176,8 @@ export const packDirectionalLightInstance = (
   f32View[floatIndex + 10] = 0;
   f32View[floatIndex + 11] = 0;
   f32View[floatIndex + 12] = Light2dKind.Directional;
+  // Directional lights are full-screen flat — never shadowed.
+  f32View[floatIndex + 13] = -1;
   return LIGHT2D_INSTANCE_FLOAT_COUNT;
 };
 
@@ -199,5 +206,7 @@ export const packAmbientLightInstance = (
   f32View[floatIndex + 10] = 0;
   f32View[floatIndex + 11] = 0;
   f32View[floatIndex + 12] = Light2dKind.AmbientZone;
+  // Ambient zones are flat fills — never shadowed.
+  f32View[floatIndex + 13] = -1;
   return LIGHT2D_INSTANCE_FLOAT_COUNT;
 };

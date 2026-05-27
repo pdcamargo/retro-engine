@@ -26,6 +26,7 @@ import './mesh-instancing.bench';
 import './retained-instance-prepare.bench';
 import './event-driven-cull-prepare.bench';
 import './light-2d.bench';
+import './light-2d-shadow.bench';
 
 interface NormalizedBench {
   readonly key: string;

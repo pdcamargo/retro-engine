@@ -74,6 +74,8 @@ export class Light2dPipeline {
   accumulationPipelineLayout: PipelineLayout | undefined;
   accumulationModule: ShaderModule | undefined;
   accumulationPipeline: RenderPipeline | undefined;
+  /** `@group(1)` layout: the shadow atlas texture + sampler the accumulation shader samples. */
+  shadowAccumBindGroupLayout: BindGroupLayout | undefined;
 
   // Composite pipeline.
   compositeBindGroupLayout: BindGroupLayout | undefined;
@@ -127,10 +129,26 @@ export class Light2dPipeline {
       addressModeV: 'clamp-to-edge',
     });
 
-    // Accumulation: @group(0) is the view uniform; no per-light bind group.
+    // Accumulation: @group(0) is the view uniform; @group(1) is the shared
+    // shadow atlas (texture + sampler) sampled by point / spot lights.
+    this.shadowAccumBindGroupLayout = renderer.createBindGroupLayout({
+      label: 'light2d-shadow-accum-layout',
+      entries: [
+        {
+          binding: 0,
+          visibility: ShaderStage.FRAGMENT,
+          texture: { sampleType: 'float', viewDimension: '2d', multisampled: false },
+        },
+        {
+          binding: 1,
+          visibility: ShaderStage.FRAGMENT,
+          sampler: { type: 'filtering' },
+        },
+      ],
+    });
     this.accumulationPipelineLayout = renderer.createPipelineLayout({
       label: 'light2d-accumulation-layout',
-      bindGroupLayouts: [viewLayout],
+      bindGroupLayouts: [viewLayout, this.shadowAccumBindGroupLayout],
     });
     const accumShader = new Shader(
       getShaderSource(registry as ShaderRegistry, 'retro_engine::light2d_accumulation'),
@@ -211,11 +229,32 @@ export class Light2dPipeline {
     });
   }
 
+  /**
+   * Build the `@group(1)` bind group the accumulation pass binds to sample the
+   * shared shadow atlas. Called by `Light2dShadowState` once the atlas exists.
+   */
+  buildShadowAccumBindGroup(app: App, atlasView: TextureView, sampler: Sampler): BindGroup {
+    if (this.shadowAccumBindGroupLayout === undefined) {
+      throw new Error(
+        'Light2dPipeline.buildShadowAccumBindGroup: pipeline not initialised — call ensureInitialised first.',
+      );
+    }
+    return app.renderer.createBindGroup({
+      label: 'light2d-shadow-accum',
+      layout: this.shadowAccumBindGroupLayout,
+      entries: [
+        { binding: 0, resource: atlasView },
+        { binding: 1, resource: sampler },
+      ],
+    });
+  }
+
   /** Drop every GPU resource. Tests call this on teardown. */
   dispose(): void {
     this.quadVertexBuffer?.destroy();
     this.quadIndexBuffer?.destroy();
     this.sampler?.destroy();
+    this.shadowAccumBindGroupLayout?.destroy();
     this.accumulationPipelineLayout?.destroy();
     this.compositeBindGroupLayout?.destroy();
     this.compositePipelineLayout?.destroy();
@@ -225,6 +264,7 @@ export class Light2dPipeline {
     this.accumulationPipelineLayout = undefined;
     this.accumulationModule = undefined;
     this.accumulationPipeline = undefined;
+    this.shadowAccumBindGroupLayout = undefined;
     this.compositeBindGroupLayout = undefined;
     this.compositePipelineLayout = undefined;
     this.compositeModule = undefined;
@@ -253,6 +293,7 @@ export class Light2dPipeline {
               { shaderLocation: 3, format: 'float32x4', offset: 16 },
               { shaderLocation: 4, format: 'float32x4', offset: 32 },
               { shaderLocation: 5, format: 'float32', offset: 48 },
+              { shaderLocation: 6, format: 'float32', offset: 52 },
             ],
           },
         ],

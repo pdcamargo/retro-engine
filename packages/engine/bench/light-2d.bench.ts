@@ -91,7 +91,7 @@ summary(() => {
       bench(`packLightInstance × ${count}`, () => {
         let cursor = 0;
         for (const { light, matrix } of lights) {
-          cursor += packLightInstance(light, matrix, scratchF32, cursor);
+          cursor += packLightInstance(light, matrix, -1, scratchF32, cursor);
         }
         do_not_optimize(cursor);
       });
@@ -104,7 +104,7 @@ summary(() => {
       bench(`packSpotLightInstance × ${count}`, () => {
         let cursor = 0;
         for (const { light, matrix } of lights) {
-          cursor += packSpotLightInstance(light, matrix, scratchF32, cursor);
+          cursor += packSpotLightInstance(light, matrix, -1, scratchF32, cursor);
         }
         do_not_optimize(cursor);
       });

@@ -12,6 +12,10 @@ import {
   Light2dCompositePass2dLabel,
   Light2dCompositePass2dNode,
 } from '../render-graph/light2d-composite-pass-2d-node';
+import {
+  Light2dShadowPass2dLabel,
+  Light2dShadowPass2dNode,
+} from '../render-graph/light2d-shadow-pass-2d-node';
 import { OpaquePass2dLabel } from '../render-graph/opaque-pass-2d-node';
 import { RenderGraph } from '../render-graph/render-graph';
 import { TransparentPass2dLabel } from '../render-graph/transparent-pass-2d-node';
@@ -37,7 +41,10 @@ import { LIGHT2D_COMPOSITE_WGSL } from './light-2d-composite.wgsl';
 import { Light2dInstanceBuffer } from './light-2d-instance-buffer';
 import { Light2dPipeline } from './light-2d-pipeline';
 import { Light2dSettings } from './light-2d-settings';
+import { LIGHT2D_SHADOW_WGSL } from './light-2d-shadow.wgsl';
+import { Light2dShadowState } from './light-2d-shadow';
 import { prepareLight2dTargets, ViewLight2dTargets } from './light-2d-targets';
+import { LightOccluder2d } from './light-occluder-2d';
 import { PointLight2d } from './point-light-2d';
 import { SpotLight2d } from './spot-light-2d';
 
@@ -51,19 +58,21 @@ import { SpotLight2d } from './spot-light-2d';
  * - Inserts the lighting render-world resources idempotently:
  *   {@link Light2dPipeline}, {@link Light2dInstanceBuffer},
  *   {@link Light2dPreparedBatches}, {@link ViewLight2dTargets},
- *   and {@link Light2dSettings} (default `(0, 0, 0, 1)` ambient,
- *   `'multiply'` composite mode).
- * - Adds two nodes to the engine's Core2d sub-graph:
- *   {@link Light2dAccumulationPass2dNode} (before the opaque pass) and
- *   {@link Light2dCompositePass2dNode} (after the transparent pass).
- *   Final per-camera order:
- *   `Light2dAccumulationPass2d → OpaquePass2d → TransparentPass2d →
- *   Light2dCompositePass2d`.
- * - Registers two render-stage systems:
+ *   {@link Light2dShadowState}, and {@link Light2dSettings} (default
+ *   `(0, 0, 0, 1)` ambient, `'multiply'` composite mode).
+ * - Adds three nodes to the engine's Core2d sub-graph:
+ *   {@link Light2dShadowPass2dNode} (builds the shadow atlas),
+ *   {@link Light2dAccumulationPass2dNode}, and
+ *   {@link Light2dCompositePass2dNode}. Final per-camera order:
+ *   `Light2dShadowPass2d → Light2dAccumulationPass2d → OpaquePass2d →
+ *   TransparentPass2d → Light2dCompositePass2d`.
+ * - Registers three render-stage systems:
  *   - `light2d-prepare-targets` in {@link RenderSet.Prepare}: ensures every
  *     active Core2d camera has a `baseColor` + `lightAccum` texture pair
  *     plus a composite bind group. Resizes / GCs entries as cameras come
  *     and go.
+ *   - `light2d-prepare-shadows` in {@link RenderSet.Prepare}: bootstraps the
+ *     shared shadow atlas + build pipeline.
  *   - `light2d-queue` in {@link RenderSet.Queue}: iterates every visible 2D
  *     light ({@link PointLight2d}, {@link SpotLight2d},
  *     {@link DirectionalLight2d}, {@link AmbientLight2d}), packs them into the
@@ -92,6 +101,9 @@ export class Light2dPlugin implements PluginObject {
     if (!registry.has('retro_engine::light2d_composite')) {
       registry.register('retro_engine::light2d_composite', LIGHT2D_COMPOSITE_WGSL);
     }
+    if (!registry.has('retro_engine::light2d_shadow')) {
+      registry.register('retro_engine::light2d_shadow', LIGHT2D_SHADOW_WGSL);
+    }
     if (app.getResource(Light2dPipeline) === undefined) {
       app.insertResource(new Light2dPipeline());
     }
@@ -103,6 +115,9 @@ export class Light2dPlugin implements PluginObject {
     }
     if (app.getResource(ViewLight2dTargets) === undefined) {
       app.insertResource(new ViewLight2dTargets());
+    }
+    if (app.getResource(Light2dShadowState) === undefined) {
+      app.insertResource(new Light2dShadowState());
     }
     if (app.getResource(Light2dSettings) === undefined) {
       app.insertResource(new Light2dSettings());
@@ -120,8 +135,10 @@ export class Light2dPlugin implements PluginObject {
         'Light2dPlugin: Core2d sub-graph missing; RenderGraphPlugin must build the sub-graph before Light2dPlugin.',
       );
     }
+    sub.addNode(Light2dShadowPass2dNode);
     sub.addNode(Light2dAccumulationPass2dNode);
     sub.addNode(Light2dCompositePass2dNode);
+    sub.addEdge(Light2dShadowPass2dLabel, Light2dAccumulationPass2dLabel);
     sub.addEdge(Light2dAccumulationPass2dLabel, OpaquePass2dLabel);
     sub.addEdge(TransparentPass2dLabel, Light2dCompositePass2dLabel);
 
@@ -141,16 +158,28 @@ export class Light2dPlugin implements PluginObject {
 
     app.addSystem(
       'render',
+      [ResMut(Light2dShadowState), ResMut(Light2dPipeline)],
+      (shadow, pipeline) => {
+        (pipeline as Light2dPipeline).ensureInitialised(app);
+        (shadow as Light2dShadowState).ensure(app, pipeline as Light2dPipeline);
+      },
+      { set: RenderSet.Prepare, label: 'light2d-prepare-shadows' },
+    );
+
+    app.addSystem(
+      'render',
       [
         Extract(Query([PointLight2d, GlobalTransform, ViewVisibility])),
         Extract(Query([SpotLight2d, GlobalTransform, ViewVisibility])),
         Extract(Query([DirectionalLight2d, GlobalTransform, ViewVisibility])),
         Extract(Query([AmbientLight2d, GlobalTransform, ViewVisibility])),
+        Extract(Query([LightOccluder2d, GlobalTransform, ViewVisibility])),
         Res(SortedCameras),
         ResMut(Light2dInstanceBuffer),
         ResMut(Light2dPreparedBatches),
+        ResMut(Light2dShadowState),
       ],
-      (points, spots, directionals, ambients, cameras, instanceBuffer, prepared) => {
+      (points, spots, directionals, ambients, occluders, cameras, instanceBuffer, prepared, shadow) => {
         queueLight2dInstances(
           app,
           {
@@ -158,10 +187,12 @@ export class Light2dPlugin implements PluginObject {
             spots: spots as unknown as LightQuery<typeof SpotLight2d>,
             directionals: directionals as unknown as LightQuery<typeof DirectionalLight2d>,
             ambients: ambients as unknown as LightQuery<typeof AmbientLight2d>,
+            occluders: occluders as unknown as LightQuery<typeof LightOccluder2d>,
           },
           cameras as SortedCameras,
           instanceBuffer as Light2dInstanceBuffer,
           prepared as Light2dPreparedBatches,
+          shadow as Light2dShadowState,
         );
       },
       { set: RenderSet.Queue, label: 'light2d-queue' },
@@ -178,6 +209,7 @@ interface LightQueries {
   readonly spots: LightQuery<typeof SpotLight2d>;
   readonly directionals: LightQuery<typeof DirectionalLight2d>;
   readonly ambients: LightQuery<typeof AmbientLight2d>;
+  readonly occluders: LightQuery<typeof LightOccluder2d>;
 }
 
 const collectVisible = <T>(
@@ -192,24 +224,54 @@ const collectVisible = <T>(
   return visible;
 };
 
+// Positional lights cast shadows; collected with the atlas row assigned at the
+// same time so the row stored in the instance matches the build input order.
+const collectCasters = <T extends { range: number }>(
+  query: LightQuery<ComponentType>,
+  shadow: Light2dShadowState,
+): { light: T; gt: GlobalTransform; row: number }[] => {
+  const visible: { light: T; gt: GlobalTransform; row: number }[] = [];
+  for (const row of query.entries()) {
+    const vis = row[3] as ViewVisibility;
+    if (!vis.visible) continue;
+    const light = row[1] as T;
+    const gt = row[2] as GlobalTransform;
+    const atlasRow = shadow.pushCaster(gt.matrix[12] as number, gt.matrix[13] as number, light.range);
+    visible.push({ light, gt, row: atlasRow });
+  }
+  return visible;
+};
+
 const queueLight2dInstances = (
   app: App,
   queries: LightQueries,
   cameras: SortedCameras,
   instanceBuffer: Light2dInstanceBuffer,
   prepared: Light2dPreparedBatches,
+  shadow: Light2dShadowState,
 ): void => {
   prepared.batches.length = 0;
   instanceBuffer.count = 0;
+  shadow.beginFrame();
 
   // Collect every visible light once. In v1 every Core2d camera sees the same
   // visible set (no per-camera render-layer filtering yet), so we pack once
   // and point every camera's batch at the same range. Kinds share one
-  // instance buffer and draw in a single instanced call.
-  const points = collectVisible<PointLight2d>(queries.points);
-  const spots = collectVisible<SpotLight2d>(queries.spots);
+  // instance buffer and draw in a single instanced call. Point / spot lights
+  // also claim a shadow-atlas row as they are collected.
+  const points = collectCasters<PointLight2d>(queries.points, shadow);
+  const spots = collectCasters<SpotLight2d>(queries.spots, shadow);
   const directionals = collectVisible<DirectionalLight2d>(queries.directionals);
   const ambients = collectVisible<AmbientLight2d>(queries.ambients);
+
+  // Occluders feed the shadow-atlas build (world-space segments).
+  for (const row of queries.occluders.entries()) {
+    const vis = row[3] as ViewVisibility;
+    if (!vis.visible) continue;
+    shadow.pushOccluder(row[1] as LightOccluder2d, row[2] as GlobalTransform);
+  }
+  shadow.upload(app);
+
   const total = points.length + spots.length + directionals.length + ambients.length;
 
   // Even with no visible lights, emit one batch per Core2d camera with
@@ -221,11 +283,11 @@ const queueLight2dInstances = (
     instanceBuffer.ensureCapacity(app.renderer, total);
     const scratch = instanceBuffer.scratchF32;
     let cursor = 0;
-    for (const { light, gt } of points) {
-      cursor += packLightInstance(light, gt.matrix, scratch, cursor);
+    for (const { light, gt, row } of points) {
+      cursor += packLightInstance(light, gt.matrix, row, scratch, cursor);
     }
-    for (const { light, gt } of spots) {
-      cursor += packSpotLightInstance(light, gt.matrix, scratch, cursor);
+    for (const { light, gt, row } of spots) {
+      cursor += packSpotLightInstance(light, gt.matrix, row, scratch, cursor);
     }
     for (const { light } of directionals) {
       cursor += packDirectionalLightInstance(light, scratch, cursor);
