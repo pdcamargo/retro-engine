@@ -21,7 +21,8 @@ if (!(canvas instanceof HTMLCanvasElement)) {
 //   `?mode=sprites` → Phase 8.1 sprite pipeline showcase (ADR-0031).
 //   `?mode=shapes`  → Phase 8.7 Material2d showcase (ADR-0035).
 //   `?mode=stress`  → mixed-load FPS harness (size=small|medium|large).
-//   `?mode=lights`  → Phase 9.1 PointLight2d showcase (ADR-0037).
+//   `?mode=lights`  → Phase 9 2D lighting showcase: point/spot/ambient lights,
+//                     composite modes, and shadow occluders (ADR-0037/0041/0042).
 //   anything else   → Phase 7.5 primitives demo.
 // All demos stay discoverable from one bundle.
 const mode = new URLSearchParams(window.location.search).get('mode');
