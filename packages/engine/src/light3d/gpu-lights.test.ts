@@ -18,7 +18,9 @@ import {
   MAX_SPOT_LIGHTS,
   NO_SHADOW_CASTER,
   packAmbient,
+  packCascadeSplits,
   packCounts,
+  packDirectionalCascadeBase,
   packDirectionalCasterIndex,
   packDirectionalLight,
   packPointLight,
@@ -33,7 +35,8 @@ import { SpotLight3d } from './spot-light-3d';
 const DIRECTIONAL_BASE = 8; // after ambient(4) + counts(4)
 const POINT_BASE = DIRECTIONAL_BASE + MAX_DIRECTIONAL_LIGHTS * 8; // 40
 const SPOT_BASE = POINT_BASE + MAX_POINT_LIGHTS * 12; // 808
-const SHADOW_VIEW_PROJ_BASE = SPOT_BASE + MAX_SPOT_LIGHTS * 16; // 1832
+const CASCADE_SPLITS_BASE = SPOT_BASE + MAX_SPOT_LIGHTS * 16; // 1832
+const SHADOW_VIEW_PROJ_BASE = CASCADE_SPLITS_BASE + 4; // 1836
 
 const translation = (x: number, y: number, z: number): Mat4 => {
   const m = mat4.identity();
@@ -44,11 +47,13 @@ const translation = (x: number, y: number, z: number): Mat4 => {
 };
 
 describe('GpuLights layout constants', () => {
-  it('is 7840 bytes / 1960 floats (header + 4 dir + 64 point + 64 spot + 8 shadow mats)', () => {
-    expect(GPU_LIGHTS_BYTE_SIZE).toBe(7840);
-    expect(GPU_LIGHTS_FLOAT_COUNT).toBe(1960);
-    // Spot section ends where the shadow-matrix array begins.
-    expect(SPOT_BASE + MAX_POINT_LIGHTS * 16).toBe(SHADOW_VIEW_PROJ_BASE);
+  it('is 8112 bytes / 2028 floats (header + 4 dir + 64 point + 64 spot + cascade splits + 12 shadow mats)', () => {
+    expect(GPU_LIGHTS_BYTE_SIZE).toBe(8112);
+    expect(GPU_LIGHTS_FLOAT_COUNT).toBe(2028);
+    // Spot section ends where the cascade_splits vec4 begins.
+    expect(SPOT_BASE + MAX_SPOT_LIGHTS * 16).toBe(CASCADE_SPLITS_BASE);
+    // cascade_splits is one vec4 ahead of the shadow-matrix array.
+    expect(CASCADE_SPLITS_BASE + 4).toBe(SHADOW_VIEW_PROJ_BASE);
     // The shadow-matrix array fills out the rest of the buffer exactly.
     expect(SHADOW_VIEW_PROJ_BASE + MAX_SHADOW_CASTERS * 16).toBe(GPU_LIGHTS_FLOAT_COUNT);
   });
@@ -88,12 +93,18 @@ describe('packAmbient / packCounts', () => {
     expect(f32[3]).toBeCloseTo(0.3);
   });
 
-  it('writes the three counts at u32 slots 4/5/6 and zeroes slot 7', () => {
+  it('writes the four counts at u32 slots 4/5/6/7 (slot 7 = cascade count)', () => {
     const u32 = new Uint32Array(GPU_LIGHTS_FLOAT_COUNT);
-    packCounts(u32, 2, 5, 9);
+    packCounts(u32, 2, 5, 9, 4);
     expect(u32[4]).toBe(2);
     expect(u32[5]).toBe(5);
     expect(u32[6]).toBe(9);
+    expect(u32[7]).toBe(4);
+  });
+
+  it('defaults the cascade count to 0 when omitted', () => {
+    const u32 = new Uint32Array(GPU_LIGHTS_FLOAT_COUNT);
+    packCounts(u32, 1, 0, 0);
     expect(u32[7]).toBe(0);
   });
 });
@@ -185,6 +196,23 @@ describe('shadow metadata packing', () => {
     expect(f32[SPOT_BASE + 2 * 16 + 15]).toBe(NO_SHADOW_CASTER);
     packSpotCasterIndex(f32, 2, 3);
     expect(f32[SPOT_BASE + 2 * 16 + 15]).toBe(3);
+  });
+
+  it('writes a directional cascade base layer into direction.w', () => {
+    const f32 = new Float32Array(GPU_LIGHTS_FLOAT_COUNT);
+    packDirectionalLight(new DirectionalLight3d(), mat4.identity(), f32, 0);
+    expect(f32[DIRECTIONAL_BASE + 3]).toBe(NO_SHADOW_CASTER);
+    packDirectionalCascadeBase(f32, 0, 4);
+    expect(f32[DIRECTIONAL_BASE + 3]).toBe(4);
+  });
+
+  it('writes the cascade split distances into the cascade_splits vec4', () => {
+    const f32 = new Float32Array(GPU_LIGHTS_FLOAT_COUNT);
+    packCascadeSplits(f32, new Float32Array([5, 15, 50, 150]));
+    expect(f32[CASCADE_SPLITS_BASE + 0]).toBe(5);
+    expect(f32[CASCADE_SPLITS_BASE + 1]).toBe(15);
+    expect(f32[CASCADE_SPLITS_BASE + 2]).toBe(50);
+    expect(f32[CASCADE_SPLITS_BASE + 3]).toBe(150);
   });
 
   it('writes a 16-float light-space matrix at the caster slot', () => {

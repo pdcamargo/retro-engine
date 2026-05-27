@@ -26,37 +26,43 @@ export const MAX_POINT_LIGHTS = 64 as const;
 export const MAX_SPOT_LIGHTS = 64 as const;
 
 /**
- * Maximum shadow-casting lights resolved per frame — the depth of the shadow
+ * Maximum shadow-casting layers resolved per frame — the depth of the shadow
  * atlas's 2D-array texture and the length of the `shadow_view_proj` matrix
- * array in {@link GpuLights}. Directional / spot lights beyond this budget (in
- * visible-iteration order) render unshadowed. Mirrors the WGSL
+ * array in {@link GpuLights}. A spot light consumes one layer; a directional
+ * light consumes one layer per cascade (consecutive layers). Casters beyond
+ * this budget (in visible-iteration order) render unshadowed. Mirrors the WGSL
  * `MAX_SHADOW_CASTERS` in `retro_engine::light3d`.
  */
-export const MAX_SHADOW_CASTERS = 8 as const;
+export const MAX_SHADOW_CASTERS = 12 as const;
 
 // std140 uniform layout (bytes), matching the WGSL `GpuLights` struct exactly:
 //
 //   ambient: vec4<f32>   @ 0    (16)  rgb + a = brightness
-//   counts:  vec4<u32>   @ 16   (16)  x = dir, y = point, z = spot
+//   counts:  vec4<u32>   @ 16   (16)  x = dir, y = point, z = spot, w = cascade count
 //   directional: array<DirectionalLightGpu, 4>  @ 32   (4 * 32  = 128)
 //   point:       array<PointLightGpu, 64>        @ 160  (64 * 48 = 3072)
 //   spot:        array<SpotLightGpu, 64>          @ 3232 (64 * 64 = 4096)
-//   shadow_view_proj: array<mat4x4<f32>, 8>       @ 7328 (8 * 64  = 512)
+//   cascade_splits: vec4<f32>                     @ 7328 (16)  far view-depth per cascade
+//   shadow_view_proj: array<mat4x4<f32>, 12>      @ 7344 (12 * 64 = 768)
 //
 // Each sub-struct is a whole number of 16-byte slots, so std140 array stride
-// equals the struct size with no inter-element padding. A `mat4x4<f32>` is
-// 64 B with 16-byte column alignment, so its array stride needs no padding.
+// equals the struct size with no inter-element padding. `cascade_splits` is a
+// 16-byte vec4 on a 16-byte boundary; the `mat4x4<f32>` array follows it (64 B
+// columns, 16-byte aligned), so neither needs extra padding.
 const HEADER_BYTES = 32;
 const DIRECTIONAL_STRIDE_F32 = 8; // 2 × vec4
 const POINT_STRIDE_F32 = 12; // 3 × vec4
 const SPOT_STRIDE_F32 = 16; // 4 × vec4
+const CASCADE_SPLITS_F32 = 4; // vec4<f32>
 const SHADOW_MATRIX_F32 = 16; // mat4x4<f32>
 
 const DIRECTIONAL_BASE_F32 = HEADER_BYTES / 4; // 8
 const POINT_BASE_F32 = DIRECTIONAL_BASE_F32 + MAX_DIRECTIONAL_LIGHTS * DIRECTIONAL_STRIDE_F32; // 40
 const SPOT_BASE_F32 = POINT_BASE_F32 + MAX_POINT_LIGHTS * POINT_STRIDE_F32; // 808
-/** First `f32` slot of the trailing `shadow_view_proj` matrix array (1832). */
-const SHADOW_VIEW_PROJ_BASE_F32 = SPOT_BASE_F32 + MAX_SPOT_LIGHTS * SPOT_STRIDE_F32; // 1832
+/** First `f32` slot of the `cascade_splits` vec4 (1832). */
+const CASCADE_SPLITS_BASE_F32 = SPOT_BASE_F32 + MAX_SPOT_LIGHTS * SPOT_STRIDE_F32; // 1832
+/** First `f32` slot of the trailing `shadow_view_proj` matrix array (1836). */
+const SHADOW_VIEW_PROJ_BASE_F32 = CASCADE_SPLITS_BASE_F32 + CASCADE_SPLITS_F32; // 1836
 
 /**
  * Sentinel caster index meaning "this light casts no shadow" — packed into the
@@ -65,15 +71,16 @@ const SHADOW_VIEW_PROJ_BASE_F32 = SPOT_BASE_F32 + MAX_SPOT_LIGHTS * SPOT_STRIDE_
  */
 export const NO_SHADOW_CASTER = -1 as const;
 
-/** Total byte size of the {@link GpuLights} uniform buffer (7840 B). */
+/** Total byte size of the {@link GpuLights} uniform buffer (8112 B). */
 export const GPU_LIGHTS_BYTE_SIZE =
   HEADER_BYTES +
   MAX_DIRECTIONAL_LIGHTS * DIRECTIONAL_STRIDE_F32 * 4 +
   MAX_POINT_LIGHTS * POINT_STRIDE_F32 * 4 +
   MAX_SPOT_LIGHTS * SPOT_STRIDE_F32 * 4 +
+  CASCADE_SPLITS_F32 * 4 +
   MAX_SHADOW_CASTERS * SHADOW_MATRIX_F32 * 4;
 
-/** `GPU_LIGHTS_BYTE_SIZE / 4` — number of `f32` slots in the lights buffer (1960). */
+/** `GPU_LIGHTS_BYTE_SIZE / 4` — number of `f32` slots in the lights buffer (2028). */
 export const GPU_LIGHTS_FLOAT_COUNT = GPU_LIGHTS_BYTE_SIZE / 4;
 
 /**
@@ -111,7 +118,9 @@ export const packAmbient = (ambient: AmbientLight, f32: Float32Array): void => {
 
 /**
  * Write the per-kind light counts into the header (`counts: vec4<u32>` at byte
- * offset 16 → `u32[4..6]`). Already-clamped counts are expected.
+ * offset 16 → `u32[4..7]`). `cascadeCount` (the number of cascades each shadowed
+ * directional light uses, `0` when none cascade) goes in `counts.w`; the shader
+ * uses it to bound cascade selection. Already-clamped counts are expected.
  *
  * @internal
  */
@@ -120,19 +129,21 @@ export const packCounts = (
   directionalCount: number,
   pointCount: number,
   spotCount: number,
+  cascadeCount = 0,
 ): void => {
   u32[4] = directionalCount;
   u32[5] = pointCount;
   u32[6] = spotCount;
-  u32[7] = 0;
+  u32[7] = cascadeCount;
 };
 
 /**
  * Pack one {@link DirectionalLight3d} into the `directional` array at `index`.
  * `direction.xyz` = the entity's forward (−Z) from `gtMatrix`; `direction.w` =
  * shadow caster index (defaults to {@link NO_SHADOW_CASTER}; set by
- * {@link packDirectionalCasterIndex} when the light is assigned an atlas
- * layer); `color.rgb` + `color.a` = intensity.
+ * {@link packDirectionalCascadeBase} for cascaded shadows or
+ * {@link packDirectionalCasterIndex} for the fixed-box fallback when the light
+ * is assigned atlas layers); `color.rgb` + `color.a` = intensity.
  *
  * @internal
  */
@@ -231,6 +242,23 @@ export const packDirectionalCasterIndex = (
 };
 
 /**
+ * Write a cascaded directional light's **base** shadow-atlas layer into its
+ * `direction.w` slot. Its cascades occupy the consecutive layers
+ * `[baseLayer, baseLayer + cascadeCount)`; the WGSL `directional_shadow_factor`
+ * adds the per-fragment cascade index to this base. Same slot as
+ * {@link packDirectionalCasterIndex} (used for the non-cascaded fallback).
+ *
+ * @internal
+ */
+export const packDirectionalCascadeBase = (
+  f32: Float32Array,
+  index: number,
+  baseLayer: number,
+): void => {
+  f32[DIRECTIONAL_BASE_F32 + index * DIRECTIONAL_STRIDE_F32 + 3] = baseLayer;
+};
+
+/**
  * Write a spot light's assigned shadow atlas layer (`casterIndex`) into its
  * `params.w` slot. See {@link packDirectionalCasterIndex}.
  *
@@ -258,6 +286,22 @@ export const packShadowViewProj = (
   viewProj: Mat4,
 ): void => {
   f32.set(viewProj as Float32Array, SHADOW_VIEW_PROJ_BASE_F32 + casterIndex * SHADOW_MATRIX_F32);
+};
+
+/**
+ * Write the directional cascade split distances into the `cascade_splits` vec4.
+ * Each component is a cascade's far edge in camera view-space distance (world
+ * units); the WGSL `directional_shadow_factor` compares a fragment's view-space
+ * depth against them to pick its cascade. Only the first `cascadeCount`
+ * components are meaningful. Copies up to four values from `splits`.
+ *
+ * @internal
+ */
+export const packCascadeSplits = (f32: Float32Array, splits: Float32Array): void => {
+  f32[CASCADE_SPLITS_BASE_F32] = splits[0] as number;
+  f32[CASCADE_SPLITS_BASE_F32 + 1] = splits[1] as number;
+  f32[CASCADE_SPLITS_BASE_F32 + 2] = splits[2] as number;
+  f32[CASCADE_SPLITS_BASE_F32 + 3] = splits[3] as number;
 };
 
 /**

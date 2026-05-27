@@ -34,8 +34,9 @@
  *   imported via `#import retro_engine::light3d`, plus the shadow depth atlas
  *   (`texture_depth_2d_array`) at `@binding(1)` and a comparison sampler at
  *   `@binding(2)` from `#import retro_engine::shadow3d`. Bound by the Core3d
- *   phase node when a `Light3dPlugin` is present; directional / spot
- *   contributions are multiplied by `shadow_factor(...)`.
+ *   phase node when a `Light3dPlugin` is present; directional contributions are
+ *   multiplied by `directional_shadow_factor(...)` (cascaded) and spot
+ *   contributions by `shadow_factor(...)`.
  *
  * The per-entity model matrix and its inverse-transpose arrive as per-instance
  * vertex attributes at `@location(8..11)` and `@location(12..15)` (vertex
@@ -185,8 +186,10 @@ fn fs_main(in: VsOut) -> @location(0) vec4<f32> {
   // are bounded by the per-kind counts (≤ the compile-time maxima) for uniform
   // control flow.
   var direct = vec3<f32>(0.0);
+  // Camera view-space depth (into the scene) selects the directional cascade.
+  let view_z = -(view.view * vec4<f32>(in.world_position, 1.0)).z;
   for (var i = 0u; i < lights.counts.x; i = i + 1u) {
-    let shadow = shadow_factor(lights.directional[i].direction.w, in.world_position);
+    let shadow = directional_shadow_factor(lights.directional[i].direction.w, in.world_position, view_z);
     direct += lit(directional_light_sample(i), n, v, n_dot_v, base_color.rgb, metallic, roughness, f0) * shadow;
   }
   for (var i = 0u; i < lights.counts.y; i = i + 1u) {

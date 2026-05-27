@@ -4,6 +4,8 @@ import { vec3 } from '@retro-engine/math';
 import { Transform, GlobalTransform } from '../transform';
 import { InheritedVisibility, ViewVisibility, Visibility } from '../visibility';
 
+import { CascadeShadowConfig } from './cascade-shadow-config';
+
 /**
  * Options accepted by the {@link DirectionalLight3d} constructor. Every field
  * is optional; omitted fields take the documented default.
@@ -28,6 +30,8 @@ export interface DirectionalLight3dOptions {
  * Requires `Transform`, `GlobalTransform`, `Visibility`, `InheritedVisibility`,
  * and `ViewVisibility` for parity with the other 3D light components so
  * visibility toggling works. An invisible directional light contributes nothing.
+ * Also requires a {@link CascadeShadowConfig} (auto-inserted with defaults),
+ * which drives its cascaded shadow map.
  *
  * @example
  * ```ts
@@ -55,5 +59,6 @@ export class DirectionalLight3d {
     Visibility,
     InheritedVisibility,
     ViewVisibility,
+    CascadeShadowConfig,
   ];
 }

@@ -6,6 +6,7 @@ import type { Renderer } from '@retro-engine/renderer-core';
 import {
   App,
   Camera3d,
+  CascadeShadowConfig,
   Core3dLabel,
   Cuboid,
   DirectionalLight3d,
@@ -56,7 +57,12 @@ describe('Light3dPlugin shadows (integration)', () => {
     const { renderer } = makeCapturingRenderer();
     const { app, spawnMesh } = litApp(renderer);
     spawnMesh();
-    app.world.spawn(new DirectionalLight3d({ intensity: 2 }), new Transform());
+    // One cascade keeps this focused on bootstrap (one directional → one layer).
+    app.world.spawn(
+      new DirectionalLight3d({ intensity: 2 }),
+      new CascadeShadowConfig({ numCascades: 1 }),
+      new Transform(),
+    );
     app.world.spawn(...Camera3d());
     await app.run();
 
@@ -120,7 +126,12 @@ describe('Light3dPlugin shadows (integration)', () => {
     const { renderer } = makeCapturingRenderer();
     const { app, spawnMesh } = litApp(renderer);
     spawnMesh();
-    app.world.spawn(new DirectionalLight3d(), new Transform());
+    // One cascade so directional + spot occupy layers 0 and 1.
+    app.world.spawn(
+      new DirectionalLight3d(),
+      new CascadeShadowConfig({ numCascades: 1 }),
+      new Transform(),
+    );
     app.world.spawn(
       new SpotLight3d({ range: 14, outerAngle: Math.PI / 6 }),
       new Transform(vec3.create(0, 6, 0)),
@@ -129,5 +140,29 @@ describe('Light3dPlugin shadows (integration)', () => {
     await app.run();
 
     expect(app.getResource(Shadow3dState)!.shadowLightCount).toBe(2);
+  });
+
+  it('gives a directional light one atlas layer per cascade and packs increasing splits', async () => {
+    const { renderer } = makeCapturingRenderer();
+    const { app, spawnMesh } = litApp(renderer);
+    spawnMesh();
+    app.world.spawn(
+      new DirectionalLight3d(),
+      new CascadeShadowConfig({ numCascades: 3, minimumDistance: 1, maximumDistance: 90 }),
+      new Transform(),
+    );
+    app.world.spawn(...Camera3d());
+    await app.run();
+
+    const shadow = app.getResource(Shadow3dState)!;
+    expect(shadow.shadowLightCount).toBe(3); // 3 cascades → 3 consecutive layers
+
+    const lights = app.getResource(GpuLights)!;
+    expect(lights.u32[7]).toBe(3); // counts.w = cascade count
+    expect(lights.f32[8 + 3]).toBe(0); // directional.direction.w = cascade base layer
+    // cascade_splits vec4 (f32 1832): strictly increasing, last == maximumDistance.
+    expect(lights.f32[1832]!).toBeLessThan(lights.f32[1833]!);
+    expect(lights.f32[1833]!).toBeLessThan(lights.f32[1834]!);
+    expect(lights.f32[1834]!).toBeCloseTo(90);
   });
 });

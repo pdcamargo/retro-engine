@@ -6,6 +6,10 @@ export type { DirectionalLight3dOptions } from './directional-light-3d';
 export { DirectionalLight3d } from './directional-light-3d';
 export type { AmbientLightOptions } from './ambient-light';
 export { AmbientLight } from './ambient-light';
+export type { CascadeShadowConfigOptions } from './cascade-shadow-config';
+export { CascadeShadowConfig, MAX_CASCADES } from './cascade-shadow-config';
+export type { CascadeFitParams } from './cascade-shadow';
+export { cascadeLightViewProj, computeCascadeSplits, reserveCasterLayers } from './cascade-shadow';
 export {
   forwardFromMatrix,
   GPU_LIGHTS_BYTE_SIZE,
@@ -17,7 +21,9 @@ export {
   MAX_SPOT_LIGHTS,
   NO_SHADOW_CASTER,
   packAmbient,
+  packCascadeSplits,
   packCounts,
+  packDirectionalCascadeBase,
   packDirectionalCasterIndex,
   packDirectionalLight,
   packPointLight,

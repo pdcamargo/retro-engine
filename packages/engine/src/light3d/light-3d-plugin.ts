@@ -1,7 +1,9 @@
 import type { ComponentType, Query as QueryHandle } from '@retro-engine/ecs';
 import type { Mat4 } from '@retro-engine/math';
-import { mat4 } from '@retro-engine/math';
+import { mat4, vec3 } from '@retro-engine/math';
 
+import { Camera } from '../camera/camera';
+import { PerspectiveProjection } from '../camera/projection';
 import type { App } from '../index';
 import { MeshAllocator, Mesh3d, RenderMeshes } from '../mesh';
 import type { PluginObject } from '../plugin';
@@ -16,14 +18,19 @@ import { GlobalTransform } from '../transform';
 import { ViewVisibility } from '../visibility/visibility';
 
 import { AmbientLight } from './ambient-light';
+import { MAX_CASCADES, CascadeShadowConfig } from './cascade-shadow-config';
+import { cascadeLightViewProj, computeCascadeSplits, reserveCasterLayers } from './cascade-shadow';
 import { DirectionalLight3d } from './directional-light-3d';
 import {
+  forwardFromMatrix,
   GpuLights,
   MAX_DIRECTIONAL_LIGHTS,
   MAX_POINT_LIGHTS,
   MAX_SPOT_LIGHTS,
   packAmbient,
+  packCascadeSplits,
   packCounts,
+  packDirectionalCascadeBase,
   packDirectionalCasterIndex,
   packDirectionalLight,
   packPointLight,
@@ -48,9 +55,36 @@ import { SpotLight3d } from './spot-light-3d';
 type LightQuery<Ctor extends ComponentType> = QueryHandle<
   readonly [Ctor, typeof GlobalTransform, typeof ViewVisibility]
 >;
+type DirectionalLightQuery = QueryHandle<
+  readonly [
+    typeof DirectionalLight3d,
+    typeof GlobalTransform,
+    typeof ViewVisibility,
+    typeof CascadeShadowConfig,
+  ]
+>;
+type CameraQuery = QueryHandle<readonly [typeof Camera, typeof PerspectiveProjection]>;
 
-// Render-thread scratch for one light-space view-proj at a time.
+// Render-thread scratch reused across the per-frame pack.
 const scratchViewProj = mat4.identity() as Mat4;
+const scratchInvView = mat4.identity() as Mat4;
+const scratchLightForward = vec3.create();
+const scratchSplits = new Float32Array(MAX_CASCADES);
+
+/** Active perspective camera driving the Core3d sub-graph, lowest `order` first. */
+const activeCore3dCamera = (
+  cameras: CameraQuery,
+): { cam: Camera; proj: PerspectiveProjection } | undefined => {
+  let best: { cam: Camera; proj: PerspectiveProjection } | undefined;
+  for (const row of cameras.entries()) {
+    const cam = row[1] as Camera;
+    if (!cam.isActive || cam.subGraph !== Core3dLabel) continue;
+    if (best === undefined || cam.order < best.cam.order) {
+      best = { cam, proj: row[2] as PerspectiveProjection };
+    }
+  }
+  return best;
+};
 
 /**
  * Engine plugin providing analytic 3D lighting **and shadow maps** for lit
@@ -63,8 +97,9 @@ const scratchViewProj = mat4.identity() as Mat4;
  * Each frame:
  *
  * - `light3d-prepare` ({@link RenderSet.Prepare}) packs every visible light into
- *   the lights uniform, assigns shadow-atlas layers to directional / spot
- *   lights (up to the budget), and computes their light-space view-projections.
+ *   the lights uniform and assigns shadow-atlas layers (up to the budget): spot
+ *   lights get one layer, directional lights get one camera-fitted cascade per
+ *   layer, and their light-space view-projections are computed here.
  * - `shadow3d-prepare` ({@link RenderSet.Prepare}, after `light3d-prepare`)
  *   bootstraps the shadow atlas GPU resources and uploads the per-light
  *   matrices.
@@ -139,18 +174,20 @@ export class Light3dPlugin implements PluginObject {
         Res(AmbientLight),
         ResMut(Shadow3dState),
         Res(Shadow3dSettings),
-        Extract(Query([DirectionalLight3d, GlobalTransform, ViewVisibility])),
+        Extract(Query([Camera, PerspectiveProjection])),
+        Extract(Query([DirectionalLight3d, GlobalTransform, ViewVisibility, CascadeShadowConfig])),
         Extract(Query([PointLight3d, GlobalTransform, ViewVisibility])),
         Extract(Query([SpotLight3d, GlobalTransform, ViewVisibility])),
       ],
-      (gpuLights, ambient, shadow, settings, directionals, points, spots) => {
+      (gpuLights, ambient, shadow, settings, cameras, directionals, points, spots) => {
         prepareLights3d(
           app,
           gpuLights as GpuLights,
           ambient as AmbientLight,
           shadow as Shadow3dState,
           settings as Shadow3dSettings,
-          directionals as unknown as LightQuery<typeof DirectionalLight3d>,
+          cameras as unknown as CameraQuery,
+          directionals as unknown as DirectionalLightQuery,
           points as unknown as LightQuery<typeof PointLight3d>,
           spots as unknown as LightQuery<typeof SpotLight3d>,
         );
@@ -200,7 +237,8 @@ const prepareLights3d = (
   ambient: AmbientLight,
   shadow: Shadow3dState,
   settings: Shadow3dSettings,
-  directionals: LightQuery<typeof DirectionalLight3d>,
+  cameras: CameraQuery,
+  directionals: DirectionalLightQuery,
   points: LightQuery<typeof PointLight3d>,
   spots: LightQuery<typeof SpotLight3d>,
 ): void => {
@@ -210,6 +248,21 @@ const prepareLights3d = (
 
   packAmbient(ambient, f32);
 
+  // Cascades fit the active perspective camera's frustum; without one, fall back
+  // to a fixed origin-centered box per directional light.
+  const camera = activeCore3dCamera(cameras);
+  let tanHalfFovY = 0;
+  let aspect = 1;
+  if (camera !== undefined) {
+    mat4.inverse(camera.cam.computed.viewMatrix, scratchInvView);
+    tanHalfFovY = Math.tan(camera.proj.fov * 0.5);
+    aspect = camera.proj.aspectRatio;
+  }
+  // Split distances are a function of the camera (shared across directionals);
+  // computed once from the first cascaded light's config.
+  let cascadeCount = 0;
+  let splitsReady = false;
+
   let directionalCount = 0;
   for (const row of directionals.entries()) {
     if (directionalCount >= MAX_DIRECTIONAL_LIGHTS) break;
@@ -217,13 +270,54 @@ const prepareLights3d = (
     const light = row[1] as DirectionalLight3d;
     const gt = row[2] as GlobalTransform;
     packDirectionalLight(light, gt.matrix, f32, directionalCount);
-    const layer = assignCasterLayer(shadow.shadowLightCount);
-    if (layer >= 0) {
-      directionalLightViewProj(gt.matrix, settings, scratchViewProj);
-      packShadowViewProj(f32, layer, scratchViewProj);
-      packDirectionalCasterIndex(f32, directionalCount, layer);
-      shadow.stageViewProj(layer, scratchViewProj as Float32Array);
-      shadow.shadowLightCount += 1;
+
+    if (camera !== undefined) {
+      const config = row[4] as CascadeShadowConfig;
+      if (!splitsReady) {
+        cascadeCount = computeCascadeSplits(
+          config.numCascades,
+          config.minimumDistance,
+          config.maximumDistance,
+          config.lambda,
+          scratchSplits,
+          config.firstCascadeFarBound,
+        );
+        splitsReady = true;
+      }
+      const base = reserveCasterLayers(shadow.shadowLightCount, cascadeCount);
+      if (base >= 0) {
+        forwardFromMatrix(gt.matrix, scratchLightForward, 0);
+        let nearC = config.minimumDistance;
+        for (let c = 0; c < cascadeCount; c++) {
+          const farC = scratchSplits[c] as number;
+          cascadeLightViewProj(
+            {
+              invView: scratchInvView,
+              tanHalfFovY,
+              aspect,
+              nearC,
+              farC,
+              lightForward: scratchLightForward,
+              backExtension: settings.cascadeBackExtension,
+            },
+            scratchViewProj,
+          );
+          packShadowViewProj(f32, base + c, scratchViewProj);
+          shadow.stageViewProj(base + c, scratchViewProj as Float32Array);
+          nearC = farC;
+        }
+        packDirectionalCascadeBase(f32, directionalCount, base);
+        shadow.shadowLightCount += cascadeCount;
+      }
+    } else {
+      const layer = assignCasterLayer(shadow.shadowLightCount);
+      if (layer >= 0) {
+        directionalLightViewProj(gt.matrix, settings, scratchViewProj);
+        packShadowViewProj(f32, layer, scratchViewProj);
+        packDirectionalCasterIndex(f32, directionalCount, layer);
+        shadow.stageViewProj(layer, scratchViewProj as Float32Array);
+        shadow.shadowLightCount += 1;
+      }
     }
     directionalCount++;
   }
@@ -254,6 +348,7 @@ const prepareLights3d = (
     spotCount++;
   }
 
-  packCounts(u32, directionalCount, pointCount, spotCount);
+  packCounts(u32, directionalCount, pointCount, spotCount, cascadeCount);
+  packCascadeSplits(f32, scratchSplits);
   gpuLights.upload(app.renderer);
 };

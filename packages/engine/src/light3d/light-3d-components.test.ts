@@ -6,6 +6,7 @@ import { GlobalTransform, Transform } from '../transform';
 import { InheritedVisibility, ViewVisibility, Visibility } from '../visibility';
 
 import { AmbientLight } from './ambient-light';
+import { CascadeShadowConfig } from './cascade-shadow-config';
 import { DirectionalLight3d } from './directional-light-3d';
 import { PointLight3d } from './point-light-3d';
 import { SpotLight3d } from './spot-light-3d';
@@ -74,8 +75,42 @@ describe('DirectionalLight3d', () => {
     expect('direction' in light).toBe(false);
   });
 
-  it('requires the visibility + transform chain (position ignored, direction from transform)', () => {
-    expect(DirectionalLight3d.requires).toEqual(VISIBILITY_REQUIRES);
+  it('requires the visibility + transform chain plus a cascade shadow config', () => {
+    expect(DirectionalLight3d.requires).toEqual([...VISIBILITY_REQUIRES, CascadeShadowConfig]);
+  });
+});
+
+describe('CascadeShadowConfig', () => {
+  it('defaults to 4 cascades over [0.1, 150] with a 0.8 log/uniform blend', () => {
+    const config = new CascadeShadowConfig();
+    expect(config.numCascades).toBe(4);
+    expect(config.minimumDistance).toBeCloseTo(0.1);
+    expect(config.maximumDistance).toBe(150);
+    expect(config.firstCascadeFarBound).toBeUndefined();
+    expect(config.overlapProportion).toBeCloseTo(0.2);
+    expect(config.lambda).toBeCloseTo(0.8);
+  });
+
+  it('clamps numCascades to [1, MAX_CASCADES]', () => {
+    expect(new CascadeShadowConfig({ numCascades: 0 }).numCascades).toBe(1);
+    expect(new CascadeShadowConfig({ numCascades: 99 }).numCascades).toBe(4);
+  });
+
+  it('honours supplied options', () => {
+    const config = new CascadeShadowConfig({
+      numCascades: 3,
+      minimumDistance: 1,
+      maximumDistance: 80,
+      firstCascadeFarBound: 6,
+      overlapProportion: 0.1,
+      lambda: 0.8,
+    });
+    expect(config.numCascades).toBe(3);
+    expect(config.minimumDistance).toBe(1);
+    expect(config.maximumDistance).toBe(80);
+    expect(config.firstCascadeFarBound).toBe(6);
+    expect(config.overlapProportion).toBeCloseTo(0.1);
+    expect(config.lambda).toBeCloseTo(0.8);
   });
 });
 

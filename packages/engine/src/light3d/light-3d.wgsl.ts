@@ -15,11 +15,12 @@ export const LIGHT3D_WGSL = /* wgsl */ `
 const MAX_DIRECTIONAL_LIGHTS: u32 = 4u;
 const MAX_POINT_LIGHTS: u32 = 64u;
 const MAX_SPOT_LIGHTS: u32 = 64u;
-const MAX_SHADOW_CASTERS: u32 = 8u;
+const MAX_SHADOW_CASTERS: u32 = 12u;
 
 struct DirectionalLightGpu {
   // xyz = world-space travel direction (the way the light points);
-  // w = shadow caster index (atlas layer + shadow_view_proj index, -1 = none).
+  // w = base shadow-atlas layer of this light's cascades (cascade c uses layer
+  //     w + c and shadow_view_proj[w + c]); -1 = casts no shadow.
   direction: vec4<f32>,
   // rgb = colour, a = intensity.
   color: vec4<f32>,
@@ -46,13 +47,18 @@ struct SpotLightGpu {
 struct GpuLights {
   // rgb = ambient colour, a = ambient brightness.
   ambient: vec4<f32>,
-  // x = directional count, y = point count, z = spot count.
+  // x = directional count, y = point count, z = spot count,
+  // w = cascade count (cascades per shadowed directional light, 0 = none).
   counts: vec4<u32>,
   directional: array<DirectionalLightGpu, MAX_DIRECTIONAL_LIGHTS>,
   point: array<PointLightGpu, MAX_POINT_LIGHTS>,
   spot: array<SpotLightGpu, MAX_SPOT_LIGHTS>,
-  // Per-shadow-caster light-space view-projection. Indexed by a light's caster
-  // index; \`retro_engine::shadow3d\` projects the world fragment by this matrix.
+  // Directional cascade split distances: each component is a cascade's far edge
+  // in camera view-space distance. Only the first \`counts.w\` are meaningful.
+  cascade_splits: vec4<f32>,
+  // Per-shadow-caster light-space view-projection. Indexed by a caster layer
+  // (spot: its caster index; directional: cascade base + cascade index);
+  // \`retro_engine::shadow3d\` projects the world fragment by this matrix.
   shadow_view_proj: array<mat4x4<f32>, MAX_SHADOW_CASTERS>,
 };
 

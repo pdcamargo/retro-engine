@@ -5,6 +5,7 @@ import type { Renderer } from '@retro-engine/renderer-core';
 import {
   App,
   Camera3d,
+  CascadeShadowConfig,
   DirectionalLight3d,
   Light3dPlugin,
   MaterialPlugin,
@@ -39,7 +40,12 @@ describe('NotShadowCaster', () => {
     const { renderer, log } = makeCapturingRenderer();
     const { app, spawn } = litApp(renderer);
     spawn(new NotShadowCaster());
-    app.world.spawn(new DirectionalLight3d(), new Transform());
+    // One cascade so the light claims exactly one layer for this assertion.
+    app.world.spawn(
+      new DirectionalLight3d(),
+      new CascadeShadowConfig({ numCascades: 1 }),
+      new Transform(),
+    );
     app.world.spawn(...Camera3d());
     await app.run();
 

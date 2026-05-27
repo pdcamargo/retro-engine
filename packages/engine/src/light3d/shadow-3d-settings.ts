@@ -4,10 +4,12 @@
  */
 export interface Shadow3dSettingsOptions {
   /**
-   * Half-extent (world units) of a directional light's orthographic shadow
-   * frustum. The shadow box is `2·directionalExtent` on a side, centered on the
-   * world origin and aimed along the light's forward axis. Casters outside this
-   * box receive no directional shadow. Default `20`.
+   * Half-extent (world units) of a directional light's **fallback** orthographic
+   * shadow box, used only when no perspective camera drives the scene (otherwise
+   * cascaded shadow maps fit the camera frustum). The box is
+   * `2·directionalExtent` on a side, centered on the world origin and aimed along
+   * the light's forward axis. Casters outside it receive no directional shadow.
+   * Default `20`.
    */
   directionalExtent?: number;
   /** Near plane of every shadow projection (world units). Default `0.5`. */
@@ -30,17 +32,25 @@ export interface Shadow3dSettingsOptions {
    * but hollows thin/open geometry; `'back'` (default) matches the main pass.
    */
   cullMode?: 'back' | 'front' | 'none';
+  /**
+   * Extra depth (world units) each directional cascade's projection is extended
+   * toward the light, so occluders just outside the cascade slice still cast into
+   * it. Larger values catch more off-screen casters at the cost of depth
+   * precision (and risk peter-panning). Default `30`.
+   */
+  cascadeBackExtension?: number;
 }
 
 /**
  * Render-world resource tuning 3D shadow-map generation. Inserted with defaults
  * by `Light3dPlugin`; insert your own before the plugin to override.
  *
- * The directional shadow frustum is a fixed orthographic box around the world
- * origin (it does not follow the camera or fit the scene). Casters far from the
- * origin fall outside it and go unshadowed; raise {@link directionalExtent} to
- * cover a larger scene. Camera-following cascaded shadow maps remove this
- * limitation in a later stage.
+ * Directional lights use cascaded shadow maps that fit the active perspective
+ * camera's frustum (per-light range/quality is set on each light's
+ * `CascadeShadowConfig`). When no perspective camera drives the scene, they fall
+ * back to a fixed orthographic box of half-extent {@link directionalExtent}
+ * around the world origin. The bias / cull settings apply to every shadow depth
+ * pass (directional cascades and spot lights alike).
  */
 export class Shadow3dSettings {
   directionalExtent: number;
@@ -49,6 +59,7 @@ export class Shadow3dSettings {
   depthBias: number;
   slopeScaleBias: number;
   cullMode: 'back' | 'front' | 'none';
+  cascadeBackExtension: number;
 
   constructor(options: Shadow3dSettingsOptions = {}) {
     this.directionalExtent = options.directionalExtent ?? 20;
@@ -57,5 +68,6 @@ export class Shadow3dSettings {
     this.depthBias = options.depthBias ?? 2;
     this.slopeScaleBias = options.slopeScaleBias ?? 3;
     this.cullMode = options.cullMode ?? 'back';
+    this.cascadeBackExtension = options.cascadeBackExtension ?? 30;
   }
 }
