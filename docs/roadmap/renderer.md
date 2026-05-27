@@ -136,15 +136,18 @@ Bevy doesn't ship 2D lighting in core; the community implements it as accumulati
 
 **Status: In progress.** ADR-0044 shipped 10.1 (the three light components +
 the `AmbientLight` resource) and the `GpuLights` / `prepare_lights` half of 10.3
-with **simple-forward** shading (the fragment loops over all lights). Light
-direction for directional/spot is derived from `GlobalTransform`. Browser-verified
-in `apps/playground` (`?mode=lit`). Shadow maps (10.4–10.6) follow; IBL (10.7) is
+with **simple-forward** shading (the fragment loops over all lights). ADR-0045
+shipped 10.4 — directional + spot shadow maps via a shared `depth32float`
+2D-array atlas (one layer per caster), a depth prepass node before the opaque
+pass, and a `shadow_factor` multiply in `pbr.wgsl`. Light direction for
+directional/spot is derived from `GlobalTransform`. Browser-verified in
+`apps/playground` (`?mode=lit`). Cascades + PCF (10.5–10.6) follow; IBL (10.7) is
 gated on the asset system.
 
 - **10.1 `PointLight` / `SpotLight` / `DirectionalLight` / `AmbientLight`** — components; ambient is a resource. ✅ (ADR-0044)
 - **10.2 Forward+ clustered shading** — 3D froxel grid via `ClusterConfig`. **Backlogged** (`docs/backlog/3d-clustered-forward-plus.md`): simple forward shipped in ADR-0044; clustering commits the engine to an SSBO dependency + a `storageBuffers` capability flag and is sequenced after shadows. Simple forward is the WebGL2 fallback; clustered is the WebGPU fast path.
 - **10.3 `prepare_lights`** — builds `GpuLights` uniform ✅ (ADR-0044); `assign_objects_to_clusters` (the cluster-binding half) is backlogged with 10.2.
-- **10.4 Shadow maps** — per-light depth render.
+- **10.4 Shadow maps** — per-light depth render. ✅ (ADR-0045) directional + spot, 2D-array depth atlas, `NotShadowCaster` opt-out. Point-light (cube) shadows + `NotShadowReceiver` are documented follow-ons; the directional frustum is a fixed origin box until cascades (10.5) add camera fitting.
 - **10.5 Cascaded shadow maps** — for `DirectionalLight` via `CascadeShadowConfig`.
 - **10.6 PCF / shadow filtering kernels** — `ShadowFilteringMethod`.
 - **10.7 Environment map & image-based lighting (IBL)** — PBR needs this to look right, but it is **gated on the asset system** (HDRI loading + cubemap baking are not built yet), so it lands after `docs/roadmap/asset-system.md`. ADR-0044's flat ambient term is the placeholder it replaces.

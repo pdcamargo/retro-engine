@@ -13,12 +13,28 @@ export {
   GpuLights,
   MAX_DIRECTIONAL_LIGHTS,
   MAX_POINT_LIGHTS,
+  MAX_SHADOW_CASTERS,
   MAX_SPOT_LIGHTS,
+  NO_SHADOW_CASTER,
   packAmbient,
   packCounts,
+  packDirectionalCasterIndex,
   packDirectionalLight,
   packPointLight,
+  packShadowViewProj,
+  packSpotCasterIndex,
   packSpotLight,
 } from './gpu-lights';
 export { LIGHT3D_WGSL } from './light-3d.wgsl';
+export { NotShadowCaster } from './not-shadow-caster';
+export type { ShadowCasterBatch } from './shadow-3d';
+export { SHADOW_ATLAS_FORMAT, SHADOW_MAP_SIZE, Shadow3dState } from './shadow-3d';
+export {
+  assignCasterLayer,
+  directionalLightViewProj,
+  spotLightViewProj,
+} from './shadow-3d-matrices';
+export type { Shadow3dSettingsOptions } from './shadow-3d-settings';
+export { Shadow3dSettings } from './shadow-3d-settings';
+export { SHADOW3D_DEPTH_WGSL, SHADOW3D_WGSL } from './shadow-3d.wgsl';
 export { Light3dPlugin } from './light-3d-plugin';

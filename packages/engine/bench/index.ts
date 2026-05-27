@@ -28,6 +28,7 @@ import './event-driven-cull-prepare.bench';
 import './light-2d.bench';
 import './light-2d-shadow.bench';
 import './light-3d.bench';
+import './shadow-3d.bench';
 
 interface NormalizedBench {
   readonly key: string;

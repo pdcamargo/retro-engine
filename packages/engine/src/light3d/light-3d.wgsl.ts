@@ -15,9 +15,11 @@ export const LIGHT3D_WGSL = /* wgsl */ `
 const MAX_DIRECTIONAL_LIGHTS: u32 = 4u;
 const MAX_POINT_LIGHTS: u32 = 64u;
 const MAX_SPOT_LIGHTS: u32 = 64u;
+const MAX_SHADOW_CASTERS: u32 = 8u;
 
 struct DirectionalLightGpu {
-  // xyz = world-space travel direction (the way the light points), w unused.
+  // xyz = world-space travel direction (the way the light points);
+  // w = shadow caster index (atlas layer + shadow_view_proj index, -1 = none).
   direction: vec4<f32>,
   // rgb = colour, a = intensity.
   color: vec4<f32>,
@@ -36,7 +38,8 @@ struct SpotLightGpu {
   // xyz = cone forward direction, w = cos(innerAngle).
   direction: vec4<f32>,
   color: vec4<f32>,
-  // x = source radius, y = cos(outerAngle), z = 1 / range^2, w unused.
+  // x = source radius, y = cos(outerAngle), z = 1 / range^2;
+  // w = shadow caster index (atlas layer + shadow_view_proj index, -1 = none).
   params: vec4<f32>,
 };
 
@@ -48,6 +51,9 @@ struct GpuLights {
   directional: array<DirectionalLightGpu, MAX_DIRECTIONAL_LIGHTS>,
   point: array<PointLightGpu, MAX_POINT_LIGHTS>,
   spot: array<SpotLightGpu, MAX_SPOT_LIGHTS>,
+  // Per-shadow-caster light-space view-projection. Indexed by a light's caster
+  // index; \`retro_engine::shadow3d\` projects the world fragment by this matrix.
+  shadow_view_proj: array<mat4x4<f32>, MAX_SHADOW_CASTERS>,
 };
 
 @group(2) @binding(0) var<uniform> lights: GpuLights;

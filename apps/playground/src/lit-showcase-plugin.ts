@@ -1,11 +1,14 @@
-// Visual verification harness for Phase 10's 3D analytic lighting (ADR-0044).
+// Visual verification harness for Phase 10's 3D analytic lighting + shadow maps
+// (ADR-0044 / ADR-0045).
 //
 // Spawns a grid of `StandardMaterial` spheres with metallic increasing along
-// X and roughness increasing along Z — the canonical PBR test layout — on a
-// matte ground plane, lit by one directional "sun", two orbiting point lights
-// (warm + cool), a downward spot light, and a dim ambient floor. Watching the
-// highlights track the orbiting lights confirms the GpuLights uniform, the
-// per-light loop in pbr.wgsl, and the @group(2) binding all work end-to-end.
+// X and roughness increasing along Z — the canonical PBR test layout — raised
+// above a matte ground plane, lit by one directional "sun", two orbiting point
+// lights (warm + cool), a downward spot light, and a dim ambient floor. The
+// raised spheres cast shadows onto the ground from the sun + spot: watching the
+// shadows track the lit grid (and the highlights track the orbiting lights)
+// confirms the GpuLights uniform, the per-light loop in pbr.wgsl, the @group(2)
+// binding, AND the shadow atlas / depth pass / shadow_factor all work end-to-end.
 //
 // GPU shading is not headless-verifiable; open ?mode=lit in a WebGPU browser
 // (restart the dev server first — it does not hot-reload engine changes).
@@ -25,6 +28,7 @@ import {
   PointLight3d,
   Query,
   ResMut,
+  Shadow3dSettings,
   Sphere,
   SpotLight3d,
   StandardMaterial,
@@ -64,6 +68,10 @@ export const litShowcasePlugin: Plugin = (app) => {
   // A dim, slightly-cool ambient floor. Inserted before Light3dPlugin so the
   // plugin's default-insert guard leaves it alone.
   app.insertResource(new AmbientLight({ color: vec3.create(0.6, 0.7, 0.9), brightness: 0.04 }));
+  // Tighten the directional shadow frustum to the scene (ground is ±6). The
+  // default extent (20) spreads the 1024² shadow map over a 40-unit box, which
+  // reads as blocky directional shadows; ±8 is ~2.5× the texel density here.
+  app.insertResource(new Shadow3dSettings({ directionalExtent: 8 }));
   app.addPlugin(new Light3dPlugin());
 
   // Orbit the point lights around the grid centre.
@@ -94,9 +102,10 @@ export const litShowcasePlugin: Plugin = (app) => {
             new StandardMaterial({ baseColor: rgba(0.9, 0.45, 0.35), metallic, roughness }),
           );
           const transform = new Transform();
+          // Raised above the ground so the sun + spot cast visible shadows onto it.
           transform.translation = vec3.create(
             (col - (GRID - 1) / 2) * SPACING,
-            0,
+            1.5,
             (row - (GRID - 1) / 2) * SPACING,
           );
           cmd.spawn(new Mesh3d(sphere), new pbr.MeshMaterial3d(material), transform);

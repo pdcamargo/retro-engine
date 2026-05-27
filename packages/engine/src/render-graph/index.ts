@@ -31,6 +31,7 @@ export {
 } from './light2d-normal-prepass-2d-node';
 export { OpaquePass2dLabel, OpaquePass2dNode } from './opaque-pass-2d-node';
 export { OpaquePass3dLabel, OpaquePass3dNode } from './opaque-pass-3d-node';
+export { Shadow3dPass3dLabel, Shadow3dPass3dNode } from './shadow-pass-3d-node';
 export {
   TransparentPass2dLabel,
   TransparentPass2dNode,

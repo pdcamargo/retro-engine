@@ -30,9 +30,12 @@
  *     lands when `TANGENT` attributes flow through `Mesh.computeFlatNormals`).
  *   - `@binding(5)` `emissive_texture: texture_2d<f32>`.
  *   - `@binding(6)` `occlusion_texture: texture_2d<f32>`.
- * - `@group(2)`: the analytic-light uniform (`GpuLights`), imported via
- *   `#import retro_engine::light3d` and bound by the Core3d phase node when a
- *   `Light3dPlugin` is present.
+ * - `@group(2)`: the analytic-light uniform (`GpuLights`) at `@binding(0)`,
+ *   imported via `#import retro_engine::light3d`, plus the shadow depth atlas
+ *   (`texture_depth_2d_array`) at `@binding(1)` and a comparison sampler at
+ *   `@binding(2)` from `#import retro_engine::shadow3d`. Bound by the Core3d
+ *   phase node when a `Light3dPlugin` is present; directional / spot
+ *   contributions are multiplied by `shadow_factor(...)`.
  *
  * The per-entity model matrix and its inverse-transpose arrive as per-instance
  * vertex attributes at `@location(8..11)` and `@location(12..15)` (vertex
@@ -42,6 +45,7 @@
 export const PBR_WGSL = /* wgsl */ `
 #import retro_engine::view
 #import retro_engine::light3d
+#import retro_engine::shadow3d
 
 struct StandardMaterialUniform {
   base_color: vec4<f32>,
@@ -182,13 +186,15 @@ fn fs_main(in: VsOut) -> @location(0) vec4<f32> {
   // control flow.
   var direct = vec3<f32>(0.0);
   for (var i = 0u; i < lights.counts.x; i = i + 1u) {
-    direct += lit(directional_light_sample(i), n, v, n_dot_v, base_color.rgb, metallic, roughness, f0);
+    let shadow = shadow_factor(lights.directional[i].direction.w, in.world_position);
+    direct += lit(directional_light_sample(i), n, v, n_dot_v, base_color.rgb, metallic, roughness, f0) * shadow;
   }
   for (var i = 0u; i < lights.counts.y; i = i + 1u) {
     direct += lit(point_light_sample(i, in.world_position), n, v, n_dot_v, base_color.rgb, metallic, roughness, f0);
   }
   for (var i = 0u; i < lights.counts.z; i = i + 1u) {
-    direct += lit(spot_light_sample(i, in.world_position), n, v, n_dot_v, base_color.rgb, metallic, roughness, f0);
+    let shadow = shadow_factor(lights.spot[i].params.w, in.world_position);
+    direct += lit(spot_light_sample(i, in.world_position), n, v, n_dot_v, base_color.rgb, metallic, roughness, f0) * shadow;
   }
 
   // Flat scene ambient — replaced by image-based lighting in Phase 10.7.
