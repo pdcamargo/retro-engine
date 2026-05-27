@@ -118,13 +118,19 @@ The 2D path is a parallel track to §7 and runs through its own dedicated batche
 
 ### Phase 9 — 2D lighting
 
+**Status: Shipped.** ADR-0037 (9.1 `PointLight2d` + accumulation/composite),
+ADR-0041 (9.1 `SpotLight2d`/`DirectionalLight2d`/`AmbientLight2d` + 9.3 composite
+modes), ADR-0042 (9.4 shadow occluders — per-light 1D shadow maps), ADR-0043
+(9.5 normal-map-aware lighting). Browser-verified in `apps/playground`
+(`?mode=lights`, `&normals=1`). All four extend ADR-0037 without superseding it.
+
 Bevy doesn't ship 2D lighting in core; the community implements it as accumulation-then-composite. Same pattern here.
 
-- **9.1 `PointLight2d` / `SpotLight2d` / `AmbientLight2d` / `DirectionalLight2d`** — components.
-- **9.2 Light accumulation pass** — writes to a per-camera light texture.
-- **9.3 Composite pass** — multiply / add / screen the light texture over the base 2D color.
-- **9.4 2D shadow occluders** — line-of-sight blocking; segment- or polygon-based.
-- **9.5 Normal-map-aware 2D lighting** — optional; capability-checked.
+- **9.1 `PointLight2d` / `SpotLight2d` / `AmbientLight2d` / `DirectionalLight2d`** — components. ✅
+- **9.2 Light accumulation pass** — writes to a per-camera light texture. ✅
+- **9.3 Composite pass** — multiply / add / screen the light texture over the base 2D color. ✅
+- **9.4 2D shadow occluders** — line-of-sight blocking; segment- or polygon-based. ✅ (`LightOccluder2d`, segment-based)
+- **9.5 Normal-map-aware 2D lighting** — optional; engine opt-in (`Light2dSettings.normalMapping`), no GPU capability needed. ✅
 
 ### Phase 10 — 3D lighting
 
