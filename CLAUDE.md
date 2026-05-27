@@ -172,3 +172,11 @@ Performance regressions don't show up in `bun run test` — they show up later a
 - **`bun run bench:check` stays local, pre-PR.** ADR-0017 §5 explains why CI doesn't compare. Run it on your machine before opening a PR that touches a hot path, after running `bun run bench:update` once to seed your laptop-local numbers.
 - **Update baselines deliberately.** `bun run bench:update` overwrites every `bench/baseline.json` with the current machine's numbers. Commit the diff alongside the perf-relevant change so the PR reviewer sees the new numbers — same shape as a test snapshot update.
 - **Bench files follow the same one-concern-per-file rule as `src/`** (CLAUDE.md §5.5). Bench helpers and stub renderers live in `packages/<pkg>/bench/helpers.ts`; bench files reference their owning ADR in a module-doc header (ADR references inside `packages/*/src/**` are still forbidden by §4 — bench files are excluded from the shipped build).
+
+## 12. Scope decisions stand on evidence, not the name
+
+"Retro" is the implementation aesthetic, not a capability ceiling. The only thing inherently constrained here is taste, never the engine's reach.
+
+- **Never justify a scope cut, a capped limit, a skipped capability, or a "simpler" path with genre or name reasoning** — "retro engines don't need X", "games like this rarely do Y", "it's a retro engine so Z is overkill". These are not arguments; they are assumptions dressed as ones.
+- Scope decisions rest on **real technical trade-offs, measured cost, WebGL2-reachability, or explicit project direction** (roadmap / backlog / ADR). If the honest reason to defer something is "it's bigger than this slice" or "it commits us to an SSBO/compute dependency", say that — don't reach for the genre.
+- A capability the roadmap plans (e.g. clustered shading) is planned because it's correct, not because the engine is "fancy enough" for it. Defer it for sequencing/cost reasons and track it (§8), never because the name implies it's unnecessary.
