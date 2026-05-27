@@ -10,10 +10,9 @@ const GROWTH_FACTOR = 1.5 as const;
  * Render-world resource owning the per-frame 2D-light instance buffer.
  *
  * One growable `BufferUsage.VERTEX | BufferUsage.COPY_DST` buffer plus a
- * shared scratch `Float32Array`. The queue system packs every visible
- * `PointLight2d` into the scratch (8 floats per light — see
- * {@link LIGHT2D_INSTANCE_BYTE_SIZE}) and issues one `renderer.writeBuffer`
- * per frame.
+ * shared scratch `Float32Array`. The queue system packs every visible 2D light
+ * into the scratch ({@link LIGHT2D_INSTANCE_BYTE_SIZE} bytes per light) and
+ * issues one `renderer.writeBuffer` per frame.
  *
  * Mirrors the {@link SpriteInstanceBuffer} growth pattern byte-for-byte: 1.5×
  * capacity bumps, minimum {@link MIN_CAPACITY} lights, prior buffer held in

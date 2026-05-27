@@ -8,14 +8,12 @@ import { vec4 } from '@retro-engine/math';
  * - `'multiply'` — `surface = base * light` (default; the classic 2D lighting
  *   look — fully unlit areas read as `base * ambient`, fully lit areas read
  *   as `base * lightContribution`).
- * - `'add'` — `surface = base + light` (additive screen overlay; reserved).
- * - `'screen'` — `surface = 1 - (1 - base) * (1 - light)` (soft-light overlay;
- *   reserved).
+ * - `'add'` — `surface = base + light` (additive overlay).
+ * - `'screen'` — `surface = 1 - (1 - base) * (1 - light)` (soft-light overlay).
  *
- * v1 of Phase 9 implements **only** `'multiply'`; selecting `'add'` or
- * `'screen'` is accepted on the resource but ignored by the composite shader
- * until the follow-on phase. Document in your scene which mode you intend so
- * the move-up lands cleanly when the additional shader paths ship.
+ * The composite pipeline is specialized per mode (one fragment entry point
+ * each), so switching modes selects a cached pipeline rather than branching
+ * per pixel.
  */
 export type Light2dCompositeMode = 'multiply' | 'add' | 'screen';
 
@@ -30,9 +28,8 @@ export type Light2dCompositeMode = 'multiply' | 'add' | 'screen';
  *   light reaches it. Set to e.g. `(0.1, 0.1, 0.1, 1)` for a dim ambient
  *   floor so unlit regions read as "in shadow" rather than "broken."
  * - {@link compositeMode} selects how the composite pass combines the
- *   accumulated light against the base color. v1 implements only
- *   `'multiply'`; the field exists for forward-compatibility with `add` and
- *   `screen` modes documented in ADR-0037 §"Not yet done".
+ *   accumulated light against the base color (`'multiply'` / `'add'` /
+ *   `'screen'`).
  *
  * Inserted by `Light2dPlugin` with the defaults above; gameplay /
  * scene-setup code mutates it directly to change ambient or composite mode

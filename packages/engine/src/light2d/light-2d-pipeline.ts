@@ -22,20 +22,25 @@ import { ShaderRegistry } from '../shader/shader-registry';
 import { SpecializedRenderPipelines } from '../shader/specialized-render-pipeline';
 
 import { LIGHT2D_INSTANCE_BYTE_SIZE } from './light-2d-batch';
+import type { Light2dCompositeMode } from './light-2d-settings';
 
 /** Format of the per-camera light-accumulation texture. Fixed at `rgba16float` so additive accumulation can exceed `1` per channel. */
 export const LIGHT2D_ACCUM_FORMAT: TextureFormat = 'rgba16float';
 
 /**
- * Specialization key for the composite pipeline. Varies only on the
- * destination surface format — each camera writes to its own
- * `view.target.format`, and a multi-window App can have cameras hitting
- * different surface formats simultaneously.
+ * Specialization key for the composite pipeline.
+ *
+ * - `surfaceFormat` — each camera writes to its own `view.target.format`, and a
+ *   multi-window App can have cameras hitting different surface formats
+ *   simultaneously.
+ * - `compositeMode` — selects the matching fragment entry point
+ *   (`fs_multiply` / `fs_add` / `fs_screen`), avoiding a per-pixel branch.
  *
  * @internal
  */
 export interface Light2dCompositeKey {
   readonly surfaceFormat: TextureFormat;
+  readonly compositeMode: Light2dCompositeMode;
 }
 
 interface Light2dCompositeSpecializeContext {
@@ -171,7 +176,7 @@ export class Light2dPipeline {
     this.composite = new SpecializedRenderPipelines<Light2dCompositeSpecializeContext>(
       pipelineCache as PipelineCache,
       (ctx) => this.specializeComposite(ctx),
-      (ctx) => `light2d-composite|f=${ctx.key.surfaceFormat}`,
+      (ctx) => `light2d-composite|f=${ctx.key.surfaceFormat}|m=${ctx.key.compositeMode}`,
     );
 
     this.initialised = true;
@@ -246,6 +251,8 @@ export class Light2dPipeline {
             attributes: [
               { shaderLocation: 2, format: 'float32x4', offset: 0 },
               { shaderLocation: 3, format: 'float32x4', offset: 16 },
+              { shaderLocation: 4, format: 'float32x4', offset: 32 },
+              { shaderLocation: 5, format: 'float32', offset: 48 },
             ],
           },
         ],
@@ -272,8 +279,10 @@ export class Light2dPipeline {
   }
 
   private specializeComposite(ctx: Light2dCompositeSpecializeContext): RenderPipelineDescriptor {
+    const mode = ctx.key.compositeMode;
+    const entryPoint = mode === 'add' ? 'fs_add' : mode === 'screen' ? 'fs_screen' : 'fs_multiply';
     return {
-      label: `light2d-composite|f=${ctx.key.surfaceFormat}`,
+      label: `light2d-composite|f=${ctx.key.surfaceFormat}|m=${mode}`,
       layout: this.compositePipelineLayout!,
       vertex: {
         module: this.compositeModule!,
@@ -283,7 +292,7 @@ export class Light2dPipeline {
       },
       fragment: {
         module: this.compositeModule!,
-        entryPoint: 'fs_main',
+        entryPoint,
         targets: [{ format: ctx.key.surfaceFormat }],
       },
       primitive: {

@@ -1,4 +1,4 @@
-import type { Entity, Query as QueryHandle } from '@retro-engine/ecs';
+import type { ComponentType, Entity, Query as QueryHandle } from '@retro-engine/ecs';
 
 import { SortedCameras } from '../camera/sorted-cameras';
 import type { App } from '../index';
@@ -21,12 +21,17 @@ import { Extract, Query, Res, ResMut } from '../system-param';
 import { GlobalTransform } from '../transform';
 import { ViewVisibility } from '../visibility/visibility';
 
+import { AmbientLight2d } from './ambient-light-2d';
+import { DirectionalLight2d } from './directional-light-2d';
 import { LIGHT2D_ACCUMULATION_WGSL } from './light-2d-accumulation.wgsl';
 import {
   type Light2dBatch,
   LIGHT2D_INSTANCE_FLOAT_COUNT,
   Light2dPreparedBatches,
+  packAmbientLightInstance,
+  packDirectionalLightInstance,
   packLightInstance,
+  packSpotLightInstance,
 } from './light-2d-batch';
 import { LIGHT2D_COMPOSITE_WGSL } from './light-2d-composite.wgsl';
 import { Light2dInstanceBuffer } from './light-2d-instance-buffer';
@@ -34,9 +39,10 @@ import { Light2dPipeline } from './light-2d-pipeline';
 import { Light2dSettings } from './light-2d-settings';
 import { prepareLight2dTargets, ViewLight2dTargets } from './light-2d-targets';
 import { PointLight2d } from './point-light-2d';
+import { SpotLight2d } from './spot-light-2d';
 
 /**
- * Engine plugin owning the built-in 2D-lighting pipeline (Phase 9.1).
+ * Engine plugin owning the built-in 2D-lighting pipeline.
  *
  * On `build`:
  *
@@ -58,10 +64,11 @@ import { PointLight2d } from './point-light-2d';
  *     active Core2d camera has a `baseColor` + `lightAccum` texture pair
  *     plus a composite bind group. Resizes / GCs entries as cameras come
  *     and go.
- *   - `light2d-queue` in {@link RenderSet.Queue}: iterates visible
- *     `(PointLight2d, GlobalTransform, ViewVisibility)` entities, packs them
- *     into the shared instance buffer, and emits one batch per Core2d
- *     camera pointing at the packed range.
+ *   - `light2d-queue` in {@link RenderSet.Queue}: iterates every visible 2D
+ *     light ({@link PointLight2d}, {@link SpotLight2d},
+ *     {@link DirectionalLight2d}, {@link AmbientLight2d}), packs them into the
+ *     shared instance buffer, and emits one batch per Core2d camera pointing
+ *     at the packed range.
  *
  * Unique. Layering on top of `SpritePlugin` or `Material2dPlugin` is the
  * intended usage; the plugin does not depend on them — installing
@@ -132,22 +139,26 @@ export class Light2dPlugin implements PluginObject {
       { set: RenderSet.Prepare, label: 'light2d-prepare-targets' },
     );
 
-    type LightQuery = QueryHandle<
-      readonly [typeof PointLight2d, typeof GlobalTransform, typeof ViewVisibility]
-    >;
-
     app.addSystem(
       'render',
       [
         Extract(Query([PointLight2d, GlobalTransform, ViewVisibility])),
+        Extract(Query([SpotLight2d, GlobalTransform, ViewVisibility])),
+        Extract(Query([DirectionalLight2d, GlobalTransform, ViewVisibility])),
+        Extract(Query([AmbientLight2d, GlobalTransform, ViewVisibility])),
         Res(SortedCameras),
         ResMut(Light2dInstanceBuffer),
         ResMut(Light2dPreparedBatches),
       ],
-      (lights, cameras, instanceBuffer, prepared) => {
+      (points, spots, directionals, ambients, cameras, instanceBuffer, prepared) => {
         queueLight2dInstances(
           app,
-          lights as unknown as LightQuery,
+          {
+            points: points as unknown as LightQuery<typeof PointLight2d>,
+            spots: spots as unknown as LightQuery<typeof SpotLight2d>,
+            directionals: directionals as unknown as LightQuery<typeof DirectionalLight2d>,
+            ambients: ambients as unknown as LightQuery<typeof AmbientLight2d>,
+          },
           cameras as SortedCameras,
           instanceBuffer as Light2dInstanceBuffer,
           prepared as Light2dPreparedBatches,
@@ -158,11 +169,32 @@ export class Light2dPlugin implements PluginObject {
   }
 }
 
+type LightQuery<Ctor extends ComponentType> = QueryHandle<
+  readonly [Ctor, typeof GlobalTransform, typeof ViewVisibility]
+>;
+
+interface LightQueries {
+  readonly points: LightQuery<typeof PointLight2d>;
+  readonly spots: LightQuery<typeof SpotLight2d>;
+  readonly directionals: LightQuery<typeof DirectionalLight2d>;
+  readonly ambients: LightQuery<typeof AmbientLight2d>;
+}
+
+const collectVisible = <T>(
+  query: QueryHandle<readonly [ComponentType, typeof GlobalTransform, typeof ViewVisibility]>,
+): { light: T; gt: GlobalTransform }[] => {
+  const visible: { light: T; gt: GlobalTransform }[] = [];
+  for (const row of query.entries()) {
+    const vis = row[3] as ViewVisibility;
+    if (!vis.visible) continue;
+    visible.push({ light: row[1] as T, gt: row[2] as GlobalTransform });
+  }
+  return visible;
+};
+
 const queueLight2dInstances = (
   app: App,
-  lights: QueryHandle<
-    readonly [typeof PointLight2d, typeof GlobalTransform, typeof ViewVisibility]
-  >,
+  queries: LightQueries,
   cameras: SortedCameras,
   instanceBuffer: Light2dInstanceBuffer,
   prepared: Light2dPreparedBatches,
@@ -170,33 +202,44 @@ const queueLight2dInstances = (
   prepared.batches.length = 0;
   instanceBuffer.count = 0;
 
-  // Collect visible lights once. In v1 every Core2d camera sees the same
-  // visible set (no per-camera render-layer filtering yet), so we pack
-  // once and point every camera's batch at the same range.
-  const visible: { light: PointLight2d; gt: GlobalTransform }[] = [];
-  for (const row of lights.entries()) {
-    const light = row[1] as PointLight2d;
-    const gt = row[2] as GlobalTransform;
-    const vis = row[3] as ViewVisibility;
-    if (!vis.visible) continue;
-    visible.push({ light, gt });
-  }
+  // Collect every visible light once. In v1 every Core2d camera sees the same
+  // visible set (no per-camera render-layer filtering yet), so we pack once
+  // and point every camera's batch at the same range. Kinds share one
+  // instance buffer and draw in a single instanced call.
+  const points = collectVisible<PointLight2d>(queries.points);
+  const spots = collectVisible<SpotLight2d>(queries.spots);
+  const directionals = collectVisible<DirectionalLight2d>(queries.directionals);
+  const ambients = collectVisible<AmbientLight2d>(queries.ambients);
+  const total = points.length + spots.length + directionals.length + ambients.length;
 
   // Even with no visible lights, emit one batch per Core2d camera with
   // `count = 0` so the accumulation node still performs its clear (the
   // composite pass needs the lightAccum texture to be in a known state —
   // the ambient floor — even when no light contributes).
   let count = 0;
-  if (visible.length > 0) {
-    instanceBuffer.ensureCapacity(app.renderer, visible.length);
+  if (total > 0) {
+    instanceBuffer.ensureCapacity(app.renderer, total);
+    const scratch = instanceBuffer.scratchF32;
     let cursor = 0;
-    for (const { light, gt } of visible) {
-      cursor += packLightInstance(light, gt.matrix, instanceBuffer.scratchF32, cursor);
+    for (const { light, gt } of points) {
+      cursor += packLightInstance(light, gt.matrix, scratch, cursor);
     }
-    count = visible.length;
+    for (const { light, gt } of spots) {
+      cursor += packSpotLightInstance(light, gt.matrix, scratch, cursor);
+    }
+    for (const { light } of directionals) {
+      cursor += packDirectionalLightInstance(light, scratch, cursor);
+    }
+    for (const { light, gt } of ambients) {
+      const he = light.halfExtents;
+      const halfW = he !== undefined ? (he[0] as number) : 0;
+      const halfH = he !== undefined ? (he[1] as number) : 0;
+      cursor += packAmbientLightInstance(light, gt.matrix, halfW, halfH, scratch, cursor);
+    }
+    count = total;
     instanceBuffer.count = count;
     if (instanceBuffer.buffer !== undefined && cursor > 0) {
-      const view = instanceBuffer.scratchF32.subarray(0, cursor);
+      const view = scratch.subarray(0, cursor);
       app.renderer.writeBuffer(instanceBuffer.buffer, 0, view as unknown as BufferSource);
     }
   }

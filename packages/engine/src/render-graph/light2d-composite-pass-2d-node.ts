@@ -2,6 +2,7 @@ import type { Entity } from '@retro-engine/ecs';
 import type { ColorAttachment, RenderPassDescriptor } from '@retro-engine/renderer-core';
 
 import { Light2dPipeline } from '../light2d/light-2d-pipeline';
+import { Light2dSettings } from '../light2d/light-2d-settings';
 import { ViewLight2dTargets } from '../light2d/light-2d-targets';
 
 import { Core2dLabel } from './core-2d';
@@ -74,8 +75,9 @@ export const Light2dCompositePass2dNode: ViewNode = {
       label: `camera#${view.sourceEntity}.light2d_composite`,
       colorAttachments: [colorAttachment],
     };
+    const compositeMode = ctx.app.getResource(Light2dSettings)?.compositeMode ?? 'multiply';
     const renderPipeline = pipeline.composite.get({
-      key: { surfaceFormat: view.target.format },
+      key: { surfaceFormat: view.target.format, compositeMode },
     });
     const pass = encoder.beginRenderPass(passDesc);
     pass.setPipeline(renderPipeline);

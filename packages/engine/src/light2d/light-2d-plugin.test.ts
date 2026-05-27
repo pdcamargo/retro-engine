@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'bun:test';
 
-import { vec3, vec4 } from '@retro-engine/math';
+import { vec2, vec3, vec4 } from '@retro-engine/math';
 
 import {
+  AmbientLight2d,
   App,
   Camera2d,
   Core2dLabel,
+  DirectionalLight2d,
   Light2dAccumulationPass2dLabel,
   Light2dCompositePass2dLabel,
+  Light2dPipeline,
   Light2dPlugin,
   Light2dPreparedBatches,
   Light2dSettings,
@@ -15,6 +18,7 @@ import {
   PointLight2d,
   RenderGraph,
   Sprite,
+  SpotLight2d,
   SpritePlugin,
   Transform,
   TransparentPass2dLabel,
@@ -188,6 +192,62 @@ describe('Light2dPlugin (integration)', () => {
     expect(buf.scratchF32[2]).toBe(200);
     expect(buf.scratchF32[3]).toBe(12);
     expect(buf.scratchF32[7]).toBe(1.5);
-    expect(LIGHT2D_INSTANCE_FLOAT_COUNT).toBe(8);
+    expect(LIGHT2D_INSTANCE_FLOAT_COUNT).toBe(13);
+  });
+
+  it('packs each light kind with its discriminator and per-kind params', async () => {
+    const { renderer } = makeCapturingRenderer();
+    const app = new App({ renderer, canvas: makeStubCanvas() });
+    app.addPlugin(new Light2dPlugin());
+    app.world.spawn(new PointLight2d({ range: 100 }), new Transform(vec3.create(1, 2, 0)));
+    app.world.spawn(
+      new SpotLight2d({
+        range: 120,
+        direction: vec2.create(1, 0),
+        innerAngle: 0,
+        outerAngle: Math.PI / 2,
+      }),
+      new Transform(vec3.create(3, 4, 0)),
+    );
+    app.world.spawn(new DirectionalLight2d({ direction: vec2.create(0, -1) }));
+    app.world.spawn(new AmbientLight2d({ halfExtents: vec2.create(50, 30) }), new Transform(vec3.create(5, 6, 0)));
+    app.world.spawn(...Camera2d());
+    await app.run();
+
+    const { Light2dInstanceBuffer, LIGHT2D_INSTANCE_FLOAT_COUNT, Light2dKind } = await import('./index');
+    const buf = app.getResource(Light2dInstanceBuffer)!;
+    const stride = LIGHT2D_INSTANCE_FLOAT_COUNT;
+    expect(buf.count).toBe(4);
+
+    // Pack order is point → spot → directional → ambient.
+    const f = buf.scratchF32;
+    expect(f[12]).toBe(Light2dKind.Point);
+    // Spot: cone dir.x at slot 8, cos(outer)=cos(PI/2)≈0 at slot 11.
+    expect(f[1 * stride + 12]).toBe(Light2dKind.Spot);
+    expect(f[1 * stride + 8]).toBeCloseTo(1);
+    expect(f[1 * stride + 11]).toBeCloseTo(0);
+    expect(f[2 * stride + 12]).toBe(Light2dKind.Directional);
+    // Ambient zone: half-extents in the footprint slot.
+    expect(f[3 * stride + 12]).toBe(Light2dKind.AmbientZone);
+    expect(f[3 * stride + 2]).toBe(50);
+    expect(f[3 * stride + 3]).toBe(30);
+  });
+
+  it('specializes a distinct composite pipeline per composite mode', async () => {
+    const { renderer } = makeCapturingRenderer();
+    const app = new App({ renderer, canvas: makeStubCanvas() });
+    app.addPlugin(new Light2dPlugin());
+    app.world.spawn(...Camera2d());
+    await app.run();
+
+    const pipeline = app.getResource(Light2dPipeline)!;
+    const surfaceFormat = 'rgba8unorm' as const;
+    const multiply = pipeline.composite!.get({ key: { surfaceFormat, compositeMode: 'multiply' } });
+    const add = pipeline.composite!.get({ key: { surfaceFormat, compositeMode: 'add' } });
+    const screen = pipeline.composite!.get({ key: { surfaceFormat, compositeMode: 'screen' } });
+    // Distinct modes yield distinct cached pipelines; the same key is reused.
+    expect(multiply).not.toBe(add);
+    expect(add).not.toBe(screen);
+    expect(pipeline.composite!.get({ key: { surfaceFormat, compositeMode: 'add' } })).toBe(add);
   });
 });

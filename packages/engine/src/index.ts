@@ -334,26 +334,36 @@ export {
   TextureSlicer,
 } from './sprite';
 export type {
+  AmbientLight2dOptions,
+  DirectionalLight2dOptions,
   Light2dBatch,
   Light2dCameraTargets,
   Light2dCompositeKey,
   Light2dCompositeMode,
   PointLight2dOptions,
+  SpotLight2dOptions,
 } from './light2d';
 export {
+  AmbientLight2d,
+  DirectionalLight2d,
   LIGHT2D_ACCUM_FORMAT,
   LIGHT2D_ACCUMULATION_WGSL,
   LIGHT2D_COMPOSITE_WGSL,
   LIGHT2D_INSTANCE_BYTE_SIZE,
   LIGHT2D_INSTANCE_FLOAT_COUNT,
   Light2dInstanceBuffer,
+  Light2dKind,
   Light2dPipeline,
   Light2dPlugin,
   Light2dPreparedBatches,
   Light2dSettings,
+  packAmbientLightInstance,
+  packDirectionalLightInstance,
   packLightInstance,
+  packSpotLightInstance,
   PointLight2d,
   prepareLight2dTargets,
+  SpotLight2d,
   ViewLight2dTargets,
 } from './light2d';
 

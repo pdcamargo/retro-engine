@@ -1,10 +1,12 @@
-// Visual harness for Phase 9.1's 2D lighting pipeline (ADR-0037).
+// Visual harness for the 2D lighting pipeline (ADR-0037, ADR-0041).
 //
 // Twelve checker sprites arranged in a 4×3 grid form a static scene. Three
 // `PointLight2d` entities sit at distinct grid positions with distinct
 // colours: warm white at top-left, cool blue at the centre, magenta at
 // bottom-right. A fourth, smaller orbit-light circles a fixed anchor each
-// frame via a `Spin`-style marker so the lighting is obviously dynamic.
+// frame via a `Spin`-style marker so the lighting is obviously dynamic. A
+// `SpotLight2d` casts a downward cone over the top row, and an
+// `AmbientLight2d` zone warms the bottom-left corner above the global floor.
 //
 // `Light2dSettings.ambient` is set to a dim grey so unlit zones read as
 // "in shadow" rather than "broken" — without ambient the multiply
@@ -13,6 +15,7 @@
 import { vec2, vec3, vec4 } from '@retro-engine/math';
 import type { Plugin } from '@retro-engine/engine';
 import {
+  AmbientLight2d,
   Camera2d,
   ClearColorConfig,
   Commands,
@@ -24,6 +27,7 @@ import {
   Query,
   ResMut,
   Sprite,
+  SpotLight2d,
   SpritePlugin,
   Time,
   Transform,
@@ -146,12 +150,39 @@ export const lightsShowcasePlugin: Plugin = (app) => {
         new Orbit(0, 0, 220, 2.4),
       );
 
+      // A downward spot light casting a cone over the top row.
+      cmd.spawn(
+        new SpotLight2d({
+          color: vec3.create(0.7, 1, 0.85),
+          intensity: 2.6,
+          range: 320,
+          radius: 8,
+          direction: vec2.create(0, -1),
+          innerAngle: Math.PI / 10,
+          outerAngle: Math.PI / 5,
+        }),
+        new Transform(vec3.create(0, 240, 0)),
+      );
+
+      // A warm regional ambient pool in the bottom-left so that area reads
+      // brighter than the global grey floor even where no light reaches.
+      cmd.spawn(
+        new AmbientLight2d({
+          color: vec3.create(1, 0.6, 0.35),
+          intensity: 0.4,
+          halfExtents: vec2.create(180, 140),
+        }),
+        new Transform(vec3.create(-260, -150, 0)),
+      );
+
       cmd.spawn(
         ...Camera2d({
           clearColor: ClearColorConfig.custom({ r: 0, g: 0, b: 0, a: 1 }),
         }),
       );
-      log.info('spawned 12 sprites + 4 PointLight2d (3 static, 1 orbiting)');
+      log.info(
+        'spawned 12 sprites + 4 PointLight2d (3 static, 1 orbiting) + 1 SpotLight2d + 1 AmbientLight2d zone',
+      );
     },
   );
 
