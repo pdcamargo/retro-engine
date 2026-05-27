@@ -3,7 +3,7 @@ import { describe, expect, it } from 'bun:test';
 import { vec3, vec4 } from '@retro-engine/math';
 import type { Buffer, BufferDescriptor, Renderer } from '@retro-engine/renderer-core';
 
-import { App, Camera3d, Cuboid, Mesh3d, Meshes, NoFrustumCulling, Transform } from '../index';
+import { App, Camera, Camera3d, Cuboid, Mesh3d, Meshes, NoFrustumCulling, Transform, Visibility } from '../index';
 import { makeRenderingRenderer, makeStubCanvas } from '../test-utils';
 import type { CapturedDrawLog } from '../test-utils';
 import { makeCapturingRenderer } from '../test-utils';
@@ -178,5 +178,71 @@ describe('prepareMeshRetained — incremental instance upload', () => {
     writes.length = 0;
     app.advanceFrame(32); // static frame: nothing re-uploaded
     expect(toInstance()).toBe(0);
+  });
+});
+
+describe('prepareMeshRetained — event-driven membership + camera moves', () => {
+  const spawnTransparent: Spawn = (app, plugin) => {
+    const mesh = app.getResource(Meshes)!.add(new Cuboid().mesh().build());
+    const mats = app.getResource(plugin.Materials)!;
+    // Distinct blend materials so each is its own batch — exercises depth re-sort.
+    const ids: Entity[] = [];
+    for (let i = 0; i < 4; i++) {
+      const m = mats.add(new UnlitMaterial({ color: vec4.create(1, 1, 1, 0.5), alphaMode: 'blend' }));
+      ids.push(
+        app.world.spawn(
+          new Mesh3d(mesh),
+          new plugin.MeshMaterial3d(m),
+          new NoFrustumCulling(),
+          new Transform(vec3.create(0, 0, -i)),
+        ),
+      );
+    }
+    return ids;
+  };
+
+  // Two frames with the surface kept alive across frame 2. `app.stop()` destroys
+  // the surface, which freezes the camera's computed view-projection — so a
+  // camera move wouldn't reach the prepare. `requestAnimationFrame` is undefined
+  // under bun test, so `run()` advances exactly one frame and no loop fires.
+  const twoFrameLive = async (
+    retained: boolean,
+    spawn: Spawn,
+    mutate: (app: App, entities: Entity[]) => void,
+  ): Promise<CapturedDrawLog> => {
+    const { renderer, log } = makeCapturingRenderer();
+    const app = new App({ renderer, canvas: makeStubCanvas() });
+    app.addPlugin(new UnlitMaterialPlugin());
+    const plugin = new MaterialPlugin(UnlitMaterial, retained ? { retained: true } : undefined);
+    app.addPlugin(plugin);
+    const entities = spawn(app, plugin);
+    app.world.spawn(...Camera3d());
+    await app.run(); // frame 1 (surface alive)
+    log.passes.length = 0;
+    mutate(app, entities);
+    app.advanceFrame(32); // frame 2 (surface still alive)
+    app.stop();
+    return log;
+  };
+
+  it('camera move re-sorts the transparent bucket identically to the legacy queue', async () => {
+    const moveCamera = (app: App): void => {
+      const camEntity = [...app.world.query([Camera, Transform]).entries()][0]![0];
+      app.world.getComponent(camEntity, Transform)!.translation[2] = 100;
+      app.world.markChanged(camEntity, Transform);
+    };
+    const legacy = batchLayout(await twoFrameLive(false, spawnTransparent, moveCamera), '.transparent3d');
+    const retained = batchLayout(await twoFrameLive(true, spawnTransparent, moveCamera), '.transparent3d');
+    expect(retained).toEqual(legacy);
+  });
+
+  it('hiding a mesh via Visibility frees it from the batch identically to legacy', async () => {
+    const hideFirst = (app: App, e: Entity[]): void => {
+      app.world.getComponent(e[0]!, Visibility)!.mode = 'Hidden';
+      app.world.markChanged(e[0]!, Visibility);
+    };
+    const legacy = batchLayout(await twoFrameLive(false, spawnTransparent, hideFirst), '.transparent3d');
+    const retained = batchLayout(await twoFrameLive(true, spawnTransparent, hideFirst), '.transparent3d');
+    expect(retained).toEqual(legacy);
   });
 });

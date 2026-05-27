@@ -3,7 +3,7 @@ import { describe, expect, it } from 'bun:test';
 import type { Entity } from '@retro-engine/ecs';
 import { vec2, vec3, vec4 } from '@retro-engine/math';
 
-import { App, Camera2d, Image, Images, SPRITE_INSTANCE_FLOAT_COUNT, Sprite, Transform } from '../index';
+import { App, Camera2d, Image, Images, SPRITE_INSTANCE_FLOAT_COUNT, Sprite, Transform, Visibility } from '../index';
 import { makeCapturingRenderer, makeRenderingRenderer, makeStubCanvas } from '../test-utils';
 
 import { SPRITE_INSTANCE_BYTE_SIZE, SpritePreparedBatches } from './sprite-batch';
@@ -191,6 +191,20 @@ describe('prepareSpritesRetained — change-gated updates converge on the full r
 
   it('matches when nothing changes (steady state)', async () => {
     await expectParityTwoFrames(spawnFour, () => {});
+  });
+
+  it('matches after hiding a sprite via Visibility (event-driven free)', async () => {
+    await expectParityTwoFrames(spawnFour, (app, e) => {
+      app.world.getComponent(e[1]!, Visibility)!.mode = 'Hidden';
+      app.world.markChanged(e[1]!, Visibility);
+    });
+  });
+
+  it('matches after moving a sprite out of the frustum (cull flip → free)', async () => {
+    await expectParityTwoFrames(spawnFour, (app, e) => {
+      app.world.getComponent(e[2]!, Transform)!.translation[0] = 100000;
+      app.world.markChanged(e[2]!, Transform);
+    });
   });
 });
 

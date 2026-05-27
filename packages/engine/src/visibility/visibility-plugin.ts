@@ -1,12 +1,15 @@
-import { Frustum } from '@retro-engine/math';
+import { Aabb, Frustum } from '@retro-engine/math';
 
 import { Camera } from '../camera/camera';
+import { RenderLayers } from '../camera/render-layers';
 import { RemovedComponents } from '../change-detection';
 import { Parent } from '../hierarchy';
 import type { App } from '../index';
 import type { PluginObject } from '../plugin';
-import { Query } from '../system-param';
+import { Query, ResMut } from '../system-param';
+import { GlobalTransform } from '../transform';
 import { checkVisibilitySystem } from './check-visibility';
+import { CheckVisibilityState } from './cull-state';
 import { updateFrustaSystem } from './update-frusta';
 import {
   InheritedVisibility,
@@ -48,6 +51,8 @@ export class VisibilityPlugin implements PluginObject {
   }
 
   build(app: App): void {
+    app.insertResource(new CheckVisibilityState());
+
     app.addSystem('postUpdate', [Query([Camera, Frustum])], (cameras) => {
       updateFrustaSystem(cameras);
     });
@@ -75,9 +80,37 @@ export class VisibilityPlugin implements PluginObject {
       [
         Query([Camera, Frustum]),
         Query([InheritedVisibility, ViewVisibility], { has: [NoFrustumCulling] }),
+        ResMut(CheckVisibilityState),
+        Query([InheritedVisibility, ViewVisibility], { changed: [GlobalTransform] }),
+        Query([InheritedVisibility, ViewVisibility], { changed: [Aabb] }),
+        Query([InheritedVisibility, ViewVisibility], { changed: [InheritedVisibility] }),
+        Query([InheritedVisibility, ViewVisibility], { changed: [RenderLayers] }),
+        RemovedComponents(Aabb),
+        RemovedComponents(NoFrustumCulling),
       ],
-      (cameras, renderables) => {
-        checkVisibilitySystem(app.world, cameras, renderables);
+      (
+        cameras,
+        renderables,
+        state,
+        changedTransforms,
+        changedAabbs,
+        changedInherited,
+        changedLayers,
+        removedAabbs,
+        removedNoFrustum,
+      ) => {
+        checkVisibilitySystem(
+          app.world,
+          cameras,
+          renderables,
+          state,
+          changedTransforms,
+          changedAabbs,
+          changedInherited,
+          changedLayers,
+          removedAabbs,
+          removedNoFrustum,
+        );
       },
     );
   }

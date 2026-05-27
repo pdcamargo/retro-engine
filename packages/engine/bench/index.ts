@@ -24,6 +24,7 @@ import './atlas-animation.bench';
 import './material2d-prepare.bench';
 import './mesh-instancing.bench';
 import './retained-instance-prepare.bench';
+import './event-driven-cull-prepare.bench';
 import './light-2d.bench';
 
 interface NormalizedBench {

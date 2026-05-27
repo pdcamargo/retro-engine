@@ -94,6 +94,7 @@ export type { ChildBuilder } from './hierarchy';
 export { Children, Parent } from './hierarchy';
 export {
   checkVisibilitySystem,
+  CheckVisibilityState,
   InheritedVisibility,
   NoFrustumCulling,
   updateFrustaSystem,

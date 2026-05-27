@@ -67,13 +67,13 @@ export class RetainedSpriteBuffer {
   /** Main-world `changeTick` observed at the last prepare — the changed-query threshold. */
   lastPrepareTick = 0;
 
-  readonly seen = new Set<Entity>();
+  /** Visible sprites whose image hasn't uploaded yet; re-checked each frame until ready. */
+  readonly pending = new Set<Entity>();
   readonly newThisFrame = new Set<Entity>();
   readonly changed = new Set<Entity>();
   readonly packEntities: Entity[] = [];
   readonly packSprites: Sprite[] = [];
   readonly packGts: GlobalTransform[] = [];
-  readonly freeList: Entity[] = [];
 
   dispose(): void {
     this.slotBuf.dispose();
@@ -82,15 +82,19 @@ export class RetainedSpriteBuffer {
 }
 
 /**
- * Change-gated retained sprite prepare.
+ * Event-driven retained sprite prepare.
  *
- * Replaces the per-frame full repack with O(changed) work: only sprites whose
- * `GlobalTransform` or `Sprite` changed since {@link RetainedSpriteBuffer.lastPrepareTick}
- * are repacked, and the {@link SortedSlotIndex} re-sorts only when membership or
- * a sort key actually changed. Atlas-driven UV updates surface as
- * `Changed<Sprite>` (atlas-sync marks it), so animation flows through the same
- * gate; because it leaves world Z untouched, it never invalidates the sort —
- * just rewrites the changed sprites' instance bytes.
+ * Maintains the per-entity slot set from change events alone — no per-frame walk
+ * of the visible set. An entity holds a slot iff it is alive, carries
+ * `Sprite + GlobalTransform + ViewVisibility`, is `ViewVisibility.visible`, and
+ * its image has uploaded. Membership transitions are driven by
+ * `Changed<ViewVisibility>` (visibility flips, which also cover spawn-into-visible
+ * since the cull flips a fresh entity false→true the same frame) and the removed
+ * buffer (despawn / `Sprite` removal); slot bytes are repacked on
+ * `Changed<GlobalTransform>` / `Changed<Sprite>` (atlas UV edits surface as the
+ * latter, so animation flows through the same gate). A static scene does O(0)
+ * work; a moving scene does O(changed). The {@link SortedSlotIndex} re-sorts only
+ * when membership or a sort key actually changed.
  *
  * Queries the main `world` directly with a self-managed since-tick rather than
  * an `Extract(Query(..., { changed }))` param: render-stage params carry the
@@ -107,71 +111,119 @@ export const prepareSpritesRetained = (
 ): void => {
   const tickNow = world.changeTick;
   const since = retained.lastPrepareTick;
-  const { slotBuf, index } = retained;
+  const { slotBuf, index, pending } = retained;
   const slots = slotBuf.slots;
-
-  // 1. Data-changed set: union of Changed<GlobalTransform> and Changed<Sprite>.
-  const changed = retained.changed;
-  changed.clear();
-  for (const row of world
-    .query([Sprite, GlobalTransform, ViewVisibility], { changed: [GlobalTransform] }, since)
-    .entries()) {
-    changed.add(row[0] as Entity);
-  }
-  for (const row of world
-    .query([Sprite, GlobalTransform, ViewVisibility], { changed: [Sprite] }, since)
-    .entries()) {
-    changed.add(row[0] as Entity);
-  }
-
-  // 2. Structural walk over every visible sprite: allocate slots for spawns /
-  //    visibility-on flips / re-lengths, and queue the spawned + changed sprites
-  //    for packing. Capturing the component refs here avoids a second lookup.
-  const seen = retained.seen;
   const newThisFrame = retained.newThisFrame;
   const packEntities = retained.packEntities;
   const packSprites = retained.packSprites;
   const packGts = retained.packGts;
-  seen.clear();
   newThisFrame.clear();
   packEntities.length = 0;
   packSprites.length = 0;
   packGts.length = 0;
 
-  world.query([Sprite, GlobalTransform, ViewVisibility]).forEach((row) => {
-    const entity = row[0] as Entity;
-    const sprite = row[1] as Sprite;
-    const gt = row[2] as GlobalTransform;
-    const vis = row[3] as ViewVisibility;
-    if (!vis.visible) return;
-    const resolvedHandle = sprite.image !== undefined ? sprite.image : images.WHITE;
-    if (renderImages.get(resolvedHandle) === undefined) return; // image not uploaded yet
-    seen.add(entity);
+  const resolveHandle = (sprite: Sprite): ImageHandle =>
+    sprite.image !== undefined ? sprite.image : images.WHITE;
 
+  const drop = (entity: Entity): void => {
+    if (slots.get(entity) !== undefined) {
+      slots.free(entity);
+      index.removeMember(entity);
+    }
+    pending.delete(entity);
+  };
+
+  // Queue an alloc/re-length + pack for a now-eligible sprite. `newThisFrame`
+  // marks slots that need addMember (fresh / re-allocated) vs updateMember.
+  const admit = (entity: Entity, sprite: Sprite, gt: GlobalTransform): void => {
     const len = instanceCountForSprite(sprite);
     const existing = slots.get(entity);
-    let needsPack: boolean;
     if (existing === undefined) {
       slots.alloc(entity, len);
       newThisFrame.add(entity);
-      needsPack = true;
     } else if (existing.len !== len) {
       // Plain ↔ 9-slice toggle: drop and re-allocate, treat as fresh in the index.
       index.removeMember(entity);
       slots.alloc(entity, len);
       newThisFrame.add(entity);
-      needsPack = true;
-    } else {
-      needsPack = changed.has(entity);
     }
-    if (needsPack) {
-      packEntities.push(entity);
-      packSprites.push(sprite);
-      packGts.push(gt);
-    }
-  });
+    packEntities.push(entity);
+    packSprites.push(sprite);
+    packGts.push(gt);
+  };
 
-  // 3. Grow the slot scratch to the finalized capacity, then pack the queued
+  // 1. Visibility transitions (and spawn-into-visible): only entities whose
+  //    ViewVisibility actually flipped since the last prepare.
+  for (const row of world
+    .query([Sprite, GlobalTransform, ViewVisibility], { changed: [ViewVisibility] }, since)
+    .entries()) {
+    const entity = row[0] as Entity;
+    const sprite = row[1] as Sprite;
+    const gt = row[2] as GlobalTransform;
+    const vis = row[3] as ViewVisibility;
+    if (!vis.visible) {
+      drop(entity);
+    } else if (renderImages.get(resolveHandle(sprite)) !== undefined) {
+      pending.delete(entity);
+      admit(entity, sprite, gt);
+    } else {
+      // Visible but the image isn't uploaded yet — park it (free any stale slot).
+      if (slots.get(entity) !== undefined) {
+        slots.free(entity);
+        index.removeMember(entity);
+      }
+      pending.add(entity);
+    }
+  }
+
+  // 2. Despawns / Sprite removals: free the slot, regardless of visibility.
+  for (const { entity, tick } of world.getRemovedComponents(Sprite)) {
+    if (tick > since) drop(entity);
+  }
+
+  // 3. Pending drain (residual O(k); k → 0 once a static scene's images upload).
+  for (const entity of pending) {
+    const vis = world.getComponent(entity, ViewVisibility);
+    if (vis === undefined || !vis.visible) {
+      pending.delete(entity);
+      continue;
+    }
+    const sprite = world.getComponent(entity, Sprite);
+    const gt = world.getComponent(entity, GlobalTransform);
+    if (sprite === undefined || gt === undefined) {
+      pending.delete(entity);
+      continue;
+    }
+    if (renderImages.get(resolveHandle(sprite)) !== undefined) {
+      pending.delete(entity);
+      admit(entity, sprite, gt);
+    }
+  }
+
+  // 4. Data changes: repack slotted sprites whose GlobalTransform or Sprite
+  //    changed. Skip entities packed fresh this frame, and those without a slot
+  //    (pending / invisible — they pack at their current state when admitted).
+  const changed = retained.changed;
+  changed.clear();
+  const repack = (row: readonly unknown[]): void => {
+    const entity = row[0] as Entity;
+    if (changed.has(entity) || newThisFrame.has(entity)) return;
+    changed.add(entity);
+    if (slots.get(entity) === undefined) return;
+    admit(entity, row[1] as Sprite, row[2] as GlobalTransform);
+  };
+  for (const row of world
+    .query([Sprite, GlobalTransform, ViewVisibility], { changed: [GlobalTransform] }, since)
+    .entries()) {
+    repack(row);
+  }
+  for (const row of world
+    .query([Sprite, GlobalTransform, ViewVisibility], { changed: [Sprite] }, since)
+    .entries()) {
+    repack(row);
+  }
+
+  // 5. Grow the slot scratch to the finalized capacity, then pack the queued
   //    sprites into their stable slots and (re)register them with the index.
   slotBuf.ensureCapacity(renderer);
   for (let i = 0; i < packEntities.length; i++) {
@@ -179,7 +231,7 @@ export const prepareSpritesRetained = (
     const sprite = packSprites[i]!;
     const gt = packGts[i]!;
     const slot = slots.get(entity)!;
-    const resolvedHandle = sprite.image !== undefined ? sprite.image : images.WHITE;
+    const resolvedHandle = resolveHandle(sprite);
     const source = images.get(resolvedHandle);
     const imageSize =
       source !== undefined ? { width: source.width, height: source.height } : { width: 1, height: 1 };
@@ -202,26 +254,13 @@ export const prepareSpritesRetained = (
     else index.updateMember(entity, key, slotBuf.store);
   }
 
-  // 4. Sweep despawned / now-invisible sprites (only when the live count fell).
-  if (seen.size !== slots.size) {
-    const freeList = retained.freeList;
-    freeList.length = 0;
-    for (const [entity] of slots.entries()) {
-      if (!seen.has(entity)) freeList.push(entity);
-    }
-    for (const entity of freeList) {
-      slots.free(entity);
-      index.removeMember(entity);
-    }
-  }
-
-  // 5. Reclaim fragmentation when holes dominate (rare; never on a static scene).
+  // 6. Reclaim fragmentation when holes dominate (rare; never on a static scene).
   if (slots.fragmentation() > COMPACT_FRAGMENTATION && slots.freeInstances > COMPACT_MIN_FREE) {
     slotBuf.compact();
     index.invalidate();
   }
 
-  // 6. Rebuild the ordered buffer if invalidated, else upload only the in-place edits.
+  // 7. Rebuild the ordered buffer if invalidated, else upload only the in-place edits.
   index.prepare(slotBuf.store, renderer);
 
   retained.lastPrepareTick = tickNow;
