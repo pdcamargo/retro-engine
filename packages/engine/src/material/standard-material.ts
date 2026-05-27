@@ -57,15 +57,17 @@ import { PBR_WGSL } from './pbr.wgsl';
  * };
  * ```
  *
- * **Lighting placeholder.** Phase 7's `pbr.wgsl` evaluates Cook-Torrance
- * against a single hardcoded directional light and a constant ambient term.
- * Phase 10's `Lights` uniform replaces both. The math (Lambert + GGX + Schlick
- * with energy conservation) is real PBR; only the light source is
- * placeholder.
+ * **Lighting requires `Light3dPlugin`.** `pbr.wgsl` evaluates Cook-Torrance
+ * against the analytic lights packed into the `retro_engine::light3d`
+ * `GpuLights` uniform (`@group(2)`). `StandardMaterial` therefore needs a
+ * `Light3dPlugin` registered on the App (alongside `StandardMaterialPlugin` +
+ * `MaterialPlugin(StandardMaterial)`) — without it the lights bind group and
+ * shader module are absent and pipeline creation fails. The math (Lambert +
+ * GGX + Schlick with energy conservation) is real PBR.
  *
  * **IBL is Phase 10.7.** When environment-map sampling lands, this material
- * gains an optional environment handle and the shader's ambient term lights
- * up from the precomputed irradiance + prefiltered env map.
+ * gains an optional environment handle and the shader's flat ambient term is
+ * replaced by precomputed irradiance + a prefiltered env map.
  */
 export class StandardMaterial implements Material {
   baseColor: Vec4 = vec4.create(1, 1, 1, 1);
@@ -197,6 +199,13 @@ export class StandardMaterial implements Material {
       viewDimension: '2d',
     },
   ]);
+
+  /**
+   * Marks this material as lit: {@link MaterialPlugin} appends the
+   * `retro_engine::light3d` `GpuLights` bind group to the pipeline layout at
+   * `@group(2)`, and the Core3d phase nodes bind it. Requires `Light3dPlugin`.
+   */
+  static readonly usesLights = true;
 
   static vertexShader(): ShaderRef {
     return ShaderRefs.module('retro_engine::pbr');

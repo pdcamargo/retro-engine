@@ -3,6 +3,7 @@ import { createWebGPURenderer } from '@retro-engine/renderer-webgpu';
 
 import { atlasShowcasePlugin } from './atlas-showcase-plugin';
 import { lightsShowcasePlugin } from './lights-showcase-plugin';
+import { litShowcasePlugin } from './lit-showcase-plugin';
 import { LoggingPlugin } from './logging-plugin';
 import { primitivesShowcasePlugin } from './primitives-showcase-plugin';
 import { shapesShowcasePlugin } from './shapes-showcase-plugin';
@@ -24,6 +25,8 @@ if (!(canvas instanceof HTMLCanvasElement)) {
 //   `?mode=lights`  → Phase 9 2D lighting showcase: point/spot/ambient lights,
 //                     composite modes, shadow occluders, and (with `&normals=1`)
 //                     normal-mapped lighting (ADR-0037/0041/0042/0043).
+//   `?mode=lit`     → Phase 10 3D lighting showcase: a metallic×roughness PBR
+//                     sphere grid under sun/point/spot/ambient lights (ADR-0044).
 //   anything else   → Phase 7.5 primitives demo.
 // All demos stay discoverable from one bundle.
 const mode = new URLSearchParams(window.location.search).get('mode');
@@ -40,7 +43,9 @@ const showcase =
             ? stressShowcasePlugin
             : mode === 'lights'
               ? lightsShowcasePlugin
-              : primitivesShowcasePlugin;
+              : mode === 'lit'
+                ? litShowcasePlugin
+                : primitivesShowcasePlugin;
 
 const renderer = createWebGPURenderer(canvas);
 const app = new App({

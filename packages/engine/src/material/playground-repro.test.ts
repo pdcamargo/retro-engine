@@ -10,6 +10,7 @@ import { describe, expect, it } from 'bun:test';
 import { vec4 } from '@retro-engine/math';
 
 import { App, Camera3d, Commands, Cuboid, Mesh3d, Meshes, Query, Transform } from '../index';
+import { Light3dPlugin } from '../light3d/light-3d-plugin';
 import { makeRenderingRenderer, makeStubCanvas } from '../test-utils';
 import { ResMut } from '../system-param';
 
@@ -107,6 +108,9 @@ describe('playground repro: Commands.spawn flow with MaterialPlugin', () => {
     app.addPlugin(new StandardMaterialPlugin());
     const plugin = new MaterialPlugin(StandardMaterial);
     app.addPlugin(plugin);
+    // StandardMaterial is lit: it #imports retro_engine::light3d and binds the
+    // GpuLights group at @group(2), so it requires a Light3dPlugin.
+    app.addPlugin(new Light3dPlugin());
 
     app.addSystem(
       'startup',

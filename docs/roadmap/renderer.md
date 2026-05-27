@@ -134,13 +134,20 @@ Bevy doesn't ship 2D lighting in core; the community implements it as accumulati
 
 ### Phase 10 — 3D lighting
 
-- **10.1 `PointLight` / `SpotLight` / `DirectionalLight` / `AmbientLight`** — components; ambient is a resource.
-- **10.2 Forward+ clustered shading** — 3D froxel grid via `ClusterConfig`.
-- **10.3 `prepare_lights`** — builds `GpuLights` uniform; `assign_objects_to_clusters` writes cluster bindings.
+**Status: In progress.** ADR-0044 shipped 10.1 (the three light components +
+the `AmbientLight` resource) and the `GpuLights` / `prepare_lights` half of 10.3
+with **simple-forward** shading (the fragment loops over all lights). Light
+direction for directional/spot is derived from `GlobalTransform`. Browser-verified
+in `apps/playground` (`?mode=lit`). Shadow maps (10.4–10.6) follow; IBL (10.7) is
+gated on the asset system.
+
+- **10.1 `PointLight` / `SpotLight` / `DirectionalLight` / `AmbientLight`** — components; ambient is a resource. ✅ (ADR-0044)
+- **10.2 Forward+ clustered shading** — 3D froxel grid via `ClusterConfig`. **Backlogged** (`docs/backlog/3d-clustered-forward-plus.md`): simple forward shipped in ADR-0044; clustering commits the engine to an SSBO dependency + a `storageBuffers` capability flag and is sequenced after shadows. Simple forward is the WebGL2 fallback; clustered is the WebGPU fast path.
+- **10.3 `prepare_lights`** — builds `GpuLights` uniform ✅ (ADR-0044); `assign_objects_to_clusters` (the cluster-binding half) is backlogged with 10.2.
 - **10.4 Shadow maps** — per-light depth render.
 - **10.5 Cascaded shadow maps** — for `DirectionalLight` via `CascadeShadowConfig`.
 - **10.6 PCF / shadow filtering kernels** — `ShadowFilteringMethod`.
-- **10.7 Environment map & image-based lighting (IBL)** — not deferred; PBR needs this to look right.
+- **10.7 Environment map & image-based lighting (IBL)** — PBR needs this to look right, but it is **gated on the asset system** (HDRI loading + cubemap baking are not built yet), so it lands after `docs/roadmap/asset-system.md`. ADR-0044's flat ambient term is the placeholder it replaces.
   - HDRI loading (`.hdr` Radiance, `.exr` OpenEXR) → high-precision float texture.
   - Equirectangular → cubemap conversion (one-shot bake).
   - Diffuse irradiance prefiltering (low-frequency cosine-weighted convolution into a small cubemap).

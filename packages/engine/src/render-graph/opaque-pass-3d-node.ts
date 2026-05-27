@@ -4,6 +4,7 @@ import type {
   RenderPassDescriptor,
 } from '@retro-engine/renderer-core';
 
+import { GpuLights } from '../light3d/gpu-lights';
 import type { RenderContext } from '../index';
 
 import type { NodeRunContext, ViewNode } from './node';
@@ -77,6 +78,10 @@ export const OpaquePass3dNode: ViewNode = {
     }
     const pass = encoder.beginRenderPass(passDesc);
     pass.setBindGroup(0, view.viewBindGroup);
+    // Lit materials read the analytic lights at @group(2). Bind once for the
+    // whole pass; pipelines that don't declare the group (unlit) ignore it.
+    const lights = ctx.app.getResource(GpuLights);
+    if (lights?.bindGroup !== undefined) pass.setBindGroup(2, lights.bindGroup);
     const renderCtx: RenderContext = {
       encoder,
       pass,

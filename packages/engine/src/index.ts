@@ -382,6 +382,32 @@ export {
   SpotLight2d,
   ViewLight2dTargets,
 } from './light2d';
+export type {
+  AmbientLightOptions,
+  DirectionalLight3dOptions,
+  PointLight3dOptions,
+  SpotLight3dOptions,
+} from './light3d';
+export {
+  AmbientLight,
+  DirectionalLight3d,
+  forwardFromMatrix,
+  GPU_LIGHTS_BYTE_SIZE,
+  GPU_LIGHTS_FLOAT_COUNT,
+  GpuLights,
+  LIGHT3D_WGSL,
+  Light3dPlugin,
+  MAX_DIRECTIONAL_LIGHTS,
+  MAX_POINT_LIGHTS,
+  MAX_SPOT_LIGHTS,
+  packAmbient,
+  packCounts,
+  packDirectionalLight,
+  packPointLight,
+  packSpotLight,
+  PointLight3d,
+  SpotLight3d,
+} from './light3d';
 
 /**
  * Named stage in the schedule — when a system runs within a frame.

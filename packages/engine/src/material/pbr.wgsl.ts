@@ -4,16 +4,16 @@
  * Registered with `ShaderRegistry` under `retro_engine::pbr` at plugin build
  * time. Both `vs_main` and `fs_main` live here.
  *
- * Lighting in Phase 7 is a single hardcoded directional light + a constant
- * ambient term — the engine has no `Lights` uniform yet (Phase 10.x adds it).
- * The Cook-Torrance math, BRDF terms, and energy-conservation split between
- * specular and diffuse are real; only the light source is placeholder. When
- * Phase 10's `Lights` uniform lands, this shader gains a `@group(3)` light
- * bind group and the inner light loop replaces the hardcoded values.
+ * Lighting reads the analytic-light uniform from `retro_engine::light3d`
+ * (`@group(2)`): the fragment loops over every directional / point / spot light
+ * the host packed this frame, running the Cook-Torrance BRDF below per light,
+ * and adds the scene ambient term. A `Light3dPlugin` must be present for the
+ * lights group to be bound. The math (Lambert + GGX + Schlick with energy
+ * conservation) is real PBR.
  *
  * IBL (image-based lighting) is the Phase 10.7 additive load. When it lands,
  * the shader gains an `#ifdef ENABLE_IBL` branch and an environment-map
- * uniform on the material's bind group.
+ * uniform, and the constant ambient term becomes the prefiltered irradiance.
  *
  * Bind groups:
  *
@@ -30,6 +30,9 @@
  *     lands when `TANGENT` attributes flow through `Mesh.computeFlatNormals`).
  *   - `@binding(5)` `emissive_texture: texture_2d<f32>`.
  *   - `@binding(6)` `occlusion_texture: texture_2d<f32>`.
+ * - `@group(2)`: the analytic-light uniform (`GpuLights`), imported via
+ *   `#import retro_engine::light3d` and bound by the Core3d phase node when a
+ *   `Light3dPlugin` is present.
  *
  * The per-entity model matrix and its inverse-transpose arrive as per-instance
  * vertex attributes at `@location(8..11)` and `@location(12..15)` (vertex
@@ -38,6 +41,7 @@
  */
 export const PBR_WGSL = /* wgsl */ `
 #import retro_engine::view
+#import retro_engine::light3d
 
 struct StandardMaterialUniform {
   base_color: vec4<f32>,
@@ -116,6 +120,36 @@ fn fresnel_schlick(cos_theta: f32, f0: vec3<f32>) -> vec3<f32> {
   return f0 + (vec3<f32>(1.0) - f0) * pow(clamp(1.0 - cos_theta, 0.0, 1.0), 5.0);
 }
 
+// Cook-Torrance response of one surface to one light sample. \`s.radiance\`
+// already folds in the light's colour, intensity, distance attenuation, and
+// (for spots) the cone mask; this applies the BRDF and the N·L cosine term.
+fn lit(
+  s: LightSample,
+  n: vec3<f32>,
+  v: vec3<f32>,
+  n_dot_v: f32,
+  albedo: vec3<f32>,
+  metallic: f32,
+  roughness: f32,
+  f0: vec3<f32>,
+) -> vec3<f32> {
+  let l = s.l;
+  let h = normalize(v + l);
+  let n_dot_l = max(dot(n, l), 0.0);
+  let n_dot_h = max(dot(n, h), 0.0);
+  let v_dot_h = max(dot(v, h), 0.0);
+
+  let d = distribution_ggx(n_dot_h, roughness);
+  let g = geometry_smith(n_dot_v, n_dot_l, roughness);
+  let f = fresnel_schlick(v_dot_h, f0);
+  let specular = (d * g * f) / max(4.0 * n_dot_v * n_dot_l, 0.0001);
+
+  let k_s = f;
+  let k_d = (vec3<f32>(1.0) - k_s) * (1.0 - metallic);
+  let diffuse = k_d * albedo / PI;
+  return (diffuse + specular) * s.radiance * n_dot_l;
+}
+
 @fragment
 fn fs_main(in: VsOut) -> @location(0) vec4<f32> {
   let base_color_sample = textureSample(base_color_texture, material_sampler, in.uv);
@@ -140,34 +174,25 @@ fn fs_main(in: VsOut) -> @location(0) vec4<f32> {
   let v = normalize(view.world_position.xyz - in.world_position);
   let n_dot_v = max(dot(n, v), 0.0001);
 
-  // Hardcoded sun direction + intensity. Phase 10's Lights uniform replaces.
-  let light_dir = normalize(vec3<f32>(-0.5, 1.0, -0.3));
-  let light_color = vec3<f32>(1.0);
-  let light_intensity = 3.0;
-
-  let l = light_dir;
-  let h = normalize(v + l);
-  let n_dot_l = max(dot(n, l), 0.0);
-  let n_dot_h = max(dot(n, h), 0.0);
-  let v_dot_h = max(dot(v, h), 0.0);
-
   let dielectric_f0 = vec3<f32>(0.04);
   let f0 = mix(dielectric_f0, base_color.rgb, metallic);
 
-  let d = distribution_ggx(n_dot_h, roughness);
-  let g = geometry_smith(n_dot_v, n_dot_l, roughness);
-  let f = fresnel_schlick(v_dot_h, f0);
-  let specular = (d * g * f) / max(4.0 * n_dot_v * n_dot_l, 0.0001);
+  // Accumulate every analytic light packed into the GpuLights uniform. Loops
+  // are bounded by the per-kind counts (≤ the compile-time maxima) for uniform
+  // control flow.
+  var direct = vec3<f32>(0.0);
+  for (var i = 0u; i < lights.counts.x; i = i + 1u) {
+    direct += lit(directional_light_sample(i), n, v, n_dot_v, base_color.rgb, metallic, roughness, f0);
+  }
+  for (var i = 0u; i < lights.counts.y; i = i + 1u) {
+    direct += lit(point_light_sample(i, in.world_position), n, v, n_dot_v, base_color.rgb, metallic, roughness, f0);
+  }
+  for (var i = 0u; i < lights.counts.z; i = i + 1u) {
+    direct += lit(spot_light_sample(i, in.world_position), n, v, n_dot_v, base_color.rgb, metallic, roughness, f0);
+  }
 
-  let k_s = f;
-  let k_d = (vec3<f32>(1.0) - k_s) * (1.0 - metallic);
-
-  let diffuse = k_d * base_color.rgb / PI;
-  let radiance = light_color * light_intensity;
-  let direct = (diffuse + specular) * radiance * n_dot_l;
-
-  // Constant ambient — replaced by IBL in Phase 10.7.
-  let ambient = vec3<f32>(0.03) * base_color.rgb * occlusion;
+  // Flat scene ambient — replaced by image-based lighting in Phase 10.7.
+  let ambient = lights.ambient.rgb * lights.ambient.a * base_color.rgb * occlusion;
 
   let final_rgb = ambient + direct + material.emissive.rgb * emissive_sample.rgb;
   return vec4<f32>(final_rgb, base_color.a);

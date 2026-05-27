@@ -13,6 +13,7 @@ import { ViewBindGroupCache } from '../camera/extracted';
 import { SortedCameras } from '../camera/sorted-cameras';
 import { Images } from '../image/images';
 import { RenderImages } from '../image/image-plugin';
+import { GpuLights } from '../light3d/gpu-lights';
 import type { App } from '../index';
 import type { AllocatorSlice, MeshHandle } from '../mesh';
 import { MeshAllocator, Meshes, Mesh3d, RenderMeshes } from '../mesh';
@@ -54,6 +55,14 @@ export interface MaterialCtor<M extends Material> {
   new (...args: never[]): M;
   readonly name: string;
   readonly bindGroup: BindGroupSchema<M>;
+  /**
+   * When `true`, the material is lit: {@link MaterialPlugin} appends the
+   * engine's `GpuLights` bind-group layout to the pipeline layout at
+   * `@group(2)` so the fragment shader can read the analytic lights, and the
+   * Core3d phase nodes bind it. Requires a `Light3dPlugin`. Omit (or `false`)
+   * for unlit materials, whose layout stays `[view, material]`.
+   */
+  readonly usesLights?: boolean;
   vertexShader?(): ShaderRef;
   fragmentShader?(): ShaderRef;
   specialize?(
@@ -640,9 +649,19 @@ class MaterialPluginState<M extends Material> {
       .layout!;
 
     if (this.pipelineLayout === undefined) {
+      const bindGroupLayouts: BindGroupLayout[] = [viewLayout, this.bindGroupLayout];
+      if (this.materialClass.usesLights === true) {
+        const gpuLights = this.app.getResource(GpuLights);
+        if (gpuLights?.layout === undefined) {
+          throw new Error(
+            `MaterialPlugin<${this.materialClass.name}>: material declares usesLights but the GpuLights @group(2) layout is missing — register a Light3dPlugin before the first frame.`,
+          );
+        }
+        bindGroupLayouts.push(gpuLights.layout);
+      }
       this.pipelineLayout = renderer.createPipelineLayout({
         label: `material#${this.materialClass.name}`,
-        bindGroupLayouts: [viewLayout, this.bindGroupLayout],
+        bindGroupLayouts,
       });
     }
 
