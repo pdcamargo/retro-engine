@@ -1,4 +1,4 @@
-// Visual harness for the 2D lighting pipeline (ADR-0037, ADR-0041, ADR-0042).
+// Visual harness for the 2D lighting pipeline (ADR-0037, 0041, 0042, 0043).
 //
 // Twelve checker sprites arranged in a 4×3 grid form a static scene. Three
 // `PointLight2d` entities sit at distinct grid positions with distinct
@@ -7,7 +7,9 @@
 // frame via a `Spin`-style marker so the lighting is obviously dynamic. A
 // `SpotLight2d` casts a downward cone over the top row, an `AmbientLight2d`
 // zone warms the bottom-left corner above the global floor, and two
-// `LightOccluder2d` boxes cast moving shadows from the orbiting light.
+// `LightOccluder2d` boxes cast moving shadows from the orbiting light. A
+// bump-mapped sprite sits at centre-bottom; `?normals=1` turns on per-pixel
+// N·L shading (ADR-0043) so its dome catches the moving light.
 //
 // `Light2dSettings.ambient` is set to a dim grey so unlit zones read as
 // "in shadow" rather than "broken" — without ambient the multiply
@@ -34,6 +36,42 @@ import {
   Time,
   Transform,
 } from '@retro-engine/engine';
+
+/**
+ * Generate a `size × size` RGBA normal map of a single spherical bump centred
+ * in the tile — normals point outward over the dome, flat `(0,0,1)` outside it.
+ * Encoded `n * 0.5 + 0.5` for the rgba8 normal buffer.
+ */
+const bumpNormalMap = (size: number): Image => {
+  const data = new Uint8Array(size * size * 4);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const nx = ((x + 0.5) / size) * 2 - 1;
+      const ny = 1 - ((y + 0.5) / size) * 2; // Y up
+      const r2 = nx * nx + ny * ny;
+      let vx = 0;
+      let vy = 0;
+      let vz = 1;
+      if (r2 < 1) {
+        vx = nx;
+        vy = ny;
+        vz = Math.sqrt(1 - r2);
+      }
+      const i = (y * size + x) * 4;
+      data[i] = Math.round((vx * 0.5 + 0.5) * 255);
+      data[i + 1] = Math.round((vy * 0.5 + 0.5) * 255);
+      data[i + 2] = Math.round((vz * 0.5 + 0.5) * 255);
+      data[i + 3] = 255;
+    }
+  }
+  return Image.fromBytes({
+    data,
+    format: 'rgba8unorm',
+    width: size,
+    height: size,
+    label: 'lights-showcase-bump-normal',
+  });
+};
 
 /** Marker component: light entities that orbit a fixed anchor point. */
 class Orbit {
@@ -86,6 +124,12 @@ export const lightsShowcasePlugin: Plugin = (app) => {
     (cmd, images, settings) => {
       // Dim grey ambient so the unlit cells read as "in shadow."
       settings.ambient = vec4.create(0.15, 0.15, 0.15, 1);
+
+      // Normal mapping is opt-in via `?normals=1` so the default scene keeps
+      // its flat-lit look; when on, every sprite shades by N·L and the
+      // bump-mapped sprite below shows per-pixel surface detail.
+      const normalsOn = new URLSearchParams(globalThis.location?.search ?? '').get('normals') === '1';
+      settings.normalMapping = normalsOn;
 
       const checker = images.add(
         Image.checker(
@@ -188,13 +232,26 @@ export const lightsShowcasePlugin: Plugin = (app) => {
         new Transform(vec3.create(120, 60, 0)),
       );
 
+      // A large bump-mapped sprite at the centre. With `?normals=1` its dome
+      // catches light per-pixel as the orbit light sweeps; otherwise it renders
+      // as a plain white quad.
+      const bump = images.add(bumpNormalMap(64));
+      cmd.spawn(
+        new Sprite({
+          color: vec4.create(0.8, 0.8, 0.85, 1),
+          customSize: vec2.create(120, 120),
+          normalMap: bump,
+        }),
+        new Transform(vec3.create(0, -150, 0)),
+      );
+
       cmd.spawn(
         ...Camera2d({
           clearColor: ClearColorConfig.custom({ r: 0, g: 0, b: 0, a: 1 }),
         }),
       );
       log.info(
-        'spawned 12 sprites + 4 PointLight2d (3 static, 1 orbiting) + 1 SpotLight2d + 1 AmbientLight2d zone + 2 occluders',
+        `spawned 12 sprites + 4 PointLight2d (3 static, 1 orbiting) + 1 SpotLight2d + 1 AmbientLight2d zone + 2 occluders + 1 bump sprite (normals ${normalsOn ? 'on' : 'off'})`,
       );
     },
   );

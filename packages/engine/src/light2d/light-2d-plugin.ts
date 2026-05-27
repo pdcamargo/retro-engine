@@ -13,6 +13,10 @@ import {
   Light2dCompositePass2dNode,
 } from '../render-graph/light2d-composite-pass-2d-node';
 import {
+  Light2dNormalPrepass2dLabel,
+  Light2dNormalPrepass2dNode,
+} from '../render-graph/light2d-normal-prepass-2d-node';
+import {
   Light2dShadowPass2dLabel,
   Light2dShadowPass2dNode,
 } from '../render-graph/light2d-shadow-pass-2d-node';
@@ -21,6 +25,8 @@ import { RenderGraph } from '../render-graph/render-graph';
 import { TransparentPass2dLabel } from '../render-graph/transparent-pass-2d-node';
 import { RenderSet } from '../render-set';
 import { ShaderRegistry } from '../shader/shader-registry';
+import { Images } from '../image/images';
+import { Sprite, SpritePipeline } from '../sprite';
 import { Extract, Query, Res, ResMut } from '../system-param';
 import { GlobalTransform } from '../transform';
 import { ViewVisibility } from '../visibility/visibility';
@@ -40,6 +46,7 @@ import {
 import { LIGHT2D_COMPOSITE_WGSL } from './light-2d-composite.wgsl';
 import { Light2dInstanceBuffer } from './light-2d-instance-buffer';
 import { Light2dPipeline } from './light-2d-pipeline';
+import { Light2dNormalState } from './light-2d-normal';
 import { Light2dSettings } from './light-2d-settings';
 import { LIGHT2D_SHADOW_WGSL } from './light-2d-shadow.wgsl';
 import { Light2dShadowState } from './light-2d-shadow';
@@ -58,21 +65,26 @@ import { SpotLight2d } from './spot-light-2d';
  * - Inserts the lighting render-world resources idempotently:
  *   {@link Light2dPipeline}, {@link Light2dInstanceBuffer},
  *   {@link Light2dPreparedBatches}, {@link ViewLight2dTargets},
- *   {@link Light2dShadowState}, and {@link Light2dSettings} (default
- *   `(0, 0, 0, 1)` ambient, `'multiply'` composite mode).
- * - Adds three nodes to the engine's Core2d sub-graph:
+ *   {@link Light2dShadowState}, {@link Light2dNormalState}, and
+ *   {@link Light2dSettings} (default `(0, 0, 0, 1)` ambient, `'multiply'`
+ *   composite mode, normal mapping off).
+ * - Adds four nodes to the engine's Core2d sub-graph:
+ *   {@link Light2dNormalPrepass2dNode} (captures normal-mapped sprites),
  *   {@link Light2dShadowPass2dNode} (builds the shadow atlas),
  *   {@link Light2dAccumulationPass2dNode}, and
  *   {@link Light2dCompositePass2dNode}. Final per-camera order:
- *   `Light2dShadowPass2d → Light2dAccumulationPass2d → OpaquePass2d →
- *   TransparentPass2d → Light2dCompositePass2d`.
- * - Registers three render-stage systems:
+ *   `Light2dNormalPrepass2d → Light2dShadowPass2d → Light2dAccumulationPass2d
+ *   → OpaquePass2d → TransparentPass2d → Light2dCompositePass2d`.
+ * - Registers render-stage systems:
  *   - `light2d-prepare-targets` in {@link RenderSet.Prepare}: ensures every
- *     active Core2d camera has a `baseColor` + `lightAccum` texture pair
- *     plus a composite bind group. Resizes / GCs entries as cameras come
- *     and go.
+ *     active Core2d camera has `baseColor` + `lightAccum` + normal textures
+ *     plus composite / normal bind groups. Resizes / GCs entries as cameras
+ *     come and go.
  *   - `light2d-prepare-shadows` in {@link RenderSet.Prepare}: bootstraps the
  *     shared shadow atlas + build pipeline.
+ *   - `light2d-capture-normals` in {@link RenderSet.Queue}: packs visible
+ *     normal-mapped sprites for the normal prepass and pushes the
+ *     `(enabled, height)` uniform.
  *   - `light2d-queue` in {@link RenderSet.Queue}: iterates every visible 2D
  *     light ({@link PointLight2d}, {@link SpotLight2d},
  *     {@link DirectionalLight2d}, {@link AmbientLight2d}), packs them into the
@@ -119,6 +131,9 @@ export class Light2dPlugin implements PluginObject {
     if (app.getResource(Light2dShadowState) === undefined) {
       app.insertResource(new Light2dShadowState());
     }
+    if (app.getResource(Light2dNormalState) === undefined) {
+      app.insertResource(new Light2dNormalState());
+    }
     if (app.getResource(Light2dSettings) === undefined) {
       app.insertResource(new Light2dSettings());
     }
@@ -135,9 +150,11 @@ export class Light2dPlugin implements PluginObject {
         'Light2dPlugin: Core2d sub-graph missing; RenderGraphPlugin must build the sub-graph before Light2dPlugin.',
       );
     }
+    sub.addNode(Light2dNormalPrepass2dNode);
     sub.addNode(Light2dShadowPass2dNode);
     sub.addNode(Light2dAccumulationPass2dNode);
     sub.addNode(Light2dCompositePass2dNode);
+    sub.addEdge(Light2dNormalPrepass2dLabel, Light2dShadowPass2dLabel);
     sub.addEdge(Light2dShadowPass2dLabel, Light2dAccumulationPass2dLabel);
     sub.addEdge(Light2dAccumulationPass2dLabel, OpaquePass2dLabel);
     sub.addEdge(TransparentPass2dLabel, Light2dCompositePass2dLabel);
@@ -164,6 +181,32 @@ export class Light2dPlugin implements PluginObject {
         (shadow as Light2dShadowState).ensure(app, pipeline as Light2dPipeline);
       },
       { set: RenderSet.Prepare, label: 'light2d-prepare-shadows' },
+    );
+
+    app.addSystem(
+      'render',
+      [
+        Extract(Query([Sprite, GlobalTransform, ViewVisibility])),
+        Res(Images),
+        Res(Light2dSettings),
+        ResMut(Light2dNormalState),
+      ],
+      (sprites, images, settings, normalState) => {
+        const ns = normalState as Light2dNormalState;
+        ns.ensureResources(app);
+        const spritePipeline = app.getResource(SpritePipeline);
+        if (spritePipeline !== undefined) ns.ensurePipeline(app, spritePipeline);
+        const s = settings as Light2dSettings;
+        ns.writeUniform(app, s.normalMapping, s.normalLightHeight);
+        ns.capture(
+          app,
+          sprites as unknown as QueryHandle<
+            readonly [typeof Sprite, typeof GlobalTransform, typeof ViewVisibility]
+          >,
+          images as Images,
+        );
+      },
+      { set: RenderSet.Queue, label: 'light2d-capture-normals' },
     );
 
     app.addSystem(

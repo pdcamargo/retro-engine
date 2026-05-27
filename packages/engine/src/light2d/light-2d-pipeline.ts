@@ -76,6 +76,8 @@ export class Light2dPipeline {
   accumulationPipeline: RenderPipeline | undefined;
   /** `@group(1)` layout: the shadow atlas texture + sampler the accumulation shader samples. */
   shadowAccumBindGroupLayout: BindGroupLayout | undefined;
+  /** `@group(2)` layout: the per-camera normal G-buffer + sampler + `(enabled, height)` uniform. */
+  normalAccumBindGroupLayout: BindGroupLayout | undefined;
 
   // Composite pipeline.
   compositeBindGroupLayout: BindGroupLayout | undefined;
@@ -146,9 +148,29 @@ export class Light2dPipeline {
         },
       ],
     });
+    this.normalAccumBindGroupLayout = renderer.createBindGroupLayout({
+      label: 'light2d-normal-accum-layout',
+      entries: [
+        {
+          binding: 0,
+          visibility: ShaderStage.FRAGMENT,
+          texture: { sampleType: 'float', viewDimension: '2d', multisampled: false },
+        },
+        {
+          binding: 1,
+          visibility: ShaderStage.FRAGMENT,
+          sampler: { type: 'filtering' },
+        },
+        {
+          binding: 2,
+          visibility: ShaderStage.FRAGMENT,
+          buffer: { type: 'uniform' },
+        },
+      ],
+    });
     this.accumulationPipelineLayout = renderer.createPipelineLayout({
       label: 'light2d-accumulation-layout',
-      bindGroupLayouts: [viewLayout, this.shadowAccumBindGroupLayout],
+      bindGroupLayouts: [viewLayout, this.shadowAccumBindGroupLayout, this.normalAccumBindGroupLayout],
     });
     const accumShader = new Shader(
       getShaderSource(registry as ShaderRegistry, 'retro_engine::light2d_accumulation'),
@@ -249,12 +271,42 @@ export class Light2dPipeline {
     });
   }
 
+  /**
+   * Build the `@group(2)` bind group the accumulation pass binds to sample a
+   * camera's normal G-buffer (plus the shared sampler + `(enabled, height)`
+   * uniform). Called by `prepareLight2dTargets` when a camera's targets are
+   * (re)allocated.
+   */
+  buildNormalAccumBindGroup(
+    app: App,
+    sourceEntity: Entity,
+    normalView: TextureView,
+    sampler: Sampler,
+    uniformBuffer: Buffer,
+  ): BindGroup {
+    if (this.normalAccumBindGroupLayout === undefined) {
+      throw new Error(
+        'Light2dPipeline.buildNormalAccumBindGroup: pipeline not initialised — call ensureInitialised first.',
+      );
+    }
+    return app.renderer.createBindGroup({
+      label: `light2d-normal-accum#${sourceEntity}`,
+      layout: this.normalAccumBindGroupLayout,
+      entries: [
+        { binding: 0, resource: normalView },
+        { binding: 1, resource: sampler },
+        { binding: 2, resource: { buffer: uniformBuffer } },
+      ],
+    });
+  }
+
   /** Drop every GPU resource. Tests call this on teardown. */
   dispose(): void {
     this.quadVertexBuffer?.destroy();
     this.quadIndexBuffer?.destroy();
     this.sampler?.destroy();
     this.shadowAccumBindGroupLayout?.destroy();
+    this.normalAccumBindGroupLayout?.destroy();
     this.accumulationPipelineLayout?.destroy();
     this.compositeBindGroupLayout?.destroy();
     this.compositePipelineLayout?.destroy();
@@ -265,6 +317,7 @@ export class Light2dPipeline {
     this.accumulationModule = undefined;
     this.accumulationPipeline = undefined;
     this.shadowAccumBindGroupLayout = undefined;
+    this.normalAccumBindGroupLayout = undefined;
     this.compositeBindGroupLayout = undefined;
     this.compositePipelineLayout = undefined;
     this.compositeModule = undefined;

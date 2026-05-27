@@ -22,7 +22,10 @@
  *
  * Vertex shader composes world position as
  * `center + uv.x * basisX + uv.y * basisY` and source UV as
- * `uvMin + uv * (uvMax - uvMin)`. Fragment samples and multiplies by tint.
+ * `uvMin + uv * (uvMax - uvMin)`. `fs_main` samples and multiplies by tint;
+ * `fs_normal` reinterprets the bound `@group(1)` texture as a tangent-space
+ * normal map and writes the (re-encoded) world normal — used by the 2D
+ * lighting normal prepass, which reuses this module's `vs_main`.
  */
 export const SPRITE_WGSL = /* wgsl */ `
 #import retro_engine::view
@@ -65,5 +68,14 @@ fn vs_main(input: VsIn) -> VsOut {
 fn fs_main(input: VsOut) -> @location(0) vec4<f32> {
   let sampled = textureSample(sprite_tex, sprite_sampler, input.uv);
   return sampled * input.tint;
+}
+
+@fragment
+fn fs_normal(input: VsOut) -> @location(0) vec4<f32> {
+  // Decode the tangent-space normal map (rgb in [0,1] -> [-1,1]). v1 treats
+  // tangent space as world space (sprite rotation is not applied), then
+  // re-encodes to [0,1] for the rgba8unorm normal buffer.
+  let n = normalize(textureSample(sprite_tex, sprite_sampler, input.uv).xyz * 2.0 - 1.0);
+  return vec4<f32>(n * 0.5 + 0.5, 1.0);
 }
 ` as const;

@@ -52,6 +52,14 @@ const SHADOW_CASTERS: f32 = 64.0;
 @group(1) @binding(0) var shadow_atlas: texture_2d<f32>;
 @group(1) @binding(1) var shadow_sampler: sampler;
 
+struct NormalParams {
+  // x = enabled (0/1), y = light height above the plane for N·L.
+  config: vec4<f32>,
+};
+@group(2) @binding(0) var normal_tex: texture_2d<f32>;
+@group(2) @binding(1) var normal_sampler: sampler;
+@group(2) @binding(2) var<uniform> normal_params: NormalParams;
+
 struct VsIn {
   @location(0) quad_uv: vec2<f32>,
   @location(2) instance_a: vec4<f32>,
@@ -121,6 +129,10 @@ fn fs_main(input: VsOut) -> @location(0) vec4<f32> {
   let v = (max(input.shadow_row, 0.0) + 0.5) / SHADOW_CASTERS;
   let stored = textureSample(shadow_atlas, shadow_sampler, vec2<f32>(u, v)).r;
 
+  // Sample the screen-space normal G-buffer (also uniform control flow).
+  let frag_uv = input.clip_position.xy / vec2<f32>(textureDimensions(normal_tex));
+  let surface_n = normalize(textureSample(normal_tex, normal_sampler, frag_uv).xyz * 2.0 - 1.0);
+
   var falloff = 1.0;
   if (input.kind == KIND_POINT || input.kind == KIND_SPOT) {
     let range = input.light_params.x;
@@ -139,6 +151,19 @@ fn fs_main(input: VsOut) -> @location(0) vec4<f32> {
       falloff = falloff * (1.0 - shadow);
     }
   }
+
+  // Normal-map shading: point/spot/directional lights modulate by N·L when
+  // enabled. Ambient zones stay omnidirectional (no N·L).
+  if (normal_params.config.x > 0.5 && input.kind != KIND_AMBIENT_ZONE) {
+    let height = max(normal_params.config.y, 1e-3);
+    var to_light_xy = -rel; // surface -> light, for point / spot
+    if (input.kind == KIND_DIRECTIONAL) {
+      to_light_xy = -input.cone.xy; // -travel direction
+    }
+    let l = normalize(vec3<f32>(to_light_xy, height));
+    falloff = falloff * max(dot(surface_n, l), 0.0);
+  }
+
   let lit = input.light_color * input.light_intensity * falloff;
   return vec4<f32>(lit, 1.0);
 }

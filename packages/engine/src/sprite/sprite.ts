@@ -62,6 +62,14 @@ export interface SpriteOptions {
    * producing a solid-colour quad tinted by {@link color}.
    */
   image?: ImageHandle;
+  /**
+   * Optional tangent-space normal map. When set and `Light2dPlugin`'s
+   * `Light2dSettings.normalMapping` is enabled, the sprite is sampled into the
+   * lighting normal buffer so 2D lights shade it per-pixel (`N·L`). Sampled
+   * with the same UVs as {@link image}, so a normal map should share the
+   * source image's dimensions / sub-rect. No effect without lighting.
+   */
+  normalMap?: ImageHandle;
   /** RGBA tint multiplied with the sampled texel. Default `(1, 1, 1, 1)`. */
   color?: Vec4;
   /**
@@ -122,6 +130,7 @@ export interface SpriteOptions {
  */
 export class Sprite {
   image: ImageHandle | undefined;
+  normalMap: ImageHandle | undefined;
   color: Vec4;
   customSize: Vec2 | undefined;
   rect: Rect | undefined;
@@ -132,6 +141,7 @@ export class Sprite {
 
   constructor(options: SpriteOptions = {}) {
     this.image = options.image;
+    this.normalMap = options.normalMap;
     this.color = options.color ?? vec4.create(1, 1, 1, 1);
     this.customSize = options.customSize;
     this.rect = options.rect;

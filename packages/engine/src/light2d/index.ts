@@ -18,6 +18,11 @@ export {
   Light2dShadowState,
 } from './light-2d-shadow';
 export { LIGHT2D_SHADOW_WGSL } from './light-2d-shadow.wgsl';
+export {
+  LIGHT2D_DEFAULT_LIGHT_HEIGHT,
+  LIGHT2D_NORMAL_FORMAT,
+  Light2dNormalState,
+} from './light-2d-normal';
 export type { Light2dBatch } from './light-2d-batch';
 export {
   LIGHT2D_INSTANCE_BYTE_SIZE,

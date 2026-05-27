@@ -115,6 +115,7 @@ export const Light2dAccumulationPass2dNode: ViewNode = {
     }
     pass.setPipeline(pipeline.accumulationPipeline);
     pass.setBindGroup(1, shadow.accumBindGroup);
+    pass.setBindGroup(2, entry.normalAccumBindGroup);
     pass.setVertexBuffer(0, pipeline.quadVertexBuffer);
     pass.setVertexBuffer(1, instanceBuffer.buffer);
     pass.setIndexBuffer(pipeline.quadIndexBuffer, 'uint16');

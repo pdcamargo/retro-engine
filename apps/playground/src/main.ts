@@ -22,7 +22,8 @@ if (!(canvas instanceof HTMLCanvasElement)) {
 //   `?mode=shapes`  → Phase 8.7 Material2d showcase (ADR-0035).
 //   `?mode=stress`  → mixed-load FPS harness (size=small|medium|large).
 //   `?mode=lights`  → Phase 9 2D lighting showcase: point/spot/ambient lights,
-//                     composite modes, and shadow occluders (ADR-0037/0041/0042).
+//                     composite modes, shadow occluders, and (with `&normals=1`)
+//                     normal-mapped lighting (ADR-0037/0041/0042/0043).
 //   anything else   → Phase 7.5 primitives demo.
 // All demos stay discoverable from one bundle.
 const mode = new URLSearchParams(window.location.search).get('mode');

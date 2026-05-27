@@ -1,6 +1,8 @@
 import type { Vec4 } from '@retro-engine/math';
 import { vec4 } from '@retro-engine/math';
 
+import { LIGHT2D_DEFAULT_LIGHT_HEIGHT } from './light-2d-normal';
+
 /**
  * Mode the composite pass uses to combine the accumulated light against the
  * base color.
@@ -38,9 +40,32 @@ export type Light2dCompositeMode = 'multiply' | 'add' | 'screen';
 export class Light2dSettings {
   ambient: Vec4 = vec4.create(0, 0, 0, 1);
   compositeMode: Light2dCompositeMode = 'multiply';
+  /**
+   * Opt-in for normal-map-aware lighting. When `true`, sprites carrying a
+   * `Sprite.normalMap` are captured into a normal G-buffer and point / spot /
+   * directional lights shade them per-pixel via `N·L`. Default `false` —
+   * lighting stays flat (the pre-normal-mapping behaviour) until enabled.
+   */
+  normalMapping = false;
+  /**
+   * World-space height of 2D lights above the sprite plane, used as the Z of
+   * the light vector in the `N·L` term. Larger values flatten the shading
+   * (light is "higher"); smaller values exaggerate it. Only consulted when
+   * {@link normalMapping} is `true`.
+   */
+  normalLightHeight: number = LIGHT2D_DEFAULT_LIGHT_HEIGHT;
 
-  constructor(options: { ambient?: Vec4; compositeMode?: Light2dCompositeMode } = {}) {
+  constructor(
+    options: {
+      ambient?: Vec4;
+      compositeMode?: Light2dCompositeMode;
+      normalMapping?: boolean;
+      normalLightHeight?: number;
+    } = {},
+  ) {
     if (options.ambient !== undefined) this.ambient = options.ambient;
     if (options.compositeMode !== undefined) this.compositeMode = options.compositeMode;
+    if (options.normalMapping !== undefined) this.normalMapping = options.normalMapping;
+    if (options.normalLightHeight !== undefined) this.normalLightHeight = options.normalLightHeight;
   }
 }

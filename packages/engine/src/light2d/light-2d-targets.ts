@@ -6,6 +6,7 @@ import { Core2dLabel } from '../render-graph/core-2d';
 import { SortedCameras } from '../camera/sorted-cameras';
 import type { App } from '../index';
 
+import { LIGHT2D_NORMAL_FORMAT, Light2dNormalState } from './light-2d-normal';
 import type { Light2dPipeline } from './light-2d-pipeline';
 
 /**
@@ -27,9 +28,14 @@ export interface Light2dCameraTargets {
   baseColorFormat: TextureFormat;
   lightAccumTex: Texture;
   lightAccumView: TextureView;
+  /** Per-camera normal G-buffer the normal prepass writes and accumulation samples for `N·L`. */
+  normalTex: Texture;
+  normalView: TextureView;
   width: number;
   height: number;
   compositeBindGroup: BindGroup;
+  /** `@group(2)` for accumulation: normal view + sampler + `(enabled, height)` uniform. */
+  normalAccumBindGroup: BindGroup;
 }
 
 /**
@@ -53,10 +59,13 @@ export class ViewLight2dTargets {
 
 const destroyEntry = (entry: Light2dCameraTargets): void => {
   entry.compositeBindGroup.destroy();
+  entry.normalAccumBindGroup.destroy();
   entry.baseColorView.destroy();
   entry.baseColorTex.destroy();
   entry.lightAccumView.destroy();
   entry.lightAccumTex.destroy();
+  entry.normalView.destroy();
+  entry.normalTex.destroy();
 };
 
 /**
@@ -133,15 +142,37 @@ export const prepareLight2dTargets = (
       baseColorView,
       lightAccumView,
     );
+
+    const normalState = app.getResource(Light2dNormalState);
+    normalState?.ensureResources(app);
+    const normalTex = app.renderer.createTexture({
+      label: `light2d-normal#${sourceEntity}`,
+      width,
+      height,
+      format: LIGHT2D_NORMAL_FORMAT,
+      usage: TextureUsage.RENDER_ATTACHMENT | TextureUsage.TEXTURE_BINDING,
+    });
+    const normalView = normalTex.createView();
+    const normalAccumBindGroup = pipeline.buildNormalAccumBindGroup(
+      app,
+      sourceEntity,
+      normalView,
+      normalState!.sampler!,
+      normalState!.uniformBuffer!,
+    );
+
     targets.perCamera.set(sourceEntity, {
       baseColorTex,
       baseColorView,
       baseColorFormat: format,
       lightAccumTex,
       lightAccumView,
+      normalTex,
+      normalView,
       width,
       height,
       compositeBindGroup,
+      normalAccumBindGroup,
     });
   }
 
