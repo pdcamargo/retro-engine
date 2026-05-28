@@ -143,16 +143,20 @@ pass, and a `shadow_factor` multiply in `pbr.wgsl`. ADR-0046 shipped 10.5 —
 cascaded directional shadow maps: the camera frustum is split into cascades, each
 fit with a stabilized (bounding-sphere + texel-snapped) light-space projection
 and stored as additional atlas layers, replacing ADR-0045's fixed origin box.
-Light direction for directional/spot is derived from `GlobalTransform`.
-Browser-verified in `apps/playground` (`?mode=lit`). PCF (10.6) follows; IBL
-(10.7) is gated on the asset system.
+ADR-0047 shipped 10.6 — a `ShadowFilteringMethod` knob on `Shadow3dSettings`
+selecting `Hardware2x2` (the existing 2×2 hardware PCF, default), `Castano13`
+(9-tap weighted-bilinear Gaussian), or `Pcf5x5` (25-tap uniform), dispatched in
+`retro_engine::shadow3d` from a `shadow_flags` uniform — no binding-model or
+HAL change. Light direction for directional/spot is derived from
+`GlobalTransform`. Browser-verified in `apps/playground` (`?mode=lit`,
+`&pcf=castano13` / `&pcf=pcf5x5`). IBL (10.7) is gated on the asset system.
 
 - **10.1 `PointLight` / `SpotLight` / `DirectionalLight` / `AmbientLight`** — components; ambient is a resource. ✅ (ADR-0044)
 - **10.2 Forward+ clustered shading** — 3D froxel grid via `ClusterConfig`. **Backlogged** (`docs/backlog/3d-clustered-forward-plus.md`): simple forward shipped in ADR-0044; clustering commits the engine to an SSBO dependency + a `storageBuffers` capability flag and is sequenced after shadows. Simple forward is the WebGL2 fallback; clustered is the WebGPU fast path.
 - **10.3 `prepare_lights`** — builds `GpuLights` uniform ✅ (ADR-0044); `assign_objects_to_clusters` (the cluster-binding half) is backlogged with 10.2.
 - **10.4 Shadow maps** — per-light depth render. ✅ (ADR-0045) directional + spot, 2D-array depth atlas, `NotShadowCaster` opt-out. Point-light (cube) shadows + `NotShadowReceiver` are documented follow-ons; the directional frustum was a fixed origin box until cascades (10.5, ADR-0046) added camera fitting.
 - **10.5 Cascaded shadow maps** — for `DirectionalLight` via `CascadeShadowConfig`. ✅ (ADR-0046) camera-fitted cascades over the shared 2D-array atlas (`MAX_SHADOW_CASTERS` 8→12), bounding-sphere + texel-snap stabilization, per-fragment cascade selection by view-space depth in `pbr.wgsl`. Per-light split ranges, multi-camera fitting, per-cascade culling/bias are documented follow-ons.
-- **10.6 PCF / shadow filtering kernels** — `ShadowFilteringMethod`.
+- **10.6 PCF / shadow filtering kernels** — `ShadowFilteringMethod`. ✅ (ADR-0047) `Shadow3dSettings.filteringMethod` selects `Hardware2x2` (default, single-tap hardware 2×2 PCF), `Castano13` (9-tap weighted-bilinear Gaussian), or `Pcf5x5` (25-tap uniform); `GpuLights.shadow_flags` carries the ordinal and `retro_engine::shadow3d` dispatches in uniform control flow. Per-camera / per-light / per-cascade overrides and PCSS / temporal PCF are documented follow-ons.
 - **10.7 Environment map & image-based lighting (IBL)** — PBR needs this to look right, but it is **gated on the asset system** (HDRI loading + cubemap baking are not built yet), so it lands after `docs/roadmap/asset-system.md`. ADR-0044's flat ambient term is the placeholder it replaces.
   - HDRI loading (`.hdr` Radiance, `.exr` OpenEXR) → high-precision float texture.
   - Equirectangular → cubemap conversion (one-shot bake).

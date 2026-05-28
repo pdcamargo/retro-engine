@@ -27,10 +27,12 @@ export {
   packDirectionalCasterIndex,
   packDirectionalLight,
   packPointLight,
+  packShadowFlags,
   packShadowViewProj,
   packSpotCasterIndex,
   packSpotLight,
 } from './gpu-lights';
+export { ShadowFilteringMethod } from './shadow-filtering-method';
 export { LIGHT3D_WGSL } from './light-3d.wgsl';
 export { NotShadowCaster } from './not-shadow-caster';
 export type { ShadowCasterBatch } from './shadow-3d';

@@ -34,29 +34,111 @@ const SHADOW3D_DEPTH_COMPARE_BIAS = '0.0015';
  */
 const SHADOW3D_CASCADE_BLEND = '0.1';
 
+/**
+ * Ordinals of {@link ShadowFilteringMethod} branched on in the WGSL dispatch.
+ * Mirror `SHADOW_FILTERING_METHOD_ORDINAL` (`Hardware2x2 = 0`) — the
+ * Hardware2x2 case is the implicit fallback (no `if`), so it has no constant
+ * here; the other two are explicit branches.
+ */
+const SHADOW3D_FILTER_CASTANO13 = '1u';
+const SHADOW3D_FILTER_PCF5X5 = '2u';
+
 export const SHADOW3D_WGSL = /* wgsl */ `
 #import retro_engine::light3d
 
 @group(2) @binding(1) var shadow_atlas: texture_depth_2d_array;
 @group(2) @binding(2) var shadow_sampler: sampler_comparison;
 
-// Comparison-sample one atlas \`layer\` at \`world_pos\`, returning the lit fraction
-// [0, 1]; fragments outside that layer's light frustum read as fully lit.
+// Project a world-space fragment into one atlas layer's UV + depth-reference,
+// plus an "inside this layer's light frustum" mask. Used by every kernel so the
+// expensive matrix multiply runs once, not per tap.
+struct ShadowProjection {
+  uv: vec2<f32>,
+  depth_ref: f32,
+  inside: bool,
+};
+
+fn project_shadow(layer: i32, world_pos: vec3<f32>) -> ShadowProjection {
+  let clip = lights.shadow_view_proj[layer] * vec4<f32>(world_pos, 1.0);
+  let ndc = clip.xyz / clip.w;
+  var p: ShadowProjection;
+  p.uv = vec2<f32>(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
+  p.depth_ref = clamp(ndc.z - ${SHADOW3D_DEPTH_COMPARE_BIAS}, 0.0, 1.0);
+  p.inside =
+    ndc.x >= -1.0 && ndc.x <= 1.0 &&
+    ndc.y >= -1.0 && ndc.y <= 1.0 &&
+    ndc.z >= 0.0 && ndc.z <= 1.0;
+  return p;
+}
+
+// Inverse atlas size in UV units (1 / SHADOW_MAP_SIZE), used as the kernel tap
+// spacing. textureDimensions reads metadata only, so this is essentially free.
+fn shadow_texel_size() -> f32 {
+  return 1.0 / f32(textureDimensions(shadow_atlas).x);
+}
+
+// Comparison-sample one atlas \`layer\` at \`world_pos\` with a single tap, returning
+// the lit fraction [0, 1]; fragments outside that layer's light frustum read as
+// fully lit. With the engine's linear-filtered comparison sampler this is the
+// 2×2 hardware-PCF path (\`ShadowFilteringMethod.Hardware2x2\`).
 //
 // textureSampleCompare must run in uniform control flow, so the atlas is sampled
 // unconditionally (the array layer index may vary per fragment) and the
 // "outside frustum" case is resolved with select() rather than a branch.
 fn sample_cascade(layer: i32, world_pos: vec3<f32>) -> f32 {
-  let clip = lights.shadow_view_proj[layer] * vec4<f32>(world_pos, 1.0);
-  let ndc = clip.xyz / clip.w;
-  let uv = vec2<f32>(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
-  let depth_ref = clamp(ndc.z - ${SHADOW3D_DEPTH_COMPARE_BIAS}, 0.0, 1.0);
-  let sampled = textureSampleCompare(shadow_atlas, shadow_sampler, uv, layer, depth_ref);
-  let inside =
-    ndc.x >= -1.0 && ndc.x <= 1.0 &&
-    ndc.y >= -1.0 && ndc.y <= 1.0 &&
-    ndc.z >= 0.0 && ndc.z <= 1.0;
-  return select(1.0, sampled, inside);
+  let p = project_shadow(layer, world_pos);
+  let sampled = textureSampleCompare(shadow_atlas, shadow_sampler, p.uv, layer, p.depth_ref);
+  return select(1.0, sampled, p.inside);
+}
+
+// Castaño 2013 9-tap weighted-bilinear PCF — a 3×3 binomial kernel
+// (1-2-1 / 2-4-2 / 1-2-1, sum 16) over the same texel spacing. Smooth penumbras
+// at ~9× the sample cost of \`sample_cascade\`. The same uniform-control-flow
+// rules apply.
+fn sample_cascade_castano13(layer: i32, world_pos: vec3<f32>) -> f32 {
+  let p = project_shadow(layer, world_pos);
+  let t = shadow_texel_size();
+  let sum =
+      1.0 * textureSampleCompare(shadow_atlas, shadow_sampler, p.uv + vec2<f32>(-t, -t), layer, p.depth_ref)
+    + 2.0 * textureSampleCompare(shadow_atlas, shadow_sampler, p.uv + vec2<f32>(0.0, -t), layer, p.depth_ref)
+    + 1.0 * textureSampleCompare(shadow_atlas, shadow_sampler, p.uv + vec2<f32>(t, -t), layer, p.depth_ref)
+    + 2.0 * textureSampleCompare(shadow_atlas, shadow_sampler, p.uv + vec2<f32>(-t, 0.0), layer, p.depth_ref)
+    + 4.0 * textureSampleCompare(shadow_atlas, shadow_sampler, p.uv, layer, p.depth_ref)
+    + 2.0 * textureSampleCompare(shadow_atlas, shadow_sampler, p.uv + vec2<f32>(t, 0.0), layer, p.depth_ref)
+    + 1.0 * textureSampleCompare(shadow_atlas, shadow_sampler, p.uv + vec2<f32>(-t, t), layer, p.depth_ref)
+    + 2.0 * textureSampleCompare(shadow_atlas, shadow_sampler, p.uv + vec2<f32>(0.0, t), layer, p.depth_ref)
+    + 1.0 * textureSampleCompare(shadow_atlas, shadow_sampler, p.uv + vec2<f32>(t, t), layer, p.depth_ref);
+  return select(1.0, sum * (1.0 / 16.0), p.inside);
+}
+
+// 25-tap uniform-weight PCF over a 5×5 texel pattern — widest blur of the three
+// kernels, ~25× sample cost. The constant-bounded loop keeps control flow
+// uniform across the dispatch, so textureSampleCompare is legal inside it.
+fn sample_cascade_pcf5x5(layer: i32, world_pos: vec3<f32>) -> f32 {
+  let p = project_shadow(layer, world_pos);
+  let t = shadow_texel_size();
+  var sum = 0.0;
+  for (var y = -2; y <= 2; y = y + 1) {
+    for (var x = -2; x <= 2; x = x + 1) {
+      let offset = vec2<f32>(f32(x) * t, f32(y) * t);
+      sum = sum + textureSampleCompare(shadow_atlas, shadow_sampler, p.uv + offset, layer, p.depth_ref);
+    }
+  }
+  return select(1.0, sum * (1.0 / 25.0), p.inside);
+}
+
+// Pick the kernel for this frame from \`lights.shadow_flags.x\` (uniform across
+// the dispatch, so all three call sites take the same branch and uniform
+// control flow is preserved).
+fn sample_cascade_dispatch(layer: i32, world_pos: vec3<f32>) -> f32 {
+  let method = lights.shadow_flags.x;
+  if (method == ${SHADOW3D_FILTER_CASTANO13}) {
+    return sample_cascade_castano13(layer, world_pos);
+  }
+  if (method == ${SHADOW3D_FILTER_PCF5X5}) {
+    return sample_cascade_pcf5x5(layer, world_pos);
+  }
+  return sample_cascade(layer, world_pos);
 }
 
 // Lit fraction for a single-map (spot) shadow. \`caster_index\` is the light's
@@ -64,7 +146,7 @@ fn sample_cascade(layer: i32, world_pos: vec3<f32>) -> f32 {
 fn shadow_factor(caster_index: f32, world_pos: vec3<f32>) -> f32 {
   let has_shadow = caster_index >= 0.0;
   let layer = max(i32(caster_index), 0);
-  return select(1.0, sample_cascade(layer, world_pos), has_shadow);
+  return select(1.0, sample_cascade_dispatch(layer, world_pos), has_shadow);
 }
 
 // Lit fraction for a cascaded (directional) shadow. \`base_index\` is the light's
@@ -93,8 +175,8 @@ fn directional_shadow_factor(base_index: f32, world_pos: vec3<f32>, view_z: f32)
 
   // Sample this cascade and the next unconditionally (uniform control flow);
   // blend across a band near this cascade's far edge.
-  let f_c = sample_cascade(base + c, world_pos);
-  let f_next = sample_cascade(base + next, world_pos);
+  let f_c = sample_cascade_dispatch(base + c, world_pos);
+  let f_next = sample_cascade_dispatch(base + next, world_pos);
   let far_c = splits[c];
   let band = max(far_c * ${SHADOW3D_CASCADE_BLEND}, 1e-4);
   let w = clamp((far_c - view_z) / band, 0.0, 1.0);

@@ -1,3 +1,5 @@
+import { ShadowFilteringMethod } from './shadow-filtering-method';
+
 /**
  * Options accepted by the {@link Shadow3dSettings} constructor. Every field is
  * optional; omitted fields take the documented default.
@@ -39,6 +41,13 @@ export interface Shadow3dSettingsOptions {
    * precision (and risk peter-panning). Default `30`.
    */
   cascadeBackExtension?: number;
+  /**
+   * Kernel `retro_engine::shadow3d` uses to sample the shadow atlas. Default
+   * {@link ShadowFilteringMethod.Hardware2x2} — the single-tap hardware-PCF
+   * path that ADR-0045/0046 shipped, with no added GPU cost. See
+   * {@link ShadowFilteringMethod} for the other options.
+   */
+  filteringMethod?: ShadowFilteringMethod;
 }
 
 /**
@@ -60,6 +69,7 @@ export class Shadow3dSettings {
   slopeScaleBias: number;
   cullMode: 'back' | 'front' | 'none';
   cascadeBackExtension: number;
+  filteringMethod: ShadowFilteringMethod;
 
   constructor(options: Shadow3dSettingsOptions = {}) {
     this.directionalExtent = options.directionalExtent ?? 20;
@@ -69,5 +79,6 @@ export class Shadow3dSettings {
     this.slopeScaleBias = options.slopeScaleBias ?? 3;
     this.cullMode = options.cullMode ?? 'back';
     this.cascadeBackExtension = options.cascadeBackExtension ?? 30;
+    this.filteringMethod = options.filteringMethod ?? ShadowFilteringMethod.Hardware2x2;
   }
 }

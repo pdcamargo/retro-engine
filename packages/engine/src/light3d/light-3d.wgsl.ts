@@ -60,6 +60,10 @@ struct GpuLights {
   // (spot: its caster index; directional: cascade base + cascade index);
   // \`retro_engine::shadow3d\` projects the world fragment by this matrix.
   shadow_view_proj: array<mat4x4<f32>, MAX_SHADOW_CASTERS>,
+  // Shadow-sampling flags shared by every shadowed light this frame.
+  // x = filtering kernel (0 = Hardware2x2, 1 = Castano13, 2 = Pcf5x5);
+  // yzw are reserved (zero) for future shadow knobs.
+  shadow_flags: vec4<u32>,
 };
 
 @group(2) @binding(0) var<uniform> lights: GpuLights;

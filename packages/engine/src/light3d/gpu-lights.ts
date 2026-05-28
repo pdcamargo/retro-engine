@@ -12,6 +12,10 @@ import { BufferUsage, ShaderStage } from '@retro-engine/renderer-core';
 import type { AmbientLight } from './ambient-light';
 import type { DirectionalLight3d } from './directional-light-3d';
 import type { PointLight3d } from './point-light-3d';
+import {
+  SHADOW_FILTERING_METHOD_ORDINAL,
+  type ShadowFilteringMethod,
+} from './shadow-filtering-method';
 import type { SpotLight3d } from './spot-light-3d';
 
 /**
@@ -44,25 +48,31 @@ export const MAX_SHADOW_CASTERS = 12 as const;
 //   spot:        array<SpotLightGpu, 64>          @ 3232 (64 * 64 = 4096)
 //   cascade_splits: vec4<f32>                     @ 7328 (16)  far view-depth per cascade
 //   shadow_view_proj: array<mat4x4<f32>, 12>      @ 7344 (12 * 64 = 768)
+//   shadow_flags: vec4<u32>                       @ 8112 (16)  x = filtering ordinal, yzw reserved
 //
 // Each sub-struct is a whole number of 16-byte slots, so std140 array stride
-// equals the struct size with no inter-element padding. `cascade_splits` is a
-// 16-byte vec4 on a 16-byte boundary; the `mat4x4<f32>` array follows it (64 B
-// columns, 16-byte aligned), so neither needs extra padding.
+// equals the struct size with no inter-element padding. `cascade_splits` and
+// `shadow_flags` are 16-byte vec4s on a 16-byte boundary; the `mat4x4<f32>`
+// array between them has 64 B columns on 16-byte alignment, so neither padding
+// nor stride correction is needed.
 const HEADER_BYTES = 32;
 const DIRECTIONAL_STRIDE_F32 = 8; // 2 × vec4
 const POINT_STRIDE_F32 = 12; // 3 × vec4
 const SPOT_STRIDE_F32 = 16; // 4 × vec4
 const CASCADE_SPLITS_F32 = 4; // vec4<f32>
 const SHADOW_MATRIX_F32 = 16; // mat4x4<f32>
+const SHADOW_FLAGS_F32 = 4; // vec4<u32>
 
 const DIRECTIONAL_BASE_F32 = HEADER_BYTES / 4; // 8
 const POINT_BASE_F32 = DIRECTIONAL_BASE_F32 + MAX_DIRECTIONAL_LIGHTS * DIRECTIONAL_STRIDE_F32; // 40
 const SPOT_BASE_F32 = POINT_BASE_F32 + MAX_POINT_LIGHTS * POINT_STRIDE_F32; // 808
 /** First `f32` slot of the `cascade_splits` vec4 (1832). */
 const CASCADE_SPLITS_BASE_F32 = SPOT_BASE_F32 + MAX_SPOT_LIGHTS * SPOT_STRIDE_F32; // 1832
-/** First `f32` slot of the trailing `shadow_view_proj` matrix array (1836). */
+/** First `f32` slot of the `shadow_view_proj` matrix array (1836). */
 const SHADOW_VIEW_PROJ_BASE_F32 = CASCADE_SPLITS_BASE_F32 + CASCADE_SPLITS_F32; // 1836
+/** First `u32` slot of the trailing `shadow_flags` vec4 (2028). */
+const SHADOW_FLAGS_BASE_U32 =
+  SHADOW_VIEW_PROJ_BASE_F32 + MAX_SHADOW_CASTERS * SHADOW_MATRIX_F32; // 2028
 
 /**
  * Sentinel caster index meaning "this light casts no shadow" — packed into the
@@ -71,16 +81,17 @@ const SHADOW_VIEW_PROJ_BASE_F32 = CASCADE_SPLITS_BASE_F32 + CASCADE_SPLITS_F32; 
  */
 export const NO_SHADOW_CASTER = -1 as const;
 
-/** Total byte size of the {@link GpuLights} uniform buffer (8112 B). */
+/** Total byte size of the {@link GpuLights} uniform buffer (8128 B). */
 export const GPU_LIGHTS_BYTE_SIZE =
   HEADER_BYTES +
   MAX_DIRECTIONAL_LIGHTS * DIRECTIONAL_STRIDE_F32 * 4 +
   MAX_POINT_LIGHTS * POINT_STRIDE_F32 * 4 +
   MAX_SPOT_LIGHTS * SPOT_STRIDE_F32 * 4 +
   CASCADE_SPLITS_F32 * 4 +
-  MAX_SHADOW_CASTERS * SHADOW_MATRIX_F32 * 4;
+  MAX_SHADOW_CASTERS * SHADOW_MATRIX_F32 * 4 +
+  SHADOW_FLAGS_F32 * 4;
 
-/** `GPU_LIGHTS_BYTE_SIZE / 4` — number of `f32` slots in the lights buffer (2028). */
+/** `GPU_LIGHTS_BYTE_SIZE / 4` — number of `f32` slots in the lights buffer (2032). */
 export const GPU_LIGHTS_FLOAT_COUNT = GPU_LIGHTS_BYTE_SIZE / 4;
 
 /**
@@ -302,6 +313,21 @@ export const packCascadeSplits = (f32: Float32Array, splits: Float32Array): void
   f32[CASCADE_SPLITS_BASE_F32 + 1] = splits[1] as number;
   f32[CASCADE_SPLITS_BASE_F32 + 2] = splits[2] as number;
   f32[CASCADE_SPLITS_BASE_F32 + 3] = splits[3] as number;
+};
+
+/**
+ * Write the {@link ShadowFilteringMethod} ordinal into `shadow_flags.x`. The
+ * WGSL `retro_engine::shadow3d` module branches on this value to pick the
+ * sampling kernel (Hardware2x2 / Castano13 / Pcf5x5). `y/z/w` are reserved and
+ * cleared to zero.
+ *
+ * @internal
+ */
+export const packShadowFlags = (u32: Uint32Array, method: ShadowFilteringMethod): void => {
+  u32[SHADOW_FLAGS_BASE_U32] = SHADOW_FILTERING_METHOD_ORDINAL[method];
+  u32[SHADOW_FLAGS_BASE_U32 + 1] = 0;
+  u32[SHADOW_FLAGS_BASE_U32 + 2] = 0;
+  u32[SHADOW_FLAGS_BASE_U32 + 3] = 0;
 };
 
 /**

@@ -422,6 +422,7 @@ export {
   packDirectionalCasterIndex,
   packDirectionalLight,
   packPointLight,
+  packShadowFlags,
   packShadowViewProj,
   packSpotCasterIndex,
   packSpotLight,
@@ -433,6 +434,7 @@ export {
   SHADOW_MAP_SIZE,
   Shadow3dSettings,
   Shadow3dState,
+  ShadowFilteringMethod,
   spotLightViewProj,
   SpotLight3d,
 } from './light3d';

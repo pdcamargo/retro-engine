@@ -20,7 +20,9 @@ import {
   PointLight3d,
   RenderGraph,
   Shadow3dPass3dLabel,
+  Shadow3dSettings,
   Shadow3dState,
+  ShadowFilteringMethod,
   SpotLight3d,
   StandardMaterial,
   StandardMaterialPlugin,
@@ -140,6 +142,39 @@ describe('Light3dPlugin shadows (integration)', () => {
     await app.run();
 
     expect(app.getResource(Shadow3dState)!.shadowLightCount).toBe(2);
+  });
+
+  it('defaults the shadow filtering method to Hardware2x2 and packs it into shadow_flags.x', async () => {
+    const { renderer } = makeCapturingRenderer();
+    const { app, spawnMesh } = litApp(renderer);
+    spawnMesh();
+    app.world.spawn(new DirectionalLight3d(), new Transform());
+    app.world.spawn(...Camera3d());
+    await app.run();
+
+    expect(app.getResource(Shadow3dSettings)!.filteringMethod).toBe(
+      ShadowFilteringMethod.Hardware2x2,
+    );
+    // shadow_flags.x sits at u32 slot 2028 (after cascade_splits + the 12-mat
+    // shadow_view_proj array). Default is the Hardware2x2 ordinal 0.
+    expect(app.getResource(GpuLights)!.u32[2028]).toBe(0);
+  });
+
+  it('packs the active shadow filtering method into shadow_flags.x', async () => {
+    const { renderer } = makeCapturingRenderer();
+    const { app, spawnMesh } = litApp(renderer);
+    spawnMesh();
+    app.world.spawn(new DirectionalLight3d(), new Transform());
+    app.world.spawn(...Camera3d());
+    // Override before plugin defaults insert the resource.
+    app.getResource(Shadow3dSettings)!.filteringMethod = ShadowFilteringMethod.Castano13;
+    await app.run();
+
+    expect(app.getResource(GpuLights)!.u32[2028]).toBe(1); // Castano13 ordinal
+
+    app.getResource(Shadow3dSettings)!.filteringMethod = ShadowFilteringMethod.Pcf5x5;
+    app.advanceFrame();
+    expect(app.getResource(GpuLights)!.u32[2028]).toBe(2); // Pcf5x5 ordinal
   });
 
   it('gives a directional light one atlas layer per cascade and packs increasing splits', async () => {

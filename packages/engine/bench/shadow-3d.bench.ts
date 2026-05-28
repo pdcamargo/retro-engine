@@ -22,10 +22,12 @@ import { cascadeLightViewProj, computeCascadeSplits } from '../src/light3d/casca
 import { MAX_CASCADES } from '../src/light3d/cascade-shadow-config';
 import {
   forwardFromMatrix,
+  GPU_LIGHTS_BYTE_SIZE,
   GPU_LIGHTS_FLOAT_COUNT,
   MAX_SHADOW_CASTERS,
   packCascadeSplits,
   packDirectionalCascadeBase,
+  packShadowFlags,
   packShadowViewProj,
   packSpotCasterIndex,
 } from '../src/light3d/gpu-lights';
@@ -34,6 +36,7 @@ import {
   spotLightViewProj,
 } from '../src/light3d/shadow-3d-matrices';
 import { Shadow3dSettings } from '../src/light3d/shadow-3d-settings';
+import { ShadowFilteringMethod } from '../src/light3d/shadow-filtering-method';
 
 const CASTER_COUNTS = [8, 64, 256] as const;
 const settings = new Shadow3dSettings();
@@ -80,6 +83,22 @@ summary(() => {
         do_not_optimize(f32[0]);
       });
     }
+  });
+
+  group('Light3dPlugin: pack shadow filtering flag', () => {
+    // Cheap micro-op called once per frame by `light3d-prepare`; this measures
+    // the cost of toggling the kernel choice via the uniform.
+    const buf = new ArrayBuffer(GPU_LIGHTS_BYTE_SIZE);
+    const u32 = new Uint32Array(buf);
+    const methods = [
+      ShadowFilteringMethod.Hardware2x2,
+      ShadowFilteringMethod.Castano13,
+      ShadowFilteringMethod.Pcf5x5,
+    ] as const;
+    bench('packShadowFlags → Hardware2x2 / Castano13 / Pcf5x5 rotation', () => {
+      for (let i = 0; i < methods.length; i++) packShadowFlags(u32, methods[i]!);
+      do_not_optimize(u32[0]);
+    });
   });
 
   group('Light3dPlugin: split + fit + pack directional cascade matrices', () => {

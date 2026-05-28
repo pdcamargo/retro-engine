@@ -34,6 +34,7 @@ import {
   packDirectionalCasterIndex,
   packDirectionalLight,
   packPointLight,
+  packShadowFlags,
   packShadowViewProj,
   packSpotCasterIndex,
   packSpotLight,
@@ -350,5 +351,6 @@ const prepareLights3d = (
 
   packCounts(u32, directionalCount, pointCount, spotCount, cascadeCount);
   packCascadeSplits(f32, scratchSplits);
+  packShadowFlags(u32, settings.filteringMethod);
   gpuLights.upload(app.renderer);
 };

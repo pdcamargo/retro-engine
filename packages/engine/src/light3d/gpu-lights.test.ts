@@ -24,11 +24,13 @@ import {
   packDirectionalCasterIndex,
   packDirectionalLight,
   packPointLight,
+  packShadowFlags,
   packShadowViewProj,
   packSpotCasterIndex,
   packSpotLight,
 } from './gpu-lights';
 import { PointLight3d } from './point-light-3d';
+import { ShadowFilteringMethod } from './shadow-filtering-method';
 import { SpotLight3d } from './spot-light-3d';
 
 // Float offsets into the scratch buffer, mirroring the std140 layout.
@@ -37,6 +39,7 @@ const POINT_BASE = DIRECTIONAL_BASE + MAX_DIRECTIONAL_LIGHTS * 8; // 40
 const SPOT_BASE = POINT_BASE + MAX_POINT_LIGHTS * 12; // 808
 const CASCADE_SPLITS_BASE = SPOT_BASE + MAX_SPOT_LIGHTS * 16; // 1832
 const SHADOW_VIEW_PROJ_BASE = CASCADE_SPLITS_BASE + 4; // 1836
+const SHADOW_FLAGS_BASE = SHADOW_VIEW_PROJ_BASE + MAX_SHADOW_CASTERS * 16; // 2028
 
 const translation = (x: number, y: number, z: number): Mat4 => {
   const m = mat4.identity();
@@ -47,15 +50,16 @@ const translation = (x: number, y: number, z: number): Mat4 => {
 };
 
 describe('GpuLights layout constants', () => {
-  it('is 8112 bytes / 2028 floats (header + 4 dir + 64 point + 64 spot + cascade splits + 12 shadow mats)', () => {
-    expect(GPU_LIGHTS_BYTE_SIZE).toBe(8112);
-    expect(GPU_LIGHTS_FLOAT_COUNT).toBe(2028);
+  it('is 8128 bytes / 2032 floats (header + 4 dir + 64 point + 64 spot + cascade splits + 12 shadow mats + shadow flags)', () => {
+    expect(GPU_LIGHTS_BYTE_SIZE).toBe(8128);
+    expect(GPU_LIGHTS_FLOAT_COUNT).toBe(2032);
     // Spot section ends where the cascade_splits vec4 begins.
     expect(SPOT_BASE + MAX_SPOT_LIGHTS * 16).toBe(CASCADE_SPLITS_BASE);
     // cascade_splits is one vec4 ahead of the shadow-matrix array.
     expect(CASCADE_SPLITS_BASE + 4).toBe(SHADOW_VIEW_PROJ_BASE);
-    // The shadow-matrix array fills out the rest of the buffer exactly.
-    expect(SHADOW_VIEW_PROJ_BASE + MAX_SHADOW_CASTERS * 16).toBe(GPU_LIGHTS_FLOAT_COUNT);
+    // shadow_flags is one trailing vec4 after the shadow-matrix array.
+    expect(SHADOW_VIEW_PROJ_BASE + MAX_SHADOW_CASTERS * 16).toBe(SHADOW_FLAGS_BASE);
+    expect(SHADOW_FLAGS_BASE + 4).toBe(GPU_LIGHTS_FLOAT_COUNT);
   });
 });
 
@@ -225,6 +229,27 @@ describe('shadow metadata packing', () => {
     expect(f32[base + 12]).toBe(7); // m[12]
     // The slot before is untouched.
     expect(f32[SHADOW_VIEW_PROJ_BASE + 2 * 16]).toBe(0);
+  });
+
+  it('packs the filtering-method ordinal into shadow_flags.x and clears yzw', () => {
+    const buf = new ArrayBuffer(GPU_LIGHTS_BYTE_SIZE);
+    const u32 = new Uint32Array(buf);
+    // Seed the reserved slots so we can confirm packShadowFlags clears them.
+    u32[SHADOW_FLAGS_BASE + 1] = 0xdeadbeef;
+    u32[SHADOW_FLAGS_BASE + 2] = 0xdeadbeef;
+    u32[SHADOW_FLAGS_BASE + 3] = 0xdeadbeef;
+
+    packShadowFlags(u32, ShadowFilteringMethod.Hardware2x2);
+    expect(u32[SHADOW_FLAGS_BASE + 0]).toBe(0);
+    expect(u32[SHADOW_FLAGS_BASE + 1]).toBe(0);
+    expect(u32[SHADOW_FLAGS_BASE + 2]).toBe(0);
+    expect(u32[SHADOW_FLAGS_BASE + 3]).toBe(0);
+
+    packShadowFlags(u32, ShadowFilteringMethod.Castano13);
+    expect(u32[SHADOW_FLAGS_BASE + 0]).toBe(1);
+
+    packShadowFlags(u32, ShadowFilteringMethod.Pcf5x5);
+    expect(u32[SHADOW_FLAGS_BASE + 0]).toBe(2);
   });
 });
 

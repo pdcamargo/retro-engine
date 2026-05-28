@@ -29,6 +29,8 @@ import {
   PointLight3d,
   Query,
   ResMut,
+  Shadow3dSettings,
+  ShadowFilteringMethod,
   Sphere,
   StandardMaterial,
   StandardMaterialPlugin,
@@ -83,6 +85,19 @@ export const litShowcasePlugin: Plugin = (app) => {
   // Cascaded directional shadows fit the camera frustum automatically now — no
   // fixed-box extent tuning needed (that was the ADR-0045 limitation cascades fix).
   app.addPlugin(new Light3dPlugin());
+
+  // Optional ?pcf=castano13 / ?pcf=pcf5x5 URL switch for visually comparing the
+  // shadow filtering kernels (ADR-0047). Default `Hardware2x2` is unchanged.
+  const pcfParam =
+    typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('pcf') : null;
+  const pcfMethod =
+    pcfParam === 'castano13'
+      ? ShadowFilteringMethod.Castano13
+      : pcfParam === 'pcf5x5'
+        ? ShadowFilteringMethod.Pcf5x5
+        : ShadowFilteringMethod.Hardware2x2;
+  app.getResource(Shadow3dSettings)!.filteringMethod = pcfMethod;
+  log.info(`shadow filtering = ${pcfMethod} (pcf URL param = ${pcfParam ?? 'unset'})`);
 
   // Orbit the point lights around the grid centre (fill + moving highlights).
   app.addSystem('update', [Query([Transform, Orbit]), ResMut(Time)], (lights, time) => {
