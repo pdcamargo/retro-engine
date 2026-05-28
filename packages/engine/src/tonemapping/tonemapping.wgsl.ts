@@ -36,10 +36,13 @@
  *   "Somewhat-Boring-Display-Transform" — a predictable shoulder + soft
  *   desaturation. Cheaper than ACES, less aggressive than Reinhard.
  *
- * Output is written in the same linear color space the swapchain expects;
- * the platform's surface format / transfer function handles the sRGB
- * encoding on store, exactly the way the rest of the engine's pipelines do
- * today.
+ * Output is written in linear space. The swapchain view is sRGB-encoding,
+ * so the hardware applies the sRGB OETF on store. Operators whose curve
+ * lands in linear (`None`, `Reinhard`, `ReinhardLuminance`, `ACES`, `SBDT`)
+ * return their mapped color directly; operators whose curve fuses the
+ * display transform with the tonemap (`AgX`, `BlenderFilmic`) explicitly
+ * apply the inverse sRGB OETF before return so the view's OETF re-encodes
+ * the intended display value bit-for-bit.
  */
 export const TONEMAPPING_WGSL = /* wgsl */ `
 struct VsOut {
@@ -66,6 +69,16 @@ fn sample_hdr(uv: vec2<f32>) -> vec4<f32> {
 
 fn luminance(c: vec3<f32>) -> f32 {
   return dot(c, vec3<f32>(0.2126, 0.7152, 0.0722));
+}
+
+// Inverse sRGB OETF (a.k.a. sRGB EOTF). Maps sRGB-display-encoded values
+// back to linear so the swapchain view's sRGB OETF can re-encode them on
+// store. Piecewise to match WebGPU's sRGB view encoding exactly — the
+// gamma-2.2 approximation drifts by ~1.5% in the midtones.
+fn srgb_to_linear(c: vec3<f32>) -> vec3<f32> {
+  let lo = c / 12.92;
+  let hi = pow((c + vec3<f32>(0.055)) / 1.055, vec3<f32>(2.4));
+  return select(hi, lo, c <= vec3<f32>(0.04045));
 }
 
 // ---------- None ----------
@@ -156,13 +169,11 @@ fn fs_agx(input: VsOut) -> @location(0) vec4<f32> {
   x = (x - vec3<f32>(min_ev)) / (max_ev - min_ev);
   x = agx_default_contrast(x);
   x = agx_out_mat * x;
-  // The AgX curve outputs values in a perceptual / display-encoded space.
-  // The engine writes to a non-sRGB swapchain today, so the perceptual
-  // output is exactly what the display interprets correctly — write it
-  // as-is. When the color-managed pipeline lands and the swapchain
-  // encodes sRGB on store, a pow(., 2.2) (or proper sRGB OETF inverse)
-  // step belongs here to linearise first.
-  return vec4<f32>(clamp(x, vec3<f32>(0.0), vec3<f32>(1.0)), s.a);
+  // AgX lands in display-encoded sRGB. Linearise via the inverse sRGB OETF
+  // so the swapchain view's OETF re-encodes back to the same display value
+  // on store.
+  let display = clamp(x, vec3<f32>(0.0), vec3<f32>(1.0));
+  return vec4<f32>(srgb_to_linear(display), s.a);
 }
 
 // ---------- Blender Filmic (polynomial approximation) ----------
@@ -173,9 +184,14 @@ fn fs_blender_filmic(input: VsOut) -> @location(0) vec4<f32> {
   // rolloff. Approximation of Blender's filmic display transform suitable
   // for a pure-math operator (a true Blender filmic match would consume
   // a baked spline LUT — see backlog).
+  //
+  // The H-B-D curve is a fused tonemap + 2.2 OETF — its output is
+  // display-encoded, not linear. Apply the inverse sRGB OETF here so the
+  // swapchain view's encode re-produces the intended display value (same
+  // treatment as fs_agx).
   let x = max(vec3<f32>(0.0), s.rgb - 0.004);
   let mapped = (x * (6.2 * x + 0.5)) / (x * (6.2 * x + 1.7) + 0.06);
-  return vec4<f32>(mapped, s.a);
+  return vec4<f32>(srgb_to_linear(mapped), s.a);
 }
 
 // ---------- Somewhat-Boring Display Transform (Stachowiak) ----------

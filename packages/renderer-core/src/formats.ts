@@ -3,14 +3,47 @@
  *
  * Expand as the engine needs them — every value added here must be mappable to
  * a concrete pixel format in every backend that ships.
+ *
+ * The `-srgb` variants of `rgba8unorm` / `bgra8unorm` carry the same byte
+ * layout as their base form; the difference is the GPU sampling / storing
+ * transfer function. A `-srgb` view performs `sRGB → linear` on
+ * `textureSample` and `linear → sRGB` on render-target store. Pair with
+ * {@link srgbVariantOf} when promoting a base format to its sRGB-encoding
+ * sibling for a texture view or pipeline color target.
  */
 export type TextureFormat =
   | 'rgba8unorm'
+  | 'rgba8unorm-srgb'
   | 'bgra8unorm'
+  | 'bgra8unorm-srgb'
   | 'rgba16float'
   | 'depth32float'
   | 'depth24plus'
   | 'depth24plus-stencil8';
+
+/**
+ * Promote a {@link TextureFormat} to its `-srgb` sibling for sRGB-encoding
+ * texture views and pipeline color targets.
+ *
+ * - `'rgba8unorm'` / `'rgba8unorm-srgb'` → `'rgba8unorm-srgb'`
+ * - `'bgra8unorm'` / `'bgra8unorm-srgb'` → `'bgra8unorm-srgb'`
+ * - any other format → returned unchanged (no sRGB sibling exists; HDR float
+ *   formats and depth formats are linear by definition).
+ *
+ * Idempotent — passing an already-sRGB format returns it as-is.
+ */
+export const srgbVariantOf = (format: TextureFormat): TextureFormat => {
+  switch (format) {
+    case 'rgba8unorm':
+    case 'rgba8unorm-srgb':
+      return 'rgba8unorm-srgb';
+    case 'bgra8unorm':
+    case 'bgra8unorm-srgb':
+      return 'bgra8unorm-srgb';
+    default:
+      return format;
+  }
+};
 
 /**
  * RGBA clear / fill color, components in `[0, 1]`.

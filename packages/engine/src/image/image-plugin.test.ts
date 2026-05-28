@@ -37,7 +37,7 @@ describe('ImagePlugin', () => {
     // ImagePlugin is registered automatically by CorePlugin — no explicit
     // addPlugin call here.
     const images = app.getResource(Images)!;
-    const handle = images.add(Image.solid(vec4.create(1, 0, 0, 1), undefined, 'red-test'));
+    const handle = images.add(Image.solid(vec4.create(1, 0, 0, 1), { label: 'red-test' }));
     await app.run();
     const renderImages = app.getResource(RenderImages)!;
     const entry = renderImages.get(handle);

@@ -42,7 +42,7 @@ describe('atlasSyncSystem (integration)', () => {
     const images = app.getResource(Images)!;
     const layouts = app.getResource(TextureAtlasLayouts)!;
     const sheet = images.add(
-      Image.checker(4, vec4.create(1, 1, 1, 1), vec4.create(0, 0, 0, 1), undefined, 'sheet'),
+      Image.checker(4, vec4.create(1, 1, 1, 1), vec4.create(0, 0, 0, 1), { label: 'sheet' }),
     );
     // 4 columns × 1 row of 16-pixel tiles → 4 normalised rects each 0.25 wide.
     const layout = layouts.add(
@@ -84,7 +84,7 @@ describe('atlasSyncSystem (integration)', () => {
     const images = app.getResource(Images)!;
     const layouts = app.getResource(TextureAtlasLayouts)!;
     const sheet = images.add(
-      Image.checker(4, vec4.create(1, 1, 1, 1), vec4.create(0, 0, 0, 1), undefined, 'sheet'),
+      Image.checker(4, vec4.create(1, 1, 1, 1), vec4.create(0, 0, 0, 1), { label: 'sheet' }),
     );
     const layout = layouts.add(
       TextureAtlasLayout.fromGrid({ tileSize: vec2.create(16, 16), columns: 4, rows: 1 }),
@@ -114,7 +114,7 @@ describe('atlasSyncSystem (integration)', () => {
     const images = app.getResource(Images)!;
     const layouts = app.getResource(TextureAtlasLayouts)!;
     const sheet = images.add(
-      Image.checker(4, vec4.create(1, 1, 1, 1), vec4.create(0, 0, 0, 1), undefined, 'sheet'),
+      Image.checker(4, vec4.create(1, 1, 1, 1), vec4.create(0, 0, 0, 1), { label: 'sheet' }),
     );
     const layout = layouts.add(
       TextureAtlasLayout.fromGrid({ tileSize: vec2.create(16, 16), columns: 4, rows: 1 }),

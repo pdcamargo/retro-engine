@@ -70,7 +70,7 @@ describe('prepareSpritesRetained — parity with the legacy full-rebuild path', 
 
   it('matches same-image sprites ordered back-to-front', async () => {
     await expectParity((app, images) => {
-      const a = images.add(Image.solid(vec4.create(1, 1, 1, 1), undefined, 'A'));
+      const a = images.add(Image.solid(vec4.create(1, 1, 1, 1), { label: 'A' }));
       const reds = [0.2, 0.4, 0.6, 0.8, 1.0];
       for (let i = 0; i < 5; i++) {
         app.world.spawn(
@@ -83,8 +83,8 @@ describe('prepareSpritesRetained — parity with the legacy full-rebuild path', 
 
   it('matches two images interleaved by Z (run-breaking)', async () => {
     await expectParity((app, images) => {
-      const a = images.add(Image.solid(vec4.create(1, 0, 0, 1), undefined, 'A'));
-      const b = images.add(Image.solid(vec4.create(0, 1, 0, 1), undefined, 'B'));
+      const a = images.add(Image.solid(vec4.create(1, 0, 0, 1), { label: 'A' }));
+      const b = images.add(Image.solid(vec4.create(0, 1, 0, 1), { label: 'B' }));
       app.world.spawn(new Sprite({ image: a, customSize: vec2.create(8, 8) }), new Transform(vec3.create(0, 0, 10)));
       app.world.spawn(new Sprite({ image: b, customSize: vec2.create(8, 8) }), new Transform(vec3.create(0, 0, 5)));
       app.world.spawn(new Sprite({ image: a, customSize: vec2.create(8, 8) }), new Transform(vec3.create(0, 0, 0)));
@@ -93,7 +93,7 @@ describe('prepareSpritesRetained — parity with the legacy full-rebuild path', 
 
   it('matches a mixed opaque + transparent scene', async () => {
     await expectParity((app, images) => {
-      const a = images.add(Image.solid(vec4.create(1, 1, 1, 1), undefined, 'A'));
+      const a = images.add(Image.solid(vec4.create(1, 1, 1, 1), { label: 'A' }));
       for (let i = 0; i < 4; i++) {
         const alpha = i % 2 === 0 ? 1 : 0.5;
         app.world.spawn(
@@ -106,8 +106,8 @@ describe('prepareSpritesRetained — parity with the legacy full-rebuild path', 
 
   it('matches sprites at the same Z across two images (same-Z regression)', async () => {
     await expectParity((app, images) => {
-      const a = images.add(Image.solid(vec4.create(1, 0, 0, 1), undefined, 'A'));
-      const b = images.add(Image.solid(vec4.create(0, 1, 0, 1), undefined, 'B'));
+      const a = images.add(Image.solid(vec4.create(1, 0, 0, 1), { label: 'A' }));
+      const b = images.add(Image.solid(vec4.create(0, 1, 0, 1), { label: 'B' }));
       for (let i = 0; i < 3; i++) app.world.spawn(new Sprite({ image: a, customSize: vec2.create(8, 8) }));
       for (let i = 0; i < 3; i++) app.world.spawn(new Sprite({ image: b, customSize: vec2.create(8, 8) }));
     });
@@ -147,7 +147,7 @@ const expectParityTwoFrames = async (spawn: SpawnMulti, mutate: Mutate): Promise
 
 describe('prepareSpritesRetained — change-gated updates converge on the full rebuild', () => {
   const spawnFour: SpawnMulti = (app, images) => {
-    const a = images.add(Image.solid(vec4.create(1, 1, 1, 1), undefined, 'A'));
+    const a = images.add(Image.solid(vec4.create(1, 1, 1, 1), { label: 'A' }));
     const ids: Entity[] = [];
     for (let i = 0; i < 4; i++) {
       ids.push(
@@ -227,7 +227,7 @@ describe('prepareSpritesRetained — incremental uploads', () => {
     const app = new App({ renderer: renderer as never, canvas: makeStubCanvas() });
     app.addPlugin(new SpritePlugin({ retained: true }));
     const images = app.getResource(Images)!;
-    const a = images.add(Image.solid(vec4.create(1, 1, 1, 1), undefined, 'A'));
+    const a = images.add(Image.solid(vec4.create(1, 1, 1, 1), { label: 'A' }));
     const ids: Entity[] = [];
     for (let i = 0; i < 20; i++) {
       ids.push(

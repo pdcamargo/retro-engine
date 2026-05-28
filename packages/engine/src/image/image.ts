@@ -14,6 +14,23 @@ import type { SamplerDescriptor, TextureFormat } from '@retro-engine/renderer-co
 export type ImageDimension = '2d' | '3d' | 'cube';
 
 /**
+ * Color-space interpretation of an {@link Image}'s pixel bytes.
+ *
+ * - `'srgb'` — bytes are sRGB-encoded (the common case for color textures:
+ *   base color, emissive, UI sprites, anything that came out of a paint tool
+ *   or a `.png`). The GPU view is allocated with the matching `-srgb` format,
+ *   so `textureSample` returns linear values.
+ * - `'linear'` — bytes are linear data (normal maps, metallic / roughness /
+ *   AO maps, displacement, atlas-layout LUTs, anything that encodes a number
+ *   rather than a perceived color). The GPU view keeps the base format and
+ *   `textureSample` returns the raw value with no transfer function applied.
+ *
+ * Mirrors Bevy's `Image::is_srgb` switch; defaults to `'srgb'` because the
+ * common case for an authored 2D / 3D asset is a color texture.
+ */
+export type ImageColorSpace = 'srgb' | 'linear';
+
+/**
  * CPU-side texture asset.
  *
  * Holds the raw pixel bytes plus the metadata the renderer needs to provision
@@ -34,8 +51,23 @@ export type ImageDimension = '2d' | '3d' | 'cube';
 export class Image {
   /** Raw pixel bytes. For multi-layer images, layers are packed contiguously. */
   readonly data: Uint8Array;
-  /** Texel format. Sampled formats only — depth formats are rejected at upload. */
+  /**
+   * Base texel format. Sampled formats only — depth formats are rejected at
+   * upload. The sRGB-encoded view is selected by {@link Image.colorSpace};
+   * `format` itself stays in the base form so the upload byte layout, the
+   * `bytesPerTexel` query, and downstream format checks all key off one
+   * value.
+   */
   readonly format: TextureFormat;
+  /**
+   * Whether the pixel bytes are sRGB-encoded color or linear data.
+   *
+   * Consumers writing data textures (normal maps, metallic / roughness / AO,
+   * displacement, atlas-layout LUTs) must pass `'linear'` explicitly; the
+   * factory methods default to `'srgb'` because the common authored case is
+   * a color texture.
+   */
+  readonly colorSpace: ImageColorSpace;
   readonly width: number;
   readonly height: number;
   /** Array-layer count (`6` for cube) or 3D depth. Defaults to `1`. */
@@ -54,6 +86,7 @@ export class Image {
   constructor(init: {
     data: Uint8Array;
     format: TextureFormat;
+    colorSpace?: ImageColorSpace;
     width: number;
     height: number;
     depthOrArrayLayers?: number;
@@ -64,6 +97,7 @@ export class Image {
   }) {
     this.data = init.data;
     this.format = init.format;
+    this.colorSpace = init.colorSpace ?? 'srgb';
     this.width = init.width;
     this.height = init.height;
     this.depthOrArrayLayers = init.depthOrArrayLayers ?? 1;
@@ -76,13 +110,14 @@ export class Image {
   /**
    * Build a 1×1 RGBA8 image filled with one solid colour. Components are
    * clamped to `[0, 1]` and rounded to the nearest byte. Default sampler is
-   * linear in both directions; pass a {@link SamplerDescriptor} to override.
+   * linear in both directions; pass `sampler` to override.
    *
    * Useful for default-fallback handles (`Images.WHITE`, `.BLACK`,
    * `.NORMAL_FLAT`) and for materials that take a tint colour without a
-   * texture.
+   * texture. Default color space is `'srgb'` — pass `colorSpace: 'linear'`
+   * for data textures (e.g. a flat normal `(0.5, 0.5, 1, 1)`).
    */
-  static solid(rgba: Vec4, sampler?: SamplerDescriptor, label?: string): Image {
+  static solid(rgba: Vec4, opts?: ImageFactoryOptions): Image {
     const data = new Uint8Array(4);
     data[0] = toByte(rgba[0]!);
     data[1] = toByte(rgba[1]!);
@@ -91,10 +126,11 @@ export class Image {
     return new Image({
       data,
       format: 'rgba8unorm',
+      colorSpace: opts?.colorSpace ?? 'srgb',
       width: 1,
       height: 1,
-      ...(sampler !== undefined ? { sampler } : {}),
-      ...(label !== undefined ? { label } : {}),
+      ...(opts?.sampler !== undefined ? { sampler: opts.sampler } : {}),
+      ...(opts?.label !== undefined ? { label: opts.label } : {}),
     });
   }
 
@@ -105,8 +141,12 @@ export class Image {
    * checks stay crisp.
    *
    * `size` must be a positive integer.
+   *
+   * Default color space is `'srgb'` — pass `colorSpace: 'linear'` to author
+   * the checker as data (e.g. for an alpha mask or a debug UV grid sampled
+   * without color decode).
    */
-  static checker(size: number, a: Vec4, b: Vec4, sampler?: SamplerDescriptor, label?: string): Image {
+  static checker(size: number, a: Vec4, b: Vec4, opts?: ImageFactoryOptions): Image {
     if (!Number.isInteger(size) || size <= 0) {
       throw new Error(`Image.checker: size must be a positive integer; got ${size}.`);
     }
@@ -132,10 +172,11 @@ export class Image {
     return new Image({
       data,
       format: 'rgba8unorm',
+      colorSpace: opts?.colorSpace ?? 'srgb',
       width: size,
       height: size,
-      sampler: sampler ?? { magFilter: 'nearest', minFilter: 'nearest' },
-      ...(label !== undefined ? { label } : {}),
+      sampler: opts?.sampler ?? { magFilter: 'nearest', minFilter: 'nearest' },
+      ...(opts?.label !== undefined ? { label: opts.label } : {}),
     });
   }
 
@@ -143,10 +184,15 @@ export class Image {
    * General-purpose constructor for an authored byte buffer. Validates that
    * `data.length` matches `width × height × layers × bytesPerTexel(format)`,
    * throwing on mismatch.
+   *
+   * `format` must be a base format — pass the sRGB-vs-linear choice through
+   * `colorSpace` (defaults to `'srgb'`). Passing an explicit `-srgb` format
+   * is rejected; the upload layer applies the variant from `colorSpace`.
    */
   static fromBytes(init: {
     data: Uint8Array;
     format: TextureFormat;
+    colorSpace?: ImageColorSpace;
     width: number;
     height: number;
     depthOrArrayLayers?: number;
@@ -155,6 +201,11 @@ export class Image {
     mipLevelCount?: number;
     label?: string;
   }): Image {
+    if (init.format === 'rgba8unorm-srgb' || init.format === 'bgra8unorm-srgb') {
+      throw new Error(
+        `Image.fromBytes: pass a base format (e.g. '${init.format.replace('-srgb', '')}') and colorSpace: 'srgb' rather than the -srgb format directly.`,
+      );
+    }
     const layers = init.depthOrArrayLayers ?? 1;
     const dimension = init.dimension ?? '2d';
     if (dimension === 'cube' && layers !== 6) {
@@ -178,6 +229,15 @@ export class Image {
   }
 }
 
+/**
+ * Shared option bag for {@link Image.solid} and {@link Image.checker}.
+ */
+export interface ImageFactoryOptions {
+  readonly sampler?: SamplerDescriptor;
+  readonly label?: string;
+  readonly colorSpace?: ImageColorSpace;
+}
+
 const DEFAULT_LINEAR_SAMPLER: SamplerDescriptor = Object.freeze({
   magFilter: 'linear',
   minFilter: 'linear',
@@ -194,11 +254,17 @@ const toByte = (v: number): number => {
  * `undefined` for depth/stencil formats and any other format that can't be a
  * `TEXTURE_BINDING` source. Exported so `ImagePlugin`'s prepare system can
  * compute `bytesPerRow` for `writeTexture` without re-deriving it.
+ *
+ * sRGB variants share the byte width of their base form (one byte per
+ * channel, four channels) — the difference is the sampling / store transfer
+ * function, not the storage layout.
  */
 export const bytesPerTexel = (format: TextureFormat): number | undefined => {
   switch (format) {
     case 'rgba8unorm':
+    case 'rgba8unorm-srgb':
     case 'bgra8unorm':
+    case 'bgra8unorm-srgb':
       return 4;
     case 'rgba16float':
       return 8;

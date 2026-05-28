@@ -126,13 +126,9 @@ export const spriteShowcasePlugin: Plugin = (app) => {
     [Commands, ResMut(Images)],
     (cmd, images) => {
       const checker = images.add(
-        Image.checker(
-          16,
-          vec4.create(0.95, 0.95, 0.95, 1),
-          vec4.create(0.25, 0.25, 0.3, 1),
-          undefined,
-          'sprite-showcase-checker',
-        ),
+        Image.checker(16, vec4.create(0.95, 0.95, 0.95, 1), vec4.create(0.25, 0.25, 0.3, 1), {
+          label: 'sprite-showcase-checker',
+        }),
       );
 
       const allPlacements = [...placements(), ...parallaxPlacements()];

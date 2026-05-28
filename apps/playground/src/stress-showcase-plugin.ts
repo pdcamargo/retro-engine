@@ -243,7 +243,7 @@ export const stressShowcasePlugin: Plugin = (app) => {
       );
 
       const spriteImageHandle = images.add(
-        Image.solid(vec4.create(1, 1, 1, 1), undefined, 'stress-sprite-white'),
+        Image.solid(vec4.create(1, 1, 1, 1), { label: 'stress-sprite-white' }),
       );
 
       const animSheet = images.add(buildAnimSheet());

@@ -22,8 +22,8 @@ describe('SpritePlugin (integration)', () => {
     app.addPlugin(new SpritePlugin());
 
     const images = app.getResource(Images)!;
-    const imageA = images.add(Image.solid(vec4.create(1, 0, 0, 1), undefined, 'A'));
-    const imageB = images.add(Image.solid(vec4.create(0, 1, 0, 1), undefined, 'B'));
+    const imageA = images.add(Image.solid(vec4.create(1, 0, 0, 1), { label: 'A' }));
+    const imageB = images.add(Image.solid(vec4.create(0, 1, 0, 1), { label: 'B' }));
 
     // Spawn 5 sprites using imageA, 5 using the default fallback (Images.WHITE).
     for (let i = 0; i < 5; i++) {
@@ -108,8 +108,8 @@ describe('SpritePlugin (integration)', () => {
     app.addPlugin(new SpritePlugin());
 
     const images = app.getResource(Images)!;
-    const imageA = images.add(Image.solid(vec4.create(1, 0, 0, 1), undefined, 'A'));
-    const imageB = images.add(Image.solid(vec4.create(0, 1, 0, 1), undefined, 'B'));
+    const imageA = images.add(Image.solid(vec4.create(1, 0, 0, 1), { label: 'A' }));
+    const imageB = images.add(Image.solid(vec4.create(0, 1, 0, 1), { label: 'B' }));
 
     // A@Z=10, B@Z=5, A@Z=0. Back-to-front sort emits batches in [A, B, A]
     // sequence — the imageB sprite at intermediate Z breaks the imageA run.
@@ -166,7 +166,7 @@ describe('SpritePlugin (integration)', () => {
     app.addPlugin(new SpritePlugin());
 
     const images = app.getResource(Images)!;
-    const imageA = images.add(Image.solid(vec4.create(1, 1, 1, 1), undefined, 'A'));
+    const imageA = images.add(Image.solid(vec4.create(1, 1, 1, 1), { label: 'A' }));
 
     // Five sprites of one image at distinct Z values, each carrying a unique
     // red byte so the packed RGBA in the instance scratch is the per-sprite
@@ -207,8 +207,8 @@ describe('SpritePlugin (integration)', () => {
     app.addPlugin(new SpritePlugin());
 
     const images = app.getResource(Images)!;
-    const imageA = images.add(Image.solid(vec4.create(1, 0, 0, 1), undefined, 'A'));
-    const imageB = images.add(Image.solid(vec4.create(0, 1, 0, 1), undefined, 'B'));
+    const imageA = images.add(Image.solid(vec4.create(1, 0, 0, 1), { label: 'A' }));
+    const imageB = images.add(Image.solid(vec4.create(0, 1, 0, 1), { label: 'B' }));
 
     for (let i = 0; i < 3; i++) {
       app.world.spawn(

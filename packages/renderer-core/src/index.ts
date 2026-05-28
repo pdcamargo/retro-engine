@@ -142,7 +142,7 @@ export { ShaderStage } from './binding';
 export type { RendererCapabilities } from './capabilities';
 
 export type { ClearColor, IndexFormat, TextureFormat, VertexFormat } from './formats';
-export { indexFormatByteSize, vertexFormatByteSize } from './formats';
+export { indexFormatByteSize, srgbVariantOf, vertexFormatByteSize } from './formats';
 
 export type {
   ColorAttachment,

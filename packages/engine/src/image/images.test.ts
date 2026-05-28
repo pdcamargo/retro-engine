@@ -33,7 +33,7 @@ describe('Images registry', () => {
   it('returns a fresh handle on add and emits an Added event', () => {
     const images = new Images();
     images.drainPendingChanges(); // discard the seeded defaults
-    const handle = images.add(Image.solid(vec4.create(1, 0, 0, 1), undefined, 'red'));
+    const handle = images.add(Image.solid(vec4.create(1, 0, 0, 1), { label: 'red' }));
     expect(images.has(handle)).toBe(true);
     expect(images.size).toBe(4);
     const events = images.drainPendingChanges();

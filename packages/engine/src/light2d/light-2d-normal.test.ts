@@ -67,7 +67,7 @@ describe('Light2dPlugin normal mapping (integration)', () => {
     app.addPlugin(new Light2dPlugin());
     app.addSystem('startup', [Commands, ResMut(Images), ResMut(Light2dSettings)], (cmd, images, settings) => {
       (settings as Light2dSettings).normalMapping = true;
-      const nm = (images as Images).add(Image.solid(vec4.create(0.5, 0.5, 1, 1)));
+      const nm = (images as Images).add(Image.solid(vec4.create(0.5, 0.5, 1, 1), { colorSpace: 'linear' }));
       cmd.spawn(
         new Sprite({ normalMap: nm, customSize: vec2.create(32, 32) }),
         new Transform(vec3.create(0, 0, 0)),
@@ -88,7 +88,7 @@ describe('Light2dPlugin normal mapping (integration)', () => {
     app.addPlugin(new SpritePlugin());
     app.addPlugin(new Light2dPlugin());
     app.addSystem('startup', [Commands, ResMut(Images)], (cmd, images) => {
-      const nm = (images as Images).add(Image.solid(vec4.create(0.5, 0.5, 1, 1)));
+      const nm = (images as Images).add(Image.solid(vec4.create(0.5, 0.5, 1, 1), { colorSpace: 'linear' }));
       cmd.spawn(new Sprite({ normalMap: nm, customSize: vec2.create(32, 32) }));
       cmd.spawn(...Camera2d());
     });

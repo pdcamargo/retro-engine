@@ -175,7 +175,11 @@ export const trianglePlugin: Plugin = (app) => {
     colorScratch[2] = b;
     colorScratch[3] = 1;
     app.renderer.writeBuffer(colorBuffer, 0, colorScratch);
-    const pipeline = specializer.get({ format: app.renderer.getPreferredSurfaceFormat() });
+    // Read the per-frame view format from RenderCtx — under the color-managed
+    // pipeline the surface's view format is the -srgb variant while
+    // getPreferredSurfaceFormat() returns the base storage format. Pipelines
+    // declare the view format in fragment.targets[].format.
+    const pipeline = specializer.get({ format: ctx.camera.mainColorTarget.format });
     ctx.pass.setPipeline(pipeline);
     ctx.pass.setBindGroup(0, colorBindGroup);
     ctx.pass.draw(3);

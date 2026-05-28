@@ -66,10 +66,21 @@ export class Images {
   readonly NORMAL_FLAT: ImageHandle;
 
   constructor() {
-    this.WHITE = this.add(Image.solid(vec4.create(1, 1, 1, 1), undefined, 'image#WHITE'));
-    this.BLACK = this.add(Image.solid(vec4.create(0, 0, 0, 1), undefined, 'image#BLACK'));
+    // WHITE / BLACK default to colorSpace 'srgb' (the StandardMaterial fallback
+    // is used for both color slots — baseColor, emissive — and data slots —
+    // metallic-roughness, occlusion). The 0.0 and 1.0 components are invariant
+    // under sRGB ↔ linear decode, so an 'srgb' fallback samples correctly
+    // through either path.
+    this.WHITE = this.add(Image.solid(vec4.create(1, 1, 1, 1), { label: 'image#WHITE' }));
+    this.BLACK = this.add(Image.solid(vec4.create(0, 0, 0, 1), { label: 'image#BLACK' }));
+    // NORMAL_FLAT must be linear: a `(0.5, 0.5, 1, 1)` literal sRGB-decodes to
+    // ~`(0.214, 0.214, 1, 1)` linear, which would corrupt tangent-space normal
+    // sampling.
     this.NORMAL_FLAT = this.add(
-      Image.solid(vec4.create(0.5, 0.5, 1, 1), undefined, 'image#NORMAL_FLAT'),
+      Image.solid(vec4.create(0.5, 0.5, 1, 1), {
+        label: 'image#NORMAL_FLAT',
+        colorSpace: 'linear',
+      }),
     );
   }
 

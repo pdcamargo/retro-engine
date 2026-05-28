@@ -3,6 +3,7 @@ import { describe, expect, it } from 'bun:test';
 import { vec4 } from '@retro-engine/math';
 
 import { bytesPerTexel, Image } from './image';
+import { Images } from './images';
 
 describe('Image.solid', () => {
   it('packs an opaque white pixel as four 0xFF bytes', () => {
@@ -34,10 +35,22 @@ describe('Image.solid', () => {
     expect(img.sampler.minFilter).toBe('linear');
   });
 
-  it('accepts a custom sampler', () => {
-    const img = Image.solid(vec4.create(0, 0, 0, 1), { magFilter: 'nearest', minFilter: 'nearest' });
+  it('accepts a custom sampler via opts', () => {
+    const img = Image.solid(vec4.create(0, 0, 0, 1), {
+      sampler: { magFilter: 'nearest', minFilter: 'nearest' },
+    });
     expect(img.sampler.magFilter).toBe('nearest');
     expect(img.sampler.minFilter).toBe('nearest');
+  });
+
+  it("defaults colorSpace to 'srgb'", () => {
+    const img = Image.solid(vec4.create(1, 0.5, 0.25, 1));
+    expect(img.colorSpace).toBe('srgb');
+  });
+
+  it("propagates colorSpace: 'linear'", () => {
+    const img = Image.solid(vec4.create(0.5, 0.5, 1, 1), { colorSpace: 'linear' });
+    expect(img.colorSpace).toBe('linear');
   });
 });
 
@@ -73,6 +86,13 @@ describe('Image.checker', () => {
     expect(() => Image.checker(1.5, vec4.create(1, 1, 1, 1), vec4.create(0, 0, 0, 1))).toThrow(
       /positive integer/,
     );
+  });
+
+  it("defaults colorSpace to 'srgb' and propagates an explicit override", () => {
+    const a = vec4.create(1, 1, 1, 1);
+    const b = vec4.create(0, 0, 0, 1);
+    expect(Image.checker(2, a, b).colorSpace).toBe('srgb');
+    expect(Image.checker(2, a, b, { colorSpace: 'linear' }).colorSpace).toBe('linear');
   });
 });
 
@@ -115,6 +135,17 @@ describe('Image.fromBytes', () => {
     ).toThrow(/sampled colour format/);
   });
 
+  it('rejects explicit -srgb formats (route them through colorSpace)', () => {
+    expect(() =>
+      Image.fromBytes({
+        data: new Uint8Array(4),
+        format: 'rgba8unorm-srgb',
+        width: 1,
+        height: 1,
+      }),
+    ).toThrow(/pass a base format/);
+  });
+
   it('rejects cube images without six layers', () => {
     expect(() =>
       Image.fromBytes({
@@ -140,12 +171,45 @@ describe('Image.fromBytes', () => {
     expect(img.dimension).toBe('cube');
     expect(img.depthOrArrayLayers).toBe(6);
   });
+
+  it("defaults colorSpace to 'srgb' and propagates an explicit override", () => {
+    const defaulted = Image.fromBytes({
+      data: new Uint8Array(4),
+      format: 'rgba8unorm',
+      width: 1,
+      height: 1,
+    });
+    expect(defaulted.colorSpace).toBe('srgb');
+    const explicit = Image.fromBytes({
+      data: new Uint8Array(4),
+      format: 'rgba8unorm',
+      width: 1,
+      height: 1,
+      colorSpace: 'linear',
+    });
+    expect(explicit.colorSpace).toBe('linear');
+  });
+});
+
+describe('Image default registry handles', () => {
+  // These three handles are load-bearing for StandardMaterial / sprite
+  // fallbacks. Regression guards: WHITE/BLACK rely on 0.0/1.0 being invariant
+  // under sRGB ↔ linear so they can fall back into both color and data slots;
+  // NORMAL_FLAT must stay linear so 0.5 doesn't decode to ~0.214.
+  it('seeds WHITE / BLACK as srgb and NORMAL_FLAT as linear', () => {
+    const images = new Images();
+    expect(images.get(images.WHITE)?.colorSpace).toBe('srgb');
+    expect(images.get(images.BLACK)?.colorSpace).toBe('srgb');
+    expect(images.get(images.NORMAL_FLAT)?.colorSpace).toBe('linear');
+  });
 });
 
 describe('bytesPerTexel', () => {
   it('reports the texel size for sampled formats', () => {
     expect(bytesPerTexel('rgba8unorm')).toBe(4);
+    expect(bytesPerTexel('rgba8unorm-srgb')).toBe(4);
     expect(bytesPerTexel('bgra8unorm')).toBe(4);
+    expect(bytesPerTexel('bgra8unorm-srgb')).toBe(4);
     expect(bytesPerTexel('rgba16float')).toBe(8);
   });
 

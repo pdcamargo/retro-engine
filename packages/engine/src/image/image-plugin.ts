@@ -1,5 +1,5 @@
-import type { Renderer, TextureView } from '@retro-engine/renderer-core';
-import { TextureUsage } from '@retro-engine/renderer-core';
+import type { Renderer, TextureFormat, TextureView } from '@retro-engine/renderer-core';
+import { srgbVariantOf, TextureUsage } from '@retro-engine/renderer-core';
 
 import type { App } from '../index';
 import type { PluginObject } from '../plugin';
@@ -168,11 +168,16 @@ const uploadImage = (
   // WebGPU stores cube textures as 2D textures with six array layers; the
   // cube-ness is expressed at view-creation time via dimension: 'cube'.
   const textureDimension: '2d' | '3d' = image.dimension === '3d' ? '3d' : '2d';
+  // sRGB-tagged color images upload to the matching -srgb GPU format so
+  // textureSample decodes to linear; linear-tagged data images upload to
+  // the base format and sample raw.
+  const gpuFormat: TextureFormat =
+    image.colorSpace === 'srgb' ? srgbVariantOf(image.format) : image.format;
   const texture = renderer.createTexture({
     width: image.width,
     height: image.height,
     depthOrArrayLayers: image.depthOrArrayLayers,
-    format: image.format,
+    format: gpuFormat,
     usage: TextureUsage.TEXTURE_BINDING | TextureUsage.COPY_DST,
     mipLevelCount: 1,
     dimension: textureDimension,

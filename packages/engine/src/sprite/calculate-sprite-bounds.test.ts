@@ -45,7 +45,7 @@ describe('calculateSpriteBoundsSystem (integration)', () => {
 
     const images = app.getResource(Images)!;
     const sheet = images.add(
-      Image.checker(8, vec4.create(1, 1, 1, 1), vec4.create(0, 0, 0, 1), undefined, 'sheet'),
+      Image.checker(8, vec4.create(1, 1, 1, 1), vec4.create(0, 0, 0, 1), { label: 'sheet' }),
     );
     const e = app.world.spawn(new Sprite({ image: sheet }));
     await app.run();
@@ -64,7 +64,7 @@ describe('calculateSpriteBoundsSystem (integration)', () => {
     const images = app.getResource(Images)!;
     const layouts = app.getResource(TextureAtlasLayouts)!;
     const sheet = images.add(
-      Image.checker(4, vec4.create(1, 1, 1, 1), vec4.create(0, 0, 0, 1), undefined, 'sheet'),
+      Image.checker(4, vec4.create(1, 1, 1, 1), vec4.create(0, 0, 0, 1), { label: 'sheet' }),
     );
     // Layout's source is 64×16, but each tile is 16×16 — bounds must use the
     // per-tile pixel size (layout.size × uvSpan), not the layout's full size.

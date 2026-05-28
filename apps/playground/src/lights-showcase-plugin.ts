@@ -132,13 +132,9 @@ export const lightsShowcasePlugin: Plugin = (app) => {
       settings.normalMapping = normalsOn;
 
       const checker = images.add(
-        Image.checker(
-          16,
-          vec4.create(0.95, 0.95, 0.95, 1),
-          vec4.create(0.35, 0.35, 0.4, 1),
-          undefined,
-          'lights-showcase-checker',
-        ),
+        Image.checker(16, vec4.create(0.95, 0.95, 0.95, 1), vec4.create(0.35, 0.35, 0.4, 1), {
+          label: 'lights-showcase-checker',
+        }),
       );
 
       for (const place of placements()) {
