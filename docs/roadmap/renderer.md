@@ -184,10 +184,24 @@ Primary 3D interchange format. Depends on the asset system landing first.
 
 ### Phase 12 — Post-processing & camera effects
 
+**Status: In progress.** ADR-0048 shipped 12.1 + 12.2 — a per-camera
+`rgba16float` intermediate target when `Camera.hdr = true`, and a per-camera
+`Tonemapping` component carrying one of seven LUT-free operators (`none`,
+`reinhard`, `reinhard_luminance`, `aces_fitted`, `agx` (default),
+`blender_filmic`, `somewhat_boring_display_transform`). Geometry / composite
+passes write to `CameraView.mainColorTarget` (HDR intermediate when
+`hdr = true`, the original target when `hdr = false`); a new `TonemappingNode`
+appended to both `Core2d` and `Core3d` sub-graphs maps HDR → swapchain on the
+way out. Material2d/3d + Sprite + Light2d-composite pipeline keys now
+specialize on `view.mainColorTarget.format` so pipelines pick up the wider
+format automatically through the existing `PipelineCache`. No new HAL, no new
+capability flag. Browser-verified in `apps/playground` (`?mode=lit&hdr=1`,
+`&tm=<method>`).
+
 Each effect is opt-in via a per-camera component that inserts a node into the camera's sub-graph.
 
-- **12.1 HDR per-camera** — `Camera.hdr = true` → `Rgba16Float` main target.
-- **12.2 `Tonemapping`** — None, Reinhard, ReinhardLuminance, AcesFitted, AgX, TonyMcMapface, BlenderFilmic, SomewhatBoringDisplayTransform.
+- **12.1 HDR per-camera** — `Camera.hdr = true` → `rgba16float` main target. ✅ (ADR-0048)
+- **12.2 `Tonemapping`** — per-camera component. ✅ (ADR-0048) — ships `none`, `reinhard`, `reinhard_luminance`, `aces_fitted`, `agx`, `blender_filmic`, `somewhat_boring_display_transform`. `tony_mc_mapface` **backlogged** (`docs/backlog/tonemapping-tony-mcmapface.md`): the only LUT-driven operator in the roadmap list, gated on `docs/roadmap/asset-system.md` for HDR texture / 3D-texture loading.
 - **12.3 `Msaa`** — per-camera (1 / 2 / 4 / 8).
 - **12.4 `Bloom`**.
 - **12.5 `Fxaa` / `Smaa`**.

@@ -14,7 +14,7 @@
 // (restart the dev server first — it does not hot-reload engine changes).
 
 import { quat, vec3, vec4 } from '@retro-engine/math';
-import type { Plugin } from '@retro-engine/engine';
+import type { Plugin, TonemappingMethod } from '@retro-engine/engine';
 import {
   AmbientLight,
   Camera3d,
@@ -35,6 +35,7 @@ import {
   StandardMaterial,
   StandardMaterialPlugin,
   Time,
+  TONEMAPPING_METHODS,
   Transform,
 } from '@retro-engine/engine';
 
@@ -98,6 +99,23 @@ export const litShowcasePlugin: Plugin = (app) => {
         : ShadowFilteringMethod.Hardware2x2;
   app.getResource(Shadow3dSettings)!.filteringMethod = pcfMethod;
   log.info(`shadow filtering = ${pcfMethod} (pcf URL param = ${pcfParam ?? 'unset'})`);
+
+  // Optional ?hdr=1 + ?tm=<method> URL switches for Phase 12.1 / 12.2
+  // (ADR-0048). `?hdr=1` flips the camera into HDR mode (rgba16float
+  // intermediate target); `?tm=aces_fitted` (etc.) overrides the default
+  // tonemap operator. With `hdr=1` and no `tm`, the camera bundle inserts
+  // `Tonemapping({ method: 'agx' })` by default.
+  const search = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+  const hdrEnabled = search?.get('hdr') === '1';
+  const tmParam = search?.get('tm') ?? null;
+  const tonemapping: TonemappingMethod | undefined =
+    tmParam !== null && (TONEMAPPING_METHODS as readonly string[]).includes(tmParam)
+      ? (tmParam as TonemappingMethod)
+      : undefined;
+  if (tmParam !== null && tonemapping === undefined) {
+    log.warn(`unknown ?tm value '${tmParam}'; valid: ${TONEMAPPING_METHODS.join(', ')}`);
+  }
+  log.info(`hdr = ${hdrEnabled} (URL ?hdr=${search?.get('hdr') ?? 'unset'}); tonemap = ${tonemapping ?? (hdrEnabled ? 'agx (default)' : 'n/a')}`);
 
   // Orbit the point lights around the grid centre (fill + moving highlights).
   app.addSystem('update', [Query([Transform, Orbit]), ResMut(Time)], (lights, time) => {
@@ -217,7 +235,14 @@ export const litShowcasePlugin: Plugin = (app) => {
       const camT = new Transform();
       camT.translation = vec3.create(0, 4, 13);
       quat.fromAxisAngle(vec3.create(1, 0, 0), -Math.PI / 11, camT.rotation);
-      cmd.spawn(...Camera3d({ transform: camT }), new CameraDolly(13, 4, 0.22));
+      cmd.spawn(
+        ...Camera3d({
+          transform: camT,
+          ...(hdrEnabled ? { hdr: true } : {}),
+          ...(tonemapping !== undefined ? { tonemapping } : {}),
+        }),
+        new CameraDolly(13, 4, 0.22),
+      );
 
       log.info('spawned PBR sphere sweep + receding box field under a raking sun');
     },

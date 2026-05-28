@@ -304,7 +304,7 @@ export const queueSpritesRetained = (
       const bindGroup = pipeline.bindGroupFor(imageHandle, images, renderImages, app.renderer);
       if (bindGroup === undefined) continue;
       const renderPipeline = specialized.get({
-        key: { surfaceFormat: view.target.format, msaaSamples: 1, hdr: false, alphaBucket: bucket },
+        key: { surfaceFormat: view.mainColorTarget.format, msaaSamples: 1, hdr: view.hdr, alphaBucket: bucket },
       });
       const sortDepth = (v[10] as number) * worldZ + (v[14] as number);
       const { firstInstance, count } = batch;

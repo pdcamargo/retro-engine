@@ -53,8 +53,9 @@ export const TransparentPass3dNode: ViewNode = {
     const transparent = phases?.transparent.get(view.sourceEntity);
     if (transparent === undefined || transparent.length === 0) return;
 
+    const colorTargetView = view.mainColorTarget.view;
     const colorAttachment: ColorAttachment = {
-      view: view.target.view,
+      view: colorTargetView,
       // Always load — the opaque pass cleared and wrote the silhouette; we
       // composite onto it.
       loadOp: 'load',
@@ -81,7 +82,7 @@ export const TransparentPass3dNode: ViewNode = {
     const renderCtx: RenderContext = {
       encoder,
       pass,
-      surfaceView: view.target.view,
+      surfaceView: colorTargetView,
       camera: view,
     };
     transparent.sort((a, b) => b.sortDepth - a.sortDepth); // back-to-front

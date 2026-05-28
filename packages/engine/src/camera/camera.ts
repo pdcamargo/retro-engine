@@ -270,8 +270,28 @@ export interface CameraView {
   readonly sourceEntity: number;
   /** Mirrored from `Camera.order` for sort visibility. */
   readonly order: number;
-  /** Resolved render target — backend view + format + dimensions. */
+  /**
+   * Resolved render target — backend view + format + dimensions. The
+   * camera's **final** output: the swapchain (for primary / surface
+   * cameras), the user-supplied texture (for texture cameras), or the
+   * user-supplied view (for view cameras). The tonemap node writes here
+   * when {@link hdr} is true; the geometry / composite passes write here
+   * directly when {@link hdr} is false.
+   */
   readonly target: ResolvedRenderTarget;
+  /**
+   * The render target geometry and composite passes write into for this
+   * camera. When {@link hdr} is `false`, this is the same object reference
+   * as {@link target} — non-HDR cameras pay nothing for the indirection.
+   * When {@link hdr} is `true`, this points at a per-camera `rgba16float`
+   * intermediate texture allocated and cached by the camera plugin;
+   * downstream passes write HDR-precision values into it, and the
+   * `TonemappingNode` reads from it and writes to {@link target} on the
+   * way to the swapchain.
+   */
+  readonly mainColorTarget: ResolvedRenderTarget;
+  /** Mirrored `Camera.hdr`. Drives the {@link mainColorTarget} allocation. */
+  readonly hdr: boolean;
   /**
    * Resolved depth attachment for this camera. `undefined` when the camera
    * was spawned with `CameraDepthTarget.None`. For `'auto'` cameras, the

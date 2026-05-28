@@ -50,9 +50,12 @@ export const TransparentPass2dNode: ViewNode = {
     // Mirror the opaque pass's lighting-aware target redirect: when a
     // Light2dPlugin has allocated a baseColor texture for this camera,
     // the transparent pass composites on top of the opaque pass's
-    // intermediate output rather than the surface.
+    // intermediate output rather than the camera's main color target.
+    // Otherwise, write to `view.mainColorTarget.view` — the HDR
+    // intermediate when `view.hdr` is true, the camera's final target
+    // when it is false.
     const targets = ctx.app.getResource(ViewLight2dTargets);
-    const colorView = targets?.perCamera.get(view.sourceEntity as Entity)?.baseColorView ?? view.target.view;
+    const colorView = targets?.perCamera.get(view.sourceEntity as Entity)?.baseColorView ?? view.mainColorTarget.view;
     const colorAttachment: ColorAttachment = {
       view: colorView,
       loadOp: 'load',

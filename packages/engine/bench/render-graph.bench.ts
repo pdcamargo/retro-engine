@@ -124,6 +124,8 @@ const buildSyntheticView = (
     sourceEntity: i,
     order: i,
     target: resolved,
+    mainColorTarget: resolved,
+    hdr: false,
     depth: undefined,
     viewport,
     clearColor: { r: 0, g: 0, b: 0, a: 1 },

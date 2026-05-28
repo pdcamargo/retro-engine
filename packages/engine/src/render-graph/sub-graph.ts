@@ -73,6 +73,16 @@ export class RenderSubGraph {
     this.incoming.get(after)!.add(before);
   }
 
+  /**
+   * True if a node with this label has been registered (whether or not the
+   * sub-graph is frozen). Plugins that run late in the lifecycle (e.g. in
+   * `finish()`) use this to add ordering edges only when an optional
+   * upstream / downstream node is actually present.
+   */
+  hasNode(label: RenderLabel): boolean {
+    return this.nodes.has(label);
+  }
+
   /** True after {@link freeze}; mutating methods throw past this point. */
   get frozen(): boolean {
     return this.cachedOrder !== undefined;

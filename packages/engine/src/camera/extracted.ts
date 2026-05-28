@@ -13,6 +13,15 @@ import type { RenderLabel } from '../render-graph/render-label';
 import type { CameraDepthTarget, CameraRenderTarget, ClearColorConfig, Viewport } from './camera';
 
 /**
+ * Texture format the per-camera HDR intermediate is allocated against when
+ * `Camera.hdr = true`. `rgba16float` is the only WebGPU format with both
+ * `RENDER_ATTACHMENT` and `TEXTURE_BINDING` usage at half-float precision
+ * that ships on every WebGPU implementation, and matches WebGL2's
+ * `EXT_color_buffer_half_float` for the eventual GL2 backend.
+ */
+export const HDR_TARGET_FORMAT: TextureFormat = 'rgba16float';
+
+/**
  * Render-world component carrying a single frame's snapshot of a main-world
  * camera. Spawned by the camera plugin's `extractCameras` system in
  * `RenderSet.Extract`; consumed by `prepareCameras` in `RenderSet.Prepare`.
@@ -38,6 +47,15 @@ export class ExtractedCamera {
   viewport: Viewport | undefined;
   /** Clear-config snapshot. */
   clearColor: ClearColorConfig;
+  /**
+   * Mirrored `Camera.hdr`. When `true`, the camera plugin allocates a
+   * per-camera `rgba16float` intermediate texture in `RenderSet.Prepare`
+   * (cached in {@link ViewHdrTargets}) and points
+   * `CameraView.mainColorTarget` at it; downstream geometry / composite
+   * passes write into that intermediate, and the tonemap node reads from
+   * it on the way to the camera's final `target`.
+   */
+  hdr: boolean;
   /** Bitmask snapshot of the camera's `RenderLayers`. */
   renderLayers: number;
   /** Deep-copied matrices. */
@@ -58,6 +76,7 @@ export class ExtractedCamera {
     depthTarget: CameraDepthTarget;
     viewport: Viewport | undefined;
     clearColor: ClearColorConfig;
+    hdr: boolean;
     renderLayers: number;
     viewMatrix: Mat4;
     projectionMatrix: Mat4;
@@ -72,6 +91,7 @@ export class ExtractedCamera {
     this.depthTarget = init.depthTarget;
     this.viewport = init.viewport;
     this.clearColor = init.clearColor;
+    this.hdr = init.hdr;
     this.renderLayers = init.renderLayers;
     this.viewMatrix = init.viewMatrix;
     this.projectionMatrix = init.projectionMatrix;
@@ -80,6 +100,36 @@ export class ExtractedCamera {
     this.targetSize = init.targetSize;
     this.subGraph = init.subGraph;
   }
+}
+
+/**
+ * Per-camera HDR intermediate texture cache, mirroring the lifecycle pattern
+ * of {@link ViewDepthCache} from `CameraPlugin`. Keyed by stable main-world
+ * camera `sourceEntity`. Populated in `RenderSet.Prepare` by `prepareCameras`
+ * when the extracted camera has `hdr === true`; garbage-collected when the
+ * camera disappears from `SortedCameras.views`, when it switches `hdr` off,
+ * or when its color-target dimensions change. Entries are always
+ * `rgba16float` (see {@link HDR_TARGET_FORMAT}) — operators consume linear
+ * HDR.
+ *
+ * The presence of an entry for a given camera entity is what tells
+ * `prepareCameras` to build `CameraView.mainColorTarget` pointing at the HDR
+ * intermediate instead of the camera's final target. Absence restores the
+ * non-HDR code path bit-for-bit.
+ *
+ * @internal
+ */
+export class ViewHdrTargets {
+  readonly perCamera: Map<
+    Entity,
+    {
+      texture: Texture;
+      view: TextureView;
+      width: number;
+      height: number;
+      format: TextureFormat;
+    }
+  > = new Map();
 }
 
 /**

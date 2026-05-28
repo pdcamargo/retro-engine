@@ -25,9 +25,10 @@ export const Light2dCompositePass2dLabel = createLabel('light2d_composite_pass_2
  *
  * Pass shape:
  *
- * - Color attachment: `view.target.view` — the camera's swapchain / texture /
- *   surface view. `loadOp: 'clear'`, `clearValue: (0, 0, 0, 1)` (the
- *   fullscreen triangle covers every pixel, so the clear value is cosmetic).
+ * - Color attachment: `view.mainColorTarget.view` — the camera's HDR
+ *   intermediate when `view.hdr` is true (ADR-0048), otherwise its final
+ *   target. `loadOp: 'clear'`, `clearValue: (0, 0, 0, 1)` (the fullscreen
+ *   triangle covers every pixel, so the clear value is cosmetic).
  * - No depth attachment.
  * - Bind group `@group(0)` carries the per-camera composite bind group from
  *   `ViewLight2dTargets` (baseColor texture + lightAccum texture + sampler).
@@ -66,7 +67,7 @@ export const Light2dCompositePass2dNode: ViewNode = {
     if (pipeline === undefined || pipeline.composite === undefined) return;
 
     const colorAttachment: ColorAttachment = {
-      view: view.target.view,
+      view: view.mainColorTarget.view,
       loadOp: 'clear',
       storeOp: 'store',
       clearValue: { r: 0, g: 0, b: 0, a: 1 },
@@ -77,7 +78,7 @@ export const Light2dCompositePass2dNode: ViewNode = {
     };
     const compositeMode = ctx.app.getResource(Light2dSettings)?.compositeMode ?? 'multiply';
     const renderPipeline = pipeline.composite.get({
-      key: { surfaceFormat: view.target.format, compositeMode },
+      key: { surfaceFormat: view.mainColorTarget.format, compositeMode },
     });
     const pass = encoder.beginRenderPass(passDesc);
     pass.setPipeline(renderPipeline);

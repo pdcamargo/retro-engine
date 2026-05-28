@@ -57,8 +57,12 @@ export const OpaquePass3dNode: ViewNode = {
       );
     }
     const phases = ctx.app.getResource(ViewPhases3d);
+    // `view.mainColorTarget` is the camera's HDR intermediate when
+    // `view.hdr` is true (ADR-0048) and the same reference as `view.target`
+    // otherwise — non-HDR cameras render unchanged.
+    const colorTargetView = view.mainColorTarget.view;
     const colorAttachment: ColorAttachment = {
-      view: view.target.view,
+      view: colorTargetView,
       loadOp: view.loadOp,
       storeOp: 'store',
       ...(view.clearColor !== undefined ? { clearValue: view.clearColor } : {}),
@@ -85,7 +89,7 @@ export const OpaquePass3dNode: ViewNode = {
     const renderCtx: RenderContext = {
       encoder,
       pass,
-      surfaceView: view.target.view,
+      surfaceView: colorTargetView,
       camera: view,
     };
     if (phases !== undefined) {

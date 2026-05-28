@@ -409,12 +409,12 @@ const queueSprites = (
     for (const batch of prepared.batches) {
       const bindGroup = pipeline.bindGroupFor(batch.image, images, renderImages, app.renderer);
       if (bindGroup === undefined) continue;
-      const surfaceFormat = view.target.format;
+      const surfaceFormat = view.mainColorTarget.format;
       const renderPipeline = specialized.get({
         key: {
           surfaceFormat,
           msaaSamples: 1,
-          hdr: false,
+          hdr: view.hdr,
           alphaBucket: batch.bucket,
         },
       });

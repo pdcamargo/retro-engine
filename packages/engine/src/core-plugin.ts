@@ -9,6 +9,7 @@ import { RenderGraphPlugin } from './render-graph/render-graph-plugin';
 import { ShaderPlugin } from './shader/shader-plugin';
 import { Query, ResMut } from './system-param';
 import { Time } from './time';
+import { TonemappingPlugin } from './tonemapping/tonemapping-plugin';
 import { Transform } from './transform';
 import { VisibilityPlugin } from './visibility/visibility-plugin';
 
@@ -86,5 +87,6 @@ export class CorePlugin implements PluginObject {
     app.addPlugin(new ImagePlugin());
     app.addPlugin(new VisibilityPlugin());
     app.addPlugin(new RenderGraphPlugin());
+    app.addPlugin(new TonemappingPlugin());
   }
 }

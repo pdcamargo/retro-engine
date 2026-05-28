@@ -1,5 +1,6 @@
 import { Core3dLabel } from '../render-graph/core-3d';
 import type { RenderLabel } from '../render-graph/render-label';
+import { DEFAULT_TONEMAPPING_METHOD, Tonemapping, type TonemappingMethod } from '../tonemapping/tonemapping';
 import { Transform } from '../transform';
 import {
   Camera,
@@ -35,6 +36,17 @@ interface BaseCameraOptions {
    * plugin registered a custom sub-graph.
    */
   subGraph?: RenderLabel;
+  /**
+   * When the camera is HDR (`hdr: true`), the bundle inserts a default
+   * {@link Tonemapping} component with method
+   * {@link DEFAULT_TONEMAPPING_METHOD}. Pass an explicit `TonemappingMethod`
+   * here to override the operator; pass `'none'` for a passthrough; pass
+   * `false` to opt out of the auto-insert entirely (the camera will then
+   * render HDR-clipped output unless you spawn a `Tonemapping` component
+   * yourself). When `hdr: false`, this option is ignored — there is no
+   * HDR signal for a tonemap to consume.
+   */
+  tonemapping?: TonemappingMethod | false;
   /** Optional initial `Transform`. Defaults to identity. */
   transform?: Transform;
 }
@@ -69,6 +81,21 @@ const buildCamera = (options: BaseCameraOptions): Camera =>
   });
 
 /**
+ * Resolve the bundle's `tonemapping` option into the optional `Tonemapping`
+ * component to insert. Returns `undefined` for non-HDR cameras (no
+ * tonemap), for HDR cameras with `tonemapping: false` (explicit opt-out),
+ * and otherwise builds a `Tonemapping` carrying the requested method or
+ * {@link DEFAULT_TONEMAPPING_METHOD} when none was passed.
+ */
+const buildTonemapping = (options: BaseCameraOptions): Tonemapping | undefined => {
+  if (options.hdr !== true) return undefined;
+  if (options.tonemapping === false) return undefined;
+  return new Tonemapping({
+    method: options.tonemapping ?? DEFAULT_TONEMAPPING_METHOD,
+  });
+};
+
+/**
  * Factory for a 2D camera, returning a tuple of components ready to pass to
  * `spawn(...)`. Pairs a `Camera` (default target = primary surface,
  * `ClearColorConfig.Default`) with an `OrthographicProjection` configured for
@@ -92,16 +119,20 @@ const buildCamera = (options: BaseCameraOptions): Camera =>
  * );
  * ```
  */
-export const Camera2d = (options: Camera2dOptions = {}): readonly object[] => [
-  buildCamera(options),
-  new OrthographicProjection({
-    near: -1000,
-    far: 1000,
-    scalingMode: ScalingMode.WindowSize,
-    ...options.projection,
-  }),
-  options.transform ?? new Transform(),
-];
+export const Camera2d = (options: Camera2dOptions = {}): readonly object[] => {
+  const tonemapping = buildTonemapping(options);
+  return [
+    buildCamera(options),
+    new OrthographicProjection({
+      near: -1000,
+      far: 1000,
+      scalingMode: ScalingMode.WindowSize,
+      ...options.projection,
+    }),
+    options.transform ?? new Transform(),
+    ...(tonemapping !== undefined ? [tonemapping] : []),
+  ];
+};
 
 /**
  * Factory for a 3D camera, returning a tuple of components ready to pass to
@@ -122,11 +153,15 @@ export const Camera2d = (options: Camera2dOptions = {}): readonly object[] => [
  * );
  * ```
  */
-export const Camera3d = (options: Camera3dOptions = {}): readonly object[] => [
-  // `Camera3d()` defaults to an engine-allocated depth attachment so 3D draws
-  // resolve depth correctly without manual texture management. The consumer
-  // can override via `options.depthTarget`.
-  buildCamera({ subGraph: Core3dLabel, depthTarget: CameraDepthTarget.auto(), ...options }),
-  new PerspectiveProjection(options.projection),
-  options.transform ?? new Transform(),
-];
+export const Camera3d = (options: Camera3dOptions = {}): readonly object[] => {
+  const tonemapping = buildTonemapping(options);
+  return [
+    // `Camera3d()` defaults to an engine-allocated depth attachment so 3D draws
+    // resolve depth correctly without manual texture management. The consumer
+    // can override via `options.depthTarget`.
+    buildCamera({ subGraph: Core3dLabel, depthTarget: CameraDepthTarget.auto(), ...options }),
+    new PerspectiveProjection(options.projection),
+    options.transform ?? new Transform(),
+    ...(tonemapping !== undefined ? [tonemapping] : []),
+  ];
+};

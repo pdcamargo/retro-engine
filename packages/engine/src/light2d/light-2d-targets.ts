@@ -108,7 +108,10 @@ export const prepareLight2dTargets = (
     const sourceEntity = view.sourceEntity as Entity;
     live.add(sourceEntity);
 
-    const { width, height, format } = view.target;
+    // baseColor must match whatever the opaque/transparent passes write
+    // into. When `view.hdr` is true that is the per-camera rgba16float
+    // intermediate (ADR-0048); otherwise the camera's final target format.
+    const { width, height, format } = view.mainColorTarget;
     const existing = targets.perCamera.get(sourceEntity);
     if (
       existing !== undefined &&

@@ -453,7 +453,7 @@ class Material2dPluginState<M extends Material2d> {
     for (const view of cameras.views) {
       if (view.subGraph !== Core2dLabel) continue;
       const cameraEntity = view.sourceEntity;
-      const surfaceFormat = view.target.format;
+      const surfaceFormat = view.mainColorTarget.format;
       const v = view.viewMatrix as Float32Array;
 
       for (const row of renderables.entries()) {
@@ -479,7 +479,7 @@ class Material2dPluginState<M extends Material2d> {
         const alphaMode = materialInstance?.alphaMode?.() ?? 'opaque';
         const alphaBucket = alphaBucketOf(alphaMode);
 
-        const key: MaterialPipelineKey2d = { surfaceFormat, msaaSamples: 1, hdr: false, alphaBucket };
+        const key: MaterialPipelineKey2d = { surfaceFormat, msaaSamples: 1, hdr: view.hdr, alphaBucket };
         const pipeline = this.specialized.get({ key, layout: renderMesh.layout.layout });
 
         // Full 4-term camera-space-Z computation (mirrors MaterialPlugin's 3D
@@ -555,7 +555,7 @@ class Material2dPluginState<M extends Material2d> {
       if (index === undefined) continue;
       const buffer = index.ordered.buffer;
       if (buffer === undefined) continue;
-      const surfaceFormat = view.target.format;
+      const surfaceFormat = view.mainColorTarget.format;
 
       for (const batch of index.batches) {
         const { meshHandle, materialHandle, bucket, depth } = batch.key;
@@ -571,7 +571,7 @@ class Material2dPluginState<M extends Material2d> {
         const prepared = renderMaterials.get(materialHandle);
         if (prepared === undefined) continue;
 
-        const key: MaterialPipelineKey2d = { surfaceFormat, msaaSamples: 1, hdr: false, alphaBucket: bucket };
+        const key: MaterialPipelineKey2d = { surfaceFormat, msaaSamples: 1, hdr: view.hdr, alphaBucket: bucket };
         const pipeline = this.specialized.get({ key, layout: renderMesh.layout.layout });
         const payload: InstancedDrawPayload = {
           pipeline,

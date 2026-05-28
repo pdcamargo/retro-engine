@@ -30,9 +30,11 @@ export const LIGHT2D_ACCUM_FORMAT: TextureFormat = 'rgba16float';
 /**
  * Specialization key for the composite pipeline.
  *
- * - `surfaceFormat` — each camera writes to its own `view.target.format`, and a
- *   multi-window App can have cameras hitting different surface formats
- *   simultaneously.
+ * - `surfaceFormat` — each camera writes to its own
+ *   `view.mainColorTarget.format` (the HDR intermediate when
+ *   `Camera.hdr` is true, the camera's final target otherwise; ADR-0048),
+ *   and a multi-window App can have cameras hitting different surface
+ *   formats simultaneously.
  * - `compositeMode` — selects the matching fragment entry point
  *   (`fs_multiply` / `fs_add` / `fs_screen`), avoiding a per-pixel branch.
  *

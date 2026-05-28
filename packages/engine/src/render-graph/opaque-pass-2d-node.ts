@@ -60,10 +60,11 @@ export const OpaquePass2dNode: ViewNode = {
     // texture so the composite pass can multiply it by the accumulated
     // lighting before the result reaches the camera's actual color target.
     // Absent the lighting plugin (no resource, or no entry for this
-    // camera), the pass writes directly to `view.target.view` exactly as
-    // it did pre-Phase-9.
+    // camera), the pass writes directly to `view.mainColorTarget.view`,
+    // which is the camera's HDR intermediate when `view.hdr` is true and
+    // its final target otherwise.
     const targets = ctx.app.getResource(ViewLight2dTargets);
-    const colorView = targets?.perCamera.get(view.sourceEntity as Entity)?.baseColorView ?? view.target.view;
+    const colorView = targets?.perCamera.get(view.sourceEntity as Entity)?.baseColorView ?? view.mainColorTarget.view;
     const colorAttachment: ColorAttachment = {
       view: colorView,
       loadOp: view.loadOp,

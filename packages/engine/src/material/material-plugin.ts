@@ -477,7 +477,7 @@ class MaterialPluginState<M extends Material> {
     const entries: InstanceEntry[] = [];
     for (const view of cameras.views) {
       const cameraEntity = view.sourceEntity;
-      const colorFormat = view.target.format;
+      const colorFormat = view.mainColorTarget.format;
       const depthFormat = view.depth?.format;
       const v = view.viewMatrix as Float32Array;
       for (const row of renderables.entries()) {
@@ -506,7 +506,7 @@ class MaterialPluginState<M extends Material> {
         const layout = renderMesh.layout.layout;
         const key: MaterialPipelineKey = {
           msaaSamples: 1,
-          hdr: false,
+          hdr: view.hdr,
           vertexLayoutDigest: vertexLayoutDigestFor(layout),
           alphaMode,
         };
@@ -590,7 +590,7 @@ class MaterialPluginState<M extends Material> {
       if (index === undefined) continue;
       const buffer = index.ordered.buffer;
       if (buffer === undefined) continue;
-      const colorFormat = view.target.format;
+      const colorFormat = view.mainColorTarget.format;
       const depthFormat = view.depth?.format;
 
       for (const batch of index.batches) {
@@ -613,7 +613,7 @@ class MaterialPluginState<M extends Material> {
         const layout = renderMesh.layout.layout;
         const key: MaterialPipelineKey = {
           msaaSamples: 1,
-          hdr: false,
+          hdr: view.hdr,
           vertexLayoutDigest: vertexLayoutDigestFor(layout),
           alphaMode,
         };

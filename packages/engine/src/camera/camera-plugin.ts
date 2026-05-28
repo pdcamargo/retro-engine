@@ -21,10 +21,12 @@ import { ClearColor } from './clear-color';
 import { ShaderRegistry } from '../shader/shader-registry';
 import {
   ExtractedCamera,
+  HDR_TARGET_FORMAT,
   VIEW_UNIFORM_BYTE_SIZE,
   VIEW_UNIFORM_WGSL,
   ViewBindGroupCache,
   ViewDepthCache,
+  ViewHdrTargets,
 } from './extracted';
 import {
   buildOrthographicMatrix,
@@ -156,6 +158,64 @@ const fullTargetViewport = (target: ResolvedRenderTarget): Viewport => ({
  * Reallocates when the cached texture's dimensions or format no longer match
  * the camera's color-target size + requested depth format.
  */
+/**
+ * When `hdr` is true, allocate (or reuse) a per-camera `rgba16float`
+ * intermediate texture sized to the camera's color target and return a
+ * `ResolvedRenderTarget` view of it. When `hdr` is false, drop any existing
+ * entry for this camera and return `undefined` — callers fall back to
+ * `view.target` for the main color attachment.
+ *
+ * Mirrors {@link resolveCameraDepth} exactly: reallocates on size change,
+ * destroys-and-reinserts on format-flag flip, no-ops on a hit.
+ */
+const resolveCameraHdrTarget = (
+  cache: ViewHdrTargets,
+  app: App,
+  sourceEntity: Entity,
+  hdr: boolean,
+  color: ResolvedRenderTarget,
+): ResolvedRenderTarget | undefined => {
+  if (!hdr) {
+    const existing = cache.perCamera.get(sourceEntity);
+    if (existing) {
+      existing.view.destroy();
+      existing.texture.destroy();
+      cache.perCamera.delete(sourceEntity);
+    }
+    return undefined;
+  }
+  const { width, height } = color;
+  const existing = cache.perCamera.get(sourceEntity);
+  if (
+    existing &&
+    existing.width === width &&
+    existing.height === height &&
+    existing.format === HDR_TARGET_FORMAT
+  ) {
+    return { view: existing.view, format: existing.format, width, height };
+  }
+  if (existing) {
+    existing.view.destroy();
+    existing.texture.destroy();
+  }
+  const texture = app.renderer.createTexture({
+    label: `view-hdr#${sourceEntity}`,
+    width,
+    height,
+    format: HDR_TARGET_FORMAT,
+    usage: TextureUsage.RENDER_ATTACHMENT | TextureUsage.TEXTURE_BINDING,
+  });
+  const view = texture.createView();
+  cache.perCamera.set(sourceEntity, {
+    texture,
+    view,
+    width,
+    height,
+    format: HDR_TARGET_FORMAT,
+  });
+  return { view, format: HDR_TARGET_FORMAT, width, height };
+};
+
 const resolveCameraDepth = (
   cache: ViewDepthCache,
   app: App,
@@ -244,6 +304,7 @@ export class CameraPlugin implements PluginObject {
     app.insertResource(new SortedCameras());
     app.insertResource(new ViewBindGroupCache());
     app.insertResource(new ViewDepthCache());
+    app.insertResource(new ViewHdrTargets());
 
     // Register the canonical view uniform module so user shaders can write
     // `#import retro_engine::view` to pull in the ViewUniform struct + the
@@ -318,6 +379,7 @@ export class CameraPlugin implements PluginObject {
               depthTarget: camera.depthTarget,
               viewport: camera.viewport,
               clearColor: camera.clearColor,
+              hdr: camera.hdr,
               renderLayers: layers?.mask ?? RenderLayers.DEFAULT_MASK,
               viewMatrix: mat4.clone(c.viewMatrix),
               projectionMatrix: mat4.clone(c.projectionMatrix),
@@ -341,10 +403,11 @@ export class CameraPlugin implements PluginObject {
         Query([ExtractedCamera]),
         ResMut(ViewBindGroupCache),
         ResMut(ViewDepthCache),
+        ResMut(ViewHdrTargets),
         ResMut(SortedCameras),
         Res(ClearColor),
       ],
-      (q, cache, depthCache, sorted, clearColor) => {
+      (q, cache, depthCache, hdrCache, sorted, clearColor) => {
         sorted.views.length = 0;
         const sortable: SortableCameraView[] = [];
         const inverseViewScratch = mat4.identity();
@@ -369,6 +432,13 @@ export class CameraPlugin implements PluginObject {
             ext.depthTarget,
             resolved,
           );
+          const hdrTarget = resolveCameraHdrTarget(
+            hdrCache,
+            app,
+            ext.sourceEntity,
+            ext.hdr,
+            resolved,
+          );
           const viewport = ext.viewport ?? fullTargetViewport(resolved);
           mat4.invert(ext.viewMatrix, inverseViewScratch);
           writeViewUniform(
@@ -387,6 +457,8 @@ export class CameraPlugin implements PluginObject {
             sourceEntity: ext.sourceEntity,
             order: ext.order,
             target: resolved,
+            mainColorTarget: hdrTarget ?? resolved,
+            hdr: ext.hdr,
             depth,
             viewport,
             clearColor: color,
@@ -409,6 +481,14 @@ export class CameraPlugin implements PluginObject {
             entry.view.destroy();
             entry.texture.destroy();
             depthCache.perCamera.delete(entity);
+          }
+        }
+        // Same GC for the HDR intermediate cache.
+        for (const [entity, entry] of hdrCache.perCamera) {
+          if (!liveSourceEntities.has(entity)) {
+            entry.view.destroy();
+            entry.texture.destroy();
+            hdrCache.perCamera.delete(entity);
           }
         }
         sortable.sort((a, b) => {

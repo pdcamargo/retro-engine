@@ -61,11 +61,13 @@ export {
 export { RenderLayers, renderLayersIntersect } from './camera/render-layers';
 export { SortedCameras } from './camera/sorted-cameras';
 export {
+  HDR_TARGET_FORMAT,
   VIEW_UNIFORM_BYTE_SIZE,
   VIEW_UNIFORM_FLOAT_COUNT,
   VIEW_UNIFORM_WGSL,
   ViewBindGroupCache,
   ViewDepthCache,
+  ViewHdrTargets,
 } from './camera/extracted';
 export { CameraPlugin } from './camera/camera-plugin';
 export type { CommandsHandle, EntityCommands } from './commands';
@@ -384,6 +386,18 @@ export {
   SpotLight2d,
   ViewLight2dTargets,
 } from './light2d';
+export type { TonemappingMethod } from './tonemapping/tonemapping';
+export { DEFAULT_TONEMAPPING_METHOD, TONEMAPPING_METHODS, Tonemapping } from './tonemapping/tonemapping';
+export { TONEMAPPING_WGSL } from './tonemapping/tonemapping.wgsl';
+export type { TonemappingKey } from './tonemapping/tonemapping-pipeline';
+export { TonemappingPipeline } from './tonemapping/tonemapping-pipeline';
+export {
+  makeTonemappingNode,
+  TonemappingPass2dLabel,
+  TonemappingPass3dLabel,
+} from './tonemapping/tonemapping-node';
+export { TonemappingPlugin } from './tonemapping/tonemapping-plugin';
+export { ViewTonemapping } from './tonemapping/view-tonemapping';
 export type {
   AmbientLightOptions,
   CascadeFitParams,
@@ -1400,11 +1414,18 @@ export class App {
     // are active and a surface exists, fall back to a clear-only pass so the
     // swapchain doesn't show stale content; headless apps with no cameras
     // skip GPU work entirely.
+    //
+    // Freeze only after the plugin lifecycle has reached `Cleaned`. Plugins
+    // are allowed to extend the graph in `finish()` (see
+    // `RenderGraphPlugin`'s docstring), and `tickPluginLifecycle` only
+    // calls `finish()` once every plugin's `ready()` reports true — until
+    // then, deferring the freeze keeps the graph mutable so a slow-to-ready
+    // plugin doesn't lock another plugin's node registrations out.
     const graph = this.getResource(RenderGraph);
-    graph?.freeze();
+    if (this._pluginsState === 'Cleaned') graph?.freeze();
     const sorted = this.getResource(SortedCameras);
     const views = sorted?.views ?? [];
-    if (views.length > 0) {
+    if (views.length > 0 && this._pluginsState === 'Cleaned') {
       if (graph !== undefined) {
         graph.run({
           app: this,
