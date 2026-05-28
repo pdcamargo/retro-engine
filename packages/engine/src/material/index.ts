@@ -53,3 +53,16 @@ export {
   forExtendedMaterial,
   synthExtendedMaterialClass,
 } from './extended-material';
+
+export {
+  INSTANCE_LAYOUT,
+  MESH_INSTANCE_BYTE_SIZE,
+  MESH_INSTANCE_FLOAT_COUNT,
+  packInstanceTransform,
+  PREVIOUS_INSTANCE_BYTE_SIZE,
+  PREVIOUS_INSTANCE_FLOAT_COUNT,
+  PREVIOUS_INSTANCE_LAYOUT,
+  PREVIOUS_INSTANCE_TRANSFORM_BASE_LOCATION,
+  packPreviousInstanceTransform,
+} from './instance-layout';
+export { MeshPreviousInstanceBuffer } from './mesh-previous-instance-buffer';

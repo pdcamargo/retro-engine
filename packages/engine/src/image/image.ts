@@ -265,6 +265,7 @@ export const bytesPerTexel = (format: TextureFormat): number | undefined => {
     case 'rgba8unorm-srgb':
     case 'bgra8unorm':
     case 'bgra8unorm-srgb':
+    case 'rg16float':
       return 4;
     case 'rgba16float':
       return 8;

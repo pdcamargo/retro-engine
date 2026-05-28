@@ -22,6 +22,14 @@ export interface InstancedDrawPayload {
   readonly vertexSlice: AllocatorSlice;
   readonly indexSlice: AllocatorSlice | undefined;
   readonly renderMesh: RenderMesh;
+  /**
+   * Second per-instance vertex buffer, bound at slot 2, carrying each
+   * entity's previous-frame model matrix. Populated only on payloads whose
+   * pipeline is a motion-vector prepass variant — main-pass opaque /
+   * transparent draws and non-motion prepass variants leave this undefined
+   * and slot 2 unbound.
+   */
+  readonly previousInstanceBuffer?: Buffer;
 }
 
 /** One renderable, before batching. `payload` is constant across a group. */
@@ -35,6 +43,13 @@ export interface InstanceEntry {
   readonly depth: number;
   readonly model: Mat4;
   readonly payload: InstancedDrawPayload;
+  /**
+   * Previous-frame model matrix used by the motion-vector prepass. Populated
+   * by the material plugin only when at least one active camera has the
+   * `MotionVectorPrepass` marker; otherwise the previous-instance vertex
+   * buffer is not built and this field stays undefined.
+   */
+  readonly previousModel?: Mat4;
 }
 
 /** A run of instances collapsed into one instanced draw. */
@@ -109,7 +124,10 @@ export const packInstancedBatches = (
 /**
  * Build the draw closure for one instanced batch. Shared by the 3D and 2D
  * material plugins — `@group(0)` view is bound by the pass node, `@group(1)` is
- * the material, the per-instance transform rides in vertex buffer slot 1.
+ * the material, the per-instance transform rides in vertex buffer slot 1, and
+ * the previous-frame transform (when the pipeline opts into the motion-vector
+ * prepass via {@link InstancedDrawPayload.previousInstanceBuffer}) rides in
+ * slot 2.
  */
 export const makeInstancedDraw =
   (
@@ -126,6 +144,9 @@ export const makeInstancedDraw =
     // whole slab is bound at offset 0.
     pass.setVertexBuffer(0, payload.vertexSlice.buffer);
     pass.setVertexBuffer(1, instanceBuffer);
+    if (payload.previousInstanceBuffer !== undefined) {
+      pass.setVertexBuffer(2, payload.previousInstanceBuffer);
+    }
     const rm = payload.renderMesh;
     if (rm.bufferInfo.kind === 'indexed') {
       const idx = payload.indexSlice!;

@@ -109,7 +109,6 @@ export class PrepassPlugin implements PluginObject {
 
     const log: Logger = app.logger.child('prepass');
     const warnedNoDepth = new Set<Entity>();
-    const warnedMotionDeferred = new Set<Entity>();
 
     // Mesh3d insert hook: auto-attach PreviousGlobalTransform to every new
     // 3D renderable, seeded from the entity's current GlobalTransform so the
@@ -160,21 +159,11 @@ export class PrepassPlugin implements PluginObject {
         flagsByCamera.map.clear();
         for (const [entity, camera] of cameras.entries()) {
           if (!camera.isActive) continue;
-          const hasMotion = app.world.getComponent(entity, MotionVectorPrepass) !== undefined;
-          if (hasMotion && !warnedMotionDeferred.has(entity)) {
-            warnedMotionDeferred.add(entity);
-            log.devWarn(
-              `camera (source entity ${entity}) has MotionVectorPrepass but motion-vector output is not yet implemented in this engine slice — marker is silently ignored. See docs/backlog/prepass-motion-vectors.md.`,
-            );
-          }
           const flags: PrepassFlags = {
             depth: app.world.getComponent(entity, DepthPrepass) !== undefined,
             normal: app.world.getComponent(entity, NormalPrepass) !== undefined,
-            // Motion vector is intentionally masked off in this slice — the
-            // previous-instance vertex buffer + fs_prepass_motion fragment
-            // output land in a follow-on (the previous-frame component +
-            // view-uniform substrate is in place via ADR-0050).
-            motionVector: false,
+            motionVector:
+              app.world.getComponent(entity, MotionVectorPrepass) !== undefined,
           };
           if (prepassFlagsAny(flags)) {
             flagsByCamera.map.set(entity, flags);

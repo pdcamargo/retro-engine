@@ -32,14 +32,11 @@ export const PREPASS_NORMAL_FORMAT: TextureFormat = 'rgba16float';
 
 /**
  * Color format for the screen-space motion-vector target. Carries the
- * half-NDC delta `(prev - curr) * 0.5` per pixel; two of the four channels
- * are unused. The renderer-core HAL does not yet expose `rg16float`, so we
- * reuse the `rgba16float` slot — when the motion-vector reconstruction
- * follow-on lands and adds the narrower format to the HAL, this constant
- * narrows to `rg16float` (additive on the HAL side, no consumer change
- * here).
+ * half-NDC delta `(prev - curr) * 0.5` per pixel. Two channels are enough —
+ * the third / fourth would be wasted bandwidth — so the HAL exposes
+ * `rg16float` and the prepass uses it directly.
  */
-export const PREPASS_MOTION_VECTOR_FORMAT: TextureFormat = 'rgba16float';
+export const PREPASS_MOTION_VECTOR_FORMAT: TextureFormat = 'rg16float';
 
 /**
  * Resolved view of a camera's prepass targets, exposed to render-graph nodes

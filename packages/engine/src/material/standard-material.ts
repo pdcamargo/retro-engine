@@ -127,12 +127,12 @@ export class StandardMaterial implements Material {
   }
 
   prepassWrites(): { depth: boolean; normal: boolean; motionVector: boolean } {
-    // StandardMaterial writes depth + world-space normal (with roughness).
-    // Motion-vector output is gated on the previous-instance vertex buffer
-    // landing — the marker on the camera side is silently ignored until then
-    // and this flag stays false to keep the pipeline cache aligned with the
-    // attachments PrepassNode3d actually binds.
-    return { depth: true, normal: true, motionVector: false };
+    // StandardMaterial writes depth, world-space normal (with roughness),
+    // and a screen-space motion vector. The pbr.wgsl module exposes
+    // `fs_prepass_normal`, `fs_prepass_motion`, and the combined
+    // `fs_prepass_normal_motion` fragment entries; the previous-instance
+    // vertex buffer feeds the motion branch.
+    return { depth: true, normal: true, motionVector: true };
   }
 
   static readonly bindGroup = MaterialSchema(StandardMaterial, [

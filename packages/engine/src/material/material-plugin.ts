@@ -20,7 +20,11 @@ import { MeshAllocator, Meshes, Mesh3d, RenderMeshes } from '../mesh';
 import type { PluginObject } from '../plugin';
 import { intersectPrepassFlags, prepassFlagsAny, type PrepassFlags } from '../prepass/components';
 import { PrepassFlagsByCamera } from '../prepass/prepass-plugin';
-import { PREPASS_NORMAL_FORMAT } from '../prepass/view-prepass-targets';
+import { PreviousGlobalTransform } from '../prepass/previous-global-transform';
+import {
+  PREPASS_MOTION_VECTOR_FORMAT,
+  PREPASS_NORMAL_FORMAT,
+} from '../prepass/view-prepass-targets';
 import { RenderSet } from '../render-set';
 import { Core3dLabel } from '../render-graph/core-3d';
 import type { PhaseItem3d } from '../render-graph/phase-3d';
@@ -39,8 +43,13 @@ import { alphaModeKey } from './material';
 import type { MaterialHandle } from './materials';
 import { Materials } from './materials';
 import { MeshMaterial3d } from './mesh-material-3d';
-import { INSTANCE_LAYOUT } from './instance-layout';
+import {
+  INSTANCE_LAYOUT,
+  packPreviousInstanceTransform,
+  PREVIOUS_INSTANCE_LAYOUT,
+} from './instance-layout';
 import { MeshInstanceBuffer } from './mesh-instance-buffer';
+import { MeshPreviousInstanceBuffer } from './mesh-previous-instance-buffer';
 import type { AlphaBucket, InstanceEntry, InstancedDrawPayload } from './instance-batching';
 import { makeInstancedDraw, packInstancedBatches } from './instance-batching';
 import { prepareMeshRetained, RetainedMeshBuffer } from './mesh-prepare-retained';
@@ -356,12 +365,32 @@ class MaterialPluginState<M extends Material> {
   bindGroupLayout!: BindGroupLayout;
   vertexModule!: ShaderModule;
   fragmentModule!: ShaderModule;
+  /**
+   * Vertex/fragment shader module variant compiled with the
+   * `PREPASS_MOTION_VECTOR` define active. Lazily built the first time a
+   * motion-vector prepass pipeline is requested for this material — the
+   * variant declares the previous-instance vertex attributes at
+   * `@location(16..19)` and the `fs_prepass_motion` /
+   * `fs_prepass_normal_motion` fragment entries. Materials without motion
+   * support never trigger the compile.
+   */
+  motionVertexModule: ShaderModule | undefined;
+  motionFragmentModule: ShaderModule | undefined;
+  vertexShaderRef!: ShaderRef;
+  fragmentShaderRef!: ShaderRef;
   vertexEntryPoint = 'vs_main';
   fragmentEntryPoint = 'fs_main';
   pipelineLayout: PipelineLayout | undefined;
   prepassPipelineLayout: PipelineLayout | undefined;
   specialized!: SpecializedRenderPipelines<SpecializeContext>;
   readonly instanceBuffer = new MeshInstanceBuffer();
+  /**
+   * Sibling of {@link instanceBuffer} carrying each entity's previous-frame
+   * model matrix for motion-vector prepass reconstruction. Allocated lazily on
+   * the first frame at least one active camera has `MotionVectorPrepass`
+   * active and at least one opt-in material participates.
+   */
+  readonly previousInstanceBuffer = new MeshPreviousInstanceBuffer();
   readonly retainedBuffer = new RetainedMeshBuffer<M>(MaterialPluginState.depthOrderedBuckets);
   scratch = new ArrayBuffer(1024);
   app!: App;
@@ -411,6 +440,8 @@ class MaterialPluginState<M extends Material> {
 
     const vertexRef = this.materialClass.vertexShader?.() ?? ({ kind: 'default' } as const);
     const fragmentRef = this.materialClass.fragmentShader?.() ?? ({ kind: 'default' } as const);
+    this.vertexShaderRef = vertexRef;
+    this.fragmentShaderRef = fragmentRef;
     this.vertexModule = compileShaderFromRef(
       cache as PipelineCache,
       registry as ShaderRegistry,
@@ -489,6 +520,19 @@ class MaterialPluginState<M extends Material> {
       | Materials<M>
       | undefined;
 
+    // Detect whether any active prepass camera has motion-vector enabled —
+    // if not, the previous-instance buffer is neither allocated nor packed,
+    // and InstanceEntry.previousModel stays undefined.
+    let motionActive = false;
+    if (prepassFlagsByCamera !== undefined) {
+      for (const f of prepassFlagsByCamera.map.values()) {
+        if (f.motionVector) {
+          motionActive = true;
+          break;
+        }
+      }
+    }
+
     // Collect one entry per (visible entity × view), then batch by
     // (mesh, material). Pipeline / material bind group / mesh slices are
     // constant across a group, so the batch carries them once.
@@ -499,6 +543,7 @@ class MaterialPluginState<M extends Material> {
       const depthFormat = view.depth?.format;
       const v = view.viewMatrix as Float32Array;
       for (const row of renderables.entries()) {
+        const entity = row[0] as Entity;
         const mesh3d = row[1] as Mesh3d;
         const meshMat = row[2] as MeshMaterial3d<M>;
         const gt = row[3] as GlobalTransform;
@@ -544,14 +589,27 @@ class MaterialPluginState<M extends Material> {
 
         const bucket: AlphaBucket =
           alphaMode === 'opaque' ? 'opaque' : alphaMode === 'blend' ? 'blend' : 'mask';
-        entries.push({
+        // Read the previous-frame world matrix only when motion is active.
+        // Falls back to the current matrix when the component is absent —
+        // the Mesh3d insert hook installed by PrepassPlugin auto-attaches it
+        // for every 3D renderable, so the absent case is unreachable in
+        // practice; the fallback exists to keep the previous-instance buffer
+        // in lockstep with the current one (skipping would break indexing).
+        let previousModel: Mat4 | undefined;
+        if (motionActive) {
+          const prevGt = app.world.getComponent(entity, PreviousGlobalTransform);
+          previousModel = (prevGt?.matrix ?? gt.matrix) as Mat4;
+        }
+        const entry: InstanceEntry = {
           cameraEntity,
           bucket,
           groupKey: `${mesh3d.handle}/${meshMat.handle}`,
           depth: sortDepth,
           model: gt.matrix as Mat4,
           payload: { pipeline, materialBindGroup: prepared.bindGroup, vertexSlice, indexSlice, renderMesh },
-        });
+          ...(previousModel !== undefined ? { previousModel } : {}),
+        };
+        entries.push(entry);
       }
     }
     if (entries.length === 0) return;
@@ -570,6 +628,31 @@ class MaterialPluginState<M extends Material> {
       app.renderer.writeBuffer(buffer, 0, this.instanceBuffer.scratchF32.subarray(0, cursorFloats) as unknown as BufferSource);
     }
 
+    // Pack the previous-instance buffer in lockstep with `entries`'s now-
+    // sorted order so `firstInstance + count` indexes both buffers identically
+    // for any motion-vector prepass batch.
+    let previousInstanceGpuBuffer: import('@retro-engine/renderer-core').Buffer | undefined;
+    if (motionActive) {
+      this.previousInstanceBuffer.ensureCapacity(app.renderer, entries.length);
+      let prevCursor = 0;
+      for (const e of entries) {
+        prevCursor += packPreviousInstanceTransform(
+          this.previousInstanceBuffer.scratchF32,
+          prevCursor,
+          (e.previousModel ?? e.model) as Mat4,
+        );
+      }
+      this.previousInstanceBuffer.count = entries.length;
+      previousInstanceGpuBuffer = this.previousInstanceBuffer.buffer!;
+      if (prevCursor > 0) {
+        app.renderer.writeBuffer(
+          previousInstanceGpuBuffer,
+          0,
+          this.previousInstanceBuffer.scratchF32.subarray(0, prevCursor) as unknown as BufferSource,
+        );
+      }
+    }
+
     for (const batch of batches) {
       const draw = makeInstancedDraw(batch.payload, buffer, batch.firstInstance, batch.count);
       const item: PhaseItem3d = { sourceEntity: batch.cameraEntity, sortDepth: batch.sortDepth, draw };
@@ -585,10 +668,10 @@ class MaterialPluginState<M extends Material> {
     // Prepass: per-camera, per-material opt-in. For every camera with at
     // least one prepass marker we walk the same entries collected above,
     // re-key on the prepass flag intersection, and push items into
-    // `phases.prepass` using a depth-only (or, in later steps, depth +
-    // normal / motion-vector) pipeline variant. The instance buffer is
-    // **reused** — both the opaque and prepass batches index into the same
-    // packed transforms, so we pay zero extra upload for the prepass.
+    // `phases.prepass` using a depth-only (or depth + normal /
+    // motion-vector) pipeline variant. The instance buffer is **reused** —
+    // both the opaque and prepass batches index into the same packed
+    // transforms, so we pay zero extra upload for the prepass.
     if (prepassFlagsByCamera === undefined || prepassFlagsByCamera.map.size === 0) return;
     this.queuePrepassFromEntries(
       app,
@@ -598,6 +681,7 @@ class MaterialPluginState<M extends Material> {
       phases,
       prepassFlagsByCamera,
       buffer,
+      previousInstanceGpuBuffer,
     );
   }
 
@@ -609,6 +693,7 @@ class MaterialPluginState<M extends Material> {
     phases: ViewPhases3d,
     prepassFlagsByCamera: PrepassFlagsByCamera,
     instanceBuffer: import('@retro-engine/renderer-core').Buffer,
+    previousInstanceBuffer: import('@retro-engine/renderer-core').Buffer | undefined,
   ): void {
     // Per-camera enabled flags lookup keeps the cost O(views) at the start.
     const flagsByEntity = prepassFlagsByCamera.map;
@@ -657,19 +742,26 @@ class MaterialPluginState<M extends Material> {
       };
       const depthBias = materialInstance?.depthBias?.() ?? 0;
       const pipeline = this.specialized.get({ key, colorFormat, depthFormat, depthBias, layout });
+      // Wire the previous-instance buffer onto this payload only when the
+      // pipeline variant actually consumes it (motion-vector channel). Other
+      // prepass variants leave slot 2 unbound — `makeInstancedDraw` skips
+      // the `setVertexBuffer(2, …)` call when the field is undefined.
+      const payloadPrevBuf = flags.motionVector ? previousInstanceBuffer : undefined;
+      const payload: InstancedDrawPayload = {
+        pipeline,
+        materialBindGroup: entry.payload.materialBindGroup,
+        vertexSlice: entry.payload.vertexSlice,
+        indexSlice: entry.payload.indexSlice,
+        renderMesh: entry.payload.renderMesh,
+        ...(payloadPrevBuf !== undefined ? { previousInstanceBuffer: payloadPrevBuf } : {}),
+      };
       prepassEntries.push({
         cameraEntity: entry.cameraEntity,
         bucket: 'opaque',
         groupKey: entry.groupKey,
         depth: entry.depth,
         model: entry.model,
-        payload: {
-          pipeline,
-          materialBindGroup: entry.payload.materialBindGroup,
-          vertexSlice: entry.payload.vertexSlice,
-          indexSlice: entry.payload.indexSlice,
-          renderMesh: entry.payload.renderMesh,
-        },
+        payload,
       });
     }
     if (prepassEntries.length === 0) return;
@@ -884,13 +976,29 @@ class MaterialPluginState<M extends Material> {
       });
     }
 
+    const supportsNormalOut = this.materialSupportsPrepassNormalFragment();
+    const supportsMotionOut = this.materialSupportsPrepassMotionFragment();
+    const writesNormal = flags.normal && supportsNormalOut;
+    const writesMotion = flags.motionVector && supportsMotionOut;
+
+    // The motion-enabled shader module variant declares the previous-instance
+    // attributes at @location(16..19) and the motion fragment entries —
+    // compile it lazily on the first motion-vector request and reuse.
+    const modules = writesMotion
+      ? this.ensureMotionShaderModules()
+      : { vertex: this.vertexModule, fragment: this.fragmentModule };
+
+    const vertexBuffers = writesMotion
+      ? [ctx.layout, INSTANCE_LAYOUT, PREVIOUS_INSTANCE_LAYOUT]
+      : [ctx.layout, INSTANCE_LAYOUT];
+
     const descriptor: RenderPipelineDescriptor = {
       label: `material#${this.materialClass.name}#prepass#${flags.depth ? 'd' : ''}${flags.normal ? 'n' : ''}${flags.motionVector ? 'm' : ''}`,
       layout: this.prepassPipelineLayout,
       vertex: {
-        module: this.vertexModule,
+        module: modules.vertex,
         entryPoint: 'vs_prepass',
-        buffers: [ctx.layout, INSTANCE_LAYOUT],
+        buffers: vertexBuffers,
       },
       primitive: {
         topology: 'triangle-list',
@@ -906,22 +1014,70 @@ class MaterialPluginState<M extends Material> {
         depthBias: ctx.depthBias,
       };
     }
-    // When the material writes the normal channel, attach the rgba16float
-    // fragment output. Motion-vector output is wired in a follow-on slice;
-    // depth-only pipelines keep `fragment: undefined`. We only wire the
-    // fragment stage if the material's shader actually exposes
-    // `fs_prepass_normal` — that lets unlit materials (depth-only by
-    // intent) participate in a depth-only prepass without inheriting a
-    // fragment they cannot satisfy.
-    const supportsNormalOut = this.materialSupportsPrepassNormalFragment();
-    if (flags.normal && supportsNormalOut) {
+    // Fragment selection by intersected flags:
+    //   normal-only             → fs_prepass_normal (single rgba16float target)
+    //   motion-only             → fs_prepass_motion (single rg16float target)
+    //   normal + motion         → fs_prepass_normal_motion (both targets, one fragment)
+    //   depth-only              → fragment undefined (no color attachment)
+    // The combined `normal + motion` fragment keeps the cardinality at one
+    // prepass pipeline per opt-in material per flag combination — splitting
+    // into two pipelines (one normal, one motion) would double the vertex
+    // work for cameras that want both, which is the TAA-friendly default.
+    if (writesNormal && writesMotion) {
       descriptor.fragment = {
-        module: this.fragmentModule,
+        module: modules.fragment,
+        entryPoint: 'fs_prepass_normal_motion',
+        targets: [
+          { format: PREPASS_NORMAL_FORMAT },
+          { format: PREPASS_MOTION_VECTOR_FORMAT },
+        ],
+      };
+    } else if (writesNormal) {
+      descriptor.fragment = {
+        module: modules.fragment,
         entryPoint: 'fs_prepass_normal',
         targets: [{ format: PREPASS_NORMAL_FORMAT }],
       };
+    } else if (writesMotion) {
+      descriptor.fragment = {
+        module: modules.fragment,
+        entryPoint: 'fs_prepass_motion',
+        targets: [{ format: PREPASS_MOTION_VECTOR_FORMAT }],
+      };
     }
     return descriptor;
+  }
+
+  /**
+   * Lazily compile the `PREPASS_MOTION_VECTOR`-defined variant of this
+   * material's vertex and fragment modules. The variant declares the
+   * previous-instance attributes at `@location(16..19)` and exposes the
+   * `fs_prepass_motion` / `fs_prepass_normal_motion` fragment entries.
+   * Materials that never produce a motion-vector prepass pipeline never
+   * trigger this path.
+   */
+  private ensureMotionShaderModules(): { vertex: ShaderModule; fragment: ShaderModule } {
+    if (this.motionVertexModule !== undefined && this.motionFragmentModule !== undefined) {
+      return { vertex: this.motionVertexModule, fragment: this.motionFragmentModule };
+    }
+    const cache = this.app.getResource(PipelineCache) as PipelineCache;
+    const registry = this.app.getResource(ShaderRegistry) as ShaderRegistry;
+    const defines = { PREPASS_MOTION_VECTOR: true } as const;
+    this.motionVertexModule = compileShaderFromRef(
+      cache,
+      registry,
+      this.vertexShaderRef,
+      `${this.materialClass.name}-vertex+motion`,
+      defines,
+    );
+    this.motionFragmentModule = compileShaderFromRef(
+      cache,
+      registry,
+      this.fragmentShaderRef,
+      `${this.materialClass.name}-fragment+motion`,
+      defines,
+    );
+    return { vertex: this.motionVertexModule, fragment: this.motionFragmentModule };
   }
 
   private materialSupportsPrepassNormalFragment(): boolean {
@@ -934,6 +1090,16 @@ class MaterialPluginState<M extends Material> {
     // material may opt into normals without shipping the fragment yet.
     return this.materialClass.name === 'StandardMaterial';
   }
+
+  private materialSupportsPrepassMotionFragment(): boolean {
+    // Sibling of `materialSupportsPrepassNormalFragment`. Materials that opt
+    // into the motion-vector channel via `prepassWrites()` must also expose
+    // `fs_prepass_motion` and `fs_prepass_normal_motion` in their shader, and
+    // declare the previous-instance attributes at `@location(16..19)` under
+    // `#ifdef PREPASS_MOTION_VECTOR`. `StandardMaterial` does (pbr.wgsl);
+    // `UnlitMaterial` does not.
+    return this.materialClass.name === 'StandardMaterial';
+  }
 }
 
 const compileShaderFromRef = (
@@ -941,6 +1107,7 @@ const compileShaderFromRef = (
   registry: ShaderRegistry,
   ref: ShaderRef,
   fallbackLabel: string,
+  defines?: Record<string, string | number | boolean>,
 ): ShaderModule => {
   if (ref.kind === 'default') {
     throw new Error(
@@ -953,7 +1120,7 @@ const compileShaderFromRef = (
       `MaterialPlugin: shader module '${ref.name}' is not registered with ShaderRegistry; register it from the material's plugin or before adding the plugin.`,
     );
   }
-  return cache.compileShader(new Shader(source, { label: ref.name }));
+  return cache.compileShader(new Shader(source, { label: ref.name }), defines);
 };
 
 const vertexLayoutDigestCache = new WeakMap<VertexBufferLayout, string>();

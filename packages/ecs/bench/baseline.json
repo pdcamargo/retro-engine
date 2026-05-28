@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "package": "@retro-engine/ecs",
-  "captured_at": "2026-05-27T01:04:17.252Z",
+  "captured_at": "2026-05-28T19:40:14.988Z",
   "runtime": "bun@1.3.14",
   "benches": [
     {
@@ -10,9 +10,9 @@
       "args": {
         "size": 1000
       },
-      "mean_ns": 21025.78852601515,
-      "p99_ns": 70200,
-      "samples": 32212
+      "mean_ns": 20941.005413766434,
+      "p99_ns": 52000,
+      "samples": 32325
     },
     {
       "key": "query iter $size entities (1 cmp)[size=10000]",
@@ -20,9 +20,9 @@
       "args": {
         "size": 10000
       },
-      "mean_ns": 205634.4705882353,
-      "p99_ns": 704400,
-      "samples": 3400
+      "mean_ns": 201482.80529953918,
+      "p99_ns": 837400,
+      "samples": 3472
     },
     {
       "key": "query iter $size entities (1 cmp)[size=100000]",
@@ -30,9 +30,9 @@
       "args": {
         "size": 100000
       },
-      "mean_ns": 2097673.6363636362,
-      "p99_ns": 4032800,
-      "samples": 330
+      "mean_ns": 2188731.230283912,
+      "p99_ns": 4132700,
+      "samples": 317
     },
     {
       "key": "query iter $size entities (3 cmps)[size=1000]",
@@ -40,9 +40,9 @@
       "args": {
         "size": 1000
       },
-      "mean_ns": 23686.80047390062,
-      "p99_ns": 45200,
-      "samples": 28698
+      "mean_ns": 23432.220689655172,
+      "p99_ns": 47100,
+      "samples": 29000
     },
     {
       "key": "query iter $size entities (3 cmps)[size=10000]",
@@ -50,9 +50,9 @@
       "args": {
         "size": 10000
       },
-      "mean_ns": 264360.55219364597,
-      "p99_ns": 745100,
-      "samples": 2644
+      "mean_ns": 245295.96632760434,
+      "p99_ns": 850400,
+      "samples": 2851
     },
     {
       "key": "query iter $size entities (3 cmps)[size=100000]",
@@ -60,121 +60,121 @@
       "args": {
         "size": 100000
       },
-      "mean_ns": 2889516.1016949154,
-      "p99_ns": 5366400,
-      "samples": 236
+      "mean_ns": 2621599.239543726,
+      "p99_ns": 5241700,
+      "samples": 263
     },
     {
       "key": "query iter 100k entities across 5 archetypes (1 cmp)",
       "group": null,
       "args": {},
-      "mean_ns": 2131099.3846153845,
-      "p99_ns": 3380500,
-      "samples": 325
+      "mean_ns": 2147726.479750779,
+      "p99_ns": 4512100,
+      "samples": 321
     },
     {
       "key": "query iter 100k entities with-filter (1 of 5 archetypes)",
       "group": null,
       "args": {},
-      "mean_ns": 444116.4340101523,
-      "p99_ns": 1028900,
-      "samples": 1576
+      "mean_ns": 427652.3576240049,
+      "p99_ns": 1255700,
+      "samples": 1633
     },
     {
       "key": "query iter 100k entities without-filter (4 of 5 archetypes)",
       "group": null,
       "args": {},
-      "mean_ns": 1803613.8020833333,
-      "p99_ns": 3542300,
-      "samples": 384
+      "mean_ns": 1844026.4,
+      "p99_ns": 4514300,
+      "samples": 375
     },
     {
       "key": "query.count() 100k entities",
       "group": null,
       "args": {},
-      "mean_ns": 1841733.3333333333,
-      "p99_ns": 2888100,
-      "samples": 378
+      "mean_ns": 1864282.3056300269,
+      "p99_ns": 3036100,
+      "samples": 373
     },
     {
       "key": "query full-iter 100k entities (no body)",
       "group": null,
       "args": {},
-      "mean_ns": 1907851.2328767122,
-      "p99_ns": 2872000,
-      "samples": 365
+      "mean_ns": 1874470.0808625338,
+      "p99_ns": 2961400,
+      "samples": 371
     },
     {
       "key": "entries() entity+3cmp @ 100k (allocating)",
       "group": null,
       "args": {},
-      "mean_ns": 5118426.865671642,
-      "p99_ns": 7723000,
-      "samples": 134
+      "mean_ns": 3117855,
+      "p99_ns": 7622800,
+      "samples": 220
     },
     {
       "key": "forEach entity+3cmp @ 100k (non-allocating)",
       "group": null,
       "args": {},
-      "mean_ns": 1153539.534883721,
-      "p99_ns": 2942200,
-      "samples": 602
+      "mean_ns": 625157.0143884892,
+      "p99_ns": 854100,
+      "samples": 1112
     },
     {
       "key": "spawn 10k entities (1 cmp) into fresh world",
       "group": null,
       "args": {},
-      "mean_ns": 6873046.464646464,
-      "p99_ns": 9479700,
-      "samples": 99
+      "mean_ns": 6639185.294117647,
+      "p99_ns": 9463600,
+      "samples": 102
     },
     {
       "key": "spawn 10k entities (3 cmps) into fresh world",
       "group": null,
       "args": {},
-      "mean_ns": 11899725.454545455,
-      "p99_ns": 15571000,
-      "samples": 55
+      "mean_ns": 10944426.229508197,
+      "p99_ns": 12684000,
+      "samples": 61
     },
     {
       "key": "spawn 10k entities (3 cmps, array form) into fresh world",
       "group": null,
       "args": {},
-      "mean_ns": 13042170,
-      "p99_ns": 17536800,
-      "samples": 50
+      "mean_ns": 11638673.684210526,
+      "p99_ns": 14980800,
+      "samples": 57
     },
     {
       "key": "despawn 10k entities from a 10k-entity world",
       "group": null,
       "args": {},
-      "mean_ns": 7831160.465116279,
-      "p99_ns": 11086400,
-      "samples": 86
+      "mean_ns": 7406535.164835165,
+      "p99_ns": 10204500,
+      "samples": 91
     },
     {
       "key": "insertBundle in-place 10k entities (same archetype, 1 cmp)",
       "group": null,
       "args": {},
-      "mean_ns": 9183006.849315068,
-      "p99_ns": 11992700,
-      "samples": 73
+      "mean_ns": 8961773.333333334,
+      "p99_ns": 11358000,
+      "samples": 75
     },
     {
       "key": "insertBundle with archetype transition 10k entities",
       "group": null,
       "args": {},
-      "mean_ns": 20373851.612903226,
-      "p99_ns": 24923600,
+      "mean_ns": 20434632.258064516,
+      "p99_ns": 24872400,
       "samples": 31
     },
     {
       "key": "removeComponent 10k entities (forces archetype transition)",
       "group": null,
       "args": {},
-      "mean_ns": 14612931.111111112,
-      "p99_ns": 17778700,
-      "samples": 45
+      "mean_ns": 13436295.918367347,
+      "p99_ns": 17193100,
+      "samples": 49
     },
     {
       "key": "Changed<Position> filter @ $pct% changed (100k rows)[pct=0]",
@@ -182,9 +182,9 @@
       "args": {
         "pct": 0
       },
-      "mean_ns": 823219.741480611,
-      "p99_ns": 1349600,
-      "samples": 851
+      "mean_ns": 776914.5232815965,
+      "p99_ns": 1420800,
+      "samples": 902
     },
     {
       "key": "Changed<Position> filter @ $pct% changed (100k rows)[pct=1]",
@@ -192,9 +192,9 @@
       "args": {
         "pct": 1
       },
-      "mean_ns": 499989.37232524966,
-      "p99_ns": 900200,
-      "samples": 1402
+      "mean_ns": 466409.9667774086,
+      "p99_ns": 704200,
+      "samples": 1505
     },
     {
       "key": "Changed<Position> filter @ $pct% changed (100k rows)[pct=10]",
@@ -202,9 +202,9 @@
       "args": {
         "pct": 10
       },
-      "mean_ns": 644179.1360294118,
-      "p99_ns": 1083300,
-      "samples": 1088
+      "mean_ns": 610237.8378378379,
+      "p99_ns": 1013300,
+      "samples": 1147
     },
     {
       "key": "Changed<Position> filter @ $pct% changed (100k rows)[pct=100]",
@@ -212,49 +212,49 @@
       "args": {
         "pct": 100
       },
-      "mean_ns": 2324851.5050167223,
-      "p99_ns": 3596200,
-      "samples": 299
+      "mean_ns": 2254873.3766233767,
+      "p99_ns": 3506100,
+      "samples": 308
     },
     {
       "key": "Added<Position> filter @ all-fresh (100k rows since 0)",
       "group": null,
       "args": {},
-      "mean_ns": 2357944.5578231295,
-      "p99_ns": 3902100,
-      "samples": 294
+      "mean_ns": 2192662.974683544,
+      "p99_ns": 3375100,
+      "samples": 316
     },
     {
       "key": "Added<Position> filter @ none-since-snapshot (100k rows)",
       "group": null,
       "args": {},
-      "mean_ns": 502259.3414459556,
-      "p99_ns": 1080800,
-      "samples": 1397
+      "mean_ns": 463171.164021164,
+      "p99_ns": 1166300,
+      "samples": 1512
     },
     {
       "key": "markChanged 10k entities",
       "group": null,
       "args": {},
-      "mean_ns": 98691.78702917021,
-      "p99_ns": 197800,
-      "samples": 7062
+      "mean_ns": 102057.53184014054,
+      "p99_ns": 205900,
+      "samples": 6831
     },
     {
       "key": "drainRemovedBuffer after 10k despawns",
       "group": null,
       "args": {},
-      "mean_ns": 8447675.94936709,
-      "p99_ns": 12151600,
-      "samples": 79
+      "mean_ns": 7957380,
+      "p99_ns": 11828100,
+      "samples": 85
     },
     {
       "key": "getRemovedComponents after 10k removeComponent",
       "group": null,
       "args": {},
-      "mean_ns": 9019848.64864865,
-      "p99_ns": 12752100,
-      "samples": 74
+      "mean_ns": 8563173.41772152,
+      "p99_ns": 10989700,
+      "samples": 79
     }
   ]
 }

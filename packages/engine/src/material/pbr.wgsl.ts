@@ -77,6 +77,12 @@ struct VsIn {
   @location(13) inv_t_c1: vec4<f32>,
   @location(14) inv_t_c2: vec4<f32>,
   @location(15) inv_t_c3: vec4<f32>,
+#ifdef PREPASS_MOTION_VECTOR
+  @location(16) prev_model_c0: vec4<f32>,
+  @location(17) prev_model_c1: vec4<f32>,
+  @location(18) prev_model_c2: vec4<f32>,
+  @location(19) prev_model_c3: vec4<f32>,
+#endif
 };
 
 struct VsOut {
@@ -213,6 +219,10 @@ struct VsPrepassOut {
   @builtin(position) clip_position: vec4<f32>,
   @location(0) world_normal: vec3<f32>,
   @location(1) uv: vec2<f32>,
+#ifdef PREPASS_MOTION_VECTOR
+  @location(2) curr_clip: vec4<f32>,
+  @location(3) prev_clip: vec4<f32>,
+#endif
 };
 
 struct FsPrepassNormalOut {
@@ -225,9 +235,15 @@ fn vs_prepass(in: VsIn) -> VsPrepassOut {
   let model = mat4x4<f32>(in.model_c0, in.model_c1, in.model_c2, in.model_c3);
   let inverse_transpose_model = mat4x4<f32>(in.inv_t_c0, in.inv_t_c1, in.inv_t_c2, in.inv_t_c3);
   let world_pos = model * vec4<f32>(in.position, 1.0);
-  out.clip_position = view.view_proj * world_pos;
+  let clip = view.view_proj * world_pos;
+  out.clip_position = clip;
   out.world_normal = normalize((inverse_transpose_model * vec4<f32>(in.normal, 0.0)).xyz);
   out.uv = in.uv;
+#ifdef PREPASS_MOTION_VECTOR
+  let prev_model = mat4x4<f32>(in.prev_model_c0, in.prev_model_c1, in.prev_model_c2, in.prev_model_c3);
+  out.curr_clip = clip;
+  out.prev_clip = view.prev_view_proj * prev_model * vec4<f32>(in.position, 1.0);
+#endif
   return out;
 }
 
@@ -239,4 +255,26 @@ fn fs_prepass_normal(in: VsPrepassOut) -> FsPrepassNormalOut {
   out.normal_roughness = encode_normal_roughness(in.world_normal, roughness);
   return out;
 }
+
+#ifdef PREPASS_MOTION_VECTOR
+struct FsPrepassNormalMotionOut {
+  @location(0) normal_roughness: vec4<f32>,
+  @location(1) motion_vector: vec2<f32>,
+};
+
+@fragment
+fn fs_prepass_motion(in: VsPrepassOut) -> @location(0) vec2<f32> {
+  return compute_motion_vector(in.prev_clip, in.curr_clip);
+}
+
+@fragment
+fn fs_prepass_normal_motion(in: VsPrepassOut) -> FsPrepassNormalMotionOut {
+  var out: FsPrepassNormalMotionOut;
+  let mr_sample = textureSample(metallic_roughness_texture, material_sampler, in.uv);
+  let roughness = clamp(material.roughness * mr_sample.g, 0.04, 1.0);
+  out.normal_roughness = encode_normal_roughness(in.world_normal, roughness);
+  out.motion_vector = compute_motion_vector(in.prev_clip, in.curr_clip);
+  return out;
+}
+#endif
 ` as const;

@@ -30,6 +30,7 @@ import './light-2d-shadow.bench';
 import './light-3d.bench';
 import './shadow-3d.bench';
 import './tonemapping.bench';
+import './prepass-motion-vectors.bench';
 
 interface NormalizedBench {
   readonly key: string;
