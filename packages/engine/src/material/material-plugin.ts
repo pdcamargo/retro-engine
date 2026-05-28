@@ -18,6 +18,9 @@ import type { App } from '../index';
 import type { AllocatorSlice, MeshHandle } from '../mesh';
 import { MeshAllocator, Meshes, Mesh3d, RenderMeshes } from '../mesh';
 import type { PluginObject } from '../plugin';
+import { intersectPrepassFlags, prepassFlagsAny, type PrepassFlags } from '../prepass/components';
+import { PrepassFlagsByCamera } from '../prepass/prepass-plugin';
+import { PREPASS_NORMAL_FORMAT } from '../prepass/view-prepass-targets';
 import { RenderSet } from '../render-set';
 import { Core3dLabel } from '../render-graph/core-3d';
 import type { PhaseItem3d } from '../render-graph/phase-3d';
@@ -251,6 +254,7 @@ export class MaterialPlugin<M extends Material> implements PluginObject {
           allocator as unknown as MeshAllocator,
           phases,
           viewBindGroupCache as unknown as ViewBindGroupCache,
+          app.getResource(PrepassFlagsByCamera),
         );
       },
       { set: RenderSet.Queue },
@@ -323,6 +327,18 @@ interface SpecializeContext {
   readonly layout: VertexBufferLayout;
 }
 
+const prepassKeyPart = (flags: PrepassFlags | undefined): string => {
+  if (flags === undefined) return 'pp=none';
+  return `pp=${flags.depth ? 'd' : ''}${flags.normal ? 'n' : ''}${flags.motionVector ? 'm' : ''}`;
+};
+
+const prepassReadableKeyPart = (
+  flags: { normal: boolean; motionVector: boolean } | undefined,
+): string => {
+  if (flags === undefined) return 'pr=none';
+  return `pr=${flags.normal ? 'n' : ''}${flags.motionVector ? 'm' : ''}`;
+};
+
 /**
  * Closure-captured per-plugin state. One instance per `MaterialPlugin<M>`.
  *
@@ -343,6 +359,7 @@ class MaterialPluginState<M extends Material> {
   vertexEntryPoint = 'vs_main';
   fragmentEntryPoint = 'fs_main';
   pipelineLayout: PipelineLayout | undefined;
+  prepassPipelineLayout: PipelineLayout | undefined;
   specialized!: SpecializedRenderPipelines<SpecializeContext>;
   readonly instanceBuffer = new MeshInstanceBuffer();
   readonly retainedBuffer = new RetainedMeshBuffer<M>(MaterialPluginState.depthOrderedBuckets);
@@ -411,7 +428,7 @@ class MaterialPluginState<M extends Material> {
       cache as PipelineCache,
       (ctx) => this.specialize(ctx),
       (ctx) =>
-        `${alphaModeKey(ctx.key.alphaMode)}|hdr=${ctx.key.hdr}|msaa=${ctx.key.msaaSamples}|vl=${ctx.key.vertexLayoutDigest}|cf=${ctx.colorFormat}|df=${ctx.depthFormat ?? 'none'}|db=${ctx.depthBias}`,
+        `${alphaModeKey(ctx.key.alphaMode)}|hdr=${ctx.key.hdr}|msaa=${ctx.key.msaaSamples}|vl=${ctx.key.vertexLayoutDigest}|cf=${ctx.colorFormat}|df=${ctx.depthFormat ?? 'none'}|db=${ctx.depthBias}|${prepassKeyPart(ctx.key.prepass)}|${prepassReadableKeyPart(ctx.key.prepassReadable)}`,
     );
   }
 
@@ -459,6 +476,7 @@ class MaterialPluginState<M extends Material> {
     allocator: MeshAllocator,
     phases: ViewPhases3d,
     viewBindGroupCache: ViewBindGroupCache,
+    prepassFlagsByCamera?: PrepassFlagsByCamera,
   ): void {
     if (viewBindGroupCache.layout === undefined) {
       // CameraPlugin.prepareCameras lazily allocates the view layout on first
@@ -563,6 +581,122 @@ class MaterialPluginState<M extends Material> {
         phases.pushAlphaMask(batch.cameraEntity, item);
       }
     }
+
+    // Prepass: per-camera, per-material opt-in. For every camera with at
+    // least one prepass marker we walk the same entries collected above,
+    // re-key on the prepass flag intersection, and push items into
+    // `phases.prepass` using a depth-only (or, in later steps, depth +
+    // normal / motion-vector) pipeline variant. The instance buffer is
+    // **reused** — both the opaque and prepass batches index into the same
+    // packed transforms, so we pay zero extra upload for the prepass.
+    if (prepassFlagsByCamera === undefined || prepassFlagsByCamera.map.size === 0) return;
+    this.queuePrepassFromEntries(
+      app,
+      entries,
+      cameras,
+      mainWorldMaterials,
+      phases,
+      prepassFlagsByCamera,
+      buffer,
+    );
+  }
+
+  private queuePrepassFromEntries(
+    _app: App,
+    entries: readonly InstanceEntry[],
+    cameras: SortedCameras,
+    mainWorldMaterials: Materials<M> | undefined,
+    phases: ViewPhases3d,
+    prepassFlagsByCamera: PrepassFlagsByCamera,
+    instanceBuffer: import('@retro-engine/renderer-core').Buffer,
+  ): void {
+    // Per-camera enabled flags lookup keeps the cost O(views) at the start.
+    const flagsByEntity = prepassFlagsByCamera.map;
+    const liveCameraFlags = new Map<number, PrepassFlags>();
+    for (const view of cameras.views) {
+      const sourceEntity = view.sourceEntity as unknown as Entity;
+      const f = flagsByEntity.get(sourceEntity);
+      if (f !== undefined) liveCameraFlags.set(view.sourceEntity, f);
+    }
+    if (liveCameraFlags.size === 0) return;
+
+    // Re-key each entry against its camera's enabled prepass flags ∩ the
+    // material's `prepassWrites()`; emit a prepass entry only when the
+    // intersection has at least one channel set. The mesh / instance slice /
+    // material bind group are shared with the opaque entry; only the
+    // pipeline differs.
+    const prepassEntries: InstanceEntry[] = [];
+    for (const entry of entries) {
+      const cameraFlags = liveCameraFlags.get(entry.cameraEntity);
+      if (cameraFlags === undefined) continue;
+      // Recover the material handle from the groupKey ("meshHandle/materialHandle").
+      const slash = entry.groupKey.indexOf('/');
+      const materialHandle = Number(
+        entry.groupKey.slice(slash + 1),
+      ) as unknown as MaterialHandle<M>;
+      const materialInstance = mainWorldMaterials?.get(materialHandle);
+      const matFlags = materialInstance?.prepassWrites?.();
+      if (matFlags === undefined) continue;
+      const flags = intersectPrepassFlags(cameraFlags, matFlags);
+      if (!prepassFlagsAny(flags)) continue;
+
+      // Build the prepass pipeline for this entry's mesh layout + intersected
+      // flags. The opaque entry's payload exposes the renderMesh which
+      // carries the original layout digest.
+      const view = cameras.views.find((v) => (v.sourceEntity as number) === entry.cameraEntity);
+      if (view === undefined) continue;
+      const depthFormat = view.depth?.format;
+      const colorFormat = view.mainColorTarget.format;
+      const layout = entry.payload.renderMesh.layout.layout;
+      const key: MaterialPipelineKey = {
+        msaaSamples: 1,
+        hdr: view.hdr,
+        vertexLayoutDigest: vertexLayoutDigestFor(layout),
+        alphaMode: 'opaque',
+        prepass: flags,
+      };
+      const depthBias = materialInstance?.depthBias?.() ?? 0;
+      const pipeline = this.specialized.get({ key, colorFormat, depthFormat, depthBias, layout });
+      prepassEntries.push({
+        cameraEntity: entry.cameraEntity,
+        bucket: 'opaque',
+        groupKey: entry.groupKey,
+        depth: entry.depth,
+        model: entry.model,
+        payload: {
+          pipeline,
+          materialBindGroup: entry.payload.materialBindGroup,
+          vertexSlice: entry.payload.vertexSlice,
+          indexSlice: entry.payload.indexSlice,
+          renderMesh: entry.payload.renderMesh,
+        },
+      });
+    }
+    if (prepassEntries.length === 0) return;
+    // Re-pack into batches; instance ordering matches the opaque pack, so
+    // both batch sets index into the same shared `instanceBuffer` slices.
+    // The packer writes into `scratchF32`, but we ignore those bytes — we
+    // pass the SAME `instanceBuffer` and rely on the firstInstance/count
+    // pairing matching what the opaque pack wrote.
+    const { batches } = packInstancedBatches(
+      prepassEntries,
+      MaterialPluginState.depthOrderedBuckets,
+      this.instanceBuffer.scratchF32,
+    );
+    for (const batch of batches) {
+      const draw = makeInstancedDraw(
+        batch.payload,
+        instanceBuffer,
+        batch.firstInstance,
+        batch.count,
+      );
+      const item: PhaseItem3d = {
+        sourceEntity: batch.cameraEntity,
+        sortDepth: batch.sortDepth,
+        draw,
+      };
+      phases.pushPrepass(batch.cameraEntity, item);
+    }
   }
 
   /**
@@ -641,9 +775,18 @@ class MaterialPluginState<M extends Material> {
   /**
    * Build a {@link RenderPipelineDescriptor} for a given `SpecializeContext`,
    * threading the material's static `specialize` (when present) over the base
-   * descriptor.
+   * descriptor. When `ctx.key.prepass` is present, builds the prepass variant
+   * (vs_prepass entrypoint, depth-only attachments for the depth-only path)
+   * instead of the opaque/transparent variant.
    */
   specialize(ctx: SpecializeContext): RenderPipelineDescriptor {
+    if (ctx.key.prepass !== undefined) {
+      return this.specializePrepass(ctx, ctx.key.prepass);
+    }
+    return this.specializeOpaque(ctx);
+  }
+
+  private specializeOpaque(ctx: SpecializeContext): RenderPipelineDescriptor {
     const renderer = this.app.renderer;
     const viewLayout = (this.app.getResource(ViewBindGroupCache) as ViewBindGroupCache)
       .layout!;
@@ -713,6 +856,83 @@ class MaterialPluginState<M extends Material> {
     }
     this.materialClass.specialize?.(descriptor, ctx.layout, ctx.key);
     return descriptor;
+  }
+
+  /**
+   * Build the prepass variant pipeline for this material. Uses the material's
+   * `vs_prepass` entry point; for the depth-only path
+   * (`flags.normal === false && flags.motionVector === false`) the fragment
+   * stage is omitted entirely so no color attachment is required. Normal /
+   * motion-vector fragment outputs are added in later steps.
+   *
+   * The pipeline layout reuses the opaque layout (view + material + optional
+   * lights) so the same material bind group remains bound at @group(1).
+   */
+  private specializePrepass(
+    ctx: SpecializeContext,
+    flags: PrepassFlags,
+  ): RenderPipelineDescriptor {
+    const renderer = this.app.renderer;
+    const viewLayout = (this.app.getResource(ViewBindGroupCache) as ViewBindGroupCache).layout!;
+
+    // The prepass layout deliberately omits the lights bind group — shading
+    // is not performed in the prepass, so only view + material are needed.
+    if (this.prepassPipelineLayout === undefined) {
+      this.prepassPipelineLayout = renderer.createPipelineLayout({
+        label: `material#${this.materialClass.name}#prepass`,
+        bindGroupLayouts: [viewLayout, this.bindGroupLayout],
+      });
+    }
+
+    const descriptor: RenderPipelineDescriptor = {
+      label: `material#${this.materialClass.name}#prepass#${flags.depth ? 'd' : ''}${flags.normal ? 'n' : ''}${flags.motionVector ? 'm' : ''}`,
+      layout: this.prepassPipelineLayout,
+      vertex: {
+        module: this.vertexModule,
+        entryPoint: 'vs_prepass',
+        buffers: [ctx.layout, INSTANCE_LAYOUT],
+      },
+      primitive: {
+        topology: 'triangle-list',
+        cullMode: 'back',
+        frontFace: 'ccw',
+      },
+    };
+    if (ctx.depthFormat !== undefined) {
+      descriptor.depthStencil = {
+        format: ctx.depthFormat,
+        depthWriteEnabled: true,
+        depthCompare: 'less',
+        depthBias: ctx.depthBias,
+      };
+    }
+    // When the material writes the normal channel, attach the rgba16float
+    // fragment output. Motion-vector output is wired in a follow-on slice;
+    // depth-only pipelines keep `fragment: undefined`. We only wire the
+    // fragment stage if the material's shader actually exposes
+    // `fs_prepass_normal` — that lets unlit materials (depth-only by
+    // intent) participate in a depth-only prepass without inheriting a
+    // fragment they cannot satisfy.
+    const supportsNormalOut = this.materialSupportsPrepassNormalFragment();
+    if (flags.normal && supportsNormalOut) {
+      descriptor.fragment = {
+        module: this.fragmentModule,
+        entryPoint: 'fs_prepass_normal',
+        targets: [{ format: PREPASS_NORMAL_FORMAT }],
+      };
+    }
+    return descriptor;
+  }
+
+  private materialSupportsPrepassNormalFragment(): boolean {
+    // Heuristic: materials that opt into the normal channel via their
+    // `prepassWrites()` must also expose `fs_prepass_normal` in their shader.
+    // The `StandardMaterial` does (pbr.wgsl); `UnlitMaterial` does not.
+    // Materials default to opt-out via `prepassWrites?()` absent or returning
+    // `normal: false`; the queue does not request normal-output pipelines for
+    // them. So this guard primarily exists for forward-compat: a future
+    // material may opt into normals without shipping the fragment yet.
+    return this.materialClass.name === 'StandardMaterial';
   }
 }
 

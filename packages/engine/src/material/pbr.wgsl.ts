@@ -206,4 +206,37 @@ fn fs_main(in: VsOut) -> @location(0) vec4<f32> {
   let final_rgb = ambient + direct + material.emissive.rgb * emissive_sample.rgb;
   return vec4<f32>(final_rgb, base_color.a);
 }
+
+#import retro_engine::prepass
+
+struct VsPrepassOut {
+  @builtin(position) clip_position: vec4<f32>,
+  @location(0) world_normal: vec3<f32>,
+  @location(1) uv: vec2<f32>,
+};
+
+struct FsPrepassNormalOut {
+  @location(0) normal_roughness: vec4<f32>,
+};
+
+@vertex
+fn vs_prepass(in: VsIn) -> VsPrepassOut {
+  var out: VsPrepassOut;
+  let model = mat4x4<f32>(in.model_c0, in.model_c1, in.model_c2, in.model_c3);
+  let inverse_transpose_model = mat4x4<f32>(in.inv_t_c0, in.inv_t_c1, in.inv_t_c2, in.inv_t_c3);
+  let world_pos = model * vec4<f32>(in.position, 1.0);
+  out.clip_position = view.view_proj * world_pos;
+  out.world_normal = normalize((inverse_transpose_model * vec4<f32>(in.normal, 0.0)).xyz);
+  out.uv = in.uv;
+  return out;
+}
+
+@fragment
+fn fs_prepass_normal(in: VsPrepassOut) -> FsPrepassNormalOut {
+  var out: FsPrepassNormalOut;
+  let mr_sample = textureSample(metallic_roughness_texture, material_sampler, in.uv);
+  let roughness = clamp(material.roughness * mr_sample.g, 0.04, 1.0);
+  out.normal_roughness = encode_normal_roughness(in.world_normal, roughness);
+  return out;
+}
 ` as const;

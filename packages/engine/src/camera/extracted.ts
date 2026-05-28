@@ -1,4 +1,5 @@
 import type { Entity } from '@retro-engine/ecs';
+import { mat4 } from '@retro-engine/math';
 import type { Mat4, Vec3 } from '@retro-engine/math';
 import type {
   BindGroup,
@@ -159,6 +160,50 @@ export class ViewDepthCache {
   > = new Map();
 }
 
+/**
+ * Per-camera cache of the previous frame's `view_proj` matrix, keyed by
+ * main-world camera entity. Read by `prepareCameras` to populate the view
+ * uniform's `prev_view_proj` slot; written by the same system once it has
+ * uploaded the current frame's value, so frame N's `view_proj` becomes
+ * frame N+1's `prev_view_proj`.
+ *
+ * On the first frame a camera is seen, no entry exists and callers fall back
+ * to the current `view_proj`, producing zero motion vectors for that frame.
+ * Entries are garbage-collected when their `sourceEntity` is absent from
+ * the current frame's `SortedCameras.views`.
+ *
+ * The matrix is stable storage — written in place each frame so callers can
+ * cache the reference.
+ *
+ * @internal
+ */
+export class ViewPreviousFrame {
+  readonly perCamera: Map<Entity, { viewProj: Mat4 }> = new Map();
+}
+
+/**
+ * Look up the previous frame's `view_proj` for a camera, then advance the
+ * cache with the current frame's matrix. Returns the **previous** value (or
+ * the current value when the camera is being seen for the first time, so
+ * the resulting motion vector is zero).
+ *
+ * @internal
+ */
+export const readAndAdvancePrevViewProj = (
+  cache: ViewPreviousFrame,
+  sourceEntity: Entity,
+  currentViewProj: Mat4,
+): Mat4 => {
+  const existing = cache.perCamera.get(sourceEntity);
+  if (existing === undefined) {
+    cache.perCamera.set(sourceEntity, { viewProj: mat4.clone(currentViewProj) });
+    return currentViewProj;
+  }
+  const prev = mat4.clone(existing.viewProj);
+  (existing.viewProj as Float32Array).set(currentViewProj as Float32Array);
+  return prev;
+};
+
 /** Slots for one camera's GPU-side view resources. */
 export interface CameraGpuSlots {
   /** Backing uniform buffer for the view bind group. */
@@ -191,15 +236,22 @@ export class ViewBindGroupCache {
  * Size in bytes of the `ViewUniform` struct uploaded to each camera's view
  * bind group. Must equal the WGSL layout of {@link VIEW_UNIFORM_WGSL}.
  *
- * Layout (288 bytes):
+ * Layout (352 bytes):
  * - `view_proj: mat4x4<f32>` — bytes 0..64
  * - `view: mat4x4<f32>` — bytes 64..128
  * - `inverse_view: mat4x4<f32>` — bytes 128..192
  * - `projection: mat4x4<f32>` — bytes 192..256
  * - `world_position: vec4<f32>` (xyz = position, w = 0) — bytes 256..272
  * - `viewport: vec4<f32>` (x, y, width, height in physical pixels) — bytes 272..288
+ * - `prev_view_proj: mat4x4<f32>` — bytes 288..352
+ *
+ * `prev_view_proj` is the previous frame's `view_proj` for the same camera
+ * entity. The motion-vector prepass shader reads it to project an entity's
+ * previous world position into the previous frame's clip space; non-prepass
+ * shaders ignore the slot. On the first frame a camera is seen, the value
+ * equals the current `view_proj` so motion vectors are zero.
  */
-export const VIEW_UNIFORM_BYTE_SIZE = 288 as const;
+export const VIEW_UNIFORM_BYTE_SIZE = 352 as const;
 
 /** `VIEW_UNIFORM_BYTE_SIZE / 4` — number of `f32` slots in a {@link ViewUniformGpu} buffer. */
 export const VIEW_UNIFORM_FLOAT_COUNT = VIEW_UNIFORM_BYTE_SIZE / 4;
@@ -217,6 +269,7 @@ struct ViewUniform {
   projection: mat4x4<f32>,
   world_position: vec4<f32>,
   viewport: vec4<f32>,
+  prev_view_proj: mat4x4<f32>,
 };
 
 @group(0) @binding(0) var<uniform> view: ViewUniform;

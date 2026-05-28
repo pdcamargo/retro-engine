@@ -22,11 +22,13 @@ import { ShaderRegistry } from '../shader/shader-registry';
 import {
   ExtractedCamera,
   HDR_TARGET_FORMAT,
+  readAndAdvancePrevViewProj,
   VIEW_UNIFORM_BYTE_SIZE,
   VIEW_UNIFORM_WGSL,
   ViewBindGroupCache,
   ViewDepthCache,
   ViewHdrTargets,
+  ViewPreviousFrame,
 } from './extracted';
 import {
   buildOrthographicMatrix,
@@ -129,6 +131,7 @@ const writeViewUniform = (
   projection: Float32Array,
   worldPosition: Float32Array,
   viewport: Viewport,
+  prevViewProj: Float32Array,
 ): void => {
   scratch.set(viewProj, 0);
   scratch.set(view, 16);
@@ -142,6 +145,7 @@ const writeViewUniform = (
   scratch[69] = viewport.physicalPosition.y;
   scratch[70] = viewport.physicalSize.width;
   scratch[71] = viewport.physicalSize.height;
+  scratch.set(prevViewProj, 72);
 };
 
 const fullTargetViewport = (target: ResolvedRenderTarget): Viewport => ({
@@ -305,6 +309,7 @@ export class CameraPlugin implements PluginObject {
     app.insertResource(new ViewBindGroupCache());
     app.insertResource(new ViewDepthCache());
     app.insertResource(new ViewHdrTargets());
+    app.insertResource(new ViewPreviousFrame());
 
     // Register the canonical view uniform module so user shaders can write
     // `#import retro_engine::view` to pull in the ViewUniform struct + the
@@ -404,10 +409,11 @@ export class CameraPlugin implements PluginObject {
         ResMut(ViewBindGroupCache),
         ResMut(ViewDepthCache),
         ResMut(ViewHdrTargets),
+        ResMut(ViewPreviousFrame),
         ResMut(SortedCameras),
         Res(ClearColor),
       ],
-      (q, cache, depthCache, hdrCache, sorted, clearColor) => {
+      (q, cache, depthCache, hdrCache, prevFrame, sorted, clearColor) => {
         sorted.views.length = 0;
         const sortable: SortableCameraView[] = [];
         const inverseViewScratch = mat4.identity();
@@ -441,6 +447,11 @@ export class CameraPlugin implements PluginObject {
           );
           const viewport = ext.viewport ?? fullTargetViewport(resolved);
           mat4.invert(ext.viewMatrix, inverseViewScratch);
+          const prevViewProj = readAndAdvancePrevViewProj(
+            prevFrame,
+            ext.sourceEntity,
+            ext.viewProjectionMatrix,
+          );
           writeViewUniform(
             cache.scratch,
             ext.viewProjectionMatrix as Float32Array,
@@ -449,6 +460,7 @@ export class CameraPlugin implements PluginObject {
             ext.projectionMatrix as Float32Array,
             ext.worldPosition as Float32Array,
             viewport,
+            prevViewProj as Float32Array,
           );
           app.renderer.writeBuffer(slots.buffer, 0, cache.scratch as BufferSource);
           const { color, loadOp } = resolveClearColor(ext.clearColor, clearColor as ClearColor);
@@ -491,6 +503,12 @@ export class CameraPlugin implements PluginObject {
             hdrCache.perCamera.delete(entity);
           }
         }
+        // GC previous-view-proj entries for cameras absent this frame.
+        for (const entity of prevFrame.perCamera.keys()) {
+          if (!liveSourceEntities.has(entity)) {
+            prevFrame.perCamera.delete(entity);
+          }
+        }
         sortable.sort((a, b) => {
           if (a.order !== b.order) return a.order - b.order;
           const aOff = isOffscreen(a._targetKind);
@@ -500,7 +518,7 @@ export class CameraPlugin implements PluginObject {
         });
         for (const v of sortable) sorted.views.push(v);
       },
-      { set: RenderSet.Prepare },
+      { set: RenderSet.Prepare, label: 'camera-prepare' },
     );
   }
 }

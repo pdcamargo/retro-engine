@@ -37,12 +37,20 @@ export class ViewPhases3d {
   readonly opaque: Map<number, PhaseItem3d[]> = new Map();
   readonly alphaMask: Map<number, PhaseItem3d[]> = new Map();
   readonly transparent: Map<number, PhaseItem3d[]> = new Map();
+  /**
+   * Items drawn by `PrepassNode3d` before the opaque pass. Sorted
+   * front-to-back at draw time (cheap early-Z, matching the opaque pass).
+   * Populated only by materials whose {@link Material.prepassWrites}
+   * intersects the camera's enabled prepass flags.
+   */
+  readonly prepass: Map<number, PhaseItem3d[]> = new Map();
 
   /** Drop every queued item. Called at the start of the per-frame queue pass. */
   clear(): void {
     this.opaque.clear();
     this.alphaMask.clear();
     this.transparent.clear();
+    this.prepass.clear();
   }
 
   pushOpaque(cameraEntity: number, item: PhaseItem3d): void {
@@ -61,5 +69,11 @@ export class ViewPhases3d {
     const list = this.transparent.get(cameraEntity);
     if (list) list.push(item);
     else this.transparent.set(cameraEntity, [item]);
+  }
+
+  pushPrepass(cameraEntity: number, item: PhaseItem3d): void {
+    const list = this.prepass.get(cameraEntity);
+    if (list) list.push(item);
+    else this.prepass.set(cameraEntity, [item]);
   }
 }

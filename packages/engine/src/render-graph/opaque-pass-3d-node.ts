@@ -6,6 +6,7 @@ import type {
 
 import { GpuLights } from '../light3d/gpu-lights';
 import type { RenderContext } from '../index';
+import { ViewPrepassTargets } from '../prepass/view-prepass-targets';
 
 import type { NodeRunContext, ViewNode } from './node';
 import { ViewPhases3d } from './phase-3d';
@@ -72,12 +73,27 @@ export const OpaquePass3dNode: ViewNode = {
       colorAttachments: [colorAttachment],
     };
     if (view.depth) {
-      const depthAttachment: DepthStencilAttachment = {
-        view: view.depth.view,
-        depthLoadOp: 'clear',
-        depthStoreOp: 'store',
-        depthClearValue: 1.0,
-      };
+      // When the screen-space prepass has populated this camera's depth
+      // attachment, load it instead of clearing — otherwise the prepass'
+      // work is wasted and Z testing in the opaque pass behaves as if no
+      // depth pre-render happened. The `ViewPrepassTargets` lookup is the
+      // single source of truth for "did the prepass run for this camera
+      // this frame?" — `PrepassNode3d` skips when its entry is absent, and
+      // so does the load-instead-of-clear branch below.
+      const prepassRan =
+        ctx.app.getResource(ViewPrepassTargets)?.perCamera.has(view.sourceEntity as never) === true;
+      const depthAttachment: DepthStencilAttachment = prepassRan
+        ? {
+            view: view.depth.view,
+            depthLoadOp: 'load',
+            depthStoreOp: 'store',
+          }
+        : {
+            view: view.depth.view,
+            depthLoadOp: 'clear',
+            depthStoreOp: 'store',
+            depthClearValue: 1.0,
+          };
       passDesc.depthStencilAttachment = depthAttachment;
     }
     const pass = encoder.beginRenderPass(passDesc);

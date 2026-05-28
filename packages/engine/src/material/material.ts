@@ -36,6 +36,20 @@ export interface Material {
    * material's `specialize()` overrides them.
    */
   depthBias?(): number;
+  /**
+   * Which screen-space prepass outputs this material can correctly write.
+   * Defaults to all-`false` (the material does not participate in the
+   * prepass). Materials opt in per-channel; the engine intersects the
+   * returned flags with the camera's enabled prepass markers and queues a
+   * prepass draw only when at least one channel is shared.
+   *
+   * `StandardMaterial` returns all three; `UnlitMaterial` returns
+   * `{ depth: true, normal: false, motionVector: false }` (it has no normal
+   * data and no current-frame-only motion to express). Materials that
+   * cannot or should not pre-write any channel — particles, decals,
+   * arbitrary post-effect surfaces — should leave this method unset.
+   */
+  prepassWrites?(): import('../prepass/components').PrepassFlags;
 }
 
 /**
@@ -112,6 +126,28 @@ export interface MaterialPipelineKey {
   readonly hdr: boolean;
   readonly vertexLayoutDigest: string;
   readonly alphaMode: AlphaMode;
+  /**
+   * When present, marks this as a **prepass** pipeline variant. The
+   * pipeline cache builds one pipeline per unique flag combination:
+   * depth-only (`fragment: undefined`), depth + normal, depth + motion
+   * vector, or all three. Absence means the pipeline targets the opaque
+   * (or transparent) shading pass.
+   */
+  readonly prepass?: import('../prepass/components').PrepassFlags;
+  /**
+   * When present, the opaque pipeline includes a `@group(3)` bind group
+   * with the camera's prepass textures so the fragment shader can sample
+   * them. Flags select which textures are bound (and therefore which
+   * pipeline variant is generated).
+   *
+   * Wired in this slice for forward-compatibility with downstream temporal
+   * effects (TAA, motion blur, SSAO); `pbr.wgsl`'s `fs_main` does not yet
+   * sample these. Expect a follow-up ADR to introduce the shader reads.
+   */
+  readonly prepassReadable?: {
+    readonly normal: boolean;
+    readonly motionVector: boolean;
+  };
 }
 
 /**

@@ -59,4 +59,17 @@ fn fs_main(input: VsOut) -> @location(0) vec4<f32> {
   let sampled = textureSample(color_texture, color_sampler, input.uv);
   return material.color * sampled;
 }
+
+struct VsPrepassOut {
+  @builtin(position) clip_position: vec4<f32>,
+};
+
+@vertex
+fn vs_prepass(input: VsIn) -> VsPrepassOut {
+  var out: VsPrepassOut;
+  let model = mat4x4<f32>(input.model_c0, input.model_c1, input.model_c2, input.model_c3);
+  let world_position = model * vec4<f32>(input.position, 1.0);
+  out.clip_position = view.view_proj * world_position;
+  return out;
+}
 ` as const;

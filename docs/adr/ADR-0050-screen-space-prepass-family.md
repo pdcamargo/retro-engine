@@ -1,0 +1,252 @@
+# ADR-0050: screen-space prepass family — depth + normal (motion-vector deferred)
+
+- **Status:** Accepted
+- **Date:** 2026-05-28
+
+## Context
+
+Phase 12 of `docs/roadmap/renderer.md` lists item 12.8 — `DepthPrepass`,
+`NormalPrepass`, `MotionVectorPrepass`, `DeferredPrepass` — as the gating
+piece of infrastructure for four downstream phases (12.6 TAA, 12.9 DoF,
+12.10 MotionBlur, plus an SSAO-under-the-prepass-family follow-on). Each
+of those effects needs one or more per-camera screen-space intermediates
+available **before** the opaque pass writes the main color target:
+
+- TAA needs depth + world-space normal (history clipping) and a motion
+  vector (reprojection).
+- SSAO needs depth + world-space normal.
+- DoF needs depth.
+- Motion blur needs the motion vector.
+
+ADR-0045's shadow depth prepass is unrelated: it writes a 2D-array depth
+**atlas** for analytic-light shadow maps; this ADR ships per-camera
+**screen-space** prepass textures that the opaque shading pass and
+downstream temporal/spatial effects sample.
+
+Deferred shading (`DeferredPrepass`) is not covered here. The forward
+shading path is the only path that exists today; deferred is its own
+future ADR.
+
+## Decision
+
+Land the screen-space prepass family for the **depth** and **normal**
+channels in this slice. The motion-vector channel ships its substrate
+(`PreviousGlobalTransform` component, per-camera `prev_view_proj` view
+uniform slot, `ViewPreviousFrame` cache) but defers the per-entity
+previous-instance vertex buffer + `fs_prepass_motion` fragment output to
+the next slice (see Consequences).
+
+### Per-camera markers
+
+Three opt-in marker components on a camera:
+
+- `DepthPrepass` — depth-only pre-render before the opaque pass.
+- `NormalPrepass` — additionally writes world-space normal + roughness
+  to an `rgba16float` color target.
+- `MotionVectorPrepass` — marker only in this slice; the engine warns
+  once per camera that motion-vector reconstruction is not yet wired and
+  the marker has no effect. Substrate is in place for the follow-on slice.
+
+The presence of any marker triggers per-camera target allocation in
+`ViewPrepassTargets`. Cameras spawned with `depthTarget: 'none'` cannot
+host a prepass — the engine warns once and skips.
+
+### Render-graph node
+
+A new `PrepassNode3d` (label `'prepass_3d'`) inserts into the `Core3d`
+sub-graph between `Shadow3dPass3dNode` (when present) and
+`OpaquePass3dNode`. When the active camera has at least one prepass
+marker the node opens a render pass with the camera's depth attachment
+plus zero or one color attachment (normal), drains
+`ViewPhases3d.prepass`, and closes.
+
+`OpaquePass3dNode` flips its depth attachment from `loadOp: 'clear'` to
+`loadOp: 'load'` when `ViewPrepassTargets.perCamera` carries an entry
+for the active camera — the prepass already populated the depth buffer
+and re-clearing would discard it. This is the one behavior change to an
+existing render node.
+
+### Per-camera target cache
+
+`ViewPrepassTargets` is a render-world resource keyed by main-world
+camera entity, mirroring `ViewHdrTargets` / `ViewDepthCache` exactly:
+allocate on first sight, reallocate on size or flag change, destroy on
+camera disappearance. Texture formats:
+
+- Depth: `depth32float`, **shared** with `ViewDepthCache` — the screen-
+  space depth is a single texture both passes touch.
+- Normal: `rgba16float` (world-space `N.xyz` mapped from `[-1, 1]` to
+  `[0, 1]` in `.rgb`, perceptual roughness in `.a`). `RENDER_ATTACHMENT |
+  TEXTURE_BINDING`. Octahedral encoding into `rg16snorm` is a deferred
+  optimization tracked in §Open questions.
+- Motion vector: `rg16float`, half-NDC delta. **Not allocated in this
+  slice** — surfaces only when motion-vector reconstruction lands.
+
+### Material opt-in
+
+A new optional `Material.prepassWrites?(): PrepassFlags` method returns
+the per-channel set the material's prepass shader can correctly write.
+`StandardMaterial` returns `{ depth: true, normal: true, motionVector:
+false }` (motion is deferred); `UnlitMaterial` returns `{ depth: true }`
+only — it has no normal data to export.
+
+A camera's enabled flags are intersected with each material's
+`prepassWrites()`. The intersection drives both the queue (which
+materials contribute a prepass phase item) and the specialization
+(which pipeline variant is requested). Materials whose intersection is
+empty are skipped from the prepass entirely.
+
+### Material pipeline key
+
+`MaterialPipelineKey` gains two additive optional fields:
+
+- `prepass?: PrepassFlags` — when set, marks the variant as a prepass
+  pipeline. The cache produces one pipeline per unique flag combination;
+  `material#<name>#prepass#<dnm>` labels make the variants visible in
+  pipeline-cache diagnostics. The depth-only variant ships
+  `fragment: undefined`; the depth + normal variant adds an
+  `rgba16float` fragment output via `fs_prepass_normal`. The depth +
+  motion-vector and depth + normal + motion-vector variants are
+  reachable but not generated by `queueMaterials` in this slice (no
+  material's `prepassWrites().motionVector` returns true).
+- `prepassReadable?: { normal, motionVector }` — reserved for the
+  opaque pipeline's forward-compat path so its `@group(3)` can sample
+  the prepass textures. The field is present and participates in cache
+  keying; the actual bind-group plumbing (layout + per-camera bind
+  group + `setBindGroup(3, ...)` in `OpaquePass3dNode`) is deferred
+  alongside the consumer (TAA).
+
+### Previous-frame substrate
+
+A new `PreviousGlobalTransform` component holds the previous frame's
+world matrix per renderable. `PrepassPlugin` installs a `Mesh3d`-insert
+hook that auto-attaches the component (seeded from the entity's
+current `GlobalTransform`) and a propagation system in `'first'` that
+copies `GlobalTransform.matrix` → `PreviousGlobalTransform.matrix` at
+the **start** of every frame. The "start" timing is deliberate: by
+`'first'`, `GlobalTransform` still holds the previous frame's final
+value because `'postUpdate'` of the current frame has not yet run, so
+the copy captures the genuine lag the motion-vector reconstruction
+needs.
+
+The camera-side complement is `ViewPreviousFrame` (in
+`camera/extracted.ts`), a per-camera cache of the previous frame's
+`view_proj`. The view uniform's new `prev_view_proj` slot (`bytes
+288..352`) is populated from this cache. `VIEW_UNIFORM_BYTE_SIZE`
+bumps 288 → 352; non-prepass shaders ignore the new slot.
+
+## Consequences
+
+- **One extra render pass per camera with at least one prepass marker.**
+  Depth-only adds essentially one extra draw per renderable (vertex
+  stage only, no fragment work). Depth + normal adds the normal-output
+  fragment stage; cost is proportional to fragment count.
+- **`VIEW_UNIFORM_BYTE_SIZE` extends 288 → 352** (additive — non-prepass
+  shaders ignore the new slot).
+- **`MaterialPipelineKey` gains two optional fields** (`prepass`,
+  `prepassReadable`). Existing code that constructs `MaterialPipelineKey`
+  literals continues to work unchanged.
+- **One behavior change in `OpaquePass3dNode`**: depth `loadOp` flips
+  from `'clear'` to `'load'` when the prepass populated depth for the
+  active camera. Covered by integration tests in
+  `prepass-depth-integration.test.ts`.
+- **Unblocks Phase 12.6 (TAA), 12.9 (DoF), and SSAO downstream.**
+  Phase 12.10 (motion blur) and the TAA reprojection step remain
+  blocked on the motion-vector follow-on.
+
+### Deferred to the next slice
+
+- **Motion-vector reconstruction**: the per-entity previous-instance
+  vertex buffer (`PREVIOUS_INSTANCE_LAYOUT`), the
+  `MeshInstanceBuffer`-sibling that packs the previous matrices in step
+  with the current ones, the `fs_prepass_motion` fragment output, and
+  the `vs_prepass` motion-vector branch. The substrate
+  (`PreviousGlobalTransform`, `'first'`-stage propagation,
+  `ViewPreviousFrame`, view uniform `prev_view_proj` slot) is in place.
+  Tracked in `docs/backlog/prepass-motion-vectors.md`.
+- **`prepassReadable` bind-group plumbing**: the pipeline-key field
+  exists for forward-compat cache keying; the `@group(3)` bind group
+  layout and per-camera bind-group population land alongside the first
+  consumer (TAA). Tracked in `docs/backlog/prepass-readable-binding.md`.
+- **Bench**: the prepass node is on the per-frame draw budget, but
+  benching it meaningfully needs a downstream consumer to drive realistic
+  workloads (TAA, DoF). Deferred to land with the first consumer.
+
+## Implementation
+
+### New files
+
+- `packages/engine/src/prepass/components.ts` — marker components +
+  `PrepassFlags` + helpers.
+- `packages/engine/src/prepass/view-prepass-targets.ts` —
+  `ViewPrepassTargets` resource, format constants, alloc / GC helpers.
+- `packages/engine/src/prepass/previous-global-transform.ts` — the
+  component (`ViewPreviousFrame` lives in `camera/extracted.ts` to
+  avoid a camera↔prepass value-import cycle).
+- `packages/engine/src/prepass/prepass-plugin.ts` — `PrepassPlugin` +
+  `PrepassFlagsByCamera`, sub-graph wiring, Extract / Prepare /
+  propagation systems, `Mesh3d` insert hook.
+- `packages/engine/src/prepass/prepass-3d-node.ts` — `PrepassNode3d`
+  ViewNode + label.
+- `packages/engine/src/prepass/prepass.wgsl.ts` — shared
+  `retro_engine::prepass` WGSL module
+  (`encode_normal_roughness`, `compute_motion_vector`).
+- Test files: `components.test.ts`, `previous-global-transform.test.ts`,
+  `view-prepass-targets.test.ts`, `prepass-plugin.test.ts`,
+  `prepass-3d-node.test.ts`, `prepass-depth-integration.test.ts`,
+  `prepass-queue.test.ts` (24 new tests; full engine suite 758 pass).
+- `packages/engine/src/camera/view-previous-frame.test.ts` — coverage
+  for `readAndAdvancePrevViewProj`.
+
+### Existing files edited
+
+- `packages/engine/src/camera/extracted.ts` — `VIEW_UNIFORM_BYTE_SIZE`
+  288 → 352, add `prev_view_proj` to `VIEW_UNIFORM_WGSL`, add
+  `ViewPreviousFrame` + `readAndAdvancePrevViewProj` helper.
+- `packages/engine/src/camera/camera-plugin.ts` — insert
+  `ViewPreviousFrame` resource, thread `prev_view_proj` into
+  `writeViewUniform`, label the prepare system `'camera-prepare'`,
+  GC the cache.
+- `packages/engine/src/render-graph/opaque-pass-3d-node.ts` — flip
+  `depthLoadOp` based on `ViewPrepassTargets`.
+- `packages/engine/src/render-graph/phase-3d.ts` — add
+  `ViewPhases3d.prepass` + `pushPrepass`.
+- `packages/engine/src/material/material.ts` — additive
+  `MaterialPipelineKey.prepass?` / `prepassReadable?` + optional
+  `Material.prepassWrites?()`.
+- `packages/engine/src/material/material-plugin.ts` — extend the
+  specialize cache key, add `specializePrepass`, queue prepass items
+  into `phases.prepass`, pass `PrepassFlagsByCamera` to the queue.
+- `packages/engine/src/material/pbr.wgsl.ts` — `vs_prepass` +
+  `fs_prepass_normal` entry points.
+- `packages/engine/src/material/unlit.wgsl.ts` — `vs_prepass` (depth-
+  only).
+- `packages/engine/src/material/standard-material.ts` —
+  `prepassWrites()` opts into depth + normal; register
+  `retro_engine::prepass` before `retro_engine::pbr`.
+- `packages/engine/src/material/unlit-material.ts` —
+  `prepassWrites()` opts into depth only.
+- `packages/engine/src/index.ts` — re-export the new public surface.
+
+### Public surface (changeset entry)
+
+`DepthPrepass`, `NormalPrepass`, `MotionVectorPrepass`,
+`PreviousGlobalTransform`, `ViewPrepassTargets`, `ViewPreviousFrame`,
+`PrepassPlugin`, `PrepassFlagsByCamera`, `PrepassNode3d`,
+`PrepassNode3dLabel`, `PrepassFlags`, `PREPASS_FLAGS_NONE`,
+`prepassFlagsAny`, `intersectPrepassFlags`, `PREPASS_DEPTH_FORMAT`,
+`PREPASS_NORMAL_FORMAT`, `PREPASS_MOTION_VECTOR_FORMAT`,
+`PREPASS_WGSL`, `ViewPrepassCameraTargets`, `ViewPrepassCacheEntry`.
+Additive optional fields on existing surfaces: `MaterialPipelineKey.prepass?`,
+`MaterialPipelineKey.prepassReadable?`, `Material.prepassWrites?()`.
+
+## Open questions
+
+- **Octahedral normal encoding** — `rg16snorm` halves the normal-buffer
+  cost and is what most modern engines use, but adds a WGSL encode /
+  decode pair. Defer to a follow-up only if a bench reveals the normal
+  target is bandwidth-bound.
+- **`ViewPhases3d.prepass` allocation churn** — phase-item array
+  allocations per frame per camera. If profiling reveals this is hot,
+  refactor to direct iteration mirroring `Shadow3dPass3dNode` (which
+  iterates caster batches without a phase list).

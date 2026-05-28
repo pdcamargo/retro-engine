@@ -68,6 +68,7 @@ export {
   ViewBindGroupCache,
   ViewDepthCache,
   ViewHdrTargets,
+  ViewPreviousFrame,
 } from './camera/extracted';
 export { CameraPlugin } from './camera/camera-plugin';
 export type { CommandsHandle, EntityCommands } from './commands';
@@ -386,6 +387,33 @@ export {
   SpotLight2d,
   ViewLight2dTargets,
 } from './light2d';
+export type { PrepassFlags } from './prepass/components';
+export {
+  DepthPrepass,
+  intersectPrepassFlags,
+  MotionVectorPrepass,
+  NormalPrepass,
+  PREPASS_FLAGS_NONE,
+  prepassFlagsAny,
+} from './prepass/components';
+export { PreviousGlobalTransform } from './prepass/previous-global-transform';
+export {
+  PrepassNode3d,
+  PrepassNode3dLabel,
+} from './prepass/prepass-3d-node';
+export { PrepassFlagsByCamera, PrepassPlugin } from './prepass/prepass-plugin';
+export { PREPASS_WGSL } from './prepass/prepass.wgsl';
+export type {
+  ViewPrepassCacheEntry,
+  ViewPrepassCameraTargets,
+} from './prepass/view-prepass-targets';
+export {
+  PREPASS_DEPTH_FORMAT,
+  PREPASS_MOTION_VECTOR_FORMAT,
+  PREPASS_NORMAL_FORMAT,
+  ViewPrepassTargets,
+} from './prepass/view-prepass-targets';
+
 export type { TonemappingMethod } from './tonemapping/tonemapping';
 export { DEFAULT_TONEMAPPING_METHOD, TONEMAPPING_METHODS, Tonemapping } from './tonemapping/tonemapping';
 export { TONEMAPPING_WGSL } from './tonemapping/tonemapping.wgsl';

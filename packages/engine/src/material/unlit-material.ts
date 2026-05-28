@@ -48,6 +48,13 @@ export class UnlitMaterial implements Material {
     return this.alphaMode_;
   }
 
+  prepassWrites(): { depth: boolean; normal: boolean; motionVector: boolean } {
+    // UnlitMaterial has no per-fragment surface data: no roughness, no
+    // world-space normal channel beyond the geometry normal it does not
+    // export. It contributes to the depth prepass only.
+    return { depth: true, normal: false, motionVector: false };
+  }
+
   static readonly bindGroup = MaterialSchema(UnlitMaterial, [
     {
       kind: 'uniform',

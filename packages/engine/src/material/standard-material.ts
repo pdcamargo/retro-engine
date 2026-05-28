@@ -4,6 +4,7 @@ import { vec4 } from '@retro-engine/math';
 import type { ImageHandle } from '../image/images';
 import type { App } from '../index';
 import type { PluginObject } from '../plugin';
+import { PREPASS_WGSL } from '../prepass/prepass.wgsl';
 import { ShaderRegistry } from '../shader/shader-registry';
 
 import { MaterialSchema } from './bind-group-schema';
@@ -125,6 +126,15 @@ export class StandardMaterial implements Material {
     return this.depthBias_;
   }
 
+  prepassWrites(): { depth: boolean; normal: boolean; motionVector: boolean } {
+    // StandardMaterial writes depth + world-space normal (with roughness).
+    // Motion-vector output is gated on the previous-instance vertex buffer
+    // landing — the marker on the camera side is silently ignored until then
+    // and this flag stays false to keep the pipeline cache aligned with the
+    // attachments PrepassNode3d actually binds.
+    return { depth: true, normal: true, motionVector: false };
+  }
+
   static readonly bindGroup = MaterialSchema(StandardMaterial, [
     {
       kind: 'uniform',
@@ -243,6 +253,13 @@ export class StandardMaterialPlugin implements PluginObject {
       throw new Error(
         'StandardMaterialPlugin: ShaderRegistry resource missing; ShaderPlugin must run before this plugin.',
       );
+    }
+    if (!registry.has('retro_engine::prepass')) {
+      // pbr.wgsl imports the prepass helpers (encode_normal_roughness,
+      // compute_motion_vector). Register the dependency module first so
+      // the import resolves even when the consumer hasn't added
+      // `PrepassPlugin`.
+      registry.register('retro_engine::prepass', PREPASS_WGSL);
     }
     if (!registry.has('retro_engine::pbr')) {
       registry.register('retro_engine::pbr', PBR_WGSL);
