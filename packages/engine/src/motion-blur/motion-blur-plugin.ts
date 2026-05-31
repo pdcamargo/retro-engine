@@ -127,7 +127,7 @@ export class MotionBlurPlugin implements PluginObject {
           app.renderer.writeBuffer(entry.paramsBuffer, 0, scratch as BufferSource);
         }
         const pipeline = app.getResource(MotionBlurPipeline);
-        for (const entity of [...targets.perCamera.keys()]) {
+        for (const entity of targets.perCamera.keys()) {
           if (!live.has(entity)) {
             evictMotionBlurTarget(targets, entity);
             // Drop the cached bind group too — it references the params buffer
