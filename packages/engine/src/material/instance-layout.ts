@@ -81,16 +81,28 @@ export const PREVIOUS_INSTANCE_FLOAT_COUNT = 16 as const;
 
 /**
  * First `@location` the previous-instance transform attributes occupy.
- * Sits just past the current-frame block (locations 8..15) so the standard
- * 16-attribute floor holds: `16..19` are the four columns of the previous
- * model matrix.
+ * `4..7` are the four columns of the previous model matrix.
+ *
+ * WebGPU guarantees only 16 vertex attributes (valid locations `0..15`), and
+ * the current-frame instance block already fills `8..15`, so the previous
+ * block cannot sit above it. It is placed in the free gap below the
+ * current-frame block instead. The previous-instance buffer is bound *only*
+ * on the motion-vector prepass pipeline, whose mesh layout occupies just
+ * `0..2` (position, normal, uv) — so `4..7` is collision-free there today.
+ *
+ * The full mesh-attribute reservation (`0..4`, up to five attributes
+ * including tangent and color) overlaps this range; tangent/color are
+ * unimplemented, so the overlap is latent. If a future material adds those
+ * mesh attributes to the layout the motion-vector prepass consumes, that
+ * change must re-derive this variant's location map (e.g. by reclaiming the
+ * inverse-transpose columns the motion-only path does not read).
  */
-export const PREVIOUS_INSTANCE_TRANSFORM_BASE_LOCATION = 16 as const;
+export const PREVIOUS_INSTANCE_TRANSFORM_BASE_LOCATION = 4 as const;
 
 /**
  * Per-instance vertex buffer layout carrying each entity's *previous*-frame
  * model matrix (`stepMode: 'instance'`, bound at vertex slot 2). Four
- * `float32x4` columns at locations `16..19`. Only attached to the prepass
+ * `float32x4` columns at locations `4..7`. Only attached to the prepass
  * pipeline when its camera has `MotionVectorPrepass` active and its material
  * opts into the motion-vector channel via `prepassWrites()`; absent
  * otherwise so opaque / non-motion prepass draws pay nothing for it.

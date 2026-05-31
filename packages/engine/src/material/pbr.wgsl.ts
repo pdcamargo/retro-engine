@@ -78,10 +78,10 @@ struct VsIn {
   @location(14) inv_t_c2: vec4<f32>,
   @location(15) inv_t_c3: vec4<f32>,
 #ifdef PREPASS_MOTION_VECTOR
-  @location(16) prev_model_c0: vec4<f32>,
-  @location(17) prev_model_c1: vec4<f32>,
-  @location(18) prev_model_c2: vec4<f32>,
-  @location(19) prev_model_c3: vec4<f32>,
+  @location(4) prev_model_c0: vec4<f32>,
+  @location(5) prev_model_c1: vec4<f32>,
+  @location(6) prev_model_c2: vec4<f32>,
+  @location(7) prev_model_c3: vec4<f32>,
 #endif
 };
 

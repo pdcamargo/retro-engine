@@ -1,12 +1,50 @@
 import { describe, expect, it } from 'bun:test';
 
 import { vec4 } from '@retro-engine/math';
+import type {
+  RenderPipeline,
+  RenderPipelineDescriptor,
+  Renderer,
+} from '@retro-engine/renderer-core';
 
 import { App, Camera3d, Cuboid, Mesh3d, Meshes, ShaderPlugin } from '../index';
+import { Light3dPlugin } from '../light3d/light-3d-plugin';
+import { DepthPrepass, MotionVectorPrepass, NormalPrepass } from '../prepass/components';
+import { PrepassPlugin } from '../prepass/prepass-plugin';
 import { makeRenderingRenderer, makeStubCanvas } from '../test-utils';
 
 import { MaterialPlugin } from './material-plugin';
+import { StandardMaterial, StandardMaterialPlugin } from './standard-material';
 import { UnlitMaterial, UnlitMaterialPlugin } from './unlit-material';
+
+/**
+ * Wraps a rendering stub renderer, recording every {@link RenderPipelineDescriptor}
+ * handed to `createRenderPipeline`. Lets a test assert invariants on the
+ * pipeline descriptors the material plugin builds — the stub itself validates
+ * nothing, so these are the only place to catch device-fatal descriptor shapes
+ * (empty fragment targets, out-of-range vertex locations) without a GPU.
+ */
+const makeDescriptorCapturingRenderer = (): {
+  renderer: Renderer;
+  descriptors: RenderPipelineDescriptor[];
+} => {
+  const base = makeRenderingRenderer();
+  const descriptors: RenderPipelineDescriptor[] = [];
+  const create = base.createRenderPipeline.bind(base);
+  base.createRenderPipeline = (descriptor: RenderPipelineDescriptor): RenderPipeline => {
+    descriptors.push(descriptor);
+    return create(descriptor);
+  };
+  return { renderer: base, descriptors };
+};
+
+const prepassDescriptors = (descriptors: RenderPipelineDescriptor[]): RenderPipelineDescriptor[] =>
+  descriptors.filter((d) => typeof d.label === 'string' && d.label.includes('#prepass#'));
+
+const requestsColorChannel = (label: string): boolean =>
+  // The prepass descriptor label encodes active flags as a `d`/`n`/`m` suffix
+  // after `#prepass#`. A normal or motion request means a color target is owed.
+  /#prepass#[dnm]*[nm]/.test(label);
 
 describe('MaterialPlugin<UnlitMaterial>', () => {
   it('builds without throwing when added in the right order', () => {
@@ -74,6 +112,73 @@ describe('MaterialPlugin<UnlitMaterial>', () => {
     const app = new App({ renderer: makeRenderingRenderer(), canvas: makeStubCanvas() });
     app.addPlugin(new UnlitMaterialPlugin());
     expect(() => app.addPlugin(new UnlitMaterialPlugin())).not.toThrow();
+  });
+});
+
+const buildPrepassApp = (renderer: Renderer, materialClass: typeof StandardMaterial) => {
+  const app = new App({ renderer, canvas: makeStubCanvas() });
+  app.addPlugin(new StandardMaterialPlugin());
+  const matPlugin = new MaterialPlugin(materialClass);
+  app.addPlugin(matPlugin);
+  app.addPlugin(new Light3dPlugin());
+  app.addPlugin(new PrepassPlugin());
+  return { app, matPlugin };
+};
+
+describe('MaterialPlugin — prepass fragment-target invariants', () => {
+  it('never builds a normal/motion prepass pipeline with empty fragment targets', async () => {
+    const { renderer, descriptors } = makeDescriptorCapturingRenderer();
+    const { app, matPlugin } = buildPrepassApp(renderer, StandardMaterial);
+    const meshHandle = app.getResource(Meshes)!.add(new Cuboid().mesh().build());
+    const matHandle = app
+      .getResource(matPlugin.Materials)!
+      .add(new StandardMaterial({ baseColor: vec4.create(1, 1, 1, 1) }));
+    app.world.spawn(new Mesh3d(meshHandle), new matPlugin.MeshMaterial3d(matHandle));
+    app.world.spawn(...Camera3d(), new DepthPrepass(), new NormalPrepass(), new MotionVectorPrepass());
+
+    await app.run();
+    app.stop();
+
+    const colorPrepass = prepassDescriptors(descriptors).filter((d) =>
+      requestsColorChannel(d.label as string),
+    );
+    // The combined normal + motion variant must have been built and must carry
+    // at least one color target — the exact failure mode the minification bug
+    // produced (empty targets → rejected pipeline).
+    expect(colorPrepass.length).toBeGreaterThan(0);
+    for (const d of colorPrepass) {
+      expect(d.fragment).toBeDefined();
+      expect(d.fragment!.targets.length).toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  it('gates prepass color output on prepassWrites(), not the (minifiable) class name', async () => {
+    // Simulate a production bundle renaming the class to a single letter. The
+    // capability gate must still attach the motion/normal targets because it
+    // reads the material's declared `prepassWrites()`, not `class.name`.
+    class Minified extends StandardMaterial {}
+    Object.defineProperty(Minified, 'name', { value: 'a' });
+
+    const { renderer, descriptors } = makeDescriptorCapturingRenderer();
+    const { app, matPlugin } = buildPrepassApp(renderer, Minified);
+    const meshHandle = app.getResource(Meshes)!.add(new Cuboid().mesh().build());
+    const matHandle = app
+      .getResource(matPlugin.Materials)!
+      .add(new Minified({ baseColor: vec4.create(1, 1, 1, 1) }));
+    app.world.spawn(new Mesh3d(meshHandle), new matPlugin.MeshMaterial3d(matHandle));
+    app.world.spawn(...Camera3d(), new DepthPrepass(), new NormalPrepass(), new MotionVectorPrepass());
+
+    await app.run();
+    app.stop();
+
+    const colorPrepass = prepassDescriptors(descriptors).filter((d) =>
+      requestsColorChannel(d.label as string),
+    );
+    expect(colorPrepass.length).toBeGreaterThan(0);
+    for (const d of colorPrepass) {
+      expect(d.fragment).toBeDefined();
+      expect(d.fragment!.targets.length).toBeGreaterThanOrEqual(1);
+    }
   });
 });
 

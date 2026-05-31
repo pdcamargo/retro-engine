@@ -18,7 +18,12 @@ import type { App } from '../index';
 import type { AllocatorSlice, MeshHandle } from '../mesh';
 import { MeshAllocator, Meshes, Mesh3d, RenderMeshes } from '../mesh';
 import type { PluginObject } from '../plugin';
-import { intersectPrepassFlags, prepassFlagsAny, type PrepassFlags } from '../prepass/components';
+import {
+  PREPASS_FLAGS_NONE,
+  intersectPrepassFlags,
+  prepassFlagsAny,
+  type PrepassFlags,
+} from '../prepass/components';
 import { PrepassFlagsByCamera } from '../prepass/prepass-plugin';
 import { PreviousGlobalTransform } from '../prepass/previous-global-transform';
 import {
@@ -370,7 +375,7 @@ class MaterialPluginState<M extends Material> {
    * `PREPASS_MOTION_VECTOR` define active. Lazily built the first time a
    * motion-vector prepass pipeline is requested for this material — the
    * variant declares the previous-instance vertex attributes at
-   * `@location(16..19)` and the `fs_prepass_motion` /
+   * `@location(4..7)` and the `fs_prepass_motion` /
    * `fs_prepass_normal_motion` fragment entries. Materials without motion
    * support never trigger the compile.
    */
@@ -395,6 +400,15 @@ class MaterialPluginState<M extends Material> {
   scratch = new ArrayBuffer(1024);
   app!: App;
   initialised = false;
+  /**
+   * The prepass channels this material class can actually write, captured
+   * from a representative instance's {@link Material.prepassWrites} once at
+   * init. Drives prepass fragment-target selection (a material that declares
+   * a channel here ships the matching `fs_prepass_*` entry). Derived from the
+   * material's own declaration rather than its class identity so it survives
+   * bundler minification of class names.
+   */
+  prepassCapabilities: PrepassFlags = PREPASS_FLAGS_NONE;
 
   constructor(plugin: MaterialPlugin<M>) {
     this.plugin = plugin;
@@ -437,6 +451,18 @@ class MaterialPluginState<M extends Material> {
       this.materialClass.bindGroup,
       `material#${this.materialClass.name}`,
     );
+
+    // Capture which prepass channels this material can write from a
+    // representative instance. `prepassWrites()` is a class-level declaration
+    // (instances do not vary it), so any instance answers for the class. A
+    // material with required constructor arguments — or none declaring
+    // prepass support — leaves the default (no channels).
+    try {
+      const probe = new this.materialClass();
+      this.prepassCapabilities = probe.prepassWrites?.() ?? PREPASS_FLAGS_NONE;
+    } catch {
+      this.prepassCapabilities = PREPASS_FLAGS_NONE;
+    }
 
     const vertexRef = this.materialClass.vertexShader?.() ?? ({ kind: 'default' } as const);
     const fragmentRef = this.materialClass.fragmentShader?.() ?? ({ kind: 'default' } as const);
@@ -942,7 +968,13 @@ class MaterialPluginState<M extends Material> {
       descriptor.depthStencil = {
         format: ctx.depthFormat,
         depthWriteEnabled: !isTransparent,
-        depthCompare: 'less',
+        // `less-equal`, not `less`: when a depth prepass has pre-populated the
+        // depth buffer, every opaque fragment arrives at exactly the depth the
+        // prepass already wrote, so a strict `less` test rejects all of them
+        // and the surface never shades. `less-equal` lets the coplanar
+        // fragment through; with no prepass it behaves like `less` for visible
+        // geometry.
+        depthCompare: 'less-equal',
         depthBias: ctx.depthBias,
       };
     }
@@ -982,7 +1014,7 @@ class MaterialPluginState<M extends Material> {
     const writesMotion = flags.motionVector && supportsMotionOut;
 
     // The motion-enabled shader module variant declares the previous-instance
-    // attributes at @location(16..19) and the motion fragment entries —
+    // attributes at @location(4..7) and the motion fragment entries —
     // compile it lazily on the first motion-vector request and reuse.
     const modules = writesMotion
       ? this.ensureMotionShaderModules()
@@ -1045,13 +1077,24 @@ class MaterialPluginState<M extends Material> {
         targets: [{ format: PREPASS_MOTION_VECTOR_FORMAT }],
       };
     }
+    // A camera asked for a color-writing prepass channel but no fragment was
+    // selected — the material declares the channel in `prepassWrites()` yet
+    // does not actually ship the entry. Handing the backend a render pipeline
+    // with a color-bearing pass but no fragment targets is invalid; fail loud
+    // here instead of letting the device reject an empty-target pipeline.
+    if ((flags.normal || flags.motionVector) && descriptor.fragment === undefined) {
+      throw new Error(
+        `MaterialPlugin<${this.materialClass.name}>: prepass requested normal/motion output but the material exposes no matching fragment entry. ` +
+          `prepassWrites() declares { normal: ${this.prepassCapabilities.normal}, motionVector: ${this.prepassCapabilities.motionVector} } — a material that declares a channel must ship its fs_prepass_* entry.`,
+      );
+    }
     return descriptor;
   }
 
   /**
    * Lazily compile the `PREPASS_MOTION_VECTOR`-defined variant of this
    * material's vertex and fragment modules. The variant declares the
-   * previous-instance attributes at `@location(16..19)` and exposes the
+   * previous-instance attributes at `@location(4..7)` and exposes the
    * `fs_prepass_motion` / `fs_prepass_normal_motion` fragment entries.
    * Materials that never produce a motion-vector prepass pipeline never
    * trigger this path.
@@ -1081,24 +1124,20 @@ class MaterialPluginState<M extends Material> {
   }
 
   private materialSupportsPrepassNormalFragment(): boolean {
-    // Heuristic: materials that opt into the normal channel via their
-    // `prepassWrites()` must also expose `fs_prepass_normal` in their shader.
-    // The `StandardMaterial` does (pbr.wgsl); `UnlitMaterial` does not.
-    // Materials default to opt-out via `prepassWrites?()` absent or returning
-    // `normal: false`; the queue does not request normal-output pipelines for
-    // them. So this guard primarily exists for forward-compat: a future
-    // material may opt into normals without shipping the fragment yet.
-    return this.materialClass.name === 'StandardMaterial';
+    // A material that declares the normal channel in `prepassWrites()` is
+    // promising it ships `fs_prepass_normal`; the declaration is the
+    // capability signal. Tied to the declared flags rather than the class
+    // name so it survives bundler minification.
+    return this.prepassCapabilities.normal;
   }
 
   private materialSupportsPrepassMotionFragment(): boolean {
-    // Sibling of `materialSupportsPrepassNormalFragment`. Materials that opt
-    // into the motion-vector channel via `prepassWrites()` must also expose
-    // `fs_prepass_motion` and `fs_prepass_normal_motion` in their shader, and
-    // declare the previous-instance attributes at `@location(16..19)` under
-    // `#ifdef PREPASS_MOTION_VECTOR`. `StandardMaterial` does (pbr.wgsl);
-    // `UnlitMaterial` does not.
-    return this.materialClass.name === 'StandardMaterial';
+    // Sibling of `materialSupportsPrepassNormalFragment`. A material that
+    // declares the motion-vector channel in `prepassWrites()` promises it
+    // ships `fs_prepass_motion` / `fs_prepass_normal_motion` and the
+    // previous-instance attributes at `@location(4..7)` under
+    // `#ifdef PREPASS_MOTION_VECTOR`.
+    return this.prepassCapabilities.motionVector;
   }
 }
 
