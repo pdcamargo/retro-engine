@@ -436,6 +436,21 @@ export {
 } from './tonemapping/tonemapping-node';
 export { TonemappingPlugin } from './tonemapping/tonemapping-plugin';
 export { ViewTonemapping } from './tonemapping/view-tonemapping';
+
+export { DEFAULT_MOTION_BLUR, MotionBlur } from './motion-blur/motion-blur';
+export { MOTION_BLUR_WGSL } from './motion-blur/motion-blur.wgsl';
+export type { MotionBlurKey } from './motion-blur/motion-blur-pipeline';
+export { MotionBlurPipeline } from './motion-blur/motion-blur-pipeline';
+export { makeMotionBlurNode, MotionBlurPass3dLabel } from './motion-blur/motion-blur-node';
+export { MotionBlurPlugin } from './motion-blur/motion-blur-plugin';
+export type { MotionBlurParams } from './motion-blur/view-motion-blur';
+export { ViewMotionBlur } from './motion-blur/view-motion-blur';
+export type { MotionBlurCacheEntry } from './motion-blur/view-motion-blur-targets';
+export {
+  MOTION_BLUR_PARAMS_BYTE_SIZE,
+  MOTION_BLUR_TARGET_FORMAT,
+  ViewMotionBlurTargets,
+} from './motion-blur/view-motion-blur-targets';
 export type {
   AmbientLightOptions,
   CascadeFitParams,

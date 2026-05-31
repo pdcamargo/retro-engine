@@ -4,6 +4,7 @@ import { Children, Parent, propagateTransformsGated } from './hierarchy';
 import { ImagePlugin } from './image/image-plugin';
 import type { App } from './index';
 import { MeshPlugin } from './mesh/mesh-plugin';
+import { MotionBlurPlugin } from './motion-blur/motion-blur-plugin';
 import type { PluginObject } from './plugin';
 import { RenderGraphPlugin } from './render-graph/render-graph-plugin';
 import { ShaderPlugin } from './shader/shader-plugin';
@@ -88,5 +89,8 @@ export class CorePlugin implements PluginObject {
     app.addPlugin(new VisibilityPlugin());
     app.addPlugin(new RenderGraphPlugin());
     app.addPlugin(new TonemappingPlugin());
+    // After TonemappingPlugin so its finish() (which orders the tonemap node
+    // behind motion blur) sees the tonemap node already registered.
+    app.addPlugin(new MotionBlurPlugin());
   }
 }

@@ -5,6 +5,7 @@ import { atlasShowcasePlugin } from './atlas-showcase-plugin';
 import { lightsShowcasePlugin } from './lights-showcase-plugin';
 import { litShowcasePlugin } from './lit-showcase-plugin';
 import { LoggingPlugin } from './logging-plugin';
+import { motionVectorsShowcasePlugin } from './motion-vectors-showcase-plugin';
 import { primitivesShowcasePlugin } from './primitives-showcase-plugin';
 import { shapesShowcasePlugin } from './shapes-showcase-plugin';
 import { sliceShowcasePlugin } from './slice-showcase-plugin';
@@ -27,6 +28,11 @@ if (!(canvas instanceof HTMLCanvasElement)) {
 //                     normal-mapped lighting (ADR-0037/0041/0042/0043).
 //   `?mode=lit`     → Phase 10 3D lighting showcase: a metallic×roughness PBR
 //                     sphere grid under sun/point/spot/ambient lights (ADR-0044).
+//   `?mode=motion-vectors` → Phase 12.8/12.10 device check: moving PBR meshes
+//                     under Depth + Normal + MotionVector prepass
+//                     (ADR-0050/0051). Add `&debug=motion` to blit the motion
+//                     target (|velocity|) to screen, or `&blur=1` to see the
+//                     Phase 12.10 MotionBlur effect (HDR camera streaks).
 //   anything else   → Phase 7.5 primitives demo.
 // All demos stay discoverable from one bundle.
 const mode = new URLSearchParams(window.location.search).get('mode');
@@ -45,7 +51,9 @@ const showcase =
               ? lightsShowcasePlugin
               : mode === 'lit'
                 ? litShowcasePlugin
-                : primitivesShowcasePlugin;
+                : mode === 'motion-vectors'
+                  ? motionVectorsShowcasePlugin
+                  : primitivesShowcasePlugin;
 
 const renderer = createWebGPURenderer(canvas);
 const app = new App({

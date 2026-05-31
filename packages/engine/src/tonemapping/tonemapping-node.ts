@@ -1,6 +1,7 @@
 import type { Entity } from '@retro-engine/ecs';
 import type { ColorAttachment, RenderPassDescriptor } from '@retro-engine/renderer-core';
 
+import { ViewMotionBlurTargets } from '../motion-blur/view-motion-blur-targets';
 import type { NodeRunContext, ViewNode } from '../render-graph/node';
 import { createLabel } from '../render-graph/render-label';
 import type { RenderLabel } from '../render-graph/render-label';
@@ -70,10 +71,16 @@ export const makeTonemappingNode = (label: RenderLabel): ViewNode => ({
     const renderPipeline = pipeline.specialized.get({
       key: { outputFormat: view.target.format, method },
     });
+    // When a motion-blur pass ran for this camera it wrote a blurred copy of the
+    // HDR scene into its own intermediate; tonemap that instead of the raw HDR
+    // target. Falls back to the HDR target when no blur output exists.
+    const blurredView = ctx.app
+      .getResource(ViewMotionBlurTargets)
+      ?.perCamera.get(view.sourceEntity as Entity)?.view;
     const bindGroup = pipeline.bindGroupFor(
       ctx.app,
       view.sourceEntity as Entity,
-      view.mainColorTarget.view,
+      blurredView ?? view.mainColorTarget.view,
     );
 
     const colorAttachment: ColorAttachment = {

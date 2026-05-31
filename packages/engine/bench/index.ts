@@ -31,6 +31,7 @@ import './light-3d.bench';
 import './shadow-3d.bench';
 import './tonemapping.bench';
 import './prepass-motion-vectors.bench';
+import './motion-blur.bench';
 
 interface NormalizedBench {
   readonly key: string;

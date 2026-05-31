@@ -207,9 +207,9 @@ Each effect is opt-in via a per-camera component that inserts a node into the ca
 - **12.5 `Fxaa` / `Smaa`**.
 - **12.6 `Taa`** — depends on motion-vector prepass + history textures.
 - **12.7 `Skybox`** — visually renders the same HDRI cubemap that Phase 10.7's `EnvironmentMapLight` lights from. Single asset, two consumers. Optional per-camera rotation/intensity override.
-- **12.8 Prepass** — `DepthPrepass`, `NormalPrepass`, `MotionVectorPrepass`, `DeferredPrepass`.
+- **12.8 Prepass** — `DepthPrepass` + `NormalPrepass` ✅ (ADR-0050), `MotionVectorPrepass` ✅ (ADR-0051). Device-verified during 12.10 bring-up (`apps/playground` `?mode=motion-vectors[&debug=motion]`), which surfaced three device-only defects the test stub could not catch — tracked + fixed in `docs/bugs/`. `DeferredPrepass` still pending.
 - **12.9 `DepthOfField`**.
-- **12.10 `MotionBlur`**.
+- **12.10 `MotionBlur`** — per-camera HDR-space pass consuming the motion-vector prepass. ✅ (ADR-0052). Browser-verified in `apps/playground` (`?mode=motion-vectors&blur=1`, press B to toggle).
 - **12.11 `ChromaticAberration`, `ContrastAdaptiveSharpening`**.
 - **12.12 Order-independent transparency** — capability-gated (storage textures).
 
