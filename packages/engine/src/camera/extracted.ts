@@ -236,7 +236,7 @@ export class ViewBindGroupCache {
  * Size in bytes of the `ViewUniform` struct uploaded to each camera's view
  * bind group. Must equal the WGSL layout of {@link VIEW_UNIFORM_WGSL}.
  *
- * Layout (352 bytes):
+ * Layout (416 bytes):
  * - `view_proj: mat4x4<f32>` — bytes 0..64
  * - `view: mat4x4<f32>` — bytes 64..128
  * - `inverse_view: mat4x4<f32>` — bytes 128..192
@@ -244,14 +244,22 @@ export class ViewBindGroupCache {
  * - `world_position: vec4<f32>` (xyz = position, w = 0) — bytes 256..272
  * - `viewport: vec4<f32>` (x, y, width, height in physical pixels) — bytes 272..288
  * - `prev_view_proj: mat4x4<f32>` — bytes 288..352
+ * - `unjittered_view_proj: mat4x4<f32>` — bytes 352..416
  *
- * `prev_view_proj` is the previous frame's `view_proj` for the same camera
- * entity. The motion-vector prepass shader reads it to project an entity's
+ * `view_proj` carries any sub-pixel jitter applied for temporal effects, so
+ * the depth prepass and the geometry passes rasterize identical (jittered)
+ * positions. `unjittered_view_proj` is the same matrix without that offset:
+ * the motion-vector prepass reads it for the current-frame clip position so
+ * velocities stay free of the jitter. When no camera jitter is active the two
+ * are bit-identical.
+ *
+ * `prev_view_proj` is the previous frame's *unjittered* `view_proj` for the
+ * same camera entity. The motion-vector prepass reads it to project an entity's
  * previous world position into the previous frame's clip space; non-prepass
  * shaders ignore the slot. On the first frame a camera is seen, the value
  * equals the current `view_proj` so motion vectors are zero.
  */
-export const VIEW_UNIFORM_BYTE_SIZE = 352 as const;
+export const VIEW_UNIFORM_BYTE_SIZE = 416 as const;
 
 /** `VIEW_UNIFORM_BYTE_SIZE / 4` — number of `f32` slots in a {@link ViewUniformGpu} buffer. */
 export const VIEW_UNIFORM_FLOAT_COUNT = VIEW_UNIFORM_BYTE_SIZE / 4;
@@ -270,6 +278,7 @@ struct ViewUniform {
   world_position: vec4<f32>,
   viewport: vec4<f32>,
   prev_view_proj: mat4x4<f32>,
+  unjittered_view_proj: mat4x4<f32>,
 };
 
 @group(0) @binding(0) var<uniform> view: ViewUniform;

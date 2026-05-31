@@ -241,7 +241,9 @@ fn vs_prepass(in: VsIn) -> VsPrepassOut {
   out.uv = in.uv;
 #ifdef PREPASS_MOTION_VECTOR
   let prev_model = mat4x4<f32>(in.prev_model_c0, in.prev_model_c1, in.prev_model_c2, in.prev_model_c3);
-  out.curr_clip = clip;
+  // Reconstruct the current clip position from the jitter-free matrix so any
+  // sub-pixel camera jitter (temporal AA) never leaks into the velocity.
+  out.curr_clip = view.unjittered_view_proj * world_pos;
   out.prev_clip = view.prev_view_proj * prev_model * vec4<f32>(in.position, 1.0);
 #endif
   return out;

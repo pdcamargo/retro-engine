@@ -11,6 +11,7 @@ import { shapesShowcasePlugin } from './shapes-showcase-plugin';
 import { sliceShowcasePlugin } from './slice-showcase-plugin';
 import { spriteShowcasePlugin } from './sprite-showcase-plugin';
 import { stressShowcasePlugin } from './stress-showcase-plugin';
+import { taaShowcasePlugin } from './taa-showcase-plugin';
 
 const canvas = document.getElementById('playground-canvas');
 if (!(canvas instanceof HTMLCanvasElement)) {
@@ -33,6 +34,10 @@ if (!(canvas instanceof HTMLCanvasElement)) {
 //                     (ADR-0050/0051). Add `&debug=motion` to blit the motion
 //                     target (|velocity|) to screen, or `&blur=1` to see the
 //                     Phase 12.10 MotionBlur effect (HDR camera streaks).
+//   `?mode=taa`     → Phase 12.6 device check: temporal anti-aliasing on a
+//                     high-contrast scene (HDR camera + Depth + MotionVector
+//                     prepass). Press T to toggle TAA for an aliased/resolved
+//                     A/B (ADR-0053).
 //   anything else   → Phase 7.5 primitives demo.
 // All demos stay discoverable from one bundle.
 const mode = new URLSearchParams(window.location.search).get('mode');
@@ -53,7 +58,9 @@ const showcase =
                 ? litShowcasePlugin
                 : mode === 'motion-vectors'
                   ? motionVectorsShowcasePlugin
-                  : primitivesShowcasePlugin;
+                  : mode === 'taa'
+                    ? taaShowcasePlugin
+                    : primitivesShowcasePlugin;
 
 const renderer = createWebGPURenderer(canvas);
 const app = new App({

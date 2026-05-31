@@ -18,6 +18,8 @@ import {
   type Viewport,
 } from './camera';
 import { ClearColor } from './clear-color';
+import { CurrentHdrView } from './current-hdr-view';
+import { jitterProjection, ViewJitter } from './jitter';
 import { ShaderRegistry } from '../shader/shader-registry';
 import {
   ExtractedCamera,
@@ -132,6 +134,7 @@ const writeViewUniform = (
   worldPosition: Float32Array,
   viewport: Viewport,
   prevViewProj: Float32Array,
+  unjitteredViewProj: Float32Array,
 ): void => {
   scratch.set(viewProj, 0);
   scratch.set(view, 16);
@@ -146,6 +149,7 @@ const writeViewUniform = (
   scratch[70] = viewport.physicalSize.width;
   scratch[71] = viewport.physicalSize.height;
   scratch.set(prevViewProj, 72);
+  scratch.set(unjitteredViewProj, 88);
 };
 
 const fullTargetViewport = (target: ResolvedRenderTarget): Viewport => ({
@@ -310,6 +314,8 @@ export class CameraPlugin implements PluginObject {
     app.insertResource(new ViewDepthCache());
     app.insertResource(new ViewHdrTargets());
     app.insertResource(new ViewPreviousFrame());
+    app.insertResource(new ViewJitter());
+    app.insertResource(new CurrentHdrView());
 
     // Register the canonical view uniform module so user shaders can write
     // `#import retro_engine::view` to pull in the ViewUniform struct + the
@@ -412,11 +418,20 @@ export class CameraPlugin implements PluginObject {
         ResMut(ViewPreviousFrame),
         ResMut(SortedCameras),
         Res(ClearColor),
+        Res(ViewJitter),
+        ResMut(CurrentHdrView),
       ],
-      (q, cache, depthCache, hdrCache, prevFrame, sorted, clearColor) => {
+      (q, cache, depthCache, hdrCache, prevFrame, sorted, clearColor, jitter, currentHdr) => {
         sorted.views.length = 0;
+        // Reseed the post-process chain handoff each frame; HDR cameras start
+        // it at their scene intermediate, non-HDR cameras get no entry.
+        currentHdr.perCamera.clear();
         const sortable: SortableCameraView[] = [];
         const inverseViewScratch = mat4.identity();
+        // Reused per camera to bake sub-pixel jitter into `view_proj` without
+        // disturbing the unjittered matrix the motion-vector prepass reads.
+        const jitteredProjScratch = mat4.create();
+        const jitteredViewProjScratch = mat4.create();
         const liveSourceEntities = new Set<Entity>();
         for (const [renderEntity, ext] of q.entries()) {
           const resolved = resolveCameraRenderTarget(ext.target, app);
@@ -445,22 +460,44 @@ export class CameraPlugin implements PluginObject {
             ext.hdr,
             resolved,
           );
+          if (hdrTarget !== undefined) {
+            currentHdr.perCamera.set(ext.sourceEntity, hdrTarget.view);
+          }
           const viewport = ext.viewport ?? fullTargetViewport(resolved);
           mat4.invert(ext.viewMatrix, inverseViewScratch);
+          // Advance the previous-frame cache with the unjittered matrix
+          // regardless of jitter state, so toggling a temporal effect on or
+          // off never injects a jitter offset into the next frame's motion
+          // vectors.
           const prevViewProj = readAndAdvancePrevViewProj(
             prevFrame,
             ext.sourceEntity,
             ext.viewProjectionMatrix,
           );
+          // Bake any requested sub-pixel offset into `view_proj`; the geometry
+          // and depth-prepass passes draw with it, while motion vectors read
+          // the untouched `unjittered_view_proj`. No entry → the two match.
+          let jitteredViewProj = ext.viewProjectionMatrix as Float32Array;
+          const offset = jitter.perCamera.get(ext.sourceEntity);
+          if (offset !== undefined && (offset.x !== 0 || offset.y !== 0)) {
+            const w = viewport.physicalSize.width;
+            const h = viewport.physicalSize.height;
+            const ndcX = w > 0 ? (offset.x * 2) / w : 0;
+            const ndcY = h > 0 ? (offset.y * 2) / h : 0;
+            jitterProjection(ext.projectionMatrix, ndcX, ndcY, jitteredProjScratch);
+            mat4.multiply(jitteredProjScratch, ext.viewMatrix, jitteredViewProjScratch);
+            jitteredViewProj = jitteredViewProjScratch as Float32Array;
+          }
           writeViewUniform(
             cache.scratch,
-            ext.viewProjectionMatrix as Float32Array,
+            jitteredViewProj,
             ext.viewMatrix as Float32Array,
             inverseViewScratch as Float32Array,
             ext.projectionMatrix as Float32Array,
             ext.worldPosition as Float32Array,
             viewport,
             prevViewProj as Float32Array,
+            ext.viewProjectionMatrix as Float32Array,
           );
           app.renderer.writeBuffer(slots.buffer, 0, cache.scratch as BufferSource);
           const { color, loadOp } = resolveClearColor(ext.clearColor, clearColor as ClearColor);

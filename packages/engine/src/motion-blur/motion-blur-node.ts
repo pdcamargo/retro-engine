@@ -1,6 +1,7 @@
 import type { Entity } from '@retro-engine/ecs';
 import type { ColorAttachment, RenderPassDescriptor } from '@retro-engine/renderer-core';
 
+import { CurrentHdrView } from '../camera/current-hdr-view';
 import type { NodeRunContext, ViewNode } from '../render-graph/node';
 import { createLabel } from '../render-graph/render-label';
 import { ViewPrepassTargets } from '../prepass/view-prepass-targets';
@@ -55,10 +56,14 @@ export const makeMotionBlurNode = (): ViewNode => ({
     const renderPipeline = pipeline.specialized.get({
       key: { outputFormat: MOTION_BLUR_TARGET_FORMAT },
     });
+    // Read whatever the preceding HDR post pass left as the current scene view
+    // (e.g. the TAA-resolved color), falling back to the raw HDR intermediate.
+    const currentHdr = ctx.app.getResource(CurrentHdrView);
+    const sceneView = currentHdr?.perCamera.get(entity) ?? view.mainColorTarget.view;
     const bindGroup = pipeline.bindGroupFor(
       ctx.app,
       entity,
-      view.mainColorTarget.view,
+      sceneView,
       motionView,
       output.paramsBuffer,
     );
@@ -78,5 +83,9 @@ export const makeMotionBlurNode = (): ViewNode => ({
     pass.setBindGroup(0, bindGroup);
     pass.draw(3, 1, 0, 0);
     pass.end();
+
+    // Publish the blurred result as the current scene view so the tonemap pass
+    // (and any pass ordered after this one) reads it in place of the raw HDR.
+    currentHdr?.perCamera.set(entity, output.view);
   },
 });

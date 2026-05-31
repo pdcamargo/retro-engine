@@ -9,6 +9,7 @@ import type { PluginObject } from './plugin';
 import { RenderGraphPlugin } from './render-graph/render-graph-plugin';
 import { ShaderPlugin } from './shader/shader-plugin';
 import { Query, ResMut } from './system-param';
+import { TaaPlugin } from './taa/taa-plugin';
 import { Time } from './time';
 import { TonemappingPlugin } from './tonemapping/tonemapping-plugin';
 import { Transform } from './transform';
@@ -92,5 +93,8 @@ export class CorePlugin implements PluginObject {
     // After TonemappingPlugin so its finish() (which orders the tonemap node
     // behind motion blur) sees the tonemap node already registered.
     app.addPlugin(new MotionBlurPlugin());
+    // After MotionBlurPlugin so its finish() can order the TAA resolve ahead of
+    // the blur and tonemap nodes.
+    app.addPlugin(new TaaPlugin());
   }
 }

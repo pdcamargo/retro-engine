@@ -70,6 +70,9 @@ export {
   ViewHdrTargets,
   ViewPreviousFrame,
 } from './camera/extracted';
+export { CurrentHdrView } from './camera/current-hdr-view';
+export type { JitterOffset } from './camera/jitter';
+export { jitterProjection, ViewJitter } from './camera/jitter';
 export { CameraPlugin } from './camera/camera-plugin';
 export type { CommandsHandle, EntityCommands } from './commands';
 export { Commands } from './commands';
@@ -451,6 +454,23 @@ export {
   MOTION_BLUR_TARGET_FORMAT,
   ViewMotionBlurTargets,
 } from './motion-blur/view-motion-blur-targets';
+export { DEFAULT_TAA, Taa } from './taa/taa';
+export { haltonJitter, TAA_JITTER_SAMPLE_COUNT } from './taa/halton';
+export { TAA_WGSL } from './taa/taa.wgsl';
+export type { TaaKey } from './taa/taa-pipeline';
+export { TaaPipeline } from './taa/taa-pipeline';
+export { makeTaaNode, TaaPass3dLabel } from './taa/taa-node';
+export { TaaPlugin } from './taa/taa-plugin';
+export type { TaaParams } from './taa/view-taa';
+export { ViewTaa } from './taa/view-taa';
+export type { TaaCacheEntry } from './taa/view-taa-targets';
+export {
+  evictTaaTargets,
+  resolveTaaTargets,
+  TAA_PARAMS_BYTE_SIZE,
+  TAA_TARGET_FORMAT,
+  ViewTaaTargets,
+} from './taa/view-taa-targets';
 export type {
   AmbientLightOptions,
   CascadeFitParams,
