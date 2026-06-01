@@ -1,30 +1,52 @@
 # Asset System
 
 - **Created:** 2026-05-21
-- **Status:** Planning
+- **Status:** Active — runtime core + retrofit (persistent project tier + studio deferred)
+- **Decision:** ADR-0055 (seals the id / handle / asset-vs-inline model, including the deferred persistent GUID tier)
 
 ## Goal
 
-`packages/assets` provides a GUID-based asset system. Assets are referenced by stable IDs, never by path. Project save/load round-trips assets, scenes, and references intact. Importers and serializers register against a central registry; new asset types are added by registration, not by inheritance.
+`packages/assets` provides one asset concept addressed by `Handle<T>`. At runtime an asset is keyed by
+a dense `AssetIndex` (the hot path); persistent project assets additionally carry a stable v4
+`AssetGuid` that survives rename. Project save/load round-trips assets, scenes, and references intact.
+Importers and serializers register against a central registry; new asset types are added by
+registration, not by inheritance. The system **absorbs** the engine's existing `Image` / `Mesh` /
+`Material` / `TextureAtlasLayout` registries rather than standing beside them.
 
 ## Phases
 
-1. **Asset ID and handle types** — opaque GUID, `Handle<T>` with type-level discrimination.
-2. **Asset store** — runtime map ID → loaded asset; ref-counted for unload.
-3. **Importer registry** — strategy pattern; each file extension or asset kind registers an importer function `(bytes) => Asset`. Hot-reload friendly.
-4. **Serializer registry** — symmetric to importers for save.
-5. **Project format** — directory layout for `.retro-project`, manifest file, asset metadata. JSON or binary? Probably JSON for v1; binary later if perf demands.
-6. **Reference resolution** — handles in serialized data reference assets by GUID; loader resolves to in-memory handles.
-7. **Studio integration** — asset browser, drag-drop into scene, rename without breaking references.
+**Active slice (this initiative — runtime core + retrofit). Backlog items:**
+
+1. **Asset id and handle types** — `AssetIndex` / `AssetGuid` / `AssetId<T>` / `Handle<T>` (phantom-
+   typed) + generic `Assets<T>` store + `AssetEvent<T>`. → `docs/backlog/assets-core-types.md`.
+2. **Asset server + loader registries** — `AssetServer` (immediate handle, schedule-bound drain),
+   `AssetPlugin`, importer/serializer registries, `FetchAssetSource`, `AssetSource` interface. →
+   `docs/backlog/asset-server-and-loaders.md`.
+3. **Retrofit** — fold the four existing types into `Assets<T>`, big-bang, keyed on `handle.index`.
+   → `docs/backlog/asset-retrofit.md`.
+
+**Deferred (designed in ADR-0055, built as a later initiative — the persistent project tier):**
+
+4. **Project format** — `.retro-project` layout, GUID `.meta` sidecars, manifest. JSON for v1.
+5. **Reference resolution + sources** — `DiskAssetSource` / `BundleAssetSource`, GUID→index
+   resolution on load, promotion (`CreateAsset` analogue: runtime asset → GUID-backed project asset).
+6. **Studio integration** — asset browser, drag-drop into scene, rename without breaking references,
+   hot-reload, inspector-dirty → serialize.
 
 (Scene system moved to its own roadmap: `docs/roadmap/scenes-and-prefabs.md`.)
 
-## Open questions
+## Resolved (ADR-0055)
 
-- GUID generation: random v4 vs content-addressed hash? Hash is reproducible but rename detection breaks.
-- Handle lifecycle: ref-counted with manual release, or rely on GC? GC means we can't predict unload timing.
-- Async loading model: promises, observable handles, or schedule-bound `AssetLoad` system?
-- Editor vs runtime asset paths: do we ship an asset bundle at runtime, or always resolve from a manifest?
+- **GUID generation** → random v4. Identity must survive edits and renames; content-addressing severs
+  references on every edit. Content hashing is a future dedup *cache* key, never the identity.
+- **Handle lifecycle** → plain value handles, explicit/bulk release, no `Arc`/`Drop`, no strong/weak
+  split. JS has no deterministic destructor and `FinalizationRegistry` is unsuitable, so auto-unload-
+  on-last-drop is impossible; lifetime is owned by the store and released explicitly or via scene
+  teardown.
+- **Async loading** → immediate handle + schedule-bound drain (`load()` returns synchronously, IO via
+  promise, a `PreUpdate` system populates the store before `RenderSet.Extract`).
+- **Editor vs runtime** → one `AssetServer`, a swappable `AssetSource` (web fetch source now; disk and
+  bundle sources designed, deferred).
 
 ## Links
 

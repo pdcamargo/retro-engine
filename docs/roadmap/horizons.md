@@ -8,32 +8,31 @@ This file is the answer to "what should I work on?" — not by listing every ini
 
 Most files in this folder are **sketches**, not researched plans. They capture intent at the time of writing. A file becomes a plan when its phases get promoted into concrete `docs/backlog/*.md` items with acceptance criteria. Until then, treat a sketch as an idea worth keeping, not as a commitment.
 
-`engine-foundations.md` is the only roadmap file in this repo that has been promoted end-to-end — every phase points to a real backlog item. Everything else is a sketch (some more researched than others) waiting for promotion when its turn comes.
+`asset-system.md` is the roadmap file currently promoted end-to-end — its active phases point to real backlog items (`assets-core-types.md`, `asset-server-and-loaders.md`, `asset-retrofit.md`). Everything else is a sketch (some more researched than others) waiting for promotion when its turn comes. The earlier foundations and renderer milestones were worked through and their umbrella roadmap files retired as the work landed (see below).
 
 ## Current milestone
 
-**M2 — Engine Foundations.** See `engine-foundations.md` for the umbrella; phases live in `docs/backlog/*.md`:
+**Asset System.** See `asset-system.md` for the umbrella; the active (runtime-core + retrofit) phases live in `docs/backlog/*.md`:
 
-- `system-param-protocol.md`
-- `engine-resource-registry.md`
-- `engine-time-resource.md`
-- `ecs-archetype-world.md`
-- `engine-schedule-and-states.md`
-- `engine-commands-buffer.md`
-- `transform-hierarchy.md`
-- `engine-plugin-lifecycle.md`
+- `assets-core-types.md`
+- `asset-server-and-loaders.md`
+- `asset-retrofit.md`
 
-The M2 design posture: single-threaded throughout (TypeScript reality), `Transform` is one component used for 2D and 3D, Required Components is the primary spawn mechanism, `States` + `runIf` is the system/resource scoping primitive, scenes and prefabs are *ours* (BSN-inspired but designed in-house), Plugin gets a full lifecycle (`build` / `ready` / `finish` / `cleanup`).
+Sealed by **ADR-0055**. The persistent project tier (GUID `.meta` sidecars, manifest, disk/bundle sources, promotion) and studio integration are designed in the ADR but deferred to a later initiative — they stay as phases 4–6 in `asset-system.md`, not yet promoted.
+
+### Completed before this
+
+- **M2 — Engine Foundations** (ADRs 0005–0011) is sealed; its backlog items landed and were removed. Design posture carried forward: single-threaded throughout (TypeScript reality), `Transform` is one component for 2D and 3D, Required Components is the primary spawn mechanism, `States` + `runIf` is the scoping primitive, scenes/prefabs are *ours* (BSN-inspired, in-house), Plugin has a full `build`/`ready`/`finish`/`cleanup` lifecycle.
+- **Renderer** (ADRs ~0018–0054) landed a large body of work — HAL, render world + sets, cameras/visibility, mesh/material/sprite pipelines, 2D/3D lighting + shadows, HDR/tonemapping, the screen-space prepass family, TAA, and SSAO. `renderer.md` is the long-horizon umbrella; remaining renderer follow-ups live as individual backlog items.
 
 ## Imminent
 
-To be picked once M2 phases start landing. Candidates currently include sprite rendering (the natural next pressure on the renderer HAL), input, and the first scene/prefab work. M3's exact shape is decided at the end of M2, not now.
+The asset retrofit unblocks the persistent project tier, which in turn unblocks scenes/prefabs and reflection/serialization. Likely next once the runtime asset core lands: the persistent GUID/manifest layer (`asset-system.md` phases 4–6) and the first reflection work (`reflection-and-serialization.md`), since scenes depend on both.
 
 ## Future direction (sketches, kept on paper)
 
 Each link below is a sketch. Some are tightly scoped, some are speculative. None are ready to execute without further research and promotion.
 
-- `asset-system.md` — GUID-handle asset store, importer/serializer registry, project format.
 - `audio.md` — HAL-shaped audio backend, mixer buses, spatial audio.
 - `change-detection.md` — `Changed<T>` / `Added<T>` query filters, generation counters. Designed alongside M2; impl deferred until a real consumer.
 - `ecs-storage.md` — perf + ergonomics beyond the M2 archetype baseline (sparse-set sidecar, fragmentation under thousands of archetypes, benchmarks).
