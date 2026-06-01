@@ -109,6 +109,7 @@ export {
   VisibilityPlugin,
   visibilityPropagateSystem,
 } from './visibility';
+export { Name } from './name';
 export type { PreprocessOptions, SpecializeFn } from './shader';
 export {
   PipelineCache,
