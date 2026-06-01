@@ -1,7 +1,7 @@
 # Asset System
 
 - **Created:** 2026-05-21
-- **Status:** Active — runtime core + retrofit (persistent project tier + studio deferred)
+- **Status:** Runtime core + retrofit shipped (phases 1–3); persistent project tier + studio (phases 4–6) deferred to a later initiative
 - **Decision:** ADR-0055 (seals the id / handle / asset-vs-inline model, including the deferred persistent GUID tier)
 
 ## Goal
@@ -15,15 +15,15 @@ registration, not by inheritance. The system **absorbs** the engine's existing `
 
 ## Phases
 
-**Active slice (this initiative — runtime core + retrofit). Backlog items:**
+**Active slice (this initiative — runtime core + retrofit). Shipped:**
 
 1. **Asset id and handle types** — `AssetIndex` / `AssetGuid` / `AssetId<T>` / `Handle<T>` (phantom-
-   typed) + generic `Assets<T>` store + `AssetEvent<T>`. → `docs/backlog/assets-core-types.md`.
+   typed) + generic `Assets<T>` store + `AssetEvent<T>`. ✅ Shipped.
 2. **Asset server + loader registries** — `AssetServer` (immediate handle, schedule-bound drain),
-   `AssetPlugin`, importer/serializer registries, `FetchAssetSource`, `AssetSource` interface. →
-   `docs/backlog/asset-server-and-loaders.md`.
+   `AssetPlugin`, importer/serializer registries, `FetchAssetSource`, `AssetSource` interface.
+   ✅ Shipped.
 3. **Retrofit** — fold the four existing types into `Assets<T>`, big-bang, keyed on `handle.index`.
-   → `docs/backlog/asset-retrofit.md`.
+   ✅ Shipped.
 
 **Deferred (designed in ADR-0055, built as a later initiative — the persistent project tier):**
 
