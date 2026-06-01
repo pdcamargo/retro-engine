@@ -16,11 +16,9 @@ import { jitterProjection } from '../camera/jitter';
 const mul = (m: Float32Array, v: readonly [number, number, number, number]): [number, number, number, number] => {
   const out: [number, number, number, number] = [0, 0, 0, 0];
   for (let row = 0; row < 4; row++) {
-    out[row] =
-      m[0 * 4 + row]! * v[0] +
-      m[1 * 4 + row]! * v[1] +
-      m[2 * 4 + row]! * v[2] +
-      m[3 * 4 + row]! * v[3];
+    let acc = 0;
+    for (let col = 0; col < 4; col++) acc += m[col * 4 + row]! * v[col];
+    out[row] = acc;
   }
   return out;
 };
