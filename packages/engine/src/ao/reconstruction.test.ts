@@ -17,7 +17,7 @@ const mul = (m: Float32Array, v: readonly [number, number, number, number]): [nu
   const out: [number, number, number, number] = [0, 0, 0, 0];
   for (let row = 0; row < 4; row++) {
     let acc = 0;
-    for (let col = 0; col < 4; col++) acc += m[col * 4 + row]! * v[col];
+    for (let col = 0; col < 4; col++) acc += m[col * 4 + row]! * v[col]!;
     out[row] = acc;
   }
   return out;
