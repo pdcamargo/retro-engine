@@ -217,6 +217,14 @@ export class StandardMaterial implements Material {
    */
   static readonly usesLights = true;
 
+  /**
+   * Opts this material's lit opaque variant into screen-space ambient
+   * occlusion: when a camera has an active {@link ScreenSpaceAo} target,
+   * {@link MaterialPlugin} appends the AO read binding at `@group(3)` and
+   * `pbr.wgsl`'s `fs_main` folds the sampled occlusion into the ambient term.
+   */
+  static readonly usesAo = true;
+
   static vertexShader(): ShaderRef {
     return ShaderRefs.module('retro_engine::pbr');
   }

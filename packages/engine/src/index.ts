@@ -471,6 +471,36 @@ export {
   TAA_TARGET_FORMAT,
   ViewTaaTargets,
 } from './taa/view-taa-targets';
+
+export { DEFAULT_AO, ScreenSpaceAo } from './ao/ao';
+export { AO_BLUR_WGSL, AO_GTAO_WGSL, AO_TEMPORAL_WGSL } from './ao/ao.wgsl';
+export type { AoKey } from './ao/ao-pipeline';
+export { AoPipeline } from './ao/ao-pipeline';
+export type { AoBlurKey } from './ao/ao-blur-pipeline';
+export { AoBlurPipeline } from './ao/ao-blur-pipeline';
+export type { AoTemporalKey } from './ao/ao-temporal-pipeline';
+export { AoTemporalPipeline } from './ao/ao-temporal-pipeline';
+export { AoBindGroupCache } from './ao/ao-bind-group-cache';
+export {
+  makeAoBlurNode,
+  makeAoGtaoNode,
+  makeAoTemporalNode,
+  AoBlurPass3dLabel,
+  AoGtaoPass3dLabel,
+  AoTemporalPass3dLabel,
+} from './ao/ao-node';
+export { AoPlugin } from './ao/ao-plugin';
+export type { AoParams } from './ao/view-ao';
+export { ViewAo } from './ao/view-ao';
+export type { AoCacheEntry } from './ao/view-ao-targets';
+export {
+  AO_HISTORY_FORMAT,
+  AO_PARAMS_BYTE_SIZE,
+  AO_TARGET_FORMAT,
+  evictAoTargets,
+  resolveAoTargets,
+  ViewAoTargets,
+} from './ao/view-ao-targets';
 export type {
   AmbientLightOptions,
   CascadeFitParams,

@@ -33,6 +33,7 @@ import './tonemapping.bench';
 import './prepass-motion-vectors.bench';
 import './motion-blur.bench';
 import './taa.bench';
+import './ao.bench';
 
 interface NormalizedBench {
   readonly key: string;

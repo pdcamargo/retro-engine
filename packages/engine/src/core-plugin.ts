@@ -1,3 +1,4 @@
+import { AoPlugin } from './ao/ao-plugin';
 import { CameraPlugin } from './camera/camera-plugin';
 import { RemovedComponents } from './change-detection';
 import { Children, Parent, propagateTransformsGated } from './hierarchy';
@@ -89,6 +90,10 @@ export class CorePlugin implements PluginObject {
     app.addPlugin(new ImagePlugin());
     app.addPlugin(new VisibilityPlugin());
     app.addPlugin(new RenderGraphPlugin());
+    // Before the HDR post chain: AO runs pre-opaque (it feeds the forward
+    // ambient term), so it is independent of tonemap / motion-blur / TAA. Its
+    // finish() wires Prepass → AO → Opaque once those nodes exist.
+    app.addPlugin(new AoPlugin());
     app.addPlugin(new TonemappingPlugin());
     // After TonemappingPlugin so its finish() (which orders the tonemap node
     // behind motion blur) sees the tonemap node already registered.

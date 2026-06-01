@@ -148,6 +148,15 @@ export interface MaterialPipelineKey {
     readonly normal: boolean;
     readonly motionVector: boolean;
   };
+  /**
+   * When `true`, this lit-material variant samples a screen-space
+   * ambient-occlusion factor from a `@group(3)` binding and folds it into its
+   * ambient term. Selected per camera by `MaterialPlugin` when the camera has an
+   * active AO target and the material declares `static usesAo` — it keys a
+   * distinct pipeline (extra bind group + the `ENABLE_SSAO` shader define), so
+   * the AO and non-AO variants never share a pipeline.
+   */
+  readonly aoEnabled?: boolean;
 }
 
 /**

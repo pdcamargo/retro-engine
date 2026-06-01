@@ -4,6 +4,7 @@ import type {
   RenderPassDescriptor,
 } from '@retro-engine/renderer-core';
 
+import { AoBindGroupCache } from '../ao/ao-bind-group-cache';
 import { GpuLights } from '../light3d/gpu-lights';
 import type { RenderContext } from '../index';
 import { ViewPrepassTargets } from '../prepass/view-prepass-targets';
@@ -102,6 +103,12 @@ export const OpaquePass3dNode: ViewNode = {
     // whole pass; pipelines that don't declare the group (unlit) ignore it.
     const lights = ctx.app.getResource(GpuLights);
     if (lights?.bindGroup !== undefined) pass.setBindGroup(2, lights.bindGroup);
+    // When screen-space AO ran for this camera, bind its result at @group(3) for
+    // the whole pass. Lit AO-enabled pipeline variants sample it; pipelines that
+    // don't declare the group (unlit, non-AO) ignore it — same contract as the
+    // lights group above.
+    const aoBindGroup = ctx.app.getResource(AoBindGroupCache)?.get(view.sourceEntity as never);
+    if (aoBindGroup !== undefined) pass.setBindGroup(3, aoBindGroup);
     const renderCtx: RenderContext = {
       encoder,
       pass,

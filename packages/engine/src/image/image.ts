@@ -261,6 +261,8 @@ const toByte = (v: number): number => {
  */
 export const bytesPerTexel = (format: TextureFormat): number | undefined => {
   switch (format) {
+    case 'r8unorm':
+      return 1;
     case 'rgba8unorm':
     case 'rgba8unorm-srgb':
     case 'bgra8unorm':

@@ -9,6 +9,8 @@ import type {
   VertexBufferLayout,
 } from '@retro-engine/renderer-core';
 
+import { AoBindGroupCache } from '../ao/ao-bind-group-cache';
+import { ViewAoTargets } from '../ao/view-ao-targets';
 import { ViewBindGroupCache } from '../camera/extracted';
 import { SortedCameras } from '../camera/sorted-cameras';
 import { Images } from '../image/images';
@@ -80,6 +82,15 @@ export interface MaterialCtor<M extends Material> {
    * for unlit materials, whose layout stays `[view, material]`.
    */
   readonly usesLights?: boolean;
+  /**
+   * When `true`, the material's lit opaque variant can sample a screen-space
+   * ambient-occlusion factor: {@link MaterialPlugin} appends the AO read
+   * bind-group layout at `@group(3)` and compiles the `ENABLE_SSAO` shader
+   * variant for cameras that have an active AO target. Requires
+   * {@link usesLights} (AO modulates the ambient/indirect term, which only
+   * exists in lit shading). Omit for unlit materials.
+   */
+  readonly usesAo?: boolean;
   vertexShader?(): ShaderRef;
   fragmentShader?(): ShaderRef;
   specialize?(
@@ -353,6 +364,10 @@ const prepassReadableKeyPart = (
   return `pr=${flags.normal ? 'n' : ''}${flags.motionVector ? 'm' : ''}`;
 };
 
+// Keyed on a stable boolean (never a class name) so the AO and non-AO pipeline
+// variants stay distinct in the cache and survive bundler minification.
+const aoKeyPart = (aoEnabled: boolean | undefined): string => (aoEnabled === true ? 'ao=1' : 'ao=0');
+
 /**
  * Closure-captured per-plugin state. One instance per `MaterialPlugin<M>`.
  *
@@ -387,6 +402,19 @@ class MaterialPluginState<M extends Material> {
   fragmentEntryPoint = 'fs_main';
   pipelineLayout: PipelineLayout | undefined;
   prepassPipelineLayout: PipelineLayout | undefined;
+  /**
+   * Pipeline layout for the AO-enabled lit variant: the opaque layout plus the
+   * screen-space AO read bind group at `@group(3)`. Built lazily the first time
+   * an `aoEnabled` pipeline is requested.
+   */
+  aoPipelineLayout: PipelineLayout | undefined;
+  /**
+   * Fragment module compiled with `ENABLE_SSAO` active — `fs_main` samples the
+   * `@group(3)` AO texture and folds it into the ambient term. Lazily built on
+   * the first `aoEnabled` request; materials that never enable AO never compile
+   * it.
+   */
+  aoFragmentModule: ShaderModule | undefined;
   specialized!: SpecializedRenderPipelines<SpecializeContext>;
   readonly instanceBuffer = new MeshInstanceBuffer();
   /**
@@ -485,7 +513,7 @@ class MaterialPluginState<M extends Material> {
       cache as PipelineCache,
       (ctx) => this.specialize(ctx),
       (ctx) =>
-        `${alphaModeKey(ctx.key.alphaMode)}|hdr=${ctx.key.hdr}|msaa=${ctx.key.msaaSamples}|vl=${ctx.key.vertexLayoutDigest}|cf=${ctx.colorFormat}|df=${ctx.depthFormat ?? 'none'}|db=${ctx.depthBias}|${prepassKeyPart(ctx.key.prepass)}|${prepassReadableKeyPart(ctx.key.prepassReadable)}`,
+        `${alphaModeKey(ctx.key.alphaMode)}|hdr=${ctx.key.hdr}|msaa=${ctx.key.msaaSamples}|vl=${ctx.key.vertexLayoutDigest}|cf=${ctx.colorFormat}|df=${ctx.depthFormat ?? 'none'}|db=${ctx.depthBias}|${prepassKeyPart(ctx.key.prepass)}|${prepassReadableKeyPart(ctx.key.prepassReadable)}|${aoKeyPart(ctx.key.aoEnabled)}`,
     );
   }
 
@@ -562,11 +590,15 @@ class MaterialPluginState<M extends Material> {
     // Collect one entry per (visible entity × view), then batch by
     // (mesh, material). Pipeline / material bind group / mesh slices are
     // constant across a group, so the batch carries them once.
+    const aoTargets = app.getResource(ViewAoTargets);
     const entries: InstanceEntry[] = [];
     for (const view of cameras.views) {
       const cameraEntity = view.sourceEntity;
       const colorFormat = view.mainColorTarget.format;
       const depthFormat = view.depth?.format;
+      const aoActiveForView =
+        this.materialClass.usesAo === true &&
+        aoTargets?.perCamera.has(view.sourceEntity as Entity) === true;
       const v = view.viewMatrix as Float32Array;
       for (const row of renderables.entries()) {
         const entity = row[0] as Entity;
@@ -593,11 +625,16 @@ class MaterialPluginState<M extends Material> {
         const depthBias = materialInstance?.depthBias?.() ?? 0;
 
         const layout = renderMesh.layout.layout;
+        // AO modulates the lit ambient term in the opaque pass (opaque +
+        // alpha-mask draw there); blend draws in the transparent pass, which
+        // does not bind @group(3), so it never takes the AO variant.
+        const aoEnabled = aoActiveForView && alphaMode !== 'blend';
         const key: MaterialPipelineKey = {
           msaaSamples: 1,
           hdr: view.hdr,
           vertexLayoutDigest: vertexLayoutDigestFor(layout),
           alphaMode,
+          ...(aoEnabled ? { aoEnabled: true } : {}),
         };
         const pipeline = this.specialized.get({ key, colorFormat, depthFormat, depthBias, layout });
 
@@ -835,6 +872,7 @@ class MaterialPluginState<M extends Material> {
     if (viewBindGroupCache.layout === undefined) return;
     if (cameras.views.length === 0) return;
     const mainWorldMaterials = app.getResource(this.plugin.Materials) as Materials<M> | undefined;
+    const aoTargets = app.getResource(ViewAoTargets);
 
     for (const view of cameras.views) {
       if (view.subGraph !== Core3dLabel) continue;
@@ -844,6 +882,9 @@ class MaterialPluginState<M extends Material> {
       if (buffer === undefined) continue;
       const colorFormat = view.mainColorTarget.format;
       const depthFormat = view.depth?.format;
+      const aoActiveForView =
+        this.materialClass.usesAo === true &&
+        aoTargets?.perCamera.has(view.sourceEntity as Entity) === true;
 
       for (const batch of index.batches) {
         const { meshHandle, materialHandle, bucket, depth } = batch.key;
@@ -863,11 +904,13 @@ class MaterialPluginState<M extends Material> {
         const alphaMode = materialInstance?.alphaMode?.() ?? 'opaque';
         const depthBias = materialInstance?.depthBias?.() ?? 0;
         const layout = renderMesh.layout.layout;
+        const aoEnabled = aoActiveForView && alphaMode !== 'blend';
         const key: MaterialPipelineKey = {
           msaaSamples: 1,
           hdr: view.hdr,
           vertexLayoutDigest: vertexLayoutDigestFor(layout),
           alphaMode,
+          ...(aoEnabled ? { aoEnabled: true } : {}),
         };
         const pipeline = this.specialized.get({ key, colorFormat, depthFormat, depthBias, layout });
         const payload: InstancedDrawPayload = {
@@ -909,7 +952,7 @@ class MaterialPluginState<M extends Material> {
     const viewLayout = (this.app.getResource(ViewBindGroupCache) as ViewBindGroupCache)
       .layout!;
 
-    if (this.pipelineLayout === undefined) {
+    const baseLayouts = (): BindGroupLayout[] => {
       const bindGroupLayouts: BindGroupLayout[] = [viewLayout, this.bindGroupLayout];
       if (this.materialClass.usesLights === true) {
         const gpuLights = this.app.getResource(GpuLights);
@@ -920,23 +963,44 @@ class MaterialPluginState<M extends Material> {
         }
         bindGroupLayouts.push(gpuLights.layout);
       }
+      return bindGroupLayouts;
+    };
+
+    // AO is a lit-only variant: it appends the screen-space AO read binding at
+    // @group(3) (after view/material/lights) and shades with the ENABLE_SSAO
+    // fragment module. Gated on usesLights so @group(3) always sits at index 3.
+    const aoEnabled = ctx.key.aoEnabled === true && this.materialClass.usesLights === true;
+    if (aoEnabled) {
+      if (this.aoPipelineLayout === undefined) {
+        const aoLayout = this.app.getResource(AoBindGroupCache)?.readLayout;
+        if (aoLayout === undefined) {
+          throw new Error(
+            `MaterialPlugin<${this.materialClass.name}>: aoEnabled pipeline requested but the AO read @group(3) layout is missing — AoPlugin must initialise before the first AO frame.`,
+          );
+        }
+        this.aoPipelineLayout = renderer.createPipelineLayout({
+          label: `material#${this.materialClass.name}#ao`,
+          bindGroupLayouts: [...baseLayouts(), aoLayout],
+        });
+      }
+    } else if (this.pipelineLayout === undefined) {
       this.pipelineLayout = renderer.createPipelineLayout({
         label: `material#${this.materialClass.name}`,
-        bindGroupLayouts,
+        bindGroupLayouts: baseLayouts(),
       });
     }
 
     const isTransparent = ctx.key.alphaMode === 'blend';
     const descriptor: RenderPipelineDescriptor = {
-      label: `material#${this.materialClass.name}#${alphaModeKey(ctx.key.alphaMode)}`,
-      layout: this.pipelineLayout,
+      label: `material#${this.materialClass.name}#${alphaModeKey(ctx.key.alphaMode)}${aoEnabled ? '#ao' : ''}`,
+      layout: aoEnabled ? this.aoPipelineLayout! : this.pipelineLayout!,
       vertex: {
         module: this.vertexModule,
         entryPoint: this.vertexEntryPoint,
         buffers: [ctx.layout, INSTANCE_LAYOUT],
       },
       fragment: {
-        module: this.fragmentModule,
+        module: aoEnabled ? this.ensureAoFragmentModule() : this.fragmentModule,
         entryPoint: this.fragmentEntryPoint,
         targets: [
           isTransparent
@@ -1121,6 +1185,27 @@ class MaterialPluginState<M extends Material> {
       defines,
     );
     return { vertex: this.motionVertexModule, fragment: this.motionFragmentModule };
+  }
+
+  /**
+   * Lazily compile the `ENABLE_SSAO`-defined variant of this material's
+   * fragment module. The variant declares the `@group(3)` AO sampler + texture
+   * and multiplies the sampled occlusion into the ambient term. Materials that
+   * never enable AO never trigger this path. The vertex stage is unchanged, so
+   * the base `vertexModule` is reused.
+   */
+  private ensureAoFragmentModule(): ShaderModule {
+    if (this.aoFragmentModule !== undefined) return this.aoFragmentModule;
+    const cache = this.app.getResource(PipelineCache) as PipelineCache;
+    const registry = this.app.getResource(ShaderRegistry) as ShaderRegistry;
+    this.aoFragmentModule = compileShaderFromRef(
+      cache,
+      registry,
+      this.fragmentShaderRef,
+      `${this.materialClass.name}-fragment+ao`,
+      { ENABLE_SSAO: true },
+    );
+    return this.aoFragmentModule;
   }
 
   private materialSupportsPrepassNormalFragment(): boolean {

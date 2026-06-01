@@ -1,6 +1,7 @@
 import { App } from '@retro-engine/engine';
 import { createWebGPURenderer } from '@retro-engine/renderer-webgpu';
 
+import { aoShowcasePlugin } from './ao-showcase-plugin';
 import { atlasShowcasePlugin } from './atlas-showcase-plugin';
 import { lightsShowcasePlugin } from './lights-showcase-plugin';
 import { litShowcasePlugin } from './lit-showcase-plugin';
@@ -38,6 +39,10 @@ if (!(canvas instanceof HTMLCanvasElement)) {
 //                     high-contrast scene (HDR camera + Depth + MotionVector
 //                     prepass). Press T to toggle TAA for an aliased/resolved
 //                     A/B (ADR-0053).
+//   `?mode=ao`      → Phase 12 device check: screen-space ambient occlusion
+//                     (GTAO) on a scene of contacts + a concave corner (Depth +
+//                     Normal prepass). Press O to toggle AO; add `&taa=1` to
+//                     check AO stays stable under jitter (ADR-0054).
 //   anything else   → Phase 7.5 primitives demo.
 // All demos stay discoverable from one bundle.
 const mode = new URLSearchParams(window.location.search).get('mode');
@@ -60,7 +65,9 @@ const showcase =
                   ? motionVectorsShowcasePlugin
                   : mode === 'taa'
                     ? taaShowcasePlugin
-                    : primitivesShowcasePlugin;
+                    : mode === 'ao'
+                      ? aoShowcasePlugin
+                      : primitivesShowcasePlugin;
 
 const renderer = createWebGPURenderer(canvas);
 const app = new App({

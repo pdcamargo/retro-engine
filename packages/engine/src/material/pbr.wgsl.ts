@@ -65,6 +65,14 @@ struct StandardMaterialUniform {
 @group(1) @binding(5) var emissive_texture: texture_2d<f32>;
 @group(1) @binding(6) var occlusion_texture: texture_2d<f32>;
 
+#ifdef ENABLE_SSAO
+// Screen-space ambient occlusion, produced by the pre-opaque AO pass and read
+// here to darken only the ambient/indirect term. Present only in the AO-enabled
+// pipeline variant (MaterialPlugin appends this @group(3) binding then).
+@group(3) @binding(0) var ao_sampler: sampler;
+@group(3) @binding(1) var ao_texture: texture_2d<f32>;
+#endif
+
 struct VsIn {
   @location(0) position: vec3<f32>,
   @location(1) normal: vec3<f32>,
@@ -206,8 +214,20 @@ fn fs_main(in: VsOut) -> @location(0) vec4<f32> {
     direct += lit(spot_light_sample(i, in.world_position), n, v, n_dot_v, base_color.rgb, metallic, roughness, f0) * shadow;
   }
 
+  // Screen-space ambient occlusion folds into the same ambient term as the
+  // material occlusion texture. Sampled with explicit LOD: the alpha-cutoff
+  // discard above puts this on non-uniform control flow, where implicit-LOD
+  // sampling is a uniformity violation. UV is the fragment's screen position
+  // over the AO texture's own dimensions (robust to sub-viewports).
+  var ssao = 1.0;
+#ifdef ENABLE_SSAO
+  let ao_dim = vec2<f32>(textureDimensions(ao_texture));
+  let ao_uv = in.clip_position.xy / ao_dim;
+  ssao = textureSampleLevel(ao_texture, ao_sampler, ao_uv, 0.0).r;
+#endif
+
   // Flat scene ambient — replaced by image-based lighting in Phase 10.7.
-  let ambient = lights.ambient.rgb * lights.ambient.a * base_color.rgb * occlusion;
+  let ambient = lights.ambient.rgb * lights.ambient.a * base_color.rgb * occlusion * ssao;
 
   let final_rgb = ambient + direct + material.emissive.rgb * emissive_sample.rgb;
   return vec4<f32>(final_rgb, base_color.a);

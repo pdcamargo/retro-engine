@@ -270,7 +270,11 @@ const resolveCameraDepth = (
     width,
     height,
     format,
-    usage: TextureUsage.RENDER_ATTACHMENT,
+    // TEXTURE_BINDING so screen-space passes (ambient occlusion, and future
+    // depth-driven effects) can sample the depth the geometry passes wrote.
+    // Additive: the depth attachment usage is unchanged; sampleability costs
+    // no extra memory and is reachable on WebGL2 for depth formats.
+    usage: TextureUsage.RENDER_ATTACHMENT | TextureUsage.TEXTURE_BINDING,
   });
   const view = texture.createView();
   cache.perCamera.set(sourceEntity, { texture, view, width, height, format });

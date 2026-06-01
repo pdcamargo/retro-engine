@@ -212,6 +212,7 @@ Each effect is opt-in via a per-camera component that inserts a node into the ca
 - **12.10 `MotionBlur`** — per-camera HDR-space pass consuming the motion-vector prepass. ✅ (ADR-0052). Browser-verified in `apps/playground` (`?mode=motion-vectors&blur=1`, press B to toggle).
 - **12.11 `ChromaticAberration`, `ContrastAdaptiveSharpening`**.
 - **12.12 Order-independent transparency** — capability-gated (storage textures).
+- **12.13 `ScreenSpaceAo`** — per-camera screen-space ambient occlusion (GTAO). ✅ (ADR-0054) A pre-opaque fragment pass that reads the depth + normal prepass, reconstructs view-space position from the **jittered** inverse-projection (exact under TAA jitter; supplied in the AO params buffer so the shared view uniform is untouched), runs a horizon-search occlusion estimate, denoises with a depth/normal bilateral blur + motion-vector temporal accumulation, and feeds the result back into the lit forward shader's ambient term via a `@group(3)` AO read binding (lands the deferred `docs/backlog/prepass-readable-binding.md`, carrying the AO texture). Fragment-only → WebGL2-reachable; a compute GTAO speedup is deferred behind a capability flag. Browser-verified in `apps/playground` (`?mode=ao`, press O to toggle; `&taa=1` to check stability under jitter).
 
 ### Phase 13 — GPU-driven batching & culling
 
