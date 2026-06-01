@@ -42,6 +42,7 @@ interface BenchPackage {
 const PACKAGES: readonly BenchPackage[] = [
   { name: '@retro-engine/ecs', dir: 'packages/ecs' },
   { name: '@retro-engine/engine', dir: 'packages/engine' },
+  { name: '@retro-engine/gltf', dir: 'packages/gltf' },
 ];
 
 const REPO_ROOT = resolve(import.meta.dirname, '..');

@@ -61,6 +61,10 @@
         "@retro-engine/renderer-core": "workspace:*",
       },
     },
+    "packages/gltf": {
+      "name": "@retro-engine/gltf",
+      "version": "0.0.0",
+    },
     "packages/math": {
       "name": "@retro-engine/math",
       "version": "0.0.0",
@@ -184,6 +188,8 @@
     "@retro-engine/ecs": ["@retro-engine/ecs@workspace:packages/ecs"],
 
     "@retro-engine/engine": ["@retro-engine/engine@workspace:packages/engine"],
+
+    "@retro-engine/gltf": ["@retro-engine/gltf@workspace:packages/gltf"],
 
     "@retro-engine/math": ["@retro-engine/math@workspace:packages/math"],
 

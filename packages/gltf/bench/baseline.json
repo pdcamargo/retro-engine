@@ -1,0 +1,24 @@
+{
+  "schema": 1,
+  "package": "@retro-engine/gltf",
+  "captured_at": "2026-06-01T21:42:38.674Z",
+  "runtime": "bun@1.3.14",
+  "benches": [
+    {
+      "key": "decode interleaved f32 VEC3 (50k)",
+      "group": null,
+      "args": {},
+      "mean_ns": 237333.7288135593,
+      "p99_ns": 754100,
+      "samples": 2950
+    },
+    {
+      "key": "decode normalized u16 VEC4 (50k)",
+      "group": null,
+      "args": {},
+      "mean_ns": 403735.6978085352,
+      "p99_ns": 944200,
+      "samples": 1734
+    }
+  ]
+}
