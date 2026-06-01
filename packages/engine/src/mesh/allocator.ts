@@ -70,6 +70,24 @@ export interface AllocatorSlice {
 const COPY_BUFFER_ALIGNMENT = 4;
 const alignUp = (value: number, align: number): number => Math.ceil(value / align) * align;
 
+/**
+ * Pad a buffer upload to {@link COPY_BUFFER_ALIGNMENT}. WebGPU's `writeBuffer`
+ * rejects a byte length that is not a multiple of 4, and index data can arrive
+ * unaligned — a `uint16` index buffer with an odd index count is `2 mod 4`. The
+ * allocation is already sized to the same alignment, so the zero-padded write
+ * stays in range and the trailing bytes are never indexed.
+ */
+const padToCopyAlignment = (data: BufferSource): BufferSource => {
+  if (data.byteLength % COPY_BUFFER_ALIGNMENT === 0) return data;
+  const padded = new Uint8Array(alignUp(data.byteLength, COPY_BUFFER_ALIGNMENT));
+  padded.set(
+    ArrayBuffer.isView(data)
+      ? new Uint8Array(data.buffer, data.byteOffset, data.byteLength)
+      : new Uint8Array(data),
+  );
+  return padded;
+};
+
 interface Slab {
   readonly buffer: Buffer;
   /** Byte capacity. */
@@ -317,10 +335,11 @@ export class MeshAllocator {
   }
 
   private write(allocation: Allocation, data: BufferSource): void {
+    const padded = padToCopyAlignment(data);
     if (allocation.kind === 'slab') {
-      this.renderer.writeBuffer(allocation.entry.slab.buffer, allocation.entry.offset, data);
+      this.renderer.writeBuffer(allocation.entry.slab.buffer, allocation.entry.offset, padded);
     } else {
-      this.renderer.writeBuffer(allocation.entry.buffer, 0, data);
+      this.renderer.writeBuffer(allocation.entry.buffer, 0, padded);
     }
   }
 

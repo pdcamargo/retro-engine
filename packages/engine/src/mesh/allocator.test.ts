@@ -231,6 +231,23 @@ describe('MeshAllocator index allocation', () => {
     expect(allocator.indexSlabCount).toBe(1);
     expect(allocator.largeAllocationCount).toBe(0);
   });
+
+  it('pads an odd-count u16 index upload to a 4-byte multiple', () => {
+    // WebGPU's writeBuffer rejects a non-multiple-of-4 byte length; a single
+    // triangle (3 u16 indices = 6 bytes) must be padded to 8 on upload.
+    const writes: number[] = [];
+    const renderer = makeFakeRenderer();
+    (renderer as { writeBuffer: (b: Buffer, o: number, d: BufferSource) => void }).writeBuffer = (
+      _buffer,
+      _offset,
+      data,
+    ) => {
+      writes.push(data.byteLength);
+    };
+    const allocator = new MeshAllocator(renderer, new MeshAllocatorSettings({ minSlabSize: 4096 }));
+    allocator.allocateIndex(asHandle(1), 'uint16', new Uint16Array([0, 1, 2]));
+    expect(writes).toEqual([8]);
+  });
 });
 
 describe('MeshAllocator free-list coalescing', () => {
