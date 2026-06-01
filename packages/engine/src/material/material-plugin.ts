@@ -514,7 +514,7 @@ class MaterialPluginState<M extends Material> {
       cache as PipelineCache,
       (ctx) => this.specialize(ctx),
       (ctx) =>
-        `${alphaModeKey(ctx.key.alphaMode)}|hdr=${ctx.key.hdr}|msaa=${ctx.key.msaaSamples}|vl=${ctx.key.vertexLayoutDigest}|cf=${ctx.colorFormat}|df=${ctx.depthFormat ?? 'none'}|db=${ctx.depthBias}|${prepassKeyPart(ctx.key.prepass)}|${prepassReadableKeyPart(ctx.key.prepassReadable)}|${aoKeyPart(ctx.key.aoEnabled)}`,
+        `${alphaModeKey(ctx.key.alphaMode)}|hdr=${ctx.key.hdr}|msaa=${ctx.key.msaaSamples}|vl=${ctx.key.vertexLayoutDigest}|cf=${ctx.colorFormat}|df=${ctx.depthFormat ?? 'none'}|db=${ctx.depthBias}|${prepassKeyPart(ctx.key.prepass)}|${prepassReadableKeyPart(ctx.key.prepassReadable)}|${aoKeyPart(ctx.key.aoEnabled)}|ds=${ctx.key.doubleSided === true}`,
     );
   }
 
@@ -625,6 +625,7 @@ class MaterialPluginState<M extends Material> {
         const materialInstance = mainWorldMaterials?.get(meshMat.handle);
         const alphaMode = materialInstance?.alphaMode?.() ?? 'opaque';
         const depthBias = materialInstance?.depthBias?.() ?? 0;
+        const doubleSided = materialInstance?.doubleSided?.() ?? false;
 
         const layout = renderMesh.layout.layout;
         // AO modulates the lit ambient term in the opaque pass (opaque +
@@ -637,6 +638,7 @@ class MaterialPluginState<M extends Material> {
           vertexLayoutDigest: vertexLayoutDigestFor(layout),
           alphaMode,
           ...(aoEnabled ? { aoEnabled: true } : {}),
+          ...(doubleSided ? { doubleSided: true } : {}),
         };
         const pipeline = this.specialized.get({ key, colorFormat, depthFormat, depthBias, layout });
 
@@ -794,12 +796,14 @@ class MaterialPluginState<M extends Material> {
       const depthFormat = view.depth?.format;
       const colorFormat = view.mainColorTarget.format;
       const layout = entry.payload.renderMesh.layout.layout;
+      const doubleSided = materialInstance?.doubleSided?.() ?? false;
       const key: MaterialPipelineKey = {
         msaaSamples: 1,
         hdr: view.hdr,
         vertexLayoutDigest: vertexLayoutDigestFor(layout),
         alphaMode: 'opaque',
         prepass: flags,
+        ...(doubleSided ? { doubleSided: true } : {}),
       };
       const depthBias = materialInstance?.depthBias?.() ?? 0;
       const pipeline = this.specialized.get({ key, colorFormat, depthFormat, depthBias, layout });
@@ -902,6 +906,7 @@ class MaterialPluginState<M extends Material> {
         const materialInstance = mainWorldMaterials?.get(materialHandle);
         const alphaMode = materialInstance?.alphaMode?.() ?? 'opaque';
         const depthBias = materialInstance?.depthBias?.() ?? 0;
+        const doubleSided = materialInstance?.doubleSided?.() ?? false;
         const layout = renderMesh.layout.layout;
         const aoEnabled = aoActiveForView && alphaMode !== 'blend';
         const key: MaterialPipelineKey = {
@@ -910,6 +915,7 @@ class MaterialPluginState<M extends Material> {
           vertexLayoutDigest: vertexLayoutDigestFor(layout),
           alphaMode,
           ...(aoEnabled ? { aoEnabled: true } : {}),
+          ...(doubleSided ? { doubleSided: true } : {}),
         };
         const pipeline = this.specialized.get({ key, colorFormat, depthFormat, depthBias, layout });
         const payload: InstancedDrawPayload = {
@@ -1023,7 +1029,7 @@ class MaterialPluginState<M extends Material> {
       },
       primitive: {
         topology: 'triangle-list',
-        cullMode: 'back',
+        cullMode: ctx.key.doubleSided === true ? 'none' : 'back',
         frontFace: 'ccw',
       },
     };
@@ -1097,7 +1103,7 @@ class MaterialPluginState<M extends Material> {
       },
       primitive: {
         topology: 'triangle-list',
-        cullMode: 'back',
+        cullMode: ctx.key.doubleSided === true ? 'none' : 'back',
         frontFace: 'ccw',
       },
     };

@@ -37,6 +37,14 @@ export interface Material {
    */
   depthBias?(): number;
   /**
+   * Whether both faces of the geometry are rendered. Defaults to `false` —
+   * back faces are culled (the usual choice for solid, consistently-wound
+   * meshes). When `true`, the material's pipeline disables face culling and
+   * the shader flips the shading normal on back faces, so single-sided
+   * surfaces (foliage, cards, glass) shade correctly from both sides.
+   */
+  doubleSided?(): boolean;
+  /**
    * Which screen-space prepass outputs this material can correctly write.
    * Defaults to all-`false` (the material does not participate in the
    * prepass). Materials opt in per-channel; the engine intersects the
@@ -157,6 +165,13 @@ export interface MaterialPipelineKey {
    * the AO and non-AO variants never share a pipeline.
    */
   readonly aoEnabled?: boolean;
+  /**
+   * When `true`, the pipeline renders both faces (cull mode `none`) instead of
+   * culling back faces. Sourced from `Material.doubleSided()`; absent means
+   * single-sided (back-face culling). Keys a distinct pipeline so single- and
+   * double-sided variants of the same material never share one.
+   */
+  readonly doubleSided?: boolean;
 }
 
 /**

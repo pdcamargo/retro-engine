@@ -46,7 +46,7 @@ import { PBR_WGSL } from './pbr.wgsl';
  * texture) is a future expansion and would require new bindings + a WGSL
  * rewrite.
  *
- * The packed uniform struct (48 bytes, std140-laid-out by the schema walker):
+ * The packed uniform struct (64-byte slot, std140-laid-out by the schema walker):
  *
  * ```wgsl
  * struct StandardMaterialUniform {
@@ -56,6 +56,7 @@ import { PBR_WGSL } from './pbr.wgsl';
  *   roughness: f32,             // offset 36
  *   occlusion_strength: f32,    // offset 40
  *   alpha_cutoff: f32,          // offset 44
+ *   normal_scale: f32,          // offset 48
  * };
  * ```
  *
@@ -78,6 +79,13 @@ export class StandardMaterial implements Material {
   roughness = 0.5;
   occlusionStrength = 1;
   alphaCutoff = 0.5;
+  /**
+   * Normal-map intensity. Scales the tangent-space X/Y of the sampled normal
+   * before it is applied, so values below `1` flatten the surface relief and
+   * values above `1` exaggerate it. `1` is the no-op default and has no effect
+   * on a material with no normal map.
+   */
+  normalScale = 1;
 
   baseColorTexture: Handle<Image> | undefined;
   metallicRoughnessTexture: Handle<Image> | undefined;
@@ -87,6 +95,7 @@ export class StandardMaterial implements Material {
 
   alphaMode_: AlphaMode = 'opaque';
   depthBias_ = 0;
+  doubleSided_ = false;
 
   constructor(init?: {
     baseColor?: Vec4;
@@ -95,6 +104,7 @@ export class StandardMaterial implements Material {
     roughness?: number;
     occlusionStrength?: number;
     alphaCutoff?: number;
+    normalScale?: number;
     baseColorTexture?: Handle<Image>;
     metallicRoughnessTexture?: Handle<Image>;
     normalMapTexture?: Handle<Image>;
@@ -102,6 +112,7 @@ export class StandardMaterial implements Material {
     occlusionTexture?: Handle<Image>;
     alphaMode?: AlphaMode;
     depthBias?: number;
+    doubleSided?: boolean;
   }) {
     if (init?.baseColor) this.baseColor = init.baseColor;
     if (init?.emissive) this.emissive = init.emissive;
@@ -109,6 +120,7 @@ export class StandardMaterial implements Material {
     if (init?.roughness !== undefined) this.roughness = init.roughness;
     if (init?.occlusionStrength !== undefined) this.occlusionStrength = init.occlusionStrength;
     if (init?.alphaCutoff !== undefined) this.alphaCutoff = init.alphaCutoff;
+    if (init?.normalScale !== undefined) this.normalScale = init.normalScale;
     if (init?.baseColorTexture !== undefined) this.baseColorTexture = init.baseColorTexture;
     if (init?.metallicRoughnessTexture !== undefined)
       this.metallicRoughnessTexture = init.metallicRoughnessTexture;
@@ -117,6 +129,7 @@ export class StandardMaterial implements Material {
     if (init?.occlusionTexture !== undefined) this.occlusionTexture = init.occlusionTexture;
     if (init?.alphaMode) this.alphaMode_ = init.alphaMode;
     if (init?.depthBias !== undefined) this.depthBias_ = init.depthBias;
+    if (init?.doubleSided !== undefined) this.doubleSided_ = init.doubleSided;
   }
 
   alphaMode(): AlphaMode {
@@ -125,6 +138,10 @@ export class StandardMaterial implements Material {
 
   depthBias(): number {
     return this.depthBias_;
+  }
+
+  doubleSided(): boolean {
+    return this.doubleSided_;
   }
 
   prepassWrites(): { depth: boolean; normal: boolean; motionVector: boolean } {
@@ -148,6 +165,7 @@ export class StandardMaterial implements Material {
         { fieldKey: 'roughness', pack: 'f32' },
         { fieldKey: 'occlusionStrength', pack: 'f32' },
         { fieldKey: 'alphaCutoff', pack: 'f32' },
+        { fieldKey: 'normalScale', pack: 'f32' },
       ],
     },
     {

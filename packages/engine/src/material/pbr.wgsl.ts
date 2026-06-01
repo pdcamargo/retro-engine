@@ -25,9 +25,11 @@
  *   - `@binding(2)` `material_sampler: sampler`.
  *   - `@binding(3)` `metallic_roughness_texture: texture_2d<f32>` (glTF
  *     convention: blue = metallic, green = roughness).
- *   - `@binding(4)` `normal_map_texture: texture_2d<f32>` (currently unused —
- *     gets read but the math passes through; normal-map tangent-space math
- *     lands when `TANGENT` attributes flow through `Mesh.computeFlatNormals`).
+ *   - `@binding(4)` `normal_map_texture: texture_2d<f32>` — perturbs the
+ *     shading normal in `fs_main` through a screen-space-derivative cotangent
+ *     frame (no per-vertex tangent required), with the tangent-space X/Y scaled
+ *     by `normal_scale`. With no normal map bound the flat-normal fallback is a
+ *     no-op and shading uses the geometric normal.
  *   - `@binding(5)` `emissive_texture: texture_2d<f32>`.
  *   - `@binding(6)` `occlusion_texture: texture_2d<f32>`.
  * - `@group(2)`: the analytic-light uniform (`GpuLights`) at `@binding(0)`,
@@ -41,7 +43,9 @@
  * The per-entity model matrix and its inverse-transpose arrive as per-instance
  * vertex attributes at `@location(8..11)` and `@location(12..15)` (vertex
  * buffer slot 1, `stepMode: 'instance'`). Vertex slot 0 consumes
- * `POSITION + NORMAL + UV_0`. Tangents are deferred.
+ * `POSITION + NORMAL + UV_0`. The fragment shader reconstructs the
+ * tangent basis from screen-space derivatives, so no per-vertex tangent
+ * attribute is consumed.
  */
 export const PBR_WGSL = /* wgsl */ `
 #import retro_engine::view
@@ -55,6 +59,7 @@ struct StandardMaterialUniform {
   roughness: f32,
   occlusion_strength: f32,
   alpha_cutoff: f32,
+  normal_scale: f32,
 };
 
 @group(1) @binding(0) var<uniform> material: StandardMaterialUniform;
@@ -169,15 +174,38 @@ fn lit(
   return (diffuse + specular) * s.radiance * n_dot_l;
 }
 
+// Reconstruct a tangent frame from screen-space derivatives of world position
+// and UV (no per-vertex tangent needed) and apply a tangent-space normal-map
+// sample. 'scale' weights the decoded X/Y (glTF normalTexture.scale). Must be
+// called from uniform control flow: dpdx/dpdy are undefined past a discard.
+fn perturb_normal(
+  geom_n: vec3<f32>,
+  world_pos: vec3<f32>,
+  uv: vec2<f32>,
+  sampled: vec3<f32>,
+  scale: f32,
+) -> vec3<f32> {
+  var ts = sampled * 2.0 - 1.0;
+  ts = vec3<f32>(ts.xy * scale, ts.z);
+  let dp1 = dpdx(world_pos);
+  let dp2 = dpdy(world_pos);
+  let duv1 = dpdx(uv);
+  let duv2 = dpdy(uv);
+  let dp2perp = cross(dp2, geom_n);
+  let dp1perp = cross(geom_n, dp1);
+  let t = dp2perp * duv1.x + dp1perp * duv2.x;
+  let b = dp2perp * duv1.y + dp1perp * duv2.y;
+  let inv_max = inverseSqrt(max(dot(t, t), dot(b, b)));
+  return normalize(mat3x3<f32>(t * inv_max, b * inv_max, geom_n) * ts);
+}
+
 @fragment
-fn fs_main(in: VsOut) -> @location(0) vec4<f32> {
+fn fs_main(in: VsOut, @builtin(front_facing) front_facing: bool) -> @location(0) vec4<f32> {
   let base_color_sample = textureSample(base_color_texture, material_sampler, in.uv);
   let mr_sample = textureSample(metallic_roughness_texture, material_sampler, in.uv);
   let emissive_sample = textureSample(emissive_texture, material_sampler, in.uv);
   let occlusion_sample = textureSample(occlusion_texture, material_sampler, in.uv);
-  // Sampled to keep WebGPU's pipeline validation happy; the normal-map
-  // contribution lands with TANGENT attribute support.
-  let _normal_sample = textureSample(normal_map_texture, material_sampler, in.uv);
+  let normal_sample = textureSample(normal_map_texture, material_sampler, in.uv);
 
   let base_color = material.base_color * base_color_sample;
   // glTF convention: blue channel = metallic, green channel = roughness.
@@ -185,11 +213,26 @@ fn fs_main(in: VsOut) -> @location(0) vec4<f32> {
   let roughness = clamp(material.roughness * mr_sample.g, 0.04, 1.0);
   let occlusion = mix(1.0, occlusion_sample.r, material.occlusion_strength);
 
+  // Perturb the shading normal before any discard — perturb_normal's
+  // derivatives require uniform control flow.
+  var n = perturb_normal(
+    normalize(in.world_normal),
+    in.world_position,
+    in.uv,
+    normal_sample.xyz,
+    material.normal_scale,
+  );
+  // Double-sided materials disable back-face culling; flip the normal toward
+  // the camera so back faces light correctly. Single-sided meshes cull back
+  // faces before this runs, so front_facing is always true for them.
+  if (!front_facing) {
+    n = -n;
+  }
+
   if (base_color.a < material.alpha_cutoff) {
     discard;
   }
 
-  let n = normalize(in.world_normal);
   let v = normalize(view.world_position.xyz - in.world_position);
   let n_dot_v = max(dot(n, v), 0.0001);
 

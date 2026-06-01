@@ -182,6 +182,61 @@ describe('MaterialPlugin — prepass fragment-target invariants', () => {
   });
 });
 
+const buildStandardApp = (renderer: Renderer) => {
+  const app = new App({ renderer, canvas: makeStubCanvas() });
+  app.addPlugin(new StandardMaterialPlugin());
+  const matPlugin = new MaterialPlugin(StandardMaterial);
+  app.addPlugin(matPlugin);
+  app.addPlugin(new Light3dPlugin());
+  return { app, matPlugin };
+};
+
+// Shading (non-prepass) pipeline descriptors for the material — the place the
+// per-material cull mode is selected.
+const shadingDescriptors = (descriptors: RenderPipelineDescriptor[]): RenderPipelineDescriptor[] =>
+  descriptors.filter(
+    (d) =>
+      typeof d.label === 'string' && d.label.includes('StandardMaterial') && !d.label.includes('#prepass#'),
+  );
+
+describe('MaterialPlugin — per-material cull mode (doubleSided)', () => {
+  it('culls back faces for a single-sided material (default)', async () => {
+    const { renderer, descriptors } = makeDescriptorCapturingRenderer();
+    const { app, matPlugin } = buildStandardApp(renderer);
+    const meshHandle = app.getResource(Meshes)!.add(new Cuboid().mesh().build());
+    const matHandle = app
+      .getResource(matPlugin.Materials)!
+      .add(new StandardMaterial({ baseColor: vec4.create(1, 1, 1, 1) }));
+    app.world.spawn(new Mesh3d(meshHandle), new matPlugin.MeshMaterial3d(matHandle));
+    app.world.spawn(...Camera3d());
+
+    await app.run();
+    app.stop();
+
+    const shading = shadingDescriptors(descriptors);
+    expect(shading.length).toBeGreaterThan(0);
+    for (const d of shading) expect(d.primitive?.cullMode).toBe('back');
+  });
+
+  it('disables culling for a double-sided material', async () => {
+    const { renderer, descriptors } = makeDescriptorCapturingRenderer();
+    const { app, matPlugin } = buildStandardApp(renderer);
+    const meshHandle = app.getResource(Meshes)!.add(new Cuboid().mesh().build());
+    const matHandle = app
+      .getResource(matPlugin.Materials)!
+      .add(new StandardMaterial({ baseColor: vec4.create(1, 1, 1, 1), doubleSided: true }));
+    app.world.spawn(new Mesh3d(meshHandle), new matPlugin.MeshMaterial3d(matHandle));
+    app.world.spawn(...Camera3d());
+
+    await app.run();
+    app.stop();
+
+    const shading = shadingDescriptors(descriptors);
+    expect(shading.length).toBeGreaterThan(0);
+    for (const d of shading) expect(d.primitive?.cullMode).toBe('none');
+  });
+});
+
 // Suppress unused-binding lint on the ShaderPlugin re-export — referenced
 // for documentation in the test file's prose context.
 void ShaderPlugin;

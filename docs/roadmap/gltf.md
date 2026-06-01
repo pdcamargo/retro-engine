@@ -23,13 +23,15 @@ This promotes Phase 11 of `renderer.md` into its own initiative. It depends on t
 
 Each item is a `docs/backlog/*.md`, sequenced.
 
-1. **`asset-load-context`** — the ADR-0056 `LoadContext` (sibling `read`, `addLabeledAsset`, atomic
-   on-schedule multi-asset drain, sibling-path resolver). Prerequisite for everything below.
-2. **`engine-name-component`** — the `Name` primitive in `packages/engine`. Small, standalone; also a
-   prerequisite for the scenes/prefabs initiative.
-3. **`standard-material-doublesided-normalscale`** — extend the shipped `StandardMaterial` + `pbr.wgsl`
-   with `normalScale` and `doubleSided` (cull). Independently shippable.
-4. **`gltf-package-and-parser`** — scaffold `@retro-engine/gltf`; in-house GLB/glTF parser + accessor
+1. ✅ **`asset-load-context`** *(shipped, ADR-0056)* — the `LoadContext` (sibling `read`,
+   `addLabeledAsset`, atomic on-schedule multi-asset drain, sibling-path resolver). Prerequisite for
+   everything below.
+2. ✅ **`engine-name-component`** *(shipped, ADR-0057)* — the `Name` primitive in `packages/engine`.
+   Small, standalone; also a prerequisite for the scenes/prefabs initiative.
+3. ✅ **`standard-material-doublesided-normalscale`** *(shipped, ADR-0058)* — extended the shipped
+   `StandardMaterial` + `pbr.wgsl` with `normalScale` (tangent-free derivative cotangent-frame normal
+   mapping) and `doubleSided` (per-material cull + back-face normal flip).
+4. **`gltf-package-and-parser`** ← **next** — scaffold `@retro-engine/gltf`; in-house GLB/glTF parser + accessor
    decoder; all bundling variants; MIME detection; `GltfImportError` + validation contract.
 5. **`gltf-mesh-and-material-mapping`** — primitives → `Mesh` (semantics, normalized ints,
    stride/sparse, index promotion, topology gating); materials → `StandardMaterial`; per-slot color

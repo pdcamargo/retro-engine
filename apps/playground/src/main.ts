@@ -7,6 +7,7 @@ import { atlasShowcasePlugin } from './atlas-showcase-plugin';
 import { lightsShowcasePlugin } from './lights-showcase-plugin';
 import { litShowcasePlugin } from './lit-showcase-plugin';
 import { LoggingPlugin } from './logging-plugin';
+import { materialShowcasePlugin } from './material-showcase-plugin';
 import { motionVectorsShowcasePlugin } from './motion-vectors-showcase-plugin';
 import { primitivesShowcasePlugin } from './primitives-showcase-plugin';
 import { shapesShowcasePlugin } from './shapes-showcase-plugin';
@@ -31,6 +32,9 @@ if (!(canvas instanceof HTMLCanvasElement)) {
 //                     normal-mapped lighting (ADR-0037/0041/0042/0043).
 //   `?mode=lit`     → Phase 10 3D lighting showcase: a metallic×roughness PBR
 //                     sphere grid under sun/point/spot/ambient lights (ADR-0044).
+//   `?mode=material`→ StandardMaterial normalScale + doubleSided check: a
+//                     normal-mapped plane row at scale 0/1/2 and a spinning
+//                     single-sided vs double-sided plane pair (ADR-0058).
 //   `?mode=motion-vectors` → Phase 12.8/12.10 device check: moving PBR meshes
 //                     under Depth + Normal + MotionVector prepass
 //                     (ADR-0050/0051). Add `&debug=motion` to blit the motion
@@ -66,6 +70,8 @@ const showcase =
               ? lightsShowcasePlugin
               : mode === 'lit'
                 ? litShowcasePlugin
+                : mode === 'material'
+                ? materialShowcasePlugin
                 : mode === 'motion-vectors'
                   ? motionVectorsShowcasePlugin
                   : mode === 'taa'
