@@ -4,6 +4,7 @@ import { createWebGPURenderer } from '@retro-engine/renderer-webgpu';
 import { aoShowcasePlugin } from './ao-showcase-plugin';
 import { assetShowcasePlugin } from './asset-showcase-plugin';
 import { atlasShowcasePlugin } from './atlas-showcase-plugin';
+import { gltfShowcasePlugin } from './gltf-showcase-plugin';
 import { lightsShowcasePlugin } from './lights-showcase-plugin';
 import { litShowcasePlugin } from './lit-showcase-plugin';
 import { LoggingPlugin } from './logging-plugin';
@@ -48,6 +49,9 @@ if (!(canvas instanceof HTMLCanvasElement)) {
 //                     (GTAO) on a scene of contacts + a concave corner (Depth +
 //                     Normal prepass). Press O to toggle AO; add `&taa=1` to
 //                     check AO stays stable under jitter (ADR-0054).
+//   `?mode=gltf`    → glTF mapping check: fetches a real model, maps it with
+//                     mapGltfAssets, and spawns the primitives (throwaway manual
+//                     harness ahead of the GltfPlugin importer).
 //   `?mode=assets`  → unified asset store device check (ADR-0055): a pulsing
 //                     cube (materials.getMut), a breathing sphere
 //                     (meshes.getMut), and a row of cubes spawned from runtime
@@ -80,7 +84,9 @@ const showcase =
                       ? aoShowcasePlugin
                       : mode === 'assets'
                         ? assetShowcasePlugin
-                        : primitivesShowcasePlugin;
+                        : mode === 'gltf'
+                          ? gltfShowcasePlugin
+                          : primitivesShowcasePlugin;
 
 const renderer = createWebGPURenderer(canvas);
 const app = new App({

@@ -18,6 +18,23 @@ export type { DecodedAccessor, DecodedAccessorArray } from './accessor';
 export { detectImageMime } from './image-source';
 export type { SupportedImageMime, ImageMimeHint } from './image-source';
 
+export { createImageBitmapDecoder } from './image-decoder';
+export type { ImageDecoder, DecodedImagePixels } from './image-decoder';
+
+export { mapPrimitiveMode } from './topology';
+export { mapSampler } from './sampler';
+export { mapPrimitiveToMesh } from './mesh-mapping';
+export { mapMaterialToStandardMaterial } from './material-mapping';
+export { createImageResolver } from './image-mapping';
+export type { ImageResolver, ImageColorSpace } from './image-mapping';
+export { mapGltfAssets } from './asset-mapping';
+export type {
+  GltfAssetStores,
+  MappedGltfAssets,
+  MappedMesh,
+  MappedPrimitive,
+} from './asset-mapping';
+
 export type {
   GltfDocument,
   GltfAsset,

@@ -14,6 +14,8 @@
  * - `invalid-accessor` — an accessor declares an unknown component type or type,
  *   or a sparse section is inconsistent.
  * - `unsupported-image-mime` — an image is in a format this loader cannot use.
+ * - `unsupported-primitive-mode` — a primitive uses a draw mode that has no
+ *   engine `PrimitiveTopology` (triangle-fan, line-loop).
  */
 export type GltfErrorCode =
   | 'bad-magic'
@@ -24,7 +26,8 @@ export type GltfErrorCode =
   | 'missing-resource'
   | 'out-of-bounds'
   | 'invalid-accessor'
-  | 'unsupported-image-mime';
+  | 'unsupported-image-mime'
+  | 'unsupported-primitive-mode';
 
 /**
  * Thrown when a glTF or GLB file cannot be imported. The {@link code} classifies
