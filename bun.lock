@@ -43,6 +43,10 @@
         "@webgpu/types": "latest",
       },
     },
+    "packages/assets": {
+      "name": "@retro-engine/assets",
+      "version": "0.0.0",
+    },
     "packages/ecs": {
       "name": "@retro-engine/ecs",
       "version": "0.0.0",
@@ -173,6 +177,8 @@
     "@oxlint/binding-win32-ia32-msvc": ["@oxlint/binding-win32-ia32-msvc@1.66.0", "", { "os": "win32", "cpu": "ia32" }, "sha512-m3Pjwc2MfTcom4E4gOv7DyuGyt7OfGNCbmqDHd+N7EzXmP+ppHuudm2NjcA3AjV5TSeGxaguVF4SbTKHe1USYA=="],
 
     "@oxlint/binding-win32-x64-msvc": ["@oxlint/binding-win32-x64-msvc@1.66.0", "", { "os": "win32", "cpu": "x64" }, "sha512-/DbBvw8UFBhja6PqudUjV4UtfsJr0Oa7jUjWVKB0g86lj/VwnPrkngn0sFql3c9RDA0O16dh7ozsXb6GjNAzBQ=="],
+
+    "@retro-engine/assets": ["@retro-engine/assets@workspace:packages/assets"],
 
     "@retro-engine/ecs": ["@retro-engine/ecs@workspace:packages/ecs"],
 

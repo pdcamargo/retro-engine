@@ -1,0 +1,15 @@
+export type { AssetId, AssetIndex, AssetGuid } from './asset-id';
+export { asAssetIndex, generateAssetGuid, assetIndexOf } from './asset-id';
+
+export type { Handle } from './handle';
+export { makeHandle, handleEq } from './handle';
+
+export type { AssetEvent } from './events';
+
+export { Assets } from './assets';
+
+export type { AssetImportContext, AssetImporter, AssetImporterRegistry } from './importer-registry';
+export type { AssetSerializer, AssetSerializerRegistry } from './serializer-registry';
+
+export type { AssetSource } from './source';
+export type { AssetManifest, AssetManifestEntry } from './manifest';
