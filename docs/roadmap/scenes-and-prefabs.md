@@ -34,6 +34,16 @@ Each phase is a sketch. Promote when prerequisites land and a real consumer asks
 - **Prefab override semantics.** When a prefab is spawned with parameter overrides, do the overrides persist on the entity, or are they "one-shot at spawn"? Bevy BSN's answer is one-shot. We probably do the same; if not, we need to track which fields are template-default vs instance-override.
 - **What's the relationship between scenes and `States`?** Recommended default: a scene is identified by a `States` value (`enum SceneId { MainMenu, Level1, Level2 }`) and `States` transitions drive scene loads. Whether scenes are *exactly* states, or scenes are an additional abstraction on top, is locked at execution.
 
+## Relationship to glTF instantiation
+
+glTF import (ADR-0057, `docs/roadmap/gltf.md`) ships the **first concrete prefab-instantiation** before
+this full system exists: a `GltfSceneRoot` reactor spawns a glTF node graph as a named entity tree
+(each node an entity with `Transform` + the `Name` component, parent/child wired, mesh nodes carrying
+`Mesh3d`+`MeshMaterial3d`) and records a node-name→entity lookup. This is deliberately
+forward-compatible — the **`Name` component is introduced there and shared here**, and when this system
+lands a glTF scene becomes a prefab **source** consumed through the same instantiation model, not a
+parallel mechanism. glTF is not blocked on this initiative.
+
 ## Inspiration, not dependency
 
 Bevy BSN's design ideas worth borrowing:
@@ -53,6 +63,7 @@ What we do not borrow:
 - Prereq: `docs/roadmap/reflection-and-serialization.md`
 - Prereq: `docs/roadmap/asset-system.md` (handle shape, project format)
 - Prereq: `docs/roadmap/observers-and-events.md` (inline observer binding needs the observer system)
+- Related: `docs/roadmap/gltf.md` (glTF instantiation is the first prefab-instantiation; introduces the shared `Name` component — ADR-0057)
 - Consumer: `docs/roadmap/ui-system.md` (UI screens are scenes)
 - Consumer: `docs/roadmap/studio-imgui.md` (studio's scene editor needs save/load + hot-reload hooks)
 - ADR-0001 (composition-only — no `Scene` base class; scenes are data that drives the World)

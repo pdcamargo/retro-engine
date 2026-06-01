@@ -173,6 +173,9 @@ HAL change. Light direction for directional/spot is derived from
 
 Primary 3D interchange format. Depends on the asset system landing first.
 
+> **Promoted to its own initiative: `docs/roadmap/gltf.md` (ADR-0057, building on ADR-0056).** The
+> sub-items below are the original sketch; the gltf roadmap is now authoritative for sequencing.
+
 - **11.1 Asset loader** — `.gltf` and `.glb`.
 - **11.2 `Gltf` root asset** — named scenes, nodes (`GltfNode`), meshes (`GltfMesh`), primitives (`GltfPrimitive`).
 - **11.3 Material → `StandardMaterial`** — metallic-roughness, normal, emissive, occlusion, alpha mode.

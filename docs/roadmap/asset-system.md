@@ -35,6 +35,11 @@ registration, not by inheritance. The system **absorbs** the engine's existing `
 
 (Scene system moved to its own roadmap: `docs/roadmap/scenes-and-prefabs.md`.)
 
+**Additive extension (ADR-0056):** the runtime core gains a `LoadContext` (sibling `read` +
+`addLabeledAsset` + atomic on-schedule multi-asset commit) so multi-file formats — glTF first
+(`docs/roadmap/gltf.md`, ADR-0057) — can load dependency graphs. It is purely additive to the
+ADR-0055 importer contract; single-file importers are unaffected.
+
 ## Resolved (ADR-0055)
 
 - **GUID generation** → random v4. Identity must survive edits and renames; content-addressing severs
