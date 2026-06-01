@@ -1,4 +1,6 @@
-import type { TextureAtlasLayoutHandle } from './texture-atlas-layouts';
+import type { Handle } from '@retro-engine/assets';
+
+import type { TextureAtlasLayout } from './texture-atlas-layout';
 
 /**
  * ECS component pairing a sprite entity with a {@link TextureAtlasLayout}
@@ -34,7 +36,7 @@ import type { TextureAtlasLayoutHandle } from './texture-atlas-layouts';
  */
 export class TextureAtlas {
   /** Layout asset that carves the source image. */
-  layout: TextureAtlasLayoutHandle;
+  layout: Handle<TextureAtlasLayout>;
   /**
    * Which tile of {@link layout} to render this frame. Indexes into
    * `layout.textures[]`; for grid layouts built via
@@ -42,7 +44,7 @@ export class TextureAtlas {
    */
   index: number;
 
-  constructor(layout: TextureAtlasLayoutHandle, index = 0) {
+  constructor(layout: Handle<TextureAtlasLayout>, index = 0) {
     this.layout = layout;
     this.index = index;
   }

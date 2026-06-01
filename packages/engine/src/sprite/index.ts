@@ -20,10 +20,6 @@ export { SPRITE_WGSL } from './sprite.wgsl';
 export { TextureAtlas } from './texture-atlas';
 export type { TextureAtlasFromGridOptions } from './texture-atlas-layout';
 export { TextureAtlasLayout } from './texture-atlas-layout';
-export type {
-  TextureAtlasLayoutAssetEvent,
-  TextureAtlasLayoutHandle,
-} from './texture-atlas-layouts';
 export { TextureAtlasLayouts } from './texture-atlas-layouts';
 export type {
   SliceScaleMode,

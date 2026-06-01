@@ -1,3 +1,4 @@
+import type { Handle } from '@retro-engine/assets';
 import { Aabb } from '@retro-engine/math';
 import type { Entity, Query as QueryHandle, World } from '@retro-engine/ecs';
 
@@ -5,7 +6,6 @@ import { NoFrustumCulling } from '../visibility/visibility';
 
 import { Mesh3d } from './mesh-3d';
 import type { Mesh } from './mesh';
-import type { MeshHandle } from './meshes';
 
 interface PendingAabbInsert {
   entity: Entity;
@@ -45,7 +45,7 @@ interface PendingAabbInsert {
  *   matched entities.
  */
 export const calculateBoundsSystem = (
-  meshes: { get(handle: MeshHandle): Mesh | undefined },
+  meshes: { get(handle: Handle<Mesh>): Mesh | undefined },
   meshables: QueryHandle<
     readonly [typeof Mesh3d],
     { without: readonly (typeof NoFrustumCulling)[]; changed: readonly (typeof Mesh3d)[] }

@@ -1,7 +1,8 @@
+import type { Handle } from '@retro-engine/assets';
 import type { Vec4 } from '@retro-engine/math';
 import { vec4 } from '@retro-engine/math';
 
-import type { ImageHandle } from '../image/images';
+import type { Image } from '../image/image';
 import type { App } from '../index';
 import type { PluginObject } from '../plugin';
 import { ShaderRegistry } from '../shader/shader-registry';
@@ -23,7 +24,7 @@ import { UNLIT_WGSL } from './unlit.wgsl';
  * | 1       | texture  | `colorTexture`   | `Image.view`          |
  * | 2       | sampler  | `colorTexture`   | `Image.sampler`       |
  *
- * `colorTexture` is an `ImageHandle | undefined`; bindings 1 and 2 share the
+ * `colorTexture` is an `Handle<Image> | undefined`; bindings 1 and 2 share the
  * field and bind the resolved {@link RenderImage}'s view + sampler. When
  * `colorTexture` is `undefined`, both bindings fall back to `Images.WHITE`
  * (the engine's pre-seeded 1×1 opaque-white default), so `new UnlitMaterial({
@@ -31,12 +32,12 @@ import { UNLIT_WGSL } from './unlit.wgsl';
  */
 export class UnlitMaterial implements Material {
   color: Vec4 = vec4.create(1, 1, 1, 1);
-  colorTexture: ImageHandle | undefined;
+  colorTexture: Handle<Image> | undefined;
   alphaMode_: AlphaMode = 'opaque';
 
   constructor(init?: {
     color?: Vec4;
-    colorTexture?: ImageHandle;
+    colorTexture?: Handle<Image>;
     alphaMode?: AlphaMode;
   }) {
     if (init?.color) this.color = init.color;

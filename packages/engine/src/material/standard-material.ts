@@ -1,7 +1,8 @@
+import type { Handle } from '@retro-engine/assets';
 import type { Vec4 } from '@retro-engine/math';
 import { vec4 } from '@retro-engine/math';
 
-import type { ImageHandle } from '../image/images';
+import type { Image } from '../image/image';
 import type { App } from '../index';
 import type { PluginObject } from '../plugin';
 import { PREPASS_WGSL } from '../prepass/prepass.wgsl';
@@ -27,7 +28,7 @@ import { PBR_WGSL } from './pbr.wgsl';
  * | 5       | texture  | `emissiveTexture`           | `Image.view`                   |
  * | 6       | texture  | `occlusionTexture`          | `Image.view`                   |
  *
- * All five texture slots are `ImageHandle | undefined` fields. When a field
+ * All five texture slots are `Handle<Image> | undefined` fields. When a field
  * is `undefined`, the bind-group schema falls back to a well-known default on
  * the {@link Images} registry: `baseColorTexture` / `metallicRoughnessTexture`
  * / `emissiveTexture` / `occlusionTexture` fall back to `Images.WHITE`,
@@ -78,11 +79,11 @@ export class StandardMaterial implements Material {
   occlusionStrength = 1;
   alphaCutoff = 0.5;
 
-  baseColorTexture: ImageHandle | undefined;
-  metallicRoughnessTexture: ImageHandle | undefined;
-  normalMapTexture: ImageHandle | undefined;
-  emissiveTexture: ImageHandle | undefined;
-  occlusionTexture: ImageHandle | undefined;
+  baseColorTexture: Handle<Image> | undefined;
+  metallicRoughnessTexture: Handle<Image> | undefined;
+  normalMapTexture: Handle<Image> | undefined;
+  emissiveTexture: Handle<Image> | undefined;
+  occlusionTexture: Handle<Image> | undefined;
 
   alphaMode_: AlphaMode = 'opaque';
   depthBias_ = 0;
@@ -94,11 +95,11 @@ export class StandardMaterial implements Material {
     roughness?: number;
     occlusionStrength?: number;
     alphaCutoff?: number;
-    baseColorTexture?: ImageHandle;
-    metallicRoughnessTexture?: ImageHandle;
-    normalMapTexture?: ImageHandle;
-    emissiveTexture?: ImageHandle;
-    occlusionTexture?: ImageHandle;
+    baseColorTexture?: Handle<Image>;
+    metallicRoughnessTexture?: Handle<Image>;
+    normalMapTexture?: Handle<Image>;
+    emissiveTexture?: Handle<Image>;
+    occlusionTexture?: Handle<Image>;
     alphaMode?: AlphaMode;
     depthBias?: number;
   }) {

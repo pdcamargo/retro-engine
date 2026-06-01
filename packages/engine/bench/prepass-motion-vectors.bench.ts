@@ -15,6 +15,7 @@
 
 import { bench, do_not_optimize, group, summary } from 'mitata';
 
+import { asAssetIndex, makeHandle } from '@retro-engine/assets';
 import { mat4 } from '@retro-engine/math';
 
 import {
@@ -32,6 +33,7 @@ import {
 const COUNT = 1_000;
 const MODEL = mat4.identity();
 const PAYLOAD = {} as unknown as InstancedDrawPayload;
+const MATERIAL_HANDLE = makeHandle(asAssetIndex(0)) as InstanceEntry['materialHandle'];
 const FREE = new Set<AlphaBucket>(['blend']); // opaque grouped freely
 
 const buildEntries = (count: number, withPrevious: boolean): InstanceEntry[] => {
@@ -41,6 +43,7 @@ const buildEntries = (count: number, withPrevious: boolean): InstanceEntry[] => 
       cameraEntity: 1,
       bucket: 'opaque',
       groupKey: `${i % 8}`,
+      materialHandle: MATERIAL_HANDLE,
       depth: i,
       model: MODEL,
       payload: PAYLOAD,

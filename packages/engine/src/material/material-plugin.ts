@@ -13,11 +13,13 @@ import { AoBindGroupCache } from '../ao/ao-bind-group-cache';
 import { ViewAoTargets } from '../ao/view-ao-targets';
 import { ViewBindGroupCache } from '../camera/extracted';
 import { SortedCameras } from '../camera/sorted-cameras';
+import type { Handle } from '@retro-engine/assets';
+
 import { Images } from '../image/images';
 import { RenderImages } from '../image/image-plugin';
 import { GpuLights } from '../light3d/gpu-lights';
 import type { App } from '../index';
-import type { AllocatorSlice, MeshHandle } from '../mesh';
+import type { AllocatorSlice } from '../mesh';
 import { MeshAllocator, Meshes, Mesh3d, RenderMeshes } from '../mesh';
 import type { PluginObject } from '../plugin';
 import {
@@ -47,7 +49,6 @@ import { ViewVisibility } from '../visibility/visibility';
 import type { BindGroupSchema } from './bind-group-schema';
 import type { Material, MaterialPipelineKey, ShaderRef } from './material';
 import { alphaModeKey } from './material';
-import type { MaterialHandle } from './materials';
 import { Materials } from './materials';
 import { MeshMaterial3d } from './mesh-material-3d';
 import {
@@ -149,7 +150,7 @@ export class MaterialPlugin<M extends Material> implements PluginObject {
   /** Per-type subclass of {@link RenderMaterials} — render-world prepared bind groups. */
   readonly RenderMaterials: new () => RenderMaterials<M>;
   /** Per-type subclass of {@link MeshMaterial3d} — spawn `new plugin.MeshMaterial3d(handle)`. */
-  readonly MeshMaterial3d: new (handle: MaterialHandle<M>) => MeshMaterial3d<M>;
+  readonly MeshMaterial3d: new (handle: Handle<M>) => MeshMaterial3d<M>;
   private readonly retained: boolean;
 
   constructor(materialClass: MaterialCtor<M>, options?: MaterialPluginOptions) {
@@ -171,14 +172,14 @@ export class MaterialPlugin<M extends Material> implements PluginObject {
     this.RenderMaterials = RenderMaterialsSubclass as unknown as new () => RenderMaterials<M>;
 
     const MeshMaterialBase = MeshMaterial3d as unknown as new (
-      h: MaterialHandle<M>,
+      h: Handle<M>,
     ) => MeshMaterial3d<M>;
     const MeshMaterialSubclass = class extends MeshMaterialBase {};
     Object.defineProperty(MeshMaterialSubclass, 'name', {
       value: `MeshMaterial3d<${materialClass.name}>`,
     });
     this.MeshMaterial3d = MeshMaterialSubclass as unknown as new (
-      h: MaterialHandle<M>,
+      h: Handle<M>,
     ) => MeshMaterial3d<M>;
   }
 
@@ -242,7 +243,7 @@ export class MaterialPlugin<M extends Material> implements PluginObject {
     // ViewVisibility) entities × active cameras; batch by (mesh, material);
     // pack per-instance transforms; specialize the pipeline; push one phase
     // item per instanced batch.
-    type MmCtor = new (h: MaterialHandle<M>) => MeshMaterial3d<M>;
+    type MmCtor = new (h: Handle<M>) => MeshMaterial3d<M>;
     type RenderablesQuery = QueryHandle<
       readonly [typeof Mesh3d, MmCtor, typeof GlobalTransform, typeof ViewVisibility]
     >;
@@ -293,7 +294,7 @@ export class MaterialPlugin<M extends Material> implements PluginObject {
   private registerRetained(
     app: App,
     state: MaterialPluginState<M>,
-    MeshMaterialCtor: new (h: MaterialHandle<M>) => MeshMaterial3d<M>,
+    MeshMaterialCtor: new (h: Handle<M>) => MeshMaterial3d<M>,
     RenderMaterialsCtor: new () => RenderMaterials<M>,
   ): void {
     app.addSystem(
@@ -524,9 +525,10 @@ class MaterialPluginState<M extends Material> {
     images: Images,
     renderImages: RenderImages,
   ): void {
-    const events = materials.drainPendingChanges();
+    const events = materials.drainEvents();
     if (events.length === 0) return;
     for (const event of events) {
+      if (event.kind === 'unused') continue;
       if (event.kind === 'removed') {
         renderMaterials.delete(event.handle);
         continue;
@@ -543,7 +545,7 @@ class MaterialPluginState<M extends Material> {
         this.scratch,
         images,
         renderImages,
-        `material#${this.materialClass.name}#${String(event.handle)}`,
+        `material#${this.materialClass.name}#${event.handle.index}`,
       );
       renderMaterials.set(event.handle, prepared);
     }
@@ -610,11 +612,11 @@ class MaterialPluginState<M extends Material> {
 
         const renderMesh = renderMeshes.get(mesh3d.handle);
         if (renderMesh === undefined) continue;
-        const vertexSlice = allocator.vertexSlice(mesh3d.handle);
+        const vertexSlice = allocator.vertexSlice(mesh3d.handle.index);
         if (vertexSlice === undefined) continue;
         let indexSlice: AllocatorSlice | undefined;
         if (renderMesh.bufferInfo.kind === 'indexed') {
-          indexSlice = allocator.indexSlice(mesh3d.handle);
+          indexSlice = allocator.indexSlice(mesh3d.handle.index);
           if (indexSlice === undefined) continue;
         }
         const prepared = renderMaterials.get(meshMat.handle);
@@ -666,7 +668,8 @@ class MaterialPluginState<M extends Material> {
         const entry: InstanceEntry = {
           cameraEntity,
           bucket,
-          groupKey: `${mesh3d.handle}/${meshMat.handle}`,
+          groupKey: `${mesh3d.handle.index}/${meshMat.handle.index}`,
+          materialHandle: meshMat.handle,
           depth: sortDepth,
           model: gt.matrix as Mat4,
           payload: { pipeline, materialBindGroup: prepared.bindGroup, vertexSlice, indexSlice, renderMesh },
@@ -777,12 +780,7 @@ class MaterialPluginState<M extends Material> {
     for (const entry of entries) {
       const cameraFlags = liveCameraFlags.get(entry.cameraEntity);
       if (cameraFlags === undefined) continue;
-      // Recover the material handle from the groupKey ("meshHandle/materialHandle").
-      const slash = entry.groupKey.indexOf('/');
-      const materialHandle = Number(
-        entry.groupKey.slice(slash + 1),
-      ) as unknown as MaterialHandle<M>;
-      const materialInstance = mainWorldMaterials?.get(materialHandle);
+      const materialInstance = mainWorldMaterials?.get(entry.materialHandle as Handle<M>);
       const matFlags = materialInstance?.prepassWrites?.();
       if (matFlags === undefined) continue;
       const flags = intersectPrepassFlags(cameraFlags, matFlags);
@@ -822,6 +820,7 @@ class MaterialPluginState<M extends Material> {
         cameraEntity: entry.cameraEntity,
         bucket: 'opaque',
         groupKey: entry.groupKey,
+        materialHandle: entry.materialHandle,
         depth: entry.depth,
         model: entry.model,
         payload,
@@ -890,11 +889,11 @@ class MaterialPluginState<M extends Material> {
         const { meshHandle, materialHandle, bucket, depth } = batch.key;
         const renderMesh = renderMeshes.get(meshHandle);
         if (renderMesh === undefined) continue;
-        const vertexSlice = allocator.vertexSlice(meshHandle);
+        const vertexSlice = allocator.vertexSlice(meshHandle.index);
         if (vertexSlice === undefined) continue;
         let indexSlice: AllocatorSlice | undefined;
         if (renderMesh.bufferInfo.kind === 'indexed') {
-          indexSlice = allocator.indexSlice(meshHandle);
+          indexSlice = allocator.indexSlice(meshHandle.index);
           if (indexSlice === undefined) continue;
         }
         const prepared = renderMaterials.get(materialHandle);
@@ -1260,8 +1259,7 @@ const vertexLayoutDigestFor = (layout: VertexBufferLayout): string => {
   return digest;
 };
 
-// Suppress unused-binding lint: the marker types `PreparedMaterial` and
-// `MeshHandle` are imported for documentation TSDoc links above but not
-// referenced in this module's runtime code.
+// Suppress unused-binding lint: the marker type `PreparedMaterial` is imported
+// for documentation TSDoc links above but not referenced in this module's
+// runtime code.
 void (null as unknown as PreparedMaterial);
-void (null as unknown as MeshHandle);

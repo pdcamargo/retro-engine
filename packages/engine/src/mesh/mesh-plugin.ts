@@ -1,3 +1,4 @@
+import type { AssetEvent, AssetIndex, Handle } from '@retro-engine/assets';
 import { vertexFormatByteSize } from '@retro-engine/renderer-core';
 
 import type { App } from '../index';
@@ -9,7 +10,6 @@ import { MeshAllocator, MeshAllocatorSettings } from './allocator';
 import { calculateBoundsSystem } from './calculate-bounds';
 import type { Indices } from './indices';
 import { Mesh3d } from './mesh-3d';
-import type { MeshAssetEvent, MeshHandle } from './meshes';
 import { Meshes } from './meshes';
 import type { MeshAttributeData } from './mesh';
 import type { Mesh } from './mesh';
@@ -17,40 +17,41 @@ import type { RenderMesh } from './render-mesh';
 import { interMeshVertexBufferLayout } from './render-mesh';
 
 /**
- * Per-frame extract-side queue: the {@link MeshAssetEvent}s the extract system
- * pulls from {@link Meshes.drainPendingChanges} and hands to the prepare
- * system. Cleared at the end of every prepare pass.
+ * Per-frame extract-side queue: the {@link AssetEvent}s the extract system
+ * pulls from {@link Meshes} and hands to the prepare system. Cleared at the end
+ * of every prepare pass.
  *
  * Inserted by {@link MeshPlugin} as an App resource (resources are App-scoped,
  * not world-scoped, in this engine — see {@link App.insertResource}).
  */
 export class ExtractedMeshAssetEvents {
-  events: MeshAssetEvent[] = [];
+  events: AssetEvent<Mesh>[] = [];
 }
 
 /**
- * Map of {@link MeshHandle} → {@link RenderMesh}, populated by the prepare
- * system. Downstream consumers (Phase 7 material draw systems, Phase 8 sprite
- * draw systems) read this to find a mesh's GPU shape, then query the
- * {@link MeshAllocator} for the buffer slices at draw time.
+ * Map of mesh {@link AssetIndex} → {@link RenderMesh}, populated by the prepare
+ * system. Downstream consumers (material draw systems, sprite draw systems)
+ * read this to find a mesh's GPU shape, then query the {@link MeshAllocator}
+ * for the buffer slices at draw time. Keyed on `handle.index` so lookups stay
+ * numeric on the draw hot path.
  */
 export class RenderMeshes {
-  private readonly entries = new Map<MeshHandle, RenderMesh>();
+  private readonly entries = new Map<AssetIndex, RenderMesh>();
 
-  set(handle: MeshHandle, mesh: RenderMesh): void {
-    this.entries.set(handle, mesh);
+  set(handle: Handle<Mesh>, mesh: RenderMesh): void {
+    this.entries.set(handle.index, mesh);
   }
 
-  get(handle: MeshHandle): RenderMesh | undefined {
-    return this.entries.get(handle);
+  get(handle: Handle<Mesh>): RenderMesh | undefined {
+    return this.entries.get(handle.index);
   }
 
-  has(handle: MeshHandle): boolean {
-    return this.entries.has(handle);
+  has(handle: Handle<Mesh>): boolean {
+    return this.entries.has(handle.index);
   }
 
-  delete(handle: MeshHandle): boolean {
-    return this.entries.delete(handle);
+  delete(handle: Handle<Mesh>): boolean {
+    return this.entries.delete(handle.index);
   }
 
   get size(): number {
@@ -126,7 +127,7 @@ export class MeshPlugin implements PluginObject {
       'render',
       [ResMut(Meshes), ResMut(ExtractedMeshAssetEvents)],
       (meshes, queue) => {
-        const drained = meshes.drainPendingChanges();
+        const drained = meshes.drainEvents();
         if (drained.length === 0) return;
         // Append rather than overwrite so a hypothetical second producer
         // (a plugin queuing synthetic events for hot-reload, etc.) could co-
@@ -146,13 +147,13 @@ export class MeshPlugin implements PluginObject {
         for (const ev of queue.events) {
           switch (ev.kind) {
             case 'removed':
-              allocator.freeVertex(ev.handle);
-              allocator.freeIndex(ev.handle);
+              allocator.freeVertex(ev.handle.index);
+              allocator.freeIndex(ev.handle.index);
               renderMeshes.delete(ev.handle);
               break;
             case 'modified':
-              allocator.freeVertex(ev.handle);
-              allocator.freeIndex(ev.handle);
+              allocator.freeVertex(ev.handle.index);
+              allocator.freeIndex(ev.handle.index);
               renderMeshes.delete(ev.handle);
               {
                 const mesh = meshes.get(ev.handle);
@@ -164,6 +165,8 @@ export class MeshPlugin implements PluginObject {
               if (mesh !== undefined) uploadMesh(ev.handle, mesh, allocator, renderMeshes);
               break;
             }
+            case 'unused':
+              break;
           }
         }
         queue.events.length = 0;
@@ -181,7 +184,7 @@ export class MeshPlugin implements PluginObject {
  * meshes with the same attribute set share a slab.
  */
 const uploadMesh = (
-  handle: MeshHandle,
+  handle: Handle<Mesh>,
   mesh: Mesh,
   allocator: MeshAllocator,
   renderMeshes: RenderMeshes,
@@ -194,13 +197,13 @@ const uploadMesh = (
   const vertexCount = (first.data.byteLength / firstElementSize) | 0;
   const layout = interMeshVertexBufferLayout(attributeData.map((a) => a.attribute));
   const packed = packInterleaved(attributeData, vertexCount, layout.stride);
-  allocator.allocateVertex(handle, layout, packed as BufferSource);
+  allocator.allocateVertex(handle.index, layout, packed as BufferSource);
 
   let bufferInfo: RenderMesh['bufferInfo'] = { kind: 'non-indexed' };
   const indices = mesh.indices;
   if (indices !== undefined) {
     allocator.allocateIndex(
-      handle,
+      handle.index,
       indices.kind === 'u16' ? 'uint16' : 'uint32',
       indicesByteView(indices) as BufferSource,
     );

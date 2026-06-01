@@ -36,8 +36,8 @@ export type ImageColorSpace = 'srgb' | 'linear';
  * Holds the raw pixel bytes plus the metadata the renderer needs to provision
  * a `Texture`, a default `TextureView`, and an attached `Sampler`. Authored
  * via {@link Image.solid} / {@link Image.checker} / {@link Image.fromBytes};
- * consumers register it through the {@link Images} registry to receive an
- * {@link ImageHandle} that materials reference at bind time.
+ * consumers register it through the {@link Images} registry to receive a
+ * `Handle<Image>` that materials reference at bind time.
  *
  * **Shadow warning.** The class name `Image` shadows the DOM
  * `HTMLImageElement` constructor when imported from `@retro-engine/engine`.

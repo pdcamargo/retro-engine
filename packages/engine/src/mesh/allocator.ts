@@ -1,7 +1,7 @@
+import type { AssetIndex } from '@retro-engine/assets';
 import type { Buffer, IndexFormat, Renderer } from '@retro-engine/renderer-core';
 import { BufferUsage } from '@retro-engine/renderer-core';
 
-import type { MeshHandle } from './meshes';
 import type { MeshVertexBufferLayoutRef } from './render-mesh';
 
 /**
@@ -75,7 +75,7 @@ interface Slab {
   /** Byte capacity. */
   readonly size: number;
   /** Per-mesh ranges (sorted by offset, non-overlapping). */
-  readonly ranges: { handle: MeshHandle; offset: number; size: number }[];
+  readonly ranges: { handle: AssetIndex; offset: number; size: number }[];
   /** Free byte ranges (sorted by offset, non-overlapping, coalesced). */
   readonly free: { offset: number; size: number }[];
 }
@@ -115,7 +115,7 @@ type Allocation =
  * because the backend cannot express a slot-relative base-vertex offset
  * at draw time. Index allocations still pack regardless.
  *
- * Allocations are tracked per {@link MeshHandle}; on `free`, the slab's range
+ * Allocations are tracked per {@link AssetIndex}; on `free`, the slab's range
  * is returned to the free list and coalesced with adjacent free ranges. Slabs
  * that drop to fully-empty are destroyed and removed from the slab list.
  */
@@ -125,8 +125,8 @@ export class MeshAllocator {
   private readonly canPackVertices: boolean;
   private readonly vertexSlabs = new Map<MeshVertexBufferLayoutRef, Slab[]>();
   private readonly indexSlabs = new Map<IndexFormat, Slab[]>();
-  private readonly vertexAllocations = new Map<MeshHandle, Allocation>();
-  private readonly indexAllocations = new Map<MeshHandle, Allocation>();
+  private readonly vertexAllocations = new Map<AssetIndex, Allocation>();
+  private readonly indexAllocations = new Map<AssetIndex, Allocation>();
 
   constructor(renderer: Renderer, settings: MeshAllocatorSettings = new MeshAllocatorSettings()) {
     this.renderer = renderer;
@@ -144,7 +144,7 @@ export class MeshAllocator {
    * {@link MeshAllocator.freeVertex} first (the {@link MeshPlugin} pipeline
    * does this automatically on `Modified` events).
    */
-  allocateVertex(handle: MeshHandle, layout: MeshVertexBufferLayoutRef, data: BufferSource): void {
+  allocateVertex(handle: AssetIndex, layout: MeshVertexBufferLayoutRef, data: BufferSource): void {
     if (this.vertexAllocations.has(handle)) {
       throw new Error(`MeshAllocator.allocateVertex: handle ${handle} already has a vertex allocation`);
     }
@@ -163,7 +163,7 @@ export class MeshAllocator {
    * Index width selects the slab list: `'uint16'` indices pack against other
    * `u16` meshes; `'uint32'` against other `u32` meshes.
    */
-  allocateIndex(handle: MeshHandle, format: IndexFormat, data: BufferSource): void {
+  allocateIndex(handle: AssetIndex, format: IndexFormat, data: BufferSource): void {
     if (this.indexAllocations.has(handle)) {
       throw new Error(`MeshAllocator.allocateIndex: handle ${handle} already has an index allocation`);
     }
@@ -182,7 +182,7 @@ export class MeshAllocator {
    * free list (or destroying its dedicated buffer for a large allocation).
    * Silent no-op when the handle has no vertex allocation.
    */
-  freeVertex(handle: MeshHandle): void {
+  freeVertex(handle: AssetIndex): void {
     const allocation = this.vertexAllocations.get(handle);
     if (!allocation) return;
     this.vertexAllocations.delete(handle);
@@ -190,7 +190,7 @@ export class MeshAllocator {
   }
 
   /** Release the index allocation for `handle`. Silent no-op when none exists. */
-  freeIndex(handle: MeshHandle): void {
+  freeIndex(handle: AssetIndex): void {
     const allocation = this.indexAllocations.get(handle);
     if (!allocation) return;
     this.indexAllocations.delete(handle);
@@ -201,12 +201,12 @@ export class MeshAllocator {
    * Resolve the GPU slice backing the mesh's vertex data. Returns `undefined`
    * if no vertex allocation exists for `handle`.
    */
-  vertexSlice(handle: MeshHandle): AllocatorSlice | undefined {
+  vertexSlice(handle: AssetIndex): AllocatorSlice | undefined {
     return this.sliceFor(this.vertexAllocations.get(handle));
   }
 
   /** Resolve the GPU slice backing the mesh's index data. */
-  indexSlice(handle: MeshHandle): AllocatorSlice | undefined {
+  indexSlice(handle: AssetIndex): AllocatorSlice | undefined {
     return this.sliceFor(this.indexAllocations.get(handle));
   }
 
@@ -255,7 +255,7 @@ export class MeshAllocator {
   }
 
   private allocateSlab(
-    handle: MeshHandle,
+    handle: AssetIndex,
     slabs: Slab[],
     size: number,
     stride: number,
@@ -288,7 +288,7 @@ export class MeshAllocator {
     return { kind: 'slab', entry: { slab, offset: 0, size }, baseVertex: 0 };
   }
 
-  private allocateLarge(handle: MeshHandle, size: number, usage: number, label: string): Allocation {
+  private allocateLarge(handle: AssetIndex, size: number, usage: number, label: string): Allocation {
     // Suppress unused-parameter; `handle` is part of the API for symmetry with slab path.
     void handle;
     const buffer = this.renderer.createBuffer({ size, usage, label });
@@ -325,7 +325,7 @@ export class MeshAllocator {
   }
 
   private freeAllocation(
-    handle: MeshHandle,
+    handle: AssetIndex,
     allocation: Allocation,
     slabRegistry: Map<unknown, Slab[]>,
   ): void {

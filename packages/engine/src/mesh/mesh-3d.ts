@@ -1,19 +1,21 @@
+import type { Handle } from '@retro-engine/assets';
+
 import { GlobalTransform, Transform } from '../transform';
 import { InheritedVisibility, ViewVisibility, Visibility } from '../visibility';
 
-import type { MeshHandle } from './meshes';
+import type { Mesh } from './mesh';
 
 /**
  * ECS component pairing an entity to a registered {@link Mesh} asset by
- * {@link MeshHandle}. Spawning a `Mesh3d` makes the entity drawable as a 3D
- * mesh; pair with a `MeshMaterial3d<M>` to select the material.
+ * handle. Spawning a `Mesh3d` makes the entity drawable as a 3D mesh; pair with
+ * a `MeshMaterial3d<M>` to select the material.
  *
  * `Mesh3d` requires `Transform`, `GlobalTransform`, `Visibility`,
  * `InheritedVisibility`, and `ViewVisibility` — spawning with `new Mesh3d(h)`
  * alone auto-attaches the rest via the engine's required-component
  * resolution.
  *
- * The held `MeshHandle` is opaque; reach the underlying `Mesh` via
+ * The held `Handle<Mesh>` is opaque; reach the underlying `Mesh` via
  * `world.getResource(Meshes)?.get(handle)`.
  *
  * @example
@@ -26,9 +28,9 @@ import type { MeshHandle } from './meshes';
  * ```
  */
 export class Mesh3d {
-  readonly handle: MeshHandle;
+  readonly handle: Handle<Mesh>;
 
-  constructor(handle: MeshHandle) {
+  constructor(handle: Handle<Mesh>) {
     this.handle = handle;
   }
 

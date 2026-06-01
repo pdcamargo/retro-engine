@@ -69,9 +69,7 @@ describe('MeshPlugin', () => {
     );
     app.advanceFrame();
     expect(renderMeshes.get(handle)?.vertexCount).toBe(3);
-    meshes.mutate(handle, (m) => {
-      m.insertAttribute(MeshAttribute.POSITION, new Float32Array(18));
-    });
+    meshes.getMut(handle)!.insertAttribute(MeshAttribute.POSITION, new Float32Array(18));
     app.advanceFrame();
     expect(renderMeshes.get(handle)?.vertexCount).toBe(6);
   });

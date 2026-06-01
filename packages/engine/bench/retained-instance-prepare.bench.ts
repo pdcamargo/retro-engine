@@ -12,6 +12,7 @@
 
 import { bench, summary } from 'mitata';
 
+import { asAssetIndex, makeHandle } from '@retro-engine/assets';
 import type { Entity } from '@retro-engine/ecs';
 import { mat4, vec2 } from '@retro-engine/math';
 
@@ -51,6 +52,7 @@ const renderer = makeRenderingBenchRenderer();
 
 const FREE = new Set<AlphaBucket>(['blend']); // opaque not in the set → grouped freely
 const PAYLOAD = {} as unknown as InstancedDrawPayload;
+const MATERIAL_HANDLE = makeHandle(asAssetIndex(0)) as InstanceEntry['materialHandle'];
 
 interface MeshKey {
   readonly groupKey: string;
@@ -62,7 +64,7 @@ const meshSameBatch = (a: MeshKey, b: MeshKey): boolean => a.groupKey === b.grou
 const buildMeshEntries = (count: number): InstanceEntry[] => {
   const entries: InstanceEntry[] = [];
   for (let i = 0; i < count; i++) {
-    entries.push({ cameraEntity: 1, bucket: 'opaque', groupKey: `${i % 8}`, depth: i, model: MODEL, payload: PAYLOAD });
+    entries.push({ cameraEntity: 1, bucket: 'opaque', groupKey: `${i % 8}`, materialHandle: MATERIAL_HANDLE, depth: i, model: MODEL, payload: PAYLOAD });
   }
   return entries;
 };
@@ -144,7 +146,7 @@ const buildSpriteEntries = (count: number): PerSpriteEntry[] => {
       gt: { matrix: mat4.identity() } as PerSpriteEntry['gt'],
       bucket: 'opaque',
       bucketKey: 0,
-      imageHandle: (i % 8) as unknown as PerSpriteEntry['imageHandle'],
+      imageHandle: makeHandle(asAssetIndex(i % 8)) as PerSpriteEntry['imageHandle'],
       worldZ: i,
     });
   }

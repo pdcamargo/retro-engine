@@ -121,9 +121,7 @@ export {
 export type {
   AllocatorSlice,
   Indices,
-  MeshAssetEvent,
   MeshAttributeData,
-  MeshHandle,
   MeshVertexAttribute,
   MeshVertexAttributeId,
   MeshVertexBufferLayoutRef,
@@ -140,9 +138,7 @@ export type {
   BindingVisibility,
   ImageFallback,
   Material,
-  MaterialAssetEvent,
   MaterialCtor,
-  MaterialHandle,
   MaterialPipelineKey,
   MaterialPluginOptions,
   PreparedMaterial,
@@ -151,9 +147,7 @@ export type {
   UniformFieldPack,
 } from './material';
 export type {
-  ImageAssetEvent,
   ImageDimension,
-  ImageHandle,
   RenderImage,
 } from './image';
 export {
@@ -164,11 +158,12 @@ export {
   Images,
   RenderImages,
 } from './image';
-export { Assets, handleEq, makeHandle } from '@retro-engine/assets';
+export { asAssetIndex, Assets, handleEq, makeHandle } from '@retro-engine/assets';
 export type {
   AssetEvent,
   AssetImportContext,
   AssetImporter,
+  AssetIndex,
   AssetSource,
   Handle,
 } from '@retro-engine/assets';
@@ -341,8 +336,6 @@ export type {
   SpriteOptions,
   SpriteSpecializeContext,
   TextureAtlasFromGridOptions,
-  TextureAtlasLayoutAssetEvent,
-  TextureAtlasLayoutHandle,
   TextureSlicerOptions,
 } from './sprite';
 export {

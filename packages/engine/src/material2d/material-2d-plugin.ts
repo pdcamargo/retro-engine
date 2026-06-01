@@ -1,3 +1,4 @@
+import type { Handle } from '@retro-engine/assets';
 import type { ComponentType, Entity, Query as QueryHandle } from '@retro-engine/ecs';
 import type { Mat4 } from '@retro-engine/math';
 import type {
@@ -15,7 +16,6 @@ import { Images } from '../image/images';
 import { RenderImages } from '../image/image-plugin';
 import type { App } from '../index';
 import type { AlphaMode } from '../material/material';
-import type { MaterialHandle } from '../material/materials';
 import { Materials } from '../material/materials';
 import { INSTANCE_LAYOUT } from '../material/instance-layout';
 import { MeshInstanceBuffer } from '../material/mesh-instance-buffer';
@@ -28,7 +28,7 @@ import {
   schemaToBindGroupLayout,
 } from '../material/prepare-bind-group';
 import { RenderMaterials } from '../material/render-materials';
-import type { AllocatorSlice, MeshHandle } from '../mesh';
+import type { AllocatorSlice } from '../mesh';
 import { Mesh2d, MeshAllocator, Meshes, RenderMeshes } from '../mesh';
 import type { PluginObject } from '../plugin';
 import { RenderSet } from '../render-set';
@@ -102,7 +102,7 @@ export class Material2dPlugin<M extends Material2d> implements PluginObject {
   /** Per-type subclass of {@link RenderMaterials} — render-world prepared bind groups. */
   readonly RenderMaterials2d: new () => RenderMaterials<M>;
   /** Per-type subclass of {@link MeshMaterial2d} — spawn `new plugin.MeshMaterial2d(handle)`. */
-  readonly MeshMaterial2d: new (handle: MaterialHandle<M>) => MeshMaterial2d<M>;
+  readonly MeshMaterial2d: new (handle: Handle<M>) => MeshMaterial2d<M>;
   private readonly retained: boolean;
 
   constructor(materialClass: Material2dCtor<M>, options?: Material2dPluginOptions) {
@@ -124,14 +124,14 @@ export class Material2dPlugin<M extends Material2d> implements PluginObject {
     this.RenderMaterials2d = RenderMaterialsSubclass as unknown as new () => RenderMaterials<M>;
 
     const MeshMaterialBase = MeshMaterial2d as unknown as new (
-      h: MaterialHandle<M>,
+      h: Handle<M>,
     ) => MeshMaterial2d<M>;
     const MeshMaterialSubclass = class extends MeshMaterialBase {};
     Object.defineProperty(MeshMaterialSubclass, 'name', {
       value: `MeshMaterial2d<${materialClass.name}>`,
     });
     this.MeshMaterial2d = MeshMaterialSubclass as unknown as new (
-      h: MaterialHandle<M>,
+      h: Handle<M>,
     ) => MeshMaterial2d<M>;
   }
 
@@ -191,7 +191,7 @@ export class Material2dPlugin<M extends Material2d> implements PluginObject {
     // ViewVisibility) entities × active 2D cameras; batch by (mesh, material),
     // pack per-instance transforms, specialize the pipeline, push one phase
     // item per instanced batch into ViewPhases2d.
-    type MmCtor = new (h: MaterialHandle<M>) => MeshMaterial2d<M>;
+    type MmCtor = new (h: Handle<M>) => MeshMaterial2d<M>;
     type RenderablesQuery = QueryHandle<
       readonly [typeof Mesh2d, MmCtor, typeof GlobalTransform, typeof ViewVisibility]
     >;
@@ -241,7 +241,7 @@ export class Material2dPlugin<M extends Material2d> implements PluginObject {
   private registerRetained(
     app: App,
     state: Material2dPluginState<M>,
-    MeshMaterialCtor: new (h: MaterialHandle<M>) => MeshMaterial2d<M>,
+    MeshMaterialCtor: new (h: Handle<M>) => MeshMaterial2d<M>,
     RenderMaterialsCtor: new () => RenderMaterials<M>,
   ): void {
     app.addSystem(
@@ -404,9 +404,10 @@ class Material2dPluginState<M extends Material2d> {
     images: Images,
     renderImages: RenderImages,
   ): void {
-    const events = materials.drainPendingChanges();
+    const events = materials.drainEvents();
     if (events.length === 0) return;
     for (const event of events) {
+      if (event.kind === 'unused') continue;
       if (event.kind === 'removed') {
         renderMaterials.delete(event.handle);
         continue;
@@ -423,7 +424,7 @@ class Material2dPluginState<M extends Material2d> {
         this.scratch,
         images,
         renderImages,
-        `material-2d#${this.materialClass.name}#${String(event.handle)}`,
+        `material-2d#${this.materialClass.name}#${event.handle.index}`,
       );
       renderMaterials.set(event.handle, prepared);
     }
@@ -465,11 +466,11 @@ class Material2dPluginState<M extends Material2d> {
 
         const renderMesh = renderMeshes.get(mesh2d.handle);
         if (renderMesh === undefined) continue;
-        const vertexSlice = allocator.vertexSlice(mesh2d.handle);
+        const vertexSlice = allocator.vertexSlice(mesh2d.handle.index);
         if (vertexSlice === undefined) continue;
         let indexSlice: AllocatorSlice | undefined;
         if (renderMesh.bufferInfo.kind === 'indexed') {
-          indexSlice = allocator.indexSlice(mesh2d.handle);
+          indexSlice = allocator.indexSlice(mesh2d.handle.index);
           if (indexSlice === undefined) continue;
         }
         const prepared = renderMaterials.get(meshMat.handle);
@@ -498,7 +499,8 @@ class Material2dPluginState<M extends Material2d> {
         entries.push({
           cameraEntity,
           bucket: alphaBucket,
-          groupKey: `${mesh2d.handle}/${meshMat.handle}`,
+          groupKey: `${mesh2d.handle.index}/${meshMat.handle.index}`,
+          materialHandle: meshMat.handle,
           depth: sortDepth,
           model: gt.matrix as Mat4,
           payload: { pipeline, materialBindGroup: prepared.bindGroup, vertexSlice, indexSlice, renderMesh },
@@ -561,11 +563,11 @@ class Material2dPluginState<M extends Material2d> {
         const { meshHandle, materialHandle, bucket, depth } = batch.key;
         const renderMesh = renderMeshes.get(meshHandle);
         if (renderMesh === undefined) continue;
-        const vertexSlice = allocator.vertexSlice(meshHandle);
+        const vertexSlice = allocator.vertexSlice(meshHandle.index);
         if (vertexSlice === undefined) continue;
         let indexSlice: AllocatorSlice | undefined;
         if (renderMesh.bufferInfo.kind === 'indexed') {
-          indexSlice = allocator.indexSlice(meshHandle);
+          indexSlice = allocator.indexSlice(meshHandle.index);
           if (indexSlice === undefined) continue;
         }
         const prepared = renderMaterials.get(materialHandle);
@@ -675,5 +677,4 @@ const compileShaderFromRef = (
 
 // Suppress unused-binding lint: imported for documentation TSDoc references.
 void (null as unknown as PreparedMaterial);
-void (null as unknown as MeshHandle);
 void (null as unknown as TextureFormat);

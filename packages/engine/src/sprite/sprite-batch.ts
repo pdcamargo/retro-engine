@@ -1,6 +1,7 @@
+import type { Handle } from '@retro-engine/assets';
 import type { Mat4 } from '@retro-engine/math';
 
-import type { ImageHandle } from '../image/images';
+import type { Image } from '../image/image';
 
 import { resolveAnchor, type Sprite } from './sprite';
 import type { TextureSlicer } from './texture-slicer';
@@ -44,7 +45,7 @@ export type SpriteAlphaBucket = 'opaque' | 'blend';
  * @internal
  */
 export interface SpriteBatch {
-  readonly image: ImageHandle;
+  readonly image: Handle<Image>;
   readonly bucket: SpriteAlphaBucket;
   /** Index of the first sprite in this batch within the per-frame instance buffer. */
   readonly firstInstance: number;

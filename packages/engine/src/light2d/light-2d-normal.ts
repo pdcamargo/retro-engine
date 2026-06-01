@@ -6,9 +6,10 @@ import type {
   TextureFormat,
 } from '@retro-engine/renderer-core';
 import { BufferUsage } from '@retro-engine/renderer-core';
+import type { Handle } from '@retro-engine/assets';
 
 import { Images } from '../image/images';
-import type { ImageHandle } from '../image/images';
+import type { Image } from '../image/image';
 import type { App } from '../index';
 import { PipelineCache } from '../shader/pipeline-cache';
 import {
@@ -35,7 +36,7 @@ const GROWTH_FACTOR = 1.5 as const;
 interface NormalDraw {
   readonly firstInstance: number;
   readonly count: number;
-  readonly normalMap: ImageHandle;
+  readonly normalMap: Handle<Image>;
 }
 
 /**

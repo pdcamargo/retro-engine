@@ -12,9 +12,10 @@
 
 import { bench, summary } from 'mitata';
 
+import type { Handle } from '@retro-engine/assets';
 import type { Sampler, Texture, TextureView } from '@retro-engine/renderer-core';
 
-import { Images, RenderImages, type ImageHandle, MaterialSchema } from '../src';
+import { Image, Images, RenderImages, MaterialSchema } from '../src';
 import type { RenderImage } from '../src';
 import {
   prepareBindGroup,
@@ -28,11 +29,11 @@ class BenchMaterial {
   emissive: { x: number; y: number; z: number; w: number } = { x: 0, y: 0, z: 0, w: 0 };
   metallic = 0;
   roughness = 0.5;
-  baseColorTexture: ImageHandle | undefined;
-  metallicRoughnessTexture: ImageHandle | undefined;
-  normalMapTexture: ImageHandle | undefined;
-  emissiveTexture: ImageHandle | undefined;
-  occlusionTexture: ImageHandle | undefined;
+  baseColorTexture: Handle<Image> | undefined;
+  metallicRoughnessTexture: Handle<Image> | undefined;
+  normalMapTexture: Handle<Image> | undefined;
+  emissiveTexture: Handle<Image> | undefined;
+  occlusionTexture: Handle<Image> | undefined;
 
   static readonly bindGroup = MaterialSchema(BenchMaterial, [
     {

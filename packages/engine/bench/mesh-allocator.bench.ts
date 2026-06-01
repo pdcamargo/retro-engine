@@ -18,15 +18,16 @@ import { bench, summary } from 'mitata';
 
 import type { Buffer, BufferDescriptor, Renderer, RendererCapabilities } from '@retro-engine/renderer-core';
 
+import { asAssetIndex, type AssetIndex } from '@retro-engine/assets';
+
 import {
   interMeshVertexBufferLayout,
   MeshAllocator,
   MeshAllocatorSettings,
-  type MeshHandle,
   MeshAttribute,
 } from '../src/mesh';
 
-const asHandle = (n: number): MeshHandle => n as MeshHandle;
+const asHandle = (n: number): AssetIndex => asAssetIndex(n);
 
 const makeBenchRenderer = (): Renderer => {
   const capabilities: RendererCapabilities = {

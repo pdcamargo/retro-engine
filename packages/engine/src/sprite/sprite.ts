@@ -1,7 +1,8 @@
+import type { Handle } from '@retro-engine/assets';
 import type { Vec2, Vec4 } from '@retro-engine/math';
 import { vec2, vec4 } from '@retro-engine/math';
 
-import type { ImageHandle } from '../image/images';
+import type { Image } from '../image/image';
 import { Transform, GlobalTransform } from '../transform';
 import { InheritedVisibility, ViewVisibility, Visibility } from '../visibility';
 
@@ -61,7 +62,7 @@ export interface SpriteOptions {
    * Source image handle. `undefined` resolves to `Images.WHITE` at queue time,
    * producing a solid-colour quad tinted by {@link color}.
    */
-  image?: ImageHandle;
+  image?: Handle<Image>;
   /**
    * Optional tangent-space normal map. When set and `Light2dPlugin`'s
    * `Light2dSettings.normalMapping` is enabled, the sprite is sampled into the
@@ -69,7 +70,7 @@ export interface SpriteOptions {
    * with the same UVs as {@link image}, so a normal map should share the
    * source image's dimensions / sub-rect. No effect without lighting.
    */
-  normalMap?: ImageHandle;
+  normalMap?: Handle<Image>;
   /** RGBA tint multiplied with the sampled texel. Default `(1, 1, 1, 1)`. */
   color?: Vec4;
   /**
@@ -129,8 +130,8 @@ export interface SpriteOptions {
  * ```
  */
 export class Sprite {
-  image: ImageHandle | undefined;
-  normalMap: ImageHandle | undefined;
+  image: Handle<Image> | undefined;
+  normalMap: Handle<Image> | undefined;
   color: Vec4;
   customSize: Vec2 | undefined;
   rect: Rect | undefined;

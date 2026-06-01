@@ -5,7 +5,7 @@ import { vec4 } from '@retro-engine/math';
 import { Image } from './image';
 import { Images } from './images';
 
-describe('Images registry', () => {
+describe('Images store', () => {
   it('seeds WHITE, BLACK, NORMAL_FLAT in the constructor', () => {
     const images = new Images();
     expect(images.has(images.WHITE)).toBe(true);
@@ -21,22 +21,22 @@ describe('Images registry', () => {
     expect(Array.from(normalFlat!.data)).toEqual([0x80, 0x80, 0xff, 0xff]);
   });
 
-  it('queues one Added event per default handle on construction', () => {
+  it('queues one added event per default handle on construction', () => {
     const images = new Images();
-    const events = images.drainPendingChanges();
+    const events = images.drainEvents();
     expect(events).toHaveLength(3);
     expect(events[0]).toEqual({ kind: 'added', handle: images.WHITE });
     expect(events[1]).toEqual({ kind: 'added', handle: images.BLACK });
     expect(events[2]).toEqual({ kind: 'added', handle: images.NORMAL_FLAT });
   });
 
-  it('returns a fresh handle on add and emits an Added event', () => {
+  it('returns a fresh handle on add and emits an added event', () => {
     const images = new Images();
-    images.drainPendingChanges(); // discard the seeded defaults
+    images.drainEvents(); // discard the seeded defaults
     const handle = images.add(Image.solid(vec4.create(1, 0, 0, 1), { label: 'red' }));
     expect(images.has(handle)).toBe(true);
     expect(images.size).toBe(4);
-    const events = images.drainPendingChanges();
+    const events = images.drainEvents();
     expect(events).toEqual([{ kind: 'added', handle }]);
   });
 
@@ -47,59 +47,47 @@ describe('Images registry', () => {
     expect(images.get(handle)).toBe(image);
   });
 
-  it('replace swaps the image and queues a Modified event', () => {
+  it('insert overwrites an existing handle and queues a modified event', () => {
     const images = new Images();
     const a = Image.solid(vec4.create(1, 0, 0, 1));
     const b = Image.solid(vec4.create(0, 1, 0, 1));
     const handle = images.add(a);
-    images.drainPendingChanges();
-    const swapped = images.replace(handle, b);
-    expect(swapped).toBe(true);
+    images.drainEvents();
+    images.insert(handle, b);
     expect(images.get(handle)).toBe(b);
-    expect(images.drainPendingChanges()).toEqual([{ kind: 'modified', handle }]);
+    expect(images.drainEvents()).toEqual([{ kind: 'modified', handle }]);
   });
 
-  it('replace is a no-op on unknown handle (no event emitted, returns false)', () => {
+  it('remove emits a removed event once; double-remove is a no-op', () => {
     const images = new Images();
     const handle = images.add(Image.solid(vec4.create(1, 1, 1, 1)));
-    images.drainPendingChanges();
+    images.drainEvents();
     images.remove(handle);
-    images.drainPendingChanges();
-    const swapped = images.replace(handle, Image.solid(vec4.create(0, 0, 0, 1)));
-    expect(swapped).toBe(false);
-    expect(images.drainPendingChanges()).toEqual([]);
-  });
-
-  it('remove emits a Removed event once; double-remove is a no-op', () => {
-    const images = new Images();
-    const handle = images.add(Image.solid(vec4.create(1, 1, 1, 1)));
-    images.drainPendingChanges();
-    images.remove(handle);
-    expect(images.drainPendingChanges()).toEqual([{ kind: 'removed', handle }]);
+    expect(images.drainEvents()).toEqual([{ kind: 'removed', handle }]);
     images.remove(handle); // double-remove
-    expect(images.drainPendingChanges()).toEqual([]);
+    expect(images.drainEvents()).toEqual([]);
     expect(images.has(handle)).toBe(false);
   });
 
-  it('drainPendingChanges clears the buffer', () => {
+  it('drainEvents clears the buffer', () => {
     const images = new Images();
-    images.drainPendingChanges();
+    images.drainEvents();
     images.add(Image.solid(vec4.create(1, 0, 0, 1)));
     images.add(Image.solid(vec4.create(0, 1, 0, 1)));
-    expect(images.drainPendingChanges()).toHaveLength(2);
-    expect(images.drainPendingChanges()).toHaveLength(0);
+    expect(images.drainEvents()).toHaveLength(2);
+    expect(images.drainEvents()).toHaveLength(0);
   });
 
-  it('iter enumerates (handle, image) pairs in insertion order, starting with the defaults', () => {
+  it('iter enumerates (index, image) pairs in insertion order, starting with the defaults', () => {
     const images = new Images();
     const extra = Image.solid(vec4.create(1, 0.5, 0, 1));
     const handle = images.add(extra);
     const entries = [...images.iter()];
     expect(entries).toHaveLength(4);
-    expect(entries[0]![0]).toBe(images.WHITE);
-    expect(entries[1]![0]).toBe(images.BLACK);
-    expect(entries[2]![0]).toBe(images.NORMAL_FLAT);
-    expect(entries[3]![0]).toBe(handle);
+    expect(entries[0]![0]).toBe(images.WHITE.index);
+    expect(entries[1]![0]).toBe(images.BLACK.index);
+    expect(entries[2]![0]).toBe(images.NORMAL_FLAT.index);
+    expect(entries[3]![0]).toBe(handle.index);
     expect(entries[3]![1]).toBe(extra);
   });
 });

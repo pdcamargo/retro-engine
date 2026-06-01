@@ -18,6 +18,7 @@
 
 import { bench, summary } from 'mitata';
 
+import { asAssetIndex, makeHandle } from '@retro-engine/assets';
 import { mat4 } from '@retro-engine/math';
 
 import {
@@ -29,6 +30,7 @@ import {
 import { MESH_INSTANCE_FLOAT_COUNT } from '../src/material/instance-layout';
 
 const PAYLOAD = {} as unknown as InstancedDrawPayload;
+const MATERIAL_HANDLE = makeHandle(asAssetIndex(0)) as InstanceEntry['materialHandle'];
 const MODEL = mat4.identity();
 
 const ENTITY_COUNTS = [1_000, 8_000] as const;
@@ -55,6 +57,7 @@ const buildEntries = (count: number, combos: number): InstanceEntry[] => {
       cameraEntity: 1,
       bucket: 'opaque',
       groupKey: `${i % combos}`,
+      materialHandle: MATERIAL_HANDLE,
       depth: (rng() - 0.5) * 200,
       model: MODEL,
       payload: PAYLOAD,

@@ -24,7 +24,6 @@ export type {
 } from './material';
 export { ShaderRefs, alphaModeKey } from './material';
 
-export type { MaterialAssetEvent, MaterialHandle } from './materials';
 export { Materials } from './materials';
 
 export { RenderMaterials } from './render-materials';

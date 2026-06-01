@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 
+import { asAssetIndex, makeHandle } from '@retro-engine/assets';
 import { mat4 } from '@retro-engine/math';
 
 import {
@@ -10,16 +11,26 @@ import {
 } from './instance-batching';
 import { MESH_INSTANCE_FLOAT_COUNT } from './instance-layout';
 
-// packInstancedBatches never inspects payload contents — a single shared stub
-// is enough; the tests assert on grouping, counts, and packed floats.
+// packInstancedBatches never inspects payload or materialHandle contents — a
+// single shared stub of each is enough; the tests assert on grouping, counts,
+// and packed floats.
 const PAYLOAD = {} as unknown as InstancedDrawPayload;
+const MATERIAL_HANDLE = makeHandle(asAssetIndex(0)) as InstanceEntry['materialHandle'];
 
 const entry = (
   cameraEntity: number,
   bucket: AlphaBucket,
   groupKey: string,
   depth: number,
-): InstanceEntry => ({ cameraEntity, bucket, groupKey, depth, model: mat4.identity(), payload: PAYLOAD });
+): InstanceEntry => ({
+  cameraEntity,
+  bucket,
+  groupKey,
+  materialHandle: MATERIAL_HANDLE,
+  depth,
+  model: mat4.identity(),
+  payload: PAYLOAD,
+});
 
 const NONE = new Set<AlphaBucket>();
 const ALL = new Set<AlphaBucket>(['opaque', 'mask', 'blend']);

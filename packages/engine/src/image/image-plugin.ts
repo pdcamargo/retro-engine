@@ -1,3 +1,4 @@
+import type { AssetEvent, AssetIndex, Handle } from '@retro-engine/assets';
 import type { Renderer, TextureFormat, TextureView } from '@retro-engine/renderer-core';
 import { srgbVariantOf, TextureUsage } from '@retro-engine/renderer-core';
 
@@ -7,50 +8,50 @@ import { RenderSet } from '../render-set';
 import { Res, ResMut } from '../system-param';
 
 import { bytesPerTexel, Image } from './image';
-import type { ImageAssetEvent, ImageHandle } from './images';
 import { Images } from './images';
 import type { RenderImage } from './render-image';
 
 /**
- * Per-frame extract-side queue: the {@link ImageAssetEvent}s the extract
- * system pulls from {@link Images.drainPendingChanges} and hands to the
- * prepare system. Cleared at the end of every prepare pass.
+ * Per-frame extract-side queue: the {@link AssetEvent}s the extract system
+ * pulls from {@link Images} and hands to the prepare system. Cleared at the end
+ * of every prepare pass.
  *
  * Inserted by {@link ImagePlugin} as an App resource (resources are
  * App-scoped, not world-scoped, in this engine — see
  * {@link App.insertResource}).
  */
 export class ExtractedImageAssetEvents {
-  events: ImageAssetEvent[] = [];
+  events: AssetEvent<Image>[] = [];
 }
 
 /**
- * Map of {@link ImageHandle} → {@link RenderImage}, populated by the prepare
- * system. The {@link MaterialPlugin} prepare path reads this when resolving
- * `imageMode: 'handle'` schema entries — texture entries bind `RenderImage.view`,
- * sampler entries bind `RenderImage.sampler`.
+ * Map of image {@link AssetIndex} → {@link RenderImage}, populated by the
+ * prepare system. The {@link MaterialPlugin} prepare path reads this when
+ * resolving `imageMode: 'handle'` schema entries — texture entries bind
+ * `RenderImage.view`, sampler entries bind `RenderImage.sampler`.
  *
  * The render-side counterpart of {@link Images}. Lifetimes are tied to the
- * source `Images` resource: a `Removed` event destroys the GPU resources and
- * drops the entry; a `Modified` event destroys-and-reuploads.
+ * source `Images` resource: a `removed` event destroys the GPU resources and
+ * drops the entry; a `modified` event destroys-and-reuploads. Keyed on
+ * `handle.index` so lookups stay numeric on the draw hot path.
  */
 export class RenderImages {
-  private readonly entries = new Map<ImageHandle, RenderImage>();
+  private readonly entries = new Map<AssetIndex, RenderImage>();
 
-  set(handle: ImageHandle, image: RenderImage): void {
-    this.entries.set(handle, image);
+  set(handle: Handle<Image>, image: RenderImage): void {
+    this.entries.set(handle.index, image);
   }
 
-  get(handle: ImageHandle): RenderImage | undefined {
-    return this.entries.get(handle);
+  get(handle: Handle<Image>): RenderImage | undefined {
+    return this.entries.get(handle.index);
   }
 
-  has(handle: ImageHandle): boolean {
-    return this.entries.has(handle);
+  has(handle: Handle<Image>): boolean {
+    return this.entries.has(handle.index);
   }
 
-  delete(handle: ImageHandle): boolean {
-    return this.entries.delete(handle);
+  delete(handle: Handle<Image>): boolean {
+    return this.entries.delete(handle.index);
   }
 
   get size(): number {
@@ -99,7 +100,7 @@ export class ImagePlugin implements PluginObject {
       'render',
       [ResMut(Images), ResMut(ExtractedImageAssetEvents)],
       (images, queue) => {
-        const drained = images.drainPendingChanges();
+        const drained = images.drainEvents();
         if (drained.length === 0) return;
         for (const ev of drained) queue.events.push(ev);
       },
@@ -115,6 +116,7 @@ export class ImagePlugin implements PluginObject {
       (images, queue, renderImages) => {
         if (queue.events.length === 0) return;
         for (const ev of queue.events) {
+          if (ev.kind === 'unused') continue;
           if (ev.kind === 'removed' || ev.kind === 'modified') {
             const existing = renderImages.get(ev.handle);
             if (existing !== undefined) {
@@ -143,25 +145,25 @@ export class ImagePlugin implements PluginObject {
  * cube images that don't carry six layers.
  */
 const uploadImage = (
-  handle: ImageHandle,
+  handle: Handle<Image>,
   image: Image,
   renderer: Renderer,
   renderImages: RenderImages,
 ): void => {
   if (image.mipLevelCount > 1) {
     throw new Error(
-      `ImagePlugin: image '${String(handle)}' declares mipLevelCount=${image.mipLevelCount}; multi-mip uploads are not implemented in Phase 7.5 — pass mipLevelCount=1 or omit.`,
+      `ImagePlugin: image '${handle.index}' declares mipLevelCount=${image.mipLevelCount}; multi-mip uploads are not implemented in Phase 7.5 — pass mipLevelCount=1 or omit.`,
     );
   }
   const bpt = bytesPerTexel(image.format);
   if (bpt === undefined) {
     throw new Error(
-      `ImagePlugin: image '${String(handle)}' uses format '${image.format}', which is not a sampled colour format supported by Image.`,
+      `ImagePlugin: image '${handle.index}' uses format '${image.format}', which is not a sampled colour format supported by Image.`,
     );
   }
   if (image.dimension === 'cube' && image.depthOrArrayLayers !== 6) {
     throw new Error(
-      `ImagePlugin: cube image '${String(handle)}' must declare depthOrArrayLayers=6; got ${image.depthOrArrayLayers}.`,
+      `ImagePlugin: cube image '${handle.index}' must declare depthOrArrayLayers=6; got ${image.depthOrArrayLayers}.`,
     );
   }
 

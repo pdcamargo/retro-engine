@@ -133,7 +133,7 @@ export type ImageFallback = 'white' | 'black' | 'normalFlat';
  * slot. Texture and sampler entries come in two flavours, discriminated by
  * `imageMode`:
  *
- * - `'handle'` — the named field stores an `ImageHandle | undefined`; the
+ * - `'handle'` — the named field stores an `Handle<Image> | undefined`; the
  *   walker resolves it through `RenderImages`, falling back to a well-known
  *   default (`fallback`) when the field is `undefined`. The handle-mode
  *   sampler entry uses the **same** `fieldKey` as the matching texture entry

@@ -33,10 +33,11 @@ import { ShaderStage } from '@retro-engine/renderer-core';
 
 import { vec4 } from '@retro-engine/math';
 
+import type { Handle } from '@retro-engine/assets';
+
 import { Image } from '../image/image';
 import { RenderImages } from '../image/image-plugin';
 import { Images } from '../image/images';
-import type { ImageHandle } from '../image/images';
 import type { RenderImage } from '../image/render-image';
 
 import {
@@ -223,8 +224,8 @@ class FakeMaterial {
 
 class HandleMaterial {
   color: { x: number; y: number; z: number; w: number } = { x: 1, y: 1, z: 1, w: 1 };
-  baseColorTexture: ImageHandle | undefined;
-  normalMapTexture: ImageHandle | undefined;
+  baseColorTexture: Handle<Image> | undefined;
+  normalMapTexture: Handle<Image> | undefined;
 
   static readonly bindGroup = MaterialSchema(HandleMaterial, [
     {

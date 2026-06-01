@@ -26,10 +26,11 @@
 
 import { bench, summary } from 'mitata';
 
+import { asAssetIndex, type Handle, makeHandle } from '@retro-engine/assets';
 import { mat4, vec4 } from '@retro-engine/math';
 
 import type { Entity } from '@retro-engine/ecs';
-import type { ImageHandle } from '../src/image/images';
+import type { Image } from '../src/image/image';
 import type { GlobalTransform } from '../src/transform';
 import {
   type PerSpriteEntry,
@@ -45,9 +46,9 @@ import { Sprite } from '../src/sprite/sprite';
 const TOTAL_SPRITES = 10_000;
 const IMAGE_COUNT = 2;
 
-const imageHandles: ImageHandle[] = [];
+const imageHandles: Handle<Image>[] = [];
 for (let i = 0; i < IMAGE_COUNT; i++) {
-  imageHandles.push((100 + i) as unknown as ImageHandle);
+  imageHandles.push(makeHandle<Image>(asAssetIndex(100 + i)));
 }
 
 const imagesStub: SpriteImageSizeLookup = {

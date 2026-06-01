@@ -9,10 +9,11 @@ import type {
   TextureFormat,
 } from '@retro-engine/renderer-core';
 import { BufferUsage, ShaderStage } from '@retro-engine/renderer-core';
+import type { AssetIndex, Handle } from '@retro-engine/assets';
 
 import { ViewBindGroupCache } from '../camera/extracted';
 import type { App } from '../index';
-import type { ImageHandle } from '../image/images';
+import type { Image } from '../image/image';
 import { Images } from '../image/images';
 import { RenderImages } from '../image/image-plugin';
 import type { RenderImage } from '../image/render-image';
@@ -71,7 +72,7 @@ export class SpritePipeline {
   vertexModule: ShaderModule | undefined;
   fragmentModule: ShaderModule | undefined;
   specialized: SpecializedRenderPipelines<SpriteSpecializeContext> | undefined;
-  private readonly bindGroupCache: Map<ImageHandle, CachedSpriteBindGroup> = new Map();
+  private readonly bindGroupCache: Map<AssetIndex, CachedSpriteBindGroup> = new Map();
   private initialised = false;
 
   /**
@@ -163,7 +164,7 @@ export class SpritePipeline {
    * one frame after a fresh image is added.
    */
   bindGroupFor(
-    handle: ImageHandle | undefined,
+    handle: Handle<Image> | undefined,
     images: Images,
     renderImages: RenderImages,
     renderer: Renderer,
@@ -171,20 +172,20 @@ export class SpritePipeline {
     const resolved = handle !== undefined ? handle : images.WHITE;
     const current = renderImages.get(resolved);
     if (current === undefined) return undefined;
-    const cached = this.bindGroupCache.get(resolved);
+    const cached = this.bindGroupCache.get(resolved.index);
     if (cached !== undefined && cached.source === current) {
       return cached.bindGroup;
     }
     if (cached !== undefined) cached.bindGroup.destroy();
     const fresh = renderer.createBindGroup({
-      label: `sprite-image#${String(resolved)}`,
+      label: `sprite-image#${resolved.index}`,
       layout: this.imageBindGroupLayout!,
       entries: [
         { binding: 0, resource: current.view },
         { binding: 1, resource: current.sampler },
       ],
     });
-    this.bindGroupCache.set(resolved, { bindGroup: fresh, source: current });
+    this.bindGroupCache.set(resolved.index, { bindGroup: fresh, source: current });
     return fresh;
   }
 

@@ -1,10 +1,10 @@
-import type { MaterialHandle } from '../material/materials';
+import type { Handle } from '@retro-engine/assets';
 
 import type { Material2d } from './material-2d';
 
 /**
  * ECS component pairing an entity to a registered Material2d asset of type
- * `M` by {@link MaterialHandle}. The phantom `M` parameter distinguishes
+ * `M` by `Handle<M>`. The phantom `M` parameter distinguishes
  * `MeshMaterial2d<ColorMaterial2d>` from any other material binding at the
  * type level; the runtime data is just the handle.
  *
@@ -25,9 +25,9 @@ import type { Material2d } from './material-2d';
  * ```
  */
 export class MeshMaterial2d<M extends Material2d> {
-  readonly handle: MaterialHandle<M>;
+  readonly handle: Handle<M>;
 
-  constructor(handle: MaterialHandle<M>) {
+  constructor(handle: Handle<M>) {
     this.handle = handle;
   }
 }

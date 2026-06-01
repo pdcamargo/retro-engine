@@ -1,3 +1,4 @@
+import type { Handle } from '@retro-engine/assets';
 import type { Mat4 } from '@retro-engine/math';
 import type { BindGroup, Buffer, RenderPassEncoder, RenderPipeline } from '@retro-engine/renderer-core';
 
@@ -5,6 +6,7 @@ import type { RenderContext } from '../index';
 import type { AllocatorSlice, RenderMesh } from '../mesh';
 
 import { packInstanceTransform } from './instance-layout';
+import type { Material } from './material';
 
 /** Which render phase an instanced batch belongs to. */
 export type AlphaBucket = 'opaque' | 'mask' | 'blend';
@@ -39,6 +41,13 @@ export interface InstanceEntry {
   readonly bucket: AlphaBucket;
   /** Identity instances must share to batch — the `(mesh, material)` pair. */
   readonly groupKey: string;
+  /**
+   * Handle of the material backing this instance. Carried so the prepass pass
+   * can resolve the material's `prepassWrites()` without re-deriving it from
+   * {@link InstanceEntry.groupKey}. Typed against the base `Material`; the
+   * 3D plugin narrows it back to its own `M` at lookup time.
+   */
+  readonly materialHandle: Handle<Material>;
   /** Camera-space sort depth. */
   readonly depth: number;
   readonly model: Mat4;

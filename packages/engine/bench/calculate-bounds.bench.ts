@@ -13,12 +13,12 @@
 
 import { bench, summary } from 'mitata';
 
+import { asAssetIndex, makeHandle } from '@retro-engine/assets';
 import { type Entity, World } from '@retro-engine/ecs';
 
 import { calculateBoundsSystem } from '../src/mesh/calculate-bounds';
 import { Mesh } from '../src/mesh/mesh';
 import { Mesh3d } from '../src/mesh/mesh-3d';
-import type { MeshHandle } from '../src/mesh/meshes';
 import { MeshAttribute } from '../src/mesh/vertex-attribute';
 import { NoFrustumCulling } from '../src/visibility/visibility';
 
@@ -34,7 +34,7 @@ const sharedMesh = (() => {
 })();
 
 const meshesStub = { get: (): Mesh => sharedMesh };
-const HANDLE = 1 as unknown as MeshHandle;
+const HANDLE = makeHandle<Mesh>(asAssetIndex(1));
 
 interface Scene {
   readonly world: World;

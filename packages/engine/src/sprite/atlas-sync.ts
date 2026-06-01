@@ -28,11 +28,11 @@ import type { TextureAtlasLayouts } from './texture-atlas-layouts';
  *
  * Unknown layout handles and out-of-bounds indices are silently skipped — the
  * sprite keeps its prior `rect`. Mirrors how the renderer treats a missing
- * `ImageHandle`: a registry that lags by one frame during teardown does not
+ * image handle: a store that lags by one frame during teardown does not
  * blank the sprite.
  *
  * Layout-asset mutations (replacing a layout's `textures[]` via
- * `TextureAtlasLayouts.replace`) do **not** automatically re-trigger atlassed
+ * `TextureAtlasLayouts.insert`) do **not** automatically re-trigger atlassed
  * sprites — the `Changed<TextureAtlas>` filter won't fire. Treat layouts as
  * immutable in the current phase; full hot-reload arrives with the asset
  * system.

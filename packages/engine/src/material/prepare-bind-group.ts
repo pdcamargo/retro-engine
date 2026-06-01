@@ -8,8 +8,9 @@ import type {
   TextureView,
 } from '@retro-engine/renderer-core';
 import { BufferUsage } from '@retro-engine/renderer-core';
+import type { Handle } from '@retro-engine/assets';
 
-import type { ImageHandle } from '../image/images';
+import type { Image } from '../image/image';
 import type { Images } from '../image/images';
 import type { RenderImage } from '../image/render-image';
 import type { RenderImages } from '../image/image-plugin';
@@ -143,7 +144,7 @@ export interface PreparedMaterial {
  *   `DataView` pair) and upload via `renderer.writeBuffer` to a per-material
  *   uniform buffer allocated lazily on first prepare.
  * - Texture and sampler entries come in two modes (per {@link BindGroupEntry}):
- *   `'handle'` mode resolves an `ImageHandle | undefined` field through
+ *   `'handle'` mode resolves a `Handle<Image> | undefined` field through
  *   `RenderImages`, falling back to `images.WHITE` / `.BLACK` /
  *   `.NORMAL_FLAT` per the entry's `fallback`. `'view'` / `'sampler'` mode
  *   reads the field directly and throws on `undefined`.
@@ -283,7 +284,7 @@ export const prepareBindGroup = <M extends object>(
 
 /**
  * Resolve an `imageMode: 'handle'` texture or sampler entry: read the
- * material's named field (an `ImageHandle | undefined`), fall back to the
+ * material's named field (a `Handle<Image> | undefined`), fall back to the
  * named default when undefined, look up the `RenderImage` in `RenderImages`,
  * and reject `'cube'` / `'3d'` images (no Phase 7.5 consumer is wired up yet
  * — the type-level support is for future cube / volume materials).
@@ -297,8 +298,8 @@ const resolveImageBinding = <M>(
   kind: 'texture' | 'sampler',
   binding: number,
 ): RenderImage => {
-  const raw = (material as Record<string, unknown>)[fieldKey] as ImageHandle | undefined;
-  const handle: ImageHandle =
+  const raw = (material as Record<string, unknown>)[fieldKey] as Handle<Image> | undefined;
+  const handle: Handle<Image> =
     raw !== undefined && raw !== null
       ? raw
       : fallback === 'white'
@@ -309,7 +310,7 @@ const resolveImageBinding = <M>(
   const renderImage = renderImages.get(handle);
   if (renderImage === undefined) {
     throw new Error(
-      `prepareBindGroup: ${kind} binding ${binding} could not resolve ImageHandle ${String(handle)} via RenderImages — make sure ImagePlugin is registered before any MaterialPlugin (its prepare system runs in RenderSet.Prepare with label 'image-prepare').`,
+      `prepareBindGroup: ${kind} binding ${binding} could not resolve image handle ${handle.index} via RenderImages — make sure ImagePlugin is registered before any MaterialPlugin (its prepare system runs in RenderSet.Prepare with label 'image-prepare').`,
     );
   }
   const sourceImage = images.get(handle);

@@ -1,7 +1,7 @@
 export type { Material2d, Material2dCtor, MaterialPipelineKey2d } from './material-2d';
 export { alphaBucketKey } from './material-2d';
 
-export type { Materials2d, MaterialAssetEvent, MaterialHandle } from './materials-2d';
+export type { Materials2d } from './materials-2d';
 export type { RenderMaterials2d } from './render-materials-2d';
 
 export { MeshMaterial2d } from './mesh-material-2d';

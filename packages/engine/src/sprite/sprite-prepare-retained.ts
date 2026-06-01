@@ -2,8 +2,11 @@ import type { Entity, World } from '@retro-engine/ecs';
 import type { Mat4 } from '@retro-engine/math';
 import type { Renderer, RenderPassEncoder } from '@retro-engine/renderer-core';
 
+import type { Handle } from '@retro-engine/assets';
+
 import type { SortedCameras } from '../camera/sorted-cameras';
-import type { ImageHandle, Images } from '../image/images';
+import type { Image } from '../image/image';
+import type { Images } from '../image/images';
 import type { RenderImages } from '../image/image-plugin';
 import type { App, RenderContext } from '../index';
 import { SortedSlotIndex } from '../instance/retained-draw-order';
@@ -29,17 +32,21 @@ interface SpriteSortKey {
   readonly bucketKey: 0 | 1;
   readonly bucket: SpriteAlphaBucket;
   readonly worldZ: number;
-  readonly imageHandle: ImageHandle;
+  readonly imageHandle: Handle<Image>;
 }
 
 const compareSpriteSortKey = (a: SpriteSortKey, b: SpriteSortKey): number => {
   if (a.bucketKey !== b.bucketKey) return a.bucketKey - b.bucketKey;
   if (a.worldZ !== b.worldZ) return b.worldZ - a.worldZ;
-  return a.imageHandle < b.imageHandle ? -1 : a.imageHandle > b.imageHandle ? 1 : 0;
+  return a.imageHandle.index < b.imageHandle.index
+    ? -1
+    : a.imageHandle.index > b.imageHandle.index
+      ? 1
+      : 0;
 };
 
 const sameSpriteBatch = (a: SpriteSortKey, b: SpriteSortKey): boolean =>
-  a.imageHandle === b.imageHandle && a.bucketKey === b.bucketKey;
+  a.imageHandle.index === b.imageHandle.index && a.bucketKey === b.bucketKey;
 
 /** Compaction policy: only worth a full re-upload once holes dominate and are large. */
 const COMPACT_FRAGMENTATION = 0.5 as const;
@@ -122,7 +129,7 @@ export const prepareSpritesRetained = (
   packSprites.length = 0;
   packGts.length = 0;
 
-  const resolveHandle = (sprite: Sprite): ImageHandle =>
+  const resolveHandle = (sprite: Sprite): Handle<Image> =>
     sprite.image !== undefined ? sprite.image : images.WHITE;
 
   const drop = (entity: Entity): void => {

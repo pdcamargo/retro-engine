@@ -1,11 +1,13 @@
+import type { Handle } from '@retro-engine/assets';
+
 import { GlobalTransform, Transform } from '../transform';
 import { InheritedVisibility, ViewVisibility, Visibility } from '../visibility';
 
-import type { MeshHandle } from './meshes';
+import type { Mesh } from './mesh';
 
 /**
  * ECS component pairing an entity to a registered {@link Mesh} asset by
- * {@link MeshHandle}, drawn as a 2D mesh through the Core2d sub-graph.
+ * handle, drawn as a 2D mesh through the Core2d sub-graph.
  * Spawning a `Mesh2d` makes the entity drawable; pair with a
  * `MeshMaterial2d<M>` to select the material that supplies its shader and
  * bind-group data.
@@ -20,7 +22,7 @@ import type { MeshHandle } from './meshes';
  * and `ViewVisibility` — spawning with `new Mesh2d(h)` alone auto-attaches the
  * rest via the engine's required-component resolution.
  *
- * The held `MeshHandle` is opaque; reach the underlying `Mesh` via
+ * The held `Handle<Mesh>` is opaque; reach the underlying `Mesh` via
  * `world.getResource(Meshes)?.get(handle)`.
  *
  * @example
@@ -35,9 +37,9 @@ import type { MeshHandle } from './meshes';
  * ```
  */
 export class Mesh2d {
-  readonly handle: MeshHandle;
+  readonly handle: Handle<Mesh>;
 
-  constructor(handle: MeshHandle) {
+  constructor(handle: Handle<Mesh>) {
     this.handle = handle;
   }
 

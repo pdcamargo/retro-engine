@@ -1,3 +1,4 @@
+import type { Handle } from '@retro-engine/assets';
 import type { ComponentType, Entity, World } from '@retro-engine/ecs';
 import type { Mat4 } from '@retro-engine/math';
 import type { Renderer } from '@retro-engine/renderer-core';
@@ -6,14 +7,13 @@ import type { SortedCameras } from '../camera/sorted-cameras';
 import { SortedSlotIndex } from '../instance/retained-draw-order';
 import { RetainedInstanceBuffer } from '../instance/retained-instance-buffer';
 import type { Slot } from '../instance/retained-slot-map';
-import type { MeshAllocator, MeshHandle, RenderMeshes } from '../mesh';
+import type { Mesh, MeshAllocator, RenderMeshes } from '../mesh';
 import { GlobalTransform } from '../transform';
 import { ViewVisibility } from '../visibility/visibility';
 
 import type { Material } from './material';
 import type { AlphaBucket } from './instance-batching';
 import { MESH_INSTANCE_BYTE_SIZE, packInstanceTransform } from './instance-layout';
-import type { MaterialHandle } from './materials';
 import type { Materials } from './materials';
 import type { RenderMaterials } from './render-materials';
 
@@ -35,8 +35,8 @@ export interface MeshKey<M extends Material> {
   readonly worldY: number;
   readonly worldZ: number;
   readonly groupKey: string;
-  readonly meshHandle: MeshHandle;
-  readonly materialHandle: MaterialHandle<M>;
+  readonly meshHandle: Handle<Mesh>;
+  readonly materialHandle: Handle<M>;
 }
 
 /** Mirrors the legacy `packInstancedBatches` comparator (sans camera — the index is per-camera). */
@@ -63,8 +63,8 @@ interface MeshMember<M extends Material> {
   worldY: number;
   worldZ: number;
   groupKey: string;
-  meshHandle: MeshHandle;
-  materialHandle: MaterialHandle<M>;
+  meshHandle: Handle<Mesh>;
+  materialHandle: Handle<M>;
 }
 
 const VIEW_MATRIX_LEN = 16;
@@ -217,17 +217,17 @@ export const prepareMeshRetained = <M extends Material>(
   changedActive.clear();
   freed.clear();
 
-  const isRenderable = (meshHandle: MeshHandle, materialHandle: MaterialHandle<M>): boolean => {
+  const isRenderable = (meshHandle: Handle<Mesh>, materialHandle: Handle<M>): boolean => {
     const renderMesh = renderMeshes.get(meshHandle);
     if (renderMesh === undefined) return false;
-    if (allocator.vertexSlice(meshHandle) === undefined) return false;
-    if (renderMesh.bufferInfo.kind === 'indexed' && allocator.indexSlice(meshHandle) === undefined) {
+    if (allocator.vertexSlice(meshHandle.index) === undefined) return false;
+    if (renderMesh.bufferInfo.kind === 'indexed' && allocator.indexSlice(meshHandle.index) === undefined) {
       return false;
     }
     return renderMaterials.get(materialHandle) !== undefined;
   };
 
-  const bucketOf = (materialHandle: MaterialHandle<M>): AlphaBucket => {
+  const bucketOf = (materialHandle: Handle<M>): AlphaBucket => {
     const alphaMode = mainWorldMaterials?.get(materialHandle)?.alphaMode?.() ?? 'opaque';
     return alphaMode === 'opaque' ? 'opaque' : alphaMode === 'blend' ? 'blend' : 'mask';
   };
@@ -246,8 +246,8 @@ export const prepareMeshRetained = <M extends Material>(
   // `newlyActive` (addMember on every camera); an existing one to `changedActive`.
   const admit = (
     entity: Entity,
-    meshHandle: MeshHandle,
-    materialHandle: MaterialHandle<M>,
+    meshHandle: Handle<Mesh>,
+    materialHandle: Handle<M>,
     gt: GlobalTransform,
   ): void => {
     let slot = slots.get(entity);
@@ -261,7 +261,7 @@ export const prepareMeshRetained = <M extends Material>(
       worldX: gt.matrix[12] as number,
       worldY: gt.matrix[13] as number,
       worldZ: gt.matrix[14] as number,
-      groupKey: `${meshHandle}/${materialHandle}`,
+      groupKey: `${meshHandle.index}/${materialHandle.index}`,
       meshHandle,
       materialHandle,
     });
@@ -276,8 +276,8 @@ export const prepareMeshRetained = <M extends Material>(
     .query([meshType, materialType, GlobalTransform, ViewVisibility], { changed: [ViewVisibility] }, since)
     .entries()) {
     const entity = row[0] as Entity;
-    const mesh = row[1] as { handle: MeshHandle };
-    const material = row[2] as { handle: MaterialHandle<M> };
+    const mesh = row[1] as { handle: Handle<Mesh> };
+    const material = row[2] as { handle: Handle<M> };
     const gt = row[3] as GlobalTransform;
     const vis = row[4] as ViewVisibility;
     if (!vis.visible) {
@@ -306,8 +306,8 @@ export const prepareMeshRetained = <M extends Material>(
       pending.delete(entity);
       continue;
     }
-    const mesh = world.getComponent(entity, meshType) as { handle: MeshHandle } | undefined;
-    const material = world.getComponent(entity, materialType) as { handle: MaterialHandle<M> } | undefined;
+    const mesh = world.getComponent(entity, meshType) as { handle: Handle<Mesh> } | undefined;
+    const material = world.getComponent(entity, materialType) as { handle: Handle<M> } | undefined;
     const gt = world.getComponent(entity, GlobalTransform);
     if (mesh === undefined || material === undefined || gt === undefined) {
       pending.delete(entity);
@@ -338,13 +338,13 @@ export const prepareMeshRetained = <M extends Material>(
 
   // 5. Regrouping: a member's (mesh, material) pair changed → new groupKey/bucket
   //    (no transform repack; only the sort key moves).
-  const regroup = (entity: Entity, meshHandle: MeshHandle, materialHandle: MaterialHandle<M>): void => {
+  const regroup = (entity: Entity, meshHandle: Handle<Mesh>, materialHandle: Handle<M>): void => {
     if (newlyActive.has(entity)) return;
     const member = members.get(entity);
     if (member === undefined) return;
     member.bucket = bucketOf(materialHandle);
     member.bucketRank = BUCKET_RANK[member.bucket];
-    member.groupKey = `${meshHandle}/${materialHandle}`;
+    member.groupKey = `${meshHandle.index}/${materialHandle.index}`;
     member.meshHandle = meshHandle;
     member.materialHandle = materialHandle;
     changedActive.add(entity);
@@ -352,12 +352,12 @@ export const prepareMeshRetained = <M extends Material>(
   for (const row of world
     .query([meshType, materialType, GlobalTransform, ViewVisibility], { changed: [meshType] }, since)
     .entries()) {
-    regroup(row[0] as Entity, (row[1] as { handle: MeshHandle }).handle, (row[2] as { handle: MaterialHandle<M> }).handle);
+    regroup(row[0] as Entity, (row[1] as { handle: Handle<Mesh> }).handle, (row[2] as { handle: Handle<M> }).handle);
   }
   for (const row of world
     .query([meshType, materialType, GlobalTransform, ViewVisibility], { changed: [materialType] }, since)
     .entries()) {
-    regroup(row[0] as Entity, (row[1] as { handle: MeshHandle }).handle, (row[2] as { handle: MaterialHandle<M> }).handle);
+    regroup(row[0] as Entity, (row[1] as { handle: Handle<Mesh> }).handle, (row[2] as { handle: Handle<M> }).handle);
   }
 
   // 6. Grow slot scratch, then pack the queued transforms into their slots.

@@ -1,9 +1,10 @@
+import type { AssetIndex } from '@retro-engine/assets';
 import type { Query as QueryHandle } from '@retro-engine/ecs';
 import type { Mat4 } from '@retro-engine/math';
 
 import type { App } from '../index';
 import { packInstanceTransform } from '../material/instance-layout';
-import type { AllocatorSlice, MeshHandle, RenderMesh } from '../mesh';
+import type { AllocatorSlice, RenderMesh } from '../mesh';
 import { MeshAllocator, Mesh3d, RenderMeshes } from '../mesh';
 import { PipelineCache } from '../shader/pipeline-cache';
 import { GlobalTransform } from '../transform';
@@ -51,25 +52,25 @@ export const queueShadow3dCasters = (
   const pipelineCache = app.getResource(PipelineCache);
   if (pipelineCache === undefined) return;
 
-  const groups = new Map<MeshHandle, CasterGroup>();
+  const groups = new Map<AssetIndex, CasterGroup>();
   for (const row of casters.entries()) {
     if (!(row[3] as ViewVisibility).visible) continue;
     const mesh3d = row[1] as Mesh3d;
     const gt = row[2] as GlobalTransform;
 
-    let group = groups.get(mesh3d.handle);
+    let group = groups.get(mesh3d.handle.index);
     if (group === undefined) {
       const renderMesh = renderMeshes.get(mesh3d.handle);
       if (renderMesh === undefined) continue;
-      const vertexSlice = allocator.vertexSlice(mesh3d.handle);
+      const vertexSlice = allocator.vertexSlice(mesh3d.handle.index);
       if (vertexSlice === undefined) continue;
       let indexSlice: AllocatorSlice | undefined;
       if (renderMesh.bufferInfo.kind === 'indexed') {
-        indexSlice = allocator.indexSlice(mesh3d.handle);
+        indexSlice = allocator.indexSlice(mesh3d.handle.index);
         if (indexSlice === undefined) continue;
       }
       group = { models: [], renderMesh, vertexSlice, indexSlice };
-      groups.set(mesh3d.handle, group);
+      groups.set(mesh3d.handle.index, group);
     }
     group.models.push(gt.matrix as Mat4);
   }

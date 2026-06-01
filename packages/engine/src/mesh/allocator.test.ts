@@ -7,12 +7,13 @@ import type {
   RendererCapabilities,
 } from '@retro-engine/renderer-core';
 
+import { asAssetIndex, type AssetIndex } from '@retro-engine/assets';
+
 import { MeshAllocator, MeshAllocatorSettings } from './allocator';
-import type { MeshHandle } from './meshes';
 import { interMeshVertexBufferLayout } from './render-mesh';
 import { MeshAttribute } from './vertex-attribute';
 
-const asHandle = (n: number): MeshHandle => n as MeshHandle;
+const asHandle = (n: number): AssetIndex => asAssetIndex(n);
 
 interface FakeBuffer extends Buffer {
   destroyed: boolean;

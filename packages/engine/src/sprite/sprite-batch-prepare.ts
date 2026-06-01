@@ -1,7 +1,8 @@
+import type { Handle } from '@retro-engine/assets';
 import type { Entity } from '@retro-engine/ecs';
 import type { Mat4 } from '@retro-engine/math';
 
-import type { ImageHandle } from '../image/images';
+import type { Image } from '../image/image';
 import type { GlobalTransform } from '../transform';
 
 import type { Sprite } from './sprite';
@@ -29,7 +30,7 @@ export interface PerSpriteEntry {
   readonly bucket: SpriteAlphaBucket;
   /** Numeric mirror of `bucket` — `0 = 'opaque'`, `1 = 'blend'` — used as the primary sort key. */
   readonly bucketKey: 0 | 1;
-  readonly imageHandle: ImageHandle;
+  readonly imageHandle: Handle<Image>;
   /** `gt.matrix[14]` cached at collection time. */
   readonly worldZ: number;
 }
@@ -43,7 +44,7 @@ export interface PerSpriteEntry {
  * @internal
  */
 export interface SpriteImageSizeLookup {
-  get(handle: ImageHandle): { readonly width: number; readonly height: number } | undefined;
+  get(handle: Handle<Image>): { readonly width: number; readonly height: number } | undefined;
 }
 
 /**
@@ -92,12 +93,16 @@ export const sortAndEmitSpriteBatches = (
   entries.sort((a, b) => {
     if (a.bucketKey !== b.bucketKey) return a.bucketKey - b.bucketKey;
     if (a.worldZ !== b.worldZ) return b.worldZ - a.worldZ;
-    return a.imageHandle < b.imageHandle ? -1 : a.imageHandle > b.imageHandle ? 1 : 0;
+    return a.imageHandle.index < b.imageHandle.index
+      ? -1
+      : a.imageHandle.index > b.imageHandle.index
+        ? 1
+        : 0;
   });
 
   let cursorFloats = 0;
   let cursorInstances = 0;
-  let batchImage: ImageHandle | undefined;
+  let batchImage: Handle<Image> | undefined;
   let batchBucketKey: 0 | 1 | undefined;
   let batchBucket: SpriteAlphaBucket | undefined;
   let batchStart = 0;
@@ -106,7 +111,7 @@ export const sortAndEmitSpriteBatches = (
 
   for (let i = 0; i < entries.length; i++) {
     const e = entries[i]!;
-    if (e.imageHandle !== batchImage || e.bucketKey !== batchBucketKey) {
+    if (e.imageHandle.index !== batchImage?.index || e.bucketKey !== batchBucketKey) {
       if (batchImage !== undefined && batchBucket !== undefined) {
         const count = cursorInstances - batchStart;
         if (count > 0) {
