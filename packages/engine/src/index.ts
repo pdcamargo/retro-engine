@@ -164,6 +164,19 @@ export {
   Images,
   RenderImages,
 } from './image';
+export { Assets, handleEq, makeHandle } from '@retro-engine/assets';
+export type {
+  AssetEvent,
+  AssetImportContext,
+  AssetImporter,
+  AssetSource,
+  Handle,
+} from '@retro-engine/assets';
+export { AssetPlugin } from './asset/asset-plugin';
+export { AssetServer } from './asset/asset-server';
+export type { AssetLoadFailure, CompletedLoad } from './asset/asset-server';
+export { FetchAssetSource } from './asset/fetch-source';
+export { applyCompletedLoads } from './asset/load-drain';
 export {
   alphaModeKey,
   ExtendedMaterial,

@@ -35,6 +35,7 @@
     "bench": "bun run bench/index.ts"
   },
   "dependencies": {
+    "@retro-engine/assets": "workspace:*",
     "@retro-engine/ecs": "workspace:*",
     "@retro-engine/math": "workspace:*",
     "@retro-engine/renderer-core": "workspace:*"

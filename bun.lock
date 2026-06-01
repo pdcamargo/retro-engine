@@ -55,6 +55,7 @@
       "name": "@retro-engine/engine",
       "version": "0.0.0",
       "dependencies": {
+        "@retro-engine/assets": "workspace:*",
         "@retro-engine/ecs": "workspace:*",
         "@retro-engine/math": "workspace:*",
         "@retro-engine/renderer-core": "workspace:*",
