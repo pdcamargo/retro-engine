@@ -2,6 +2,7 @@ import { App } from '@retro-engine/engine';
 import { createWebGPURenderer } from '@retro-engine/renderer-webgpu';
 
 import { aoShowcasePlugin } from './ao-showcase-plugin';
+import { assetShowcasePlugin } from './asset-showcase-plugin';
 import { atlasShowcasePlugin } from './atlas-showcase-plugin';
 import { lightsShowcasePlugin } from './lights-showcase-plugin';
 import { litShowcasePlugin } from './lit-showcase-plugin';
@@ -43,6 +44,10 @@ if (!(canvas instanceof HTMLCanvasElement)) {
 //                     (GTAO) on a scene of contacts + a concave corner (Depth +
 //                     Normal prepass). Press O to toggle AO; add `&taa=1` to
 //                     check AO stays stable under jitter (ADR-0054).
+//   `?mode=assets`  → unified asset store device check (ADR-0055): a pulsing
+//                     cube (materials.getMut), a breathing sphere
+//                     (meshes.getMut), and a row of cubes spawned from runtime
+//                     meshes.add / materials.add.
 //   anything else   → Phase 7.5 primitives demo.
 // All demos stay discoverable from one bundle.
 const mode = new URLSearchParams(window.location.search).get('mode');
@@ -67,7 +72,9 @@ const showcase =
                     ? taaShowcasePlugin
                     : mode === 'ao'
                       ? aoShowcasePlugin
-                      : primitivesShowcasePlugin;
+                      : mode === 'assets'
+                        ? assetShowcasePlugin
+                        : primitivesShowcasePlugin;
 
 const renderer = createWebGPURenderer(canvas);
 const app = new App({
