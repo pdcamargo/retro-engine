@@ -36,7 +36,20 @@ import {
 } from '@retro-engine/gltf';
 import type { MappedGltfAssets, SiblingReader } from '@retro-engine/gltf';
 
+import gltfUrl from '../models/Clover_1.gltf';
+import binUrl from '../models/Clover_1.bin';
+import textureUrl from '../models/Leaves.png';
+
 const MODEL = 'Clover_1.gltf';
+
+// The dev server (bun index.html) serves only the bundle graph, not a static
+// folder — so the model's siblings come in as bundled URLs keyed by the names
+// the .gltf references internally.
+const FILE_URLS: Readonly<Record<string, string>> = {
+  'Clover_1.gltf': gltfUrl,
+  'Clover_1.bin': binUrl,
+  'Leaves.png': textureUrl,
+};
 
 /** Marks a spawned primitive to rotate so its double-sided faces are visible. */
 class Spin {
@@ -64,10 +77,15 @@ export const gltfShowcasePlugin: Plugin = (app) => {
   // Manual load context: fetch siblings from /models, and register sub-assets by
   // inserting straight into the stores (the proper AssetServer load-drain is
   // item 6's job — this harness just wants the handles).
-  const read: SiblingReader = async (relativePath) =>
-    new Uint8Array(await (await fetch(`/models/${relativePath}`)).arrayBuffer());
+  const read: SiblingReader = async (relativePath) => {
+    const url = FILE_URLS[relativePath];
+    if (url === undefined) throw new Error(`gltf-showcase: no bundled URL for '${relativePath}'`);
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`gltf-showcase: fetch ${relativePath} -> ${response.status}`);
+    return new Uint8Array(await response.arrayBuffer());
+  };
   const ctx: LoadContext = {
-    path: `/models/${MODEL}`,
+    path: MODEL,
     read,
     addLabeledAsset: (_label, value, store) => store.add(value),
   };
