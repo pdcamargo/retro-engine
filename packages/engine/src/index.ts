@@ -161,11 +161,11 @@ export {
 export { asAssetIndex, Assets, handleEq, makeHandle } from '@retro-engine/assets';
 export type {
   AssetEvent,
-  AssetImportContext,
   AssetImporter,
   AssetIndex,
   AssetSource,
   Handle,
+  LoadContext,
 } from '@retro-engine/assets';
 export { AssetPlugin } from './asset/asset-plugin';
 export { AssetServer } from './asset/asset-server';

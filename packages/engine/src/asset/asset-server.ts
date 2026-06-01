@@ -1,7 +1,9 @@
-import type { AssetImporter, AssetSource, Assets, Handle } from '@retro-engine/assets';
+import type { AssetImporter, AssetSource, Assets, Handle, LoadContext } from '@retro-engine/assets';
 
 import type { Logger } from '../log';
 import { engineLogger } from '../log';
+
+import { decodeDataUri, isDataUri, resolveSiblingPath } from './sibling-path';
 
 /**
  * A load that finished its off-schedule IO and is waiting for the drain to
@@ -214,10 +216,29 @@ export class AssetServer {
     importer: AssetImporter<unknown>,
     handle: Handle<unknown>,
   ): Promise<void> {
+    // Sub-assets the importer registers are buffered here, local to this load,
+    // so a throwing importer commits nothing: the buffer is dropped and the
+    // reserved slots are simply never filled (all-or-nothing).
+    const labeled: CompletedLoad[] = [];
     try {
       const bytes = await this.source.read(path);
-      const value = await importer(bytes, { path });
-      this.completed.push({ store, handle, value });
+      const ctx: LoadContext = {
+        path,
+        read: (relativePath) =>
+          isDataUri(relativePath)
+            ? Promise.resolve(decodeDataUri(relativePath))
+            : this.source.read(resolveSiblingPath(path, relativePath)),
+        addLabeledAsset: <U>(_label: string, value: U, subStore: Assets<U>): Handle<U> => {
+          const subHandle = subStore.reserveHandle();
+          labeled.push({ store: subStore as Assets<unknown>, handle: subHandle, value });
+          return subHandle;
+        },
+      };
+      const value = await importer(bytes, ctx);
+      // Push the whole subgraph in one go — sub-assets before the root — so the
+      // drain commits it in a single PreUpdate pass, queuing every `added` event
+      // in the same frame, before extraction reads any of them.
+      this.completed.push(...labeled, { store, handle, value });
     } catch (error) {
       this.failures.push({ path, handle, error });
     }

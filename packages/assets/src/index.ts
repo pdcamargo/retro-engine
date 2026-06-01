@@ -8,7 +8,7 @@ export type { AssetEvent } from './events';
 
 export { Assets } from './assets';
 
-export type { AssetImportContext, AssetImporter, AssetImporterRegistry } from './importer-registry';
+export type { LoadContext, AssetImporter, AssetImporterRegistry } from './importer-registry';
 export type { AssetSerializer, AssetSerializerRegistry } from './serializer-registry';
 
 export type { AssetSource } from './source';
