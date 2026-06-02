@@ -110,6 +110,12 @@ export {
   visibilityPropagateSystem,
 } from './visibility';
 export { Name } from './name';
+export type { SceneData, SerializedComponent, SerializedEntity } from './scene/scene-data';
+export { SCENE_FORMAT_VERSION } from './scene/scene-data';
+export type { SerializeOptions } from './scene/serialize';
+export { serializeWorld } from './scene/serialize';
+export type { DeserializeOptions } from './scene/deserialize';
+export { deserializeScene } from './scene/deserialize';
 export type { PreprocessOptions, SpecializeFn } from './shader';
 export {
   PipelineCache,

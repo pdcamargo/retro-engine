@@ -59,6 +59,7 @@
         "@retro-engine/assets": "workspace:*",
         "@retro-engine/ecs": "workspace:*",
         "@retro-engine/math": "workspace:*",
+        "@retro-engine/reflect": "workspace:*",
         "@retro-engine/renderer-core": "workspace:*",
       },
     },
@@ -76,6 +77,16 @@
       "name": "@retro-engine/math",
       "version": "0.0.0",
       "dependencies": {
+        "wgpu-matrix": "^3.0.0",
+      },
+    },
+    "packages/reflect": {
+      "name": "@retro-engine/reflect",
+      "version": "0.0.0",
+      "dependencies": {
+        "@retro-engine/assets": "workspace:*",
+        "@retro-engine/ecs": "workspace:*",
+        "@retro-engine/math": "workspace:*",
         "wgpu-matrix": "^3.0.0",
       },
     },
@@ -201,6 +212,8 @@
     "@retro-engine/math": ["@retro-engine/math@workspace:packages/math"],
 
     "@retro-engine/playground": ["@retro-engine/playground@workspace:apps/playground"],
+
+    "@retro-engine/reflect": ["@retro-engine/reflect@workspace:packages/reflect"],
 
     "@retro-engine/renderer-core": ["@retro-engine/renderer-core@workspace:packages/renderer-core"],
 

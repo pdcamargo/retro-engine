@@ -1,7 +1,7 @@
 {
-  "name": "@retro-engine/engine",
+  "name": "@retro-engine/reflect",
   "version": "0.0.0",
-  "description": "Retro Engine — App, plugins, schedules. The surface a game targets.",
+  "description": "Runtime type reflection for Retro Engine. A type registry keyed by stable name, a typed field-type vocabulary, and a JSON value codec for scene serialization.",
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
@@ -31,14 +31,12 @@
     "build": "tsc -p tsconfig.build.json",
     "lint": "oxlint .",
     "test": "bun test",
-    "typecheck": "tsc --noEmit",
-    "bench": "bun run bench/index.ts"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@retro-engine/assets": "workspace:*",
     "@retro-engine/ecs": "workspace:*",
     "@retro-engine/math": "workspace:*",
-    "@retro-engine/reflect": "workspace:*",
-    "@retro-engine/renderer-core": "workspace:*"
+    "wgpu-matrix": "^3.0.0"
   }
 }
