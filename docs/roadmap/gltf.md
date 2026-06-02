@@ -38,9 +38,9 @@ Each item is a `docs/backlog/*.md`, sequenced.
 5. ✅ **`gltf-mesh-and-material-mapping`** *(shipped, ADR-0057/0059)* — primitives → `Mesh` (semantics,
    normalized ints, stride/sparse, index promotion, topology gating); materials → `StandardMaterial`;
    per-slot color space; sampler mapping + image dedup/duplication; injected image-decode port.
-6. **`gltf-root-asset-and-instantiation`** ← **next** — the `Gltf` root + `GltfNode`/`GltfScene`/
-   `GltfMesh`/`GltfPrimitive`; sub-asset labelling; `GltfSceneRoot` + `GltfInstanceNodes` + the
-   `GltfPlugin` reactor; named-node/bone lookup.
+6. ✅ **`gltf-root-asset-and-instantiation`** *(shipped, ADR-0057)* — the `Gltf` root +
+   `GltfNode`/`GltfScene`/`GltfMesh`/`GltfPrimitive`; sub-asset labelling; `GltfSceneRoot` +
+   `GltfInstanceNodes` + the `GltfPlugin` reactor; named-node/bone lookup. **Phase A (v1) complete.**
 
 ### Phase B — deferred (designed in ADR-0057, not built; foundation accommodates)
 
