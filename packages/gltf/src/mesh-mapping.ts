@@ -6,18 +6,25 @@ import { mapPrimitiveMode } from './topology';
 import type { GltfDocument, GltfPrimitive } from './schema';
 
 /**
- * glTF attribute semantic → engine vertex attribute. Semantics not listed here
- * are recognised as deferred: `TEXCOORD_1` (UV_1), `JOINTS_0`, and `WEIGHTS_0`
- * map to attributes the engine does not yet carry (skinning / second UV set) and
- * are skipped rather than treated as errors.
+ * glTF attribute semantic → engine vertex attribute, in a fixed slot order.
+ *
+ * Order matters: the vertex layout assigns each attribute a `shaderLocation`
+ * from its slot index, and the engine's shaders expect position at location 0,
+ * normal at 1, UV at 2. glTF lists a primitive's attributes in arbitrary key
+ * order (a Blender export often puts `COLOR_0` first), so they are inserted in
+ * this canonical order rather than the order the file happens to use.
+ *
+ * Semantics not listed are recognised as deferred: `TEXCOORD_1` (UV_1),
+ * `JOINTS_0`, and `WEIGHTS_0` map to attributes the engine does not yet carry
+ * (skinning / second UV set) and are skipped rather than treated as errors.
  */
-const ATTRIBUTE_MAP: Readonly<Record<string, MeshVertexAttribute>> = {
-  POSITION: MeshAttribute.POSITION,
-  NORMAL: MeshAttribute.NORMAL,
-  TEXCOORD_0: MeshAttribute.UV_0,
-  TANGENT: MeshAttribute.TANGENT,
-  COLOR_0: MeshAttribute.COLOR,
-};
+const ORDERED_ATTRIBUTES: readonly (readonly [string, MeshVertexAttribute])[] = [
+  ['POSITION', MeshAttribute.POSITION],
+  ['NORMAL', MeshAttribute.NORMAL],
+  ['TEXCOORD_0', MeshAttribute.UV_0],
+  ['TANGENT', MeshAttribute.TANGENT],
+  ['COLOR_0', MeshAttribute.COLOR],
+];
 
 const toFloat32 = (array: DecodedAccessorArray): Float32Array =>
   array instanceof Float32Array ? array : new Float32Array(array);
@@ -55,9 +62,9 @@ export const mapPrimitiveToMesh = (
 ): Mesh => {
   const mesh = new Mesh({ primitiveTopology: mapPrimitiveMode(primitive.mode) });
 
-  for (const [semantic, accessorIndex] of Object.entries(primitive.attributes)) {
-    const attribute = ATTRIBUTE_MAP[semantic];
-    if (attribute === undefined) continue;
+  for (const [semantic, attribute] of ORDERED_ATTRIBUTES) {
+    const accessorIndex = primitive.attributes[semantic];
+    if (accessorIndex === undefined) continue;
     const decoded = decodeAccessor(document, buffers, accessorIndex);
     const data =
       semantic === 'COLOR_0' && decoded.componentCount === 3

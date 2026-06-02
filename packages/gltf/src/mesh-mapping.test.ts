@@ -67,6 +67,32 @@ describe('mapPrimitiveToMesh — attributes', () => {
     expect(Array.from(mesh.getAttribute(MeshAttribute.POSITION)!.data)).toEqual([0, 0, 0, 1, 2, 3]);
   });
 
+  it('inserts attributes in canonical slot order regardless of glTF key order', () => {
+    // Blender exports often list COLOR_0 first; the engine's shaders expect
+    // position at location 0, so insertion order must not follow the file.
+    const { document, buffers } = buildDoc([
+      {
+        componentType: 5123,
+        type: 'VEC4',
+        count: 1,
+        normalized: true,
+        data: new Uint16Array([65535, 65535, 65535, 65535]),
+      },
+      { componentType: 5126, type: 'VEC3', count: 1, data: new Float32Array([1, 2, 3]) },
+      { componentType: 5126, type: 'VEC3', count: 1, data: new Float32Array([0, 1, 0]) },
+      { componentType: 5126, type: 'VEC2', count: 1, data: new Float32Array([0.25, 0.75]) },
+    ]);
+    const mesh = mapPrimitiveToMesh(document, buffers, {
+      attributes: { COLOR_0: 0, POSITION: 1, NORMAL: 2, TEXCOORD_0: 3 },
+    });
+
+    const order = [...mesh.iterAttributes()].map((a) => a.attribute);
+    expect(order[0]).toBe(MeshAttribute.POSITION);
+    expect(order[1]).toBe(MeshAttribute.NORMAL);
+    expect(order[2]).toBe(MeshAttribute.UV_0);
+    expect(order[3]).toBe(MeshAttribute.COLOR);
+  });
+
   it('carries normalized u16 COLOR_0 through as expanded floats', () => {
     const { document, buffers } = buildDoc([
       { componentType: 5126, type: 'VEC3', count: 2, data: new Float32Array([0, 0, 0, 1, 1, 1]) },
