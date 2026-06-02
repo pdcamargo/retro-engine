@@ -8,26 +8,23 @@ This file is the answer to "what should I work on?" — not by listing every ini
 
 Most files in this folder are **sketches**, not researched plans. They capture intent at the time of writing. A file becomes a plan when its phases get promoted into concrete `docs/backlog/*.md` items with acceptance criteria. Until then, treat a sketch as an idea worth keeping, not as a commitment.
 
-`asset-system.md` is the roadmap file currently promoted end-to-end — its active phases point to real backlog items (`assets-core-types.md`, `asset-server-and-loaders.md`, `asset-retrofit.md`). Everything else is a sketch (some more researched than others) waiting for promotion when its turn comes. The earlier foundations and renderer milestones were worked through and their umbrella roadmap files retired as the work landed (see below).
+`reflection-and-serialization.md` is the roadmap file currently promoted — its v1 slice points to a real backlog item (`reflection-serialization-v1.md`) sealed by ADR-0060. Everything else is a sketch (some more researched than others) waiting for promotion when its turn comes. The earlier foundations, renderer, and asset-system milestones were worked through and their umbrella roadmap files retired or partially deferred as the work landed (see below).
 
 ## Current milestone
 
-**Asset System.** See `asset-system.md` for the umbrella; the active (runtime-core + retrofit) phases live in `docs/backlog/*.md`:
+**Reflection & Serialization.** See `reflection-and-serialization.md` for the umbrella; the active v1 slice lives in `docs/backlog/reflection-serialization-v1.md`, sealed by **ADR-0060**.
 
-- `assets-core-types.md`
-- `asset-server-and-loaders.md`
-- `asset-retrofit.md`
-
-Sealed by **ADR-0055**. The persistent project tier (GUID `.meta` sidecars, manifest, disk/bundle sources, promotion) and studio integration are designed in the ADR but deferred to a later initiative — they stay as phases 4–6 in `asset-system.md`, not yet promoted.
+v1 ships the keystone for scenes/prefabs — the inverse of glTF's `data → World` instantiation: a new `@retro-engine/reflect` package (a `TypeRegistry` keyed by stable name, the typed `t` field-type vocabulary, field introspection, a JSON value codec) plus the world↔scene serializer in `packages/engine/src/scene/`, with entity-reference remapping and asset-handle resolution across the round-trip. Decorators, change-detection-by-name, the studio inspector, scene composition, and engine-component retrofit are reserved (see ADR-0060).
 
 ### Completed before this
 
+- **Asset System (runtime core)** — `Assets<T>` stores, handles, the asset server + loaders, and the dependency-aware load context landed (ADR-0055, ADR-0056), with glTF/GLB import on top (ADR-0057, ADR-0059). The persistent project tier (GUID `.meta` sidecars, manifest, disk/bundle sources, promotion) and studio integration stay deferred as `asset-system.md` phases 4–6.
 - **M2 — Engine Foundations** (ADRs 0005–0011) is sealed; its backlog items landed and were removed. Design posture carried forward: single-threaded throughout (TypeScript reality), `Transform` is one component for 2D and 3D, Required Components is the primary spawn mechanism, `States` + `runIf` is the scoping primitive, scenes/prefabs are *ours* (BSN-inspired, in-house), Plugin has a full `build`/`ready`/`finish`/`cleanup` lifecycle.
 - **Renderer** (ADRs ~0018–0054) landed a large body of work — HAL, render world + sets, cameras/visibility, mesh/material/sprite pipelines, 2D/3D lighting + shadows, HDR/tonemapping, the screen-space prepass family, TAA, and SSAO. `renderer.md` is the long-horizon umbrella; remaining renderer follow-ups live as individual backlog items.
 
 ## Imminent
 
-The asset retrofit unblocks the persistent project tier, which in turn unblocks scenes/prefabs and reflection/serialization. Likely next once the runtime asset core lands: the persistent GUID/manifest layer (`asset-system.md` phases 4–6) and the first reflection work (`reflection-and-serialization.md`), since scenes depend on both.
+With reflection v1 landed, the next steps build on it: starting `scenes-and-prefabs.md` (scene-as-asset format, entity templates/patches) now that world↔data round-trip exists, and promoting further `reflection-and-serialization.md` phases (decorators as sugar, resources-as-reflectable, change-detection-by-name) as consumers demand them. The persistent GUID/manifest tier (`asset-system.md` phases 4–6) also remains queued, since scenes reference assets by GUID.
 
 ## Future direction (sketches, kept on paper)
 
@@ -40,7 +37,6 @@ Each link below is a sketch. Some are tightly scoped, some are speculative. None
 - `input-system.md` — platform-agnostic input HAL, action bindings, gamepad, touch.
 - `observers-and-events.md` — observer + hook system, `Message<T>` vs `Event<T>` naming, `Trigger<E>` param.
 - `playground-app.md` — beyond the M1 scaffolding: example scenes, production build target.
-- `reflection-and-serialization.md` — decorator-based component reflection, `TypeRegistry` equivalent, scene format. Foundation for scenes/prefabs.
 - `release-automation.md` — provenance, code signing, auto-update. Gated on the first 0.1.0 publish.
 - `renderer.md` — consolidated long-horizon renderer roadmap (foundations → sprites/materials → lights/glTF → post → GPU-driven → WebGL2 → tooling). Supersedes the earlier `first-render-path.md`, `renderer-graph.md`, and `webgl2-backend.md` sketches.
 - `scenes-and-prefabs.md` — our scene + prefab system, BSN-inspired but designed in-house.

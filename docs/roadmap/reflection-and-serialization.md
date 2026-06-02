@@ -1,7 +1,7 @@
 # Reflection and Serialization
 
 - **Created:** 2026-05-21
-- **Status:** Future direction (sketch — foundation for scenes/prefabs)
+- **Status:** Active — v1 shipped 2026-06-02 (ADR-0060); later phases kept on paper
 
 ## Goal
 
@@ -10,6 +10,16 @@ A TypeScript analog to Bevy's reflection + serialization stack. Components, reso
 The Bevy equivalent: `#[derive(Reflect)]` + `TypeRegistry` + `DynamicScene`. Our TS equivalent: decorator-driven (or registration-call-driven — open question) metadata that lands in a global `TypeRegistry`, with JSON or binary scene formats reading from that registry to round-trip world state.
 
 We're done when a component class can be defined once with type metadata, registered, and round-tripped through the scene format without hand-rolling a serializer per type.
+
+## v1 (shipped 2026-06-02 — ADR-0060)
+
+Landed as `@retro-engine/reflect` plus the `packages/engine/src/scene/` serializer:
+
+- Phase 1 (registration call), Phase 2 (`TypeRegistry` keyed by stable name), Phase 3 (field introspection), and Phase 4 (JSON world↔scene round-trip with entity-reference remapping) are shipped.
+- Phase 5 partially: `.skip()` (skip-serialize), `.default()` (default-if-missing), per-type `version` + `migrations`, and `t.entity()` / `t.handle()` references with remap and injected handle resolution. Decorator-based annotations are deferred.
+- Reserved (ADR-0060): decorators as Phase 1 sugar, change-detection-by-name (Phase 6), the studio inspector (Phase 7), resources-as-reflectable, scene composition, retrofitting engine components into the registry, and an App-integrated hook-firing load.
+
+The open questions below are resolved by ADR-0060 for v1 — registration calls first (decorators deferred), explicit stable names, the `t` vocabulary, versioning/migration designed in — and are kept here as historical context.
 
 ## Phases
 
