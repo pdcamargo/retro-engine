@@ -9,6 +9,7 @@
     "**/*.test.ts",
     "src/test-support.ts",
     "src/mapping-test-support.ts",
+    "src/app-test-support.ts",
     "dist",
     "node_modules"
   ]

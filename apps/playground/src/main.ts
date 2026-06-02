@@ -49,9 +49,9 @@ if (!(canvas instanceof HTMLCanvasElement)) {
 //                     (GTAO) on a scene of contacts + a concave corner (Depth +
 //                     Normal prepass). Press O to toggle AO; add `&taa=1` to
 //                     check AO stays stable under jitter (ADR-0054).
-//   `?mode=gltf`    → glTF mapping check: fetches a real model, maps it with
-//                     mapGltfAssets, and spawns the primitives (throwaway manual
-//                     harness ahead of the GltfPlugin importer).
+//   `?mode=gltf`    → glTF load path: GltfPlugin + AssetServer.load + a
+//                     GltfSceneRoot entity instantiate a real model's node graph
+//                     as a named entity tree (ADR-0057).
 //   `?mode=assets`  → unified asset store device check (ADR-0055): a pulsing
 //                     cube (materials.getMut), a breathing sphere
 //                     (meshes.getMut), and a row of cubes spawned from runtime

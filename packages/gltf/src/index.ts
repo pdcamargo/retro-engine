@@ -38,10 +38,6 @@ export type {
 export type {
   GltfDocument,
   GltfAsset,
-  GltfScene,
-  GltfNode,
-  GltfMesh,
-  GltfPrimitive,
   GltfMaterial,
   GltfPbrMetallicRoughness,
   GltfTextureInfo,
@@ -58,3 +54,16 @@ export type {
   GltfAccessorType,
   GltfAlphaMode,
 } from './schema';
+
+export { Gltfs } from './gltf-root';
+export type { Gltf, GltfNode, GltfScene, GltfMesh, GltfPrimitive } from './gltf-root';
+
+export { buildGltfRoot } from './build-gltf-root';
+export { createGltfImporter } from './gltf-importer';
+
+export { GltfSceneRoot, GltfInstanceNodes } from './gltf-components';
+
+export { addGltfInstantiation } from './gltf-instantiate';
+
+export { GltfPlugin } from './gltf-plugin';
+export type { GltfPluginOptions } from './gltf-plugin';

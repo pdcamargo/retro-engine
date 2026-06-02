@@ -6,6 +6,7 @@
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "dependencies": {
+    "@retro-engine/ecs": "workspace:*",
     "@retro-engine/engine": "workspace:*",
     "@retro-engine/math": "workspace:*",
     "@retro-engine/renderer-core": "workspace:*"
