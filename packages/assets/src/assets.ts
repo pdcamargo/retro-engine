@@ -95,9 +95,14 @@ export class Assets<T> {
    * event. Used by async loading: a consumer gets a stable handle immediately
    * and `get` returns `undefined` until {@link insert} fills the slot. The
    * handle is valid for the lifetime of the store.
+   *
+   * Pass a `guid` to reserve a slot for a project-backed asset loaded by its
+   * persistent identity: the handle carries the GUID, so the {@link insert}
+   * that later fills it registers the GUID and {@link handleByGuid} resolves
+   * it. Omit it for a runtime load that has no persistent identity.
    */
-  reserveHandle(): Handle<T> {
-    return makeHandle<T>(asAssetIndex(this.nextIndex++));
+  reserveHandle(guid?: AssetGuid): Handle<T> {
+    return makeHandle<T>(asAssetIndex(this.nextIndex++), guid);
   }
 
   /** Whether `handle` resolves to a stored value. */

@@ -1,4 +1,13 @@
-import type { AssetImporter, AssetSource, Assets, Handle, LoadContext } from '@retro-engine/assets';
+import type {
+  AssetGuid,
+  AssetImporter,
+  AssetManifest,
+  AssetSource,
+  Assets,
+  Handle,
+  LoadContext,
+} from '@retro-engine/assets';
+import { parseAssetManifest } from '@retro-engine/assets';
 
 import type { Logger } from '../log';
 import { engineLogger } from '../log';
@@ -89,6 +98,11 @@ export class AssetServer {
   private completed: CompletedLoad[] = [];
   private failures: AssetLoadFailure[] = [];
   private readonly inflight = new Set<Promise<void>>();
+  private manifest?: AssetManifest;
+  private readonly guidToHandle = new Map<
+    AssetGuid,
+    { readonly handle: Handle<unknown>; readonly store: Assets<unknown> }
+  >();
 
   constructor(options: { readonly source: AssetSource; readonly logger?: Logger }) {
     this.source = options.source;
@@ -132,9 +146,8 @@ export class AssetServer {
     const ext = extensionOf(path);
     const loader = this.loaders.get(ext);
     if (loader === undefined) {
-      const known = [...this.loaders.keys()].map((e) => `.${e}`).join(', ');
       throw new Error(
-        `AssetServer.load: no loader registered for '.${ext}' (path '${path}'). Registered: ${known === '' ? '(none)' : known}.`,
+        `AssetServer.load: no loader registered for '.${ext}' (path '${path}'). Registered: ${this.registeredExtensions()}.`,
       );
     }
 
@@ -163,6 +176,69 @@ export class AssetServer {
       return;
     }
     this.kickLoad(path, cached.store, loader.importer, cached.handle);
+  }
+
+  /**
+   * Adopt `manifest` as the GUID→location index that {@link AssetServer.loadByGuid}
+   * resolves against, replacing any already set. Use this when the manifest is
+   * built or fetched out of band; {@link AssetServer.loadManifest} reads and
+   * parses one through the injected source.
+   */
+  setManifest(manifest: AssetManifest): void {
+    this.manifest = manifest;
+  }
+
+  /**
+   * Read a manifest's bytes from `location` through the injected source, parse
+   * them, and adopt the result for {@link AssetServer.loadByGuid}. Rejects if the
+   * source read fails or the bytes are not a valid manifest.
+   */
+  async loadManifest(location: string): Promise<void> {
+    const bytes = await this.source.read(location);
+    this.manifest = parseAssetManifest(new TextDecoder().decode(bytes));
+  }
+
+  /**
+   * Start loading the asset with persistent identity `guid` and return its
+   * handle immediately — the GUID counterpart of {@link AssetServer.load}. The
+   * handle carries the GUID, so once the `PreUpdate` drain commits the value its
+   * store indexes it by GUID and a scene that references that GUID resolves with
+   * no injected resolver.
+   *
+   * The GUID is resolved through the manifest (set via
+   * {@link AssetServer.setManifest} or {@link AssetServer.loadManifest}) to a
+   * location, then loaded exactly like {@link AssetServer.load} using the loader
+   * registered for the location's extension. Idempotent per GUID: a repeat call
+   * returns the same handle and starts no new IO.
+   *
+   * Throws synchronously if no manifest is set, the GUID is absent from it, the
+   * location has no usable extension, or no loader is registered for that
+   * extension — all wiring mistakes, surfaced before a handle is handed out.
+   */
+  loadByGuid<T>(guid: AssetGuid): Handle<T> {
+    const cached = this.guidToHandle.get(guid);
+    if (cached !== undefined) return cached.handle as Handle<T>;
+
+    if (this.manifest === undefined) {
+      throw new Error(`AssetServer.loadByGuid: no manifest set (guid '${guid}').`);
+    }
+    const entry = this.manifest.entries.get(guid);
+    if (entry === undefined) {
+      throw new Error(`AssetServer.loadByGuid: guid '${guid}' is not in the manifest.`);
+    }
+
+    const ext = extensionOf(entry.location);
+    const loader = this.loaders.get(ext);
+    if (loader === undefined) {
+      throw new Error(
+        `AssetServer.loadByGuid: no loader registered for '.${ext}' (guid '${guid}', location '${entry.location}'). Registered: ${this.registeredExtensions()}.`,
+      );
+    }
+
+    const handle = loader.store.reserveHandle(guid);
+    this.guidToHandle.set(guid, { handle, store: loader.store });
+    this.kickLoad(entry.location, loader.store, loader.importer, handle);
+    return handle as Handle<T>;
   }
 
   /** Take and clear the completed-load queue. Called by the drain each frame. */
@@ -194,6 +270,12 @@ export class AssetServer {
     while (this.inflight.size > 0) {
       await Promise.all(this.inflight);
     }
+  }
+
+  /** The registered loader extensions formatted for a "no loader" error. */
+  private registeredExtensions(): string {
+    const known = [...this.loaders.keys()].map((e) => `.${e}`).join(', ');
+    return known === '' ? '(none)' : known;
   }
 
   private kickLoad(

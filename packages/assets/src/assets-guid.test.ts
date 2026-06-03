@@ -52,4 +52,23 @@ describe('Assets — GUID index', () => {
     assets.remove(handle);
     expect(assets.handleByGuid(guid)).toBeUndefined();
   });
+
+  it('reserveHandle(guid) carries the guid so the inserted value is indexed', () => {
+    const assets = new Assets<Mesh>();
+    const guid = generateAssetGuid();
+    const handle = assets.reserveHandle(guid);
+    expect(handle.guid).toBe(guid);
+    // Reserved but not filled: nothing to resolve yet.
+    expect(assets.handleByGuid(guid)).toBeUndefined();
+
+    assets.insert(handle, mesh('loaded'));
+    const resolved = assets.handleByGuid(guid);
+    expect(resolved!.index).toBe(handle.index);
+    expect(assets.get(resolved!)).toEqual(mesh('loaded'));
+  });
+
+  it('reserveHandle() with no guid stays guid-less', () => {
+    const assets = new Assets<Mesh>();
+    expect(assets.reserveHandle().guid).toBeUndefined();
+  });
 });

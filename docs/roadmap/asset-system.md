@@ -32,8 +32,14 @@ registration, not by inheritance. The system **absorbs** the engine's existing `
    resolution on load, promotion (`CreateAsset` analogue: runtime asset → GUID-backed project asset).
    The **in-memory** slice of GUID→handle resolution shipped early (ADR-0065): `Assets<T>` carries a
    GUID index, and `spawnScene` resolves a scene's handles through the App's `AssetStores` with no
-   injected resolver — for assets already present in their stores. Disk/manifest load-on-demand and
-   cross-process GUID stability remain here.
+   injected resolver — for assets already present in their stores. The **read half** of the
+   persistent path then shipped (ADR-0066): a loadable manifest (`parseAssetManifest`) +
+   `AssetServer.loadByGuid`, which reads bytes through the injected source and re-establishes assets
+   under their original GUIDs — so a scene saved in one process loads in a fresh one, browser-native
+   over `FetchAssetSource`. Remaining here: the **write/save** path (baking the manifest + asset
+   bytes — needs a write-capable backend), `DiskAssetSource` / `BundleAssetSource`, `.meta` sidecars,
+   and promotion. Selective/streamed scene loading (load only what a scene references, background-load
+   on swap, unload the unused) is tracked in `docs/backlog/scene-aware-asset-streaming.md`.
 6. **Studio integration** — asset browser, drag-drop into scene, rename without breaking references,
    hot-reload, inspector-dirty → serialize.
 

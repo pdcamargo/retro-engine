@@ -12,4 +12,5 @@ export type { LoadContext, AssetImporter, AssetImporterRegistry } from './import
 export type { AssetSerializer, AssetSerializerRegistry } from './serializer-registry';
 
 export type { AssetSource } from './source';
-export type { AssetManifest, AssetManifestEntry } from './manifest';
+export type { AssetManifest, AssetManifestEntry, AssetManifestFile } from './manifest';
+export { MANIFEST_FORMAT_VERSION, parseAssetManifest } from './manifest';

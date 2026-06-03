@@ -20,3 +20,55 @@ export interface AssetManifest {
   /** Every project asset keyed by its stable {@link AssetGuid}. */
   readonly entries: ReadonlyMap<AssetGuid, AssetManifestEntry>;
 }
+
+/** Current manifest wire-format version. Bumped only on a breaking shape change. */
+export const MANIFEST_FORMAT_VERSION = 1;
+
+/**
+ * The on-the-wire JSON shape of a manifest: a format version and a flat list of
+ * entries. {@link parseAssetManifest} folds this into an {@link AssetManifest},
+ * keying the entries by GUID — JSON has no map type, so the wire form is a list.
+ */
+export interface AssetManifestFile {
+  /** Wire-format version; must equal {@link MANIFEST_FORMAT_VERSION} to parse. */
+  readonly version: number;
+  /** Every project asset, in no particular order. */
+  readonly entries: readonly AssetManifestEntry[];
+}
+
+/**
+ * Parse a manifest's JSON text into an {@link AssetManifest}, keying its entries
+ * by GUID. Throws if the JSON is malformed, the `version` does not equal
+ * {@link MANIFEST_FORMAT_VERSION}, an entry lacks a string `guid` / `location` /
+ * `kind`, or two entries share a GUID.
+ */
+export const parseAssetManifest = (text: string): AssetManifest => {
+  const file = JSON.parse(text) as { version?: unknown; entries?: unknown };
+  if (file.version !== MANIFEST_FORMAT_VERSION) {
+    throw new Error(
+      `parseAssetManifest: unsupported manifest version ${String(file.version)} (expected ${MANIFEST_FORMAT_VERSION}).`,
+    );
+  }
+  if (!Array.isArray(file.entries)) {
+    throw new Error('parseAssetManifest: manifest `entries` must be an array.');
+  }
+  const entries = new Map<AssetGuid, AssetManifestEntry>();
+  for (const raw of file.entries as readonly unknown[]) {
+    const entry = raw as { guid?: unknown; location?: unknown; kind?: unknown };
+    if (
+      typeof entry.guid !== 'string' ||
+      typeof entry.location !== 'string' ||
+      typeof entry.kind !== 'string'
+    ) {
+      throw new Error(
+        'parseAssetManifest: every entry needs a string `guid`, `location`, and `kind`.',
+      );
+    }
+    const guid = entry.guid as AssetGuid;
+    if (entries.has(guid)) {
+      throw new Error(`parseAssetManifest: duplicate GUID '${entry.guid}' in manifest.`);
+    }
+    entries.set(guid, { guid, location: entry.location, kind: entry.kind });
+  }
+  return { entries };
+};
