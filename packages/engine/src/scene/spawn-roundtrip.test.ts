@@ -185,12 +185,15 @@ describe('spawnScene — bare-world contrast and edge cases', () => {
     expect(app.world.getComponent(child, Parent)).toBeUndefined();
   });
 
-  it('throws when a scene has a handle field but no resolver is supplied', () => {
+  it('throws via the default resolver when a referenced asset is absent from its store', () => {
+    // No resolveHandle passed: handles resolve by GUID against the App's asset
+    // stores. The store exists (MeshPlugin registered it) but holds no asset for
+    // this GUID, so resolution fails loudly rather than silently dropping it.
     const app = new App({ renderer: makeHeadlessRenderer() });
     const scene: SceneData = {
       version: 1,
       entities: [{ id: 0, components: [{ type: 'Mesh3d', version: 1, data: { handle: 'guid-x' } }] }],
     };
-    expect(() => spawnScene(app, scene)).toThrow(/resolveHandle/);
+    expect(() => spawnScene(app, scene)).toThrow(/not present in its store/);
   });
 });

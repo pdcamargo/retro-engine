@@ -3,6 +3,7 @@ import type { Handle } from '@retro-engine/assets';
 import type { TypeRegistry } from '@retro-engine/reflect';
 import { decodeComponent } from '@retro-engine/reflect';
 
+import { AssetStores } from '../asset/asset-stores';
 import { Commands, type CommandsHandle } from '../commands';
 import { Parent } from '../hierarchy';
 import type { App } from '../index';
@@ -14,9 +15,10 @@ import type { SceneData } from './scene-data';
 /** Options for {@link spawnScene}. */
 export interface SpawnSceneOptions {
   /**
-   * Reconstruct an asset handle from its persistent reference. Required if the
-   * scene contains any handle fields — there is no global GUID→handle resolver,
-   * so the caller supplies one (backed by its asset stores).
+   * Override for reconstructing an asset handle from its persistent reference.
+   * By default handles resolve by GUID against the App's registered asset
+   * stores (its {@link AssetStores} resource); pass this only to override that —
+   * e.g. tools/tests, or a scene whose assets live outside the App's stores.
    */
   resolveHandle?(assetType: string, guid: string): Handle<unknown>;
   /**
@@ -68,7 +70,16 @@ export const spawnScene = (
   const idToEntity = new Map<number, Entity>();
   for (const entity of scene.entities) idToEntity.set(entity.id, cmd.spawn().id);
 
-  const env = buildDecodeEnv(registry, idToEntity, opts);
+  // No injected resolver → resolve handles by GUID against the App's registered
+  // asset stores. An injected resolver always wins; with neither, decoding a
+  // handle field throws (buildDecodeEnv's fallback).
+  const stores = app.getResource(AssetStores);
+  const decodeOpts: SpawnSceneOptions =
+    opts.resolveHandle === undefined && stores !== undefined
+      ? { ...opts, resolveHandle: (assetType, guid) => stores.handleFor(assetType, guid) }
+      : opts;
+
+  const env = buildDecodeEnv(registry, idToEntity, decodeOpts);
   const parentReg = registry.getByCtor(Parent);
 
   // Pass 2: decode + insert every component except Parent, which is routed

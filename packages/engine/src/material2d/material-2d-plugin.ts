@@ -12,6 +12,7 @@ import type {
   VertexBufferLayout,
 } from '@retro-engine/renderer-core';
 
+import { registerAssetStore } from '../asset/asset-stores';
 import { ViewBindGroupCache } from '../camera/extracted';
 import { SortedCameras } from '../camera/sorted-cameras';
 import { Images } from '../image/images';
@@ -151,11 +152,18 @@ export class Material2dPlugin<M extends Material2d> implements PluginObject {
         `${this.name()}: a Materials2d registry for this material type is already installed; do not add the same Material2dPlugin twice.`,
       );
     }
-    app.insertResource(new this.Materials2d());
+    const materials = new this.Materials2d();
+    app.insertResource(materials);
     app.insertResource(new this.RenderMaterials2d());
     if (app.getResource(ViewPhases2d) === undefined) {
       app.insertResource(new ViewPhases2d());
     }
+
+    // The handle's asset type is qualified by the material class so two material
+    // types never resolve to each other's store; it backs both the `t.handle`
+    // schema and the store registration. Mirrors MaterialPlugin's 3D path.
+    const materialsKey = `Materials2d<${this.materialClass.name}>`;
+    registerAssetStore(app, materialsKey, materials);
 
     // The material handle is the only authored state. Register the synthesized
     // per-type subclass under a generic-qualified name so a scene's
@@ -163,7 +171,7 @@ export class Material2dPlugin<M extends Material2d> implements PluginObject {
     // decode overwrites. Mirrors MaterialPlugin's 3D registration.
     app.registerComponent(
       this.MeshMaterial2d,
-      { handle: t.handle<M>('Materials2d') },
+      { handle: t.handle<M>(materialsKey) },
       {
         name: `MeshMaterial2d<${this.materialClass.name}>`,
         make: () => new this.MeshMaterial2d(makeHandle(asAssetIndex(0))),

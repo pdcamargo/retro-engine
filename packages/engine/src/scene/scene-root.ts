@@ -12,10 +12,9 @@ import type { SpawnSceneOptions } from './spawn';
  * tears the instance down. Spawned exactly once; the result is recorded as a
  * {@link SceneInstance} on the same entity.
  *
- * `resolveHandle` reconstructs asset handles referenced inside the scene from
- * their persistent GUIDs. Required only if the scene contains handle fields —
- * there is no global GUID→handle resolver, so the caller supplies one backed by
- * its asset stores.
+ * `resolveHandle` overrides how the scene's asset handles are reconstructed from
+ * their persistent GUIDs. By default they resolve against the App's registered
+ * asset stores, so it is needed only to override that (e.g. tools/tests).
  *
  * This is a transient runtime load marker with no persistent identity — it is not
  * itself serialized into a scene.

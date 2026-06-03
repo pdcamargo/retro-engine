@@ -1,4 +1,4 @@
-import { asAssetIndex, type AssetIndex } from './asset-id';
+import { asAssetIndex, generateAssetGuid, type AssetGuid, type AssetIndex } from './asset-id';
 import type { AssetEvent } from './events';
 import { makeHandle, type Handle } from './handle';
 
@@ -12,23 +12,29 @@ import { makeHandle, type Handle } from './handle';
  * the GPU representation in sync. Indices are minted monotonically with no
  * reuse, so a handle never silently resolves to a different asset.
  *
+ * Every stored value is also indexed by its {@link AssetGuid}, so a handle
+ * serialized by GUID round-trips back to its slot via {@link handleByGuid}.
  * The store owns asset lifetime: a handle keeps nothing alive, and removal is
  * always explicit. This generalizes the per-type registries the engine grew for
  * meshes, images, materials, and atlas layouts into one shape.
  */
 export class Assets<T> {
   private readonly entries = new Map<AssetIndex, T>();
+  private readonly byGuid = new Map<AssetGuid, AssetIndex>();
   private nextIndex = 1;
   private events: AssetEvent<T>[] = [];
 
   /**
    * Register `value` under a fresh runtime slot and queue an `added` event.
-   * Returns the handle; the asset has no persistent GUID until it is promoted.
+   * Mints a persistent {@link AssetGuid} so the asset can be serialized and
+   * later resolved by GUID; pass an explicit `guid` to adopt an existing
+   * identity (e.g. one read from a manifest). Returns the handle.
    */
-  add(value: T): Handle<T> {
+  add(value: T, guid: AssetGuid = generateAssetGuid()): Handle<T> {
     const index = asAssetIndex(this.nextIndex++);
     this.entries.set(index, value);
-    const handle = makeHandle<T>(index);
+    this.byGuid.set(guid, index);
+    const handle = makeHandle<T>(index, guid);
     this.events.push({ kind: 'added', handle });
     return handle;
   }
@@ -36,6 +42,17 @@ export class Assets<T> {
   /** Read the value behind `handle`, or `undefined` if the slot is empty or removed. */
   get(handle: Handle<T>): T | undefined {
     return this.entries.get(handle.index);
+  }
+
+  /**
+   * Resolve a handle from its persistent {@link AssetGuid}, or `undefined` if no
+   * stored asset carries that GUID. This is the load-side counterpart of the
+   * GUID a serialized handle was written with — it routes the GUID back to the
+   * live slot. The returned handle's `index` is the current runtime slot.
+   */
+  handleByGuid(guid: AssetGuid): Handle<T> | undefined {
+    const index = this.byGuid.get(guid);
+    return index === undefined ? undefined : makeHandle<T>(index, guid);
   }
 
   /**
@@ -59,6 +76,7 @@ export class Assets<T> {
   insert(handle: Handle<T>, value: T): void {
     const kind = this.entries.has(handle.index) ? 'modified' : 'added';
     this.entries.set(handle.index, value);
+    if (handle.guid !== undefined) this.byGuid.set(handle.guid, handle.index);
     this.events.push({ kind, handle });
   }
 
@@ -68,6 +86,7 @@ export class Assets<T> {
    */
   remove(handle: Handle<T>): void {
     if (!this.entries.delete(handle.index)) return;
+    if (handle.guid !== undefined) this.byGuid.delete(handle.guid);
     this.events.push({ kind: 'removed', handle });
   }
 

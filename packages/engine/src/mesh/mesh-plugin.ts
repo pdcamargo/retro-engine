@@ -3,6 +3,7 @@ import { asAssetIndex, makeHandle } from '@retro-engine/assets';
 import { t } from '@retro-engine/reflect';
 import { vertexFormatByteSize } from '@retro-engine/renderer-core';
 
+import { ASSET_TYPE, registerAssetStore } from '../asset/asset-stores';
 import type { App } from '../index';
 import type { PluginObject } from '../plugin';
 import { RenderSet } from '../render-set';
@@ -94,6 +95,7 @@ export class MeshPlugin implements PluginObject {
 
   build(app: App): void {
     if (app.getResource(Meshes) === undefined) app.insertResource(new Meshes());
+    registerAssetStore(app, ASSET_TYPE.mesh, app.getResource(Meshes)!);
     if (app.getResource(MeshAllocatorSettings) === undefined) {
       app.insertResource(new MeshAllocatorSettings());
     }
@@ -113,13 +115,13 @@ export class MeshPlugin implements PluginObject {
     // explicit make supplies a placeholder handle decode immediately overwrites.
     app.registerComponent(
       Mesh3d,
-      { handle: t.handle<Mesh>('Mesh') },
+      { handle: t.handle<Mesh>(ASSET_TYPE.mesh) },
       { name: 'Mesh3d', make: () => new Mesh3d(makeHandle(asAssetIndex(0))) },
     );
     // Mesh2d shares the Meshes store with Mesh3d; same handle wrapper, same key.
     app.registerComponent(
       Mesh2d,
-      { handle: t.handle<Mesh>('Mesh') },
+      { handle: t.handle<Mesh>(ASSET_TYPE.mesh) },
       { name: 'Mesh2d', make: () => new Mesh2d(makeHandle(asAssetIndex(0))) },
     );
 

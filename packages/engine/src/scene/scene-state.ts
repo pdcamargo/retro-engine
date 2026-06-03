@@ -12,8 +12,9 @@ import type { SpawnSceneOptions } from './spawn';
 /** Options for {@link registerSceneState} / `App.addScene`. */
 export interface AddSceneOptions {
   /**
-   * Resolver for asset handles referenced inside the scene, forwarded to the
-   * `SceneRoot`. Required only if the scene contains handle fields.
+   * Optional override for resolving the scene's asset handles, forwarded to the
+   * `SceneRoot`. By default they resolve by GUID against the App's registered
+   * asset stores; pass this only to override that.
    */
   resolveHandle?: SpawnSceneOptions['resolveHandle'];
 }

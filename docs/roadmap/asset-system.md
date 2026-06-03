@@ -30,6 +30,10 @@ registration, not by inheritance. The system **absorbs** the engine's existing `
 4. **Project format** — `.retro-project` layout, GUID `.meta` sidecars, manifest. JSON for v1.
 5. **Reference resolution + sources** — `DiskAssetSource` / `BundleAssetSource`, GUID→index
    resolution on load, promotion (`CreateAsset` analogue: runtime asset → GUID-backed project asset).
+   The **in-memory** slice of GUID→handle resolution shipped early (ADR-0065): `Assets<T>` carries a
+   GUID index, and `spawnScene` resolves a scene's handles through the App's `AssetStores` with no
+   injected resolver — for assets already present in their stores. Disk/manifest load-on-demand and
+   cross-process GUID stability remain here.
 6. **Studio integration** — asset browser, drag-drop into scene, rename without breaking references,
    hot-reload, inspector-dirty → serialize.
 

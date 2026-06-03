@@ -195,6 +195,7 @@ export type {
 export { AssetPlugin } from './asset/asset-plugin';
 export { AssetServer } from './asset/asset-server';
 export type { AssetLoadFailure, CompletedLoad } from './asset/asset-server';
+export { ASSET_TYPE, AssetStores, registerAssetStore } from './asset/asset-stores';
 export { FetchAssetSource } from './asset/fetch-source';
 export { applyCompletedLoads } from './asset/load-drain';
 export {

@@ -2,6 +2,7 @@ import type { AssetEvent, AssetIndex, Handle } from '@retro-engine/assets';
 import type { Renderer, TextureFormat, TextureView } from '@retro-engine/renderer-core';
 import { srgbVariantOf, TextureUsage } from '@retro-engine/renderer-core';
 
+import { ASSET_TYPE, registerAssetStore } from '../asset/asset-stores';
 import type { App } from '../index';
 import type { PluginObject } from '../plugin';
 import { RenderSet } from '../render-set';
@@ -87,6 +88,7 @@ export class ImagePlugin implements PluginObject {
 
   build(app: App): void {
     if (app.getResource(Images) === undefined) app.insertResource(new Images());
+    registerAssetStore(app, ASSET_TYPE.image, app.getResource(Images)!);
     if (app.getResource(ExtractedImageAssetEvents) === undefined) {
       app.insertResource(new ExtractedImageAssetEvents());
     }

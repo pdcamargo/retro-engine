@@ -9,6 +9,7 @@ import type {
   VertexBufferLayout,
 } from '@retro-engine/renderer-core';
 
+import { registerAssetStore } from '../asset/asset-stores';
 import { AoBindGroupCache } from '../ao/ao-bind-group-cache';
 import { ViewAoTargets } from '../ao/view-ao-targets';
 import { ViewBindGroupCache } from '../camera/extracted';
@@ -199,11 +200,19 @@ export class MaterialPlugin<M extends Material> implements PluginObject {
         `${this.name()}: a Materials registry for this material type is already installed; do not add the same MaterialPlugin twice.`,
       );
     }
-    app.insertResource(new this.Materials());
+    const materials = new this.Materials();
+    app.insertResource(materials);
     app.insertResource(new this.RenderMaterials());
     if (app.getResource(ViewPhases3d) === undefined) {
       app.insertResource(new ViewPhases3d());
     }
+
+    // The handle's asset type is qualified by the material class so two material
+    // types never resolve to each other's store; it backs both the `t.handle`
+    // schema and the store registration, the single source of truth for this
+    // material's GUID resolution.
+    const materialsKey = `Materials<${this.materialClass.name}>`;
+    registerAssetStore(app, materialsKey, materials);
 
     // Register the synthesised per-type subclass — not the base — so the scene
     // serializer recognises the exact constructor entities carry. The name is
@@ -212,7 +221,7 @@ export class MaterialPlugin<M extends Material> implements PluginObject {
     // overwrites.
     app.registerComponent(
       this.MeshMaterial3d,
-      { handle: t.handle<M>('Materials') },
+      { handle: t.handle<M>(materialsKey) },
       {
         name: `MeshMaterial3d<${this.materialClass.name}>`,
         make: () => new this.MeshMaterial3d(makeHandle(asAssetIndex(0))),

@@ -3,6 +3,7 @@ import { asAssetIndex, makeHandle } from '@retro-engine/assets';
 import { t } from '@retro-engine/reflect';
 import type { RenderPassEncoder } from '@retro-engine/renderer-core';
 
+import { ASSET_TYPE, registerAssetStore } from '../asset/asset-stores';
 import { SortedCameras } from '../camera/sorted-cameras';
 import type { Image } from '../image/image';
 import { Images } from '../image/images';
@@ -123,6 +124,7 @@ export class SpritePlugin implements PluginObject {
     if (app.getResource(TextureAtlasLayouts) === undefined) {
       app.insertResource(new TextureAtlasLayouts());
     }
+    registerAssetStore(app, ASSET_TYPE.textureAtlasLayout, app.getResource(TextureAtlasLayouts)!);
 
     // Reflection schemas. Texture handles, tint, footprint, anchor, and the
     // 9-slice descriptor are authored; AtlasAnimation.elapsedSec is recomputed by
@@ -149,8 +151,8 @@ export class SpritePlugin implements PluginObject {
     app.registerComponent(
       Sprite,
       {
-        image: t.handle<Image>('Image').optional(),
-        normalMap: t.handle<Image>('Image').optional(),
+        image: t.handle<Image>(ASSET_TYPE.image).optional(),
+        normalMap: t.handle<Image>(ASSET_TYPE.image).optional(),
         color: t.vec4,
         customSize: t.vec2.optional(),
         rect: t.struct({ min: t.vec2, max: t.vec2 }).optional(),
@@ -176,7 +178,7 @@ export class SpritePlugin implements PluginObject {
     );
     app.registerComponent(
       TextureAtlas,
-      { layout: t.handle<TextureAtlasLayout>('TextureAtlasLayout'), index: t.number },
+      { layout: t.handle<TextureAtlasLayout>(ASSET_TYPE.textureAtlasLayout), index: t.number },
       { name: 'TextureAtlas', make: () => new TextureAtlas(makeHandle(asAssetIndex(0))) },
     );
     app.registerComponent(
