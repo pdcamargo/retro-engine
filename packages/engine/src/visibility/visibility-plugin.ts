@@ -1,4 +1,5 @@
 import { Aabb, Frustum } from '@retro-engine/math';
+import { t } from '@retro-engine/reflect';
 
 import { Camera } from '../camera/camera';
 import { RenderLayers } from '../camera/render-layers';
@@ -52,6 +53,14 @@ export class VisibilityPlugin implements PluginObject {
 
   build(app: App): void {
     app.insertResource(new CheckVisibilityState());
+
+    // Only the authored intent persists. InheritedVisibility and ViewVisibility
+    // are derived each frame by the systems below, so they are not registered.
+    app.registerComponent(
+      Visibility,
+      { mode: t.enum('Inherited', 'Hidden', 'Visible') },
+      { name: 'Visibility' },
+    );
 
     app.addSystem('postUpdate', [Query([Camera, Frustum])], (cameras) => {
       updateFrustaSystem(cameras);

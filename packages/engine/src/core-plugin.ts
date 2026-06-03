@@ -1,3 +1,6 @@
+import type { Entity } from '@retro-engine/ecs';
+import { t } from '@retro-engine/reflect';
+
 import { AoPlugin } from './ao/ao-plugin';
 import { CameraPlugin } from './camera/camera-plugin';
 import { RemovedComponents } from './change-detection';
@@ -6,6 +9,7 @@ import { ImagePlugin } from './image/image-plugin';
 import type { App } from './index';
 import { MeshPlugin } from './mesh/mesh-plugin';
 import { MotionBlurPlugin } from './motion-blur/motion-blur-plugin';
+import { Name } from './name';
 import type { PluginObject } from './plugin';
 import { RenderGraphPlugin } from './render-graph/render-graph-plugin';
 import { ShaderPlugin } from './shader/shader-plugin';
@@ -84,6 +88,22 @@ export class CorePlugin implements PluginObject {
       const idx = siblings.entities.indexOf(ctx.entity);
       if (idx >= 0) siblings.entities.splice(idx, 1);
     });
+
+    // Reflection schemas for the core graph. GlobalTransform and Children are
+    // deliberately omitted: the first is recomputed by propagation, the second
+    // is rebuilt from each child's Parent edge when a scene is spawned.
+    app.registerComponent(
+      Transform,
+      { translation: t.vec3, rotation: t.quat, scale: t.vec3 },
+      { name: 'Transform' },
+    );
+    app.registerComponent(Name, { value: t.string }, { name: 'Name' });
+    app.registerComponent(
+      Parent,
+      { entity: t.entity() },
+      { name: 'Parent', make: () => new Parent(0 as Entity) },
+    );
+
     app.addPlugin(new ShaderPlugin());
     app.addPlugin(new CameraPlugin());
     app.addPlugin(new MeshPlugin());

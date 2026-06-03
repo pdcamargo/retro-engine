@@ -21,6 +21,33 @@ export interface DeserializeOptions {
 }
 
 /**
+ * Build the {@link DecodeEnv} shared by every scene-loading path: it threads the
+ * registry, remaps entity-typed fields through `idToEntity` (unmapped ids fall
+ * back to `opts.nullEntity`, default entity `0`), and resolves handle fields via
+ * `opts.resolveHandle` — throwing if a handle is encountered without one.
+ *
+ * @internal Shared by `deserializeScene` (bare world) and `spawnScene` (commands).
+ */
+export const buildDecodeEnv = (
+  registry: TypeRegistry,
+  idToEntity: ReadonlyMap<number, Entity>,
+  opts: DeserializeOptions,
+): DecodeEnv => {
+  const nullEntity = opts.nullEntity ?? (0 as Entity);
+  return {
+    registry,
+    entity: (id) => idToEntity.get(id) ?? nullEntity,
+    resolveHandle:
+      opts.resolveHandle ??
+      (() => {
+        throw new Error(
+          'scene load: the scene references asset handles — pass resolveHandle to restore them',
+        );
+      }),
+  };
+};
+
+/**
  * Spawn a {@link SceneData} into `world` and return the scene-id → entity remap.
  *
  * Runs in two phases so references resolve regardless of order: first every
@@ -41,18 +68,7 @@ export const deserializeScene = (
     idToEntity.set(entity.id, world.spawn());
   }
 
-  const nullEntity = opts.nullEntity ?? (0 as Entity);
-  const env: DecodeEnv = {
-    registry,
-    entity: (id) => idToEntity.get(id) ?? nullEntity,
-    resolveHandle:
-      opts.resolveHandle ??
-      (() => {
-        throw new Error(
-          'deserializeScene: the scene references asset handles — pass resolveHandle to restore them',
-        );
-      }),
-  };
+  const env = buildDecodeEnv(registry, idToEntity, opts);
 
   for (const serialized of scene.entities) {
     const entity = idToEntity.get(serialized.id)!;

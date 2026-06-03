@@ -1,0 +1,94 @@
+import type { Entity } from '@retro-engine/ecs';
+import type { Handle } from '@retro-engine/assets';
+import type { TypeRegistry } from '@retro-engine/reflect';
+import { decodeComponent } from '@retro-engine/reflect';
+
+import { Commands, type CommandsHandle } from '../commands';
+import { Parent } from '../hierarchy';
+import type { App } from '../index';
+
+import { AppTypeRegistry } from './app-type-registry';
+import { buildDecodeEnv } from './deserialize';
+import type { SceneData } from './scene-data';
+
+/** Options for {@link spawnScene}. */
+export interface SpawnSceneOptions {
+  /**
+   * Reconstruct an asset handle from its persistent reference. Required if the
+   * scene contains any handle fields — there is no global GUID→handle resolver,
+   * so the caller supplies one (backed by its asset stores).
+   */
+  resolveHandle?(assetType: string, guid: string): Handle<unknown>;
+  /**
+   * Entity used for a reference whose target is not part of the scene.
+   * Defaults to entity `0`, which is never a live id (ids start at `1`).
+   */
+  nullEntity?: Entity;
+}
+
+/**
+ * Spawn a {@link SceneData} into a live App through its command buffer, and
+ * return the scene-id → entity remap.
+ *
+ * Unlike {@link deserializeScene} — which writes straight into a bare world —
+ * this drives every spawn, insert, and parent link through `Commands`, so the
+ * engine's lifecycle hooks fire, Required Components resolve, and the hierarchy
+ * wires the same way runtime spawning does. Concretely: a parent's `Children`
+ * is rebuilt from each child's serialized `Parent` edge (never serialized
+ * directly), and a frame later the propagation systems recompute the derived
+ * state (`GlobalTransform`, inherited visibility) that scenes never persist.
+ *
+ * Runs in two passes so references resolve regardless of order: first every
+ * serialized entity is reserved (an empty spawn whose id is available
+ * synchronously), then each entity's components are decoded and inserted — with
+ * the `Parent` edge routed through `addChild` rather than inserted, so the
+ * reciprocal `Children` is built and its hooks fire. The buffer flushes before
+ * returning.
+ *
+ * @param registry - The registry to decode against. Defaults to the App's
+ *   {@link AppTypeRegistry} resource; pass an explicit one for tools/tests.
+ */
+export const spawnScene = (
+  app: App,
+  scene: SceneData,
+  registry: TypeRegistry = app.getResource(AppTypeRegistry)!.registry,
+  opts: SpawnSceneOptions = {},
+): Map<number, Entity> => {
+  const cmd = Commands.resolve({
+    app,
+    world: app.world,
+    stage: 'update',
+    systemId: app.mintSystemId(),
+    lastSeenTick: 0,
+    lastSeenFrame: -1,
+  }) as CommandsHandle;
+
+  // Pass 1: reserve every id up front so all parent/child ends are live at
+  // flush regardless of declaration order. The empty spawn fires no hooks.
+  const idToEntity = new Map<number, Entity>();
+  for (const entity of scene.entities) idToEntity.set(entity.id, cmd.spawn().id);
+
+  const env = buildDecodeEnv(registry, idToEntity, opts);
+  const parentReg = registry.getByCtor(Parent);
+
+  // Pass 2: decode + insert every component except Parent, which is routed
+  // through addChild so the appendChild op wires both sides and fires hooks.
+  for (const serialized of scene.entities) {
+    const entity = idToEntity.get(serialized.id)!;
+    const components: object[] = [];
+    for (const component of serialized.components) {
+      const reg = registry.get(component.type);
+      if (reg === undefined) continue;
+      if (parentReg !== undefined && reg === parentReg) {
+        const parent = decodeComponent(reg, component, env) as Parent;
+        cmd.entity(parent.entity).addChild(entity);
+        continue;
+      }
+      components.push(decodeComponent(reg, component, env));
+    }
+    if (components.length > 0) cmd.entity(entity).insert(...components);
+  }
+
+  app.flushCommands();
+  return idToEntity;
+};

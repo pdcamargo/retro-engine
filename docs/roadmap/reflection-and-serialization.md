@@ -1,7 +1,7 @@
 # Reflection and Serialization
 
 - **Created:** 2026-05-21
-- **Status:** Active — v1 shipped 2026-06-02 (ADR-0060); later phases kept on paper
+- **Status:** Active — v1 shipped 2026-06-02 (ADR-0060); engine-component registration + hook-firing spawn shipped 2026-06-02 (ADR-0061); later phases kept on paper
 
 ## Goal
 
@@ -18,6 +18,16 @@ Landed as `@retro-engine/reflect` plus the `packages/engine/src/scene/` serializ
 - Phase 1 (registration call), Phase 2 (`TypeRegistry` keyed by stable name), Phase 3 (field introspection), and Phase 4 (JSON world↔scene round-trip with entity-reference remapping) are shipped.
 - Phase 5 partially: `.skip()` (skip-serialize), `.default()` (default-if-missing), per-type `version` + `migrations`, and `t.entity()` / `t.handle()` references with remap and injected handle resolution. Decorator-based annotations are deferred.
 - Reserved (ADR-0060): decorators as Phase 1 sugar, change-detection-by-name (Phase 6), the studio inspector (Phase 7), resources-as-reflectable, scene composition, retrofitting engine components into the registry, and an App-integrated hook-firing load.
+
+## Engine components + hook-firing spawn (shipped 2026-06-02 — ADR-0061)
+
+The two ADR-0060 reservations above marked **shipped**: *retrofitting engine components into the registry* and *an App-integrated hook-firing load*.
+
+- The App owns its registry as the `AppTypeRegistry` resource (Bevy analog); plugins register their own component schemas in `build()` via `App.registerComponent`. The core graph + one renderable family are registered: `Transform`, `Name`, `Parent`, `Visibility`, `Mesh3d`, and per-type `MeshMaterial3d<M>`. Derived/reciprocal components (`GlobalTransform`, the inherited/view visibility booleans, `Children`) are deliberately not serialized — recomputed/rebuilt on load.
+- `spawnScene(app, scene)` loads through `Commands` with reserved ids so hooks fire, Required Components resolve, and `Children` is rebuilt from each child's serialized `Parent` edge; the bare-`World` `deserializeScene` stays for tools/tests. Save side gains `serializeScene(app)`.
+- Convention codified in CLAUDE.md §13: every engine/internal component declares its serialization (schema or deliberate non-serialized classification).
+
+Still reserved: registering every remaining component (filled in as systems are touched); the Scene asset type + States-gated load/unload + prefab templates/patches (next slice); resources-as-reflectable; decorators; change-detection-by-name; the studio inspector; the persistent GUID→handle asset bridge.
 
 The open questions below are resolved by ADR-0060 for v1 — registration calls first (decorators deferred), explicit stable names, the `t` vocabulary, versioning/migration designed in — and are kept here as historical context.
 

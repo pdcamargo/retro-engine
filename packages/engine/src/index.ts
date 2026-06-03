@@ -6,6 +6,10 @@ import type {
   TextureView,
 } from '@retro-engine/renderer-core';
 import { World } from '@retro-engine/ecs';
+import type { ComponentType } from '@retro-engine/ecs';
+import type { RegisteredType, RegisterOptions, Schema } from '@retro-engine/reflect';
+
+import { AppTypeRegistry } from './scene/app-type-registry';
 
 import type { CameraView } from './camera/camera';
 import { ClearColor } from './camera/clear-color';
@@ -110,12 +114,15 @@ export {
   visibilityPropagateSystem,
 } from './visibility';
 export { Name } from './name';
+export { AppTypeRegistry } from './scene/app-type-registry';
 export type { SceneData, SerializedComponent, SerializedEntity } from './scene/scene-data';
 export { SCENE_FORMAT_VERSION } from './scene/scene-data';
 export type { SerializeOptions } from './scene/serialize';
-export { serializeWorld } from './scene/serialize';
+export { serializeScene, serializeWorld } from './scene/serialize';
 export type { DeserializeOptions } from './scene/deserialize';
 export { deserializeScene } from './scene/deserialize';
+export type { SpawnSceneOptions } from './scene/spawn';
+export { spawnScene } from './scene/spawn';
 export type { PreprocessOptions, SpecializeFn } from './shader';
 export {
   PipelineCache,
@@ -783,6 +790,10 @@ export class App {
     this.canvas = options.canvas;
     this.clearColor = options.clearColor ?? { r: 0, g: 0, b: 0, a: 1 };
     this.logger = options.logger ?? engineLogger;
+    // The reflection registry must exist before any plugin's build() runs, so
+    // plugins can register their component schemas (via registerComponent) as
+    // they wire themselves up. CorePlugin — added below — is the first to do so.
+    this.insertResource(new AppTypeRegistry());
     // ADR-0020: legacy `AppOptions.clearColor` is sugar for inserting a
     // `ClearColor` resource. CameraPlugin only inserts a default if no
     // ClearColor is already present, so user-supplied values win.
@@ -1206,6 +1217,45 @@ export class App {
     this.resourceChangeFrames.set(key, frame);
     if (!wasPresent) this.resourceAddedFrames.set(key, frame);
     return this;
+  }
+
+  /**
+   * Register a component's reflection schema in this App's registry, so the
+   * scene serializer can round-trip it. The owning plugin registers its own
+   * components from `build()`; a stable `name` (in `opts`) is mandatory — class
+   * names are unreliable under minification.
+   *
+   * Derived or computed components (recomputed every frame by a system) and
+   * reciprocal relationship targets (rebuilt from their edge) are deliberately
+   * left unregistered — only authored state persists in a scene.
+   *
+   * @example
+   * ```ts
+   * app.registerComponent(Transform, {
+   *   translation: t.vec3, rotation: t.quat, scale: t.vec3,
+   * }, { name: 'Transform' });
+   * ```
+   */
+  registerComponent<T extends object>(
+    ctor: ComponentType<T>,
+    schema: Schema<T>,
+    opts?: RegisterOptions<T>,
+  ): RegisteredType<T> {
+    return this.getResource(AppTypeRegistry)!.registry.registerComponent(ctor, schema, opts);
+  }
+
+  /**
+   * Register a value type's reflection schema in this App's registry. Unlike
+   * {@link App.registerComponent}, the type is not marked entity-attachable —
+   * use this for nested value types referenced by a component's schema (via
+   * `t.type(...)`).
+   */
+  registerType<T extends object>(
+    ctor: ComponentType<T>,
+    schema: Schema<T>,
+    opts?: RegisterOptions<T>,
+  ): RegisteredType<T> {
+    return this.getResource(AppTypeRegistry)!.registry.registerType(ctor, schema, opts);
   }
 
   /**

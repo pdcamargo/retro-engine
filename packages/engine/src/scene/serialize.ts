@@ -3,6 +3,8 @@ import type { Handle } from '@retro-engine/assets';
 import type { EncodeEnv, TypeRegistry } from '@retro-engine/reflect';
 import { encodeComponent } from '@retro-engine/reflect';
 
+import type { App } from '../index';
+import { AppTypeRegistry } from './app-type-registry';
 import { SCENE_FORMAT_VERSION, type SceneData, type SerializedComponent } from './scene-data';
 
 /** Options for {@link serializeWorld}. */
@@ -52,3 +54,12 @@ export const serializeWorld = (
 
   return { version: SCENE_FORMAT_VERSION, entities };
 };
+
+/**
+ * Serialize an App's world using the App's own reflection registry — the
+ * convenience over {@link serializeWorld} that saves the caller from reaching
+ * for the {@link AppTypeRegistry} resource. Pairs with {@link spawnScene} on the
+ * load side.
+ */
+export const serializeScene = (app: App, opts: SerializeOptions = {}): SceneData =>
+  serializeWorld(app.world, app.getResource(AppTypeRegistry)!.registry, opts);

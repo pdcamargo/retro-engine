@@ -1,4 +1,6 @@
 import type { AssetEvent, AssetIndex, Handle } from '@retro-engine/assets';
+import { asAssetIndex, makeHandle } from '@retro-engine/assets';
+import { t } from '@retro-engine/reflect';
 import { vertexFormatByteSize } from '@retro-engine/renderer-core';
 
 import type { App } from '../index';
@@ -104,6 +106,15 @@ export class MeshPlugin implements PluginObject {
     if (app.getResource(RenderMeshes) === undefined) {
       app.insertResource(new RenderMeshes());
     }
+
+    // The mesh handle is the only authored state; the visibility/transform
+    // companions Mesh3d requires are re-attached on load and recomputed. The
+    // explicit make supplies a placeholder handle decode immediately overwrites.
+    app.registerComponent(
+      Mesh3d,
+      { handle: t.handle<Mesh>('Mesh') },
+      { name: 'Mesh3d', make: () => new Mesh3d(makeHandle(asAssetIndex(0))) },
+    );
 
     // Head of VisibilityPlugin's documented order:
     // `CalculateBounds → UpdateFrusta → VisibilityPropagate → CheckVisibility`.

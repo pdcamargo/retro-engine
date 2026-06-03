@@ -14,6 +14,8 @@ import { ViewAoTargets } from '../ao/view-ao-targets';
 import { ViewBindGroupCache } from '../camera/extracted';
 import { SortedCameras } from '../camera/sorted-cameras';
 import type { Handle } from '@retro-engine/assets';
+import { asAssetIndex, makeHandle } from '@retro-engine/assets';
+import { t } from '@retro-engine/reflect';
 
 import { Images } from '../image/images';
 import { RenderImages } from '../image/image-plugin';
@@ -202,6 +204,20 @@ export class MaterialPlugin<M extends Material> implements PluginObject {
     if (app.getResource(ViewPhases3d) === undefined) {
       app.insertResource(new ViewPhases3d());
     }
+
+    // Register the synthesised per-type subclass — not the base — so the scene
+    // serializer recognises the exact constructor entities carry. The name is
+    // qualified by the material type so two material types never collide. The
+    // handle is the only authored state; make supplies a placeholder decode
+    // overwrites.
+    app.registerComponent(
+      this.MeshMaterial3d,
+      { handle: t.handle<M>('Materials') },
+      {
+        name: `MeshMaterial3d<${this.materialClass.name}>`,
+        make: () => new this.MeshMaterial3d(makeHandle(asAssetIndex(0))),
+      },
+    );
 
     // GPU resource creation is deferred to the first system tick — the
     // renderer's device is undefined until `app.run()` awaits `init()`, which

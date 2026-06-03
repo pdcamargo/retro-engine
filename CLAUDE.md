@@ -180,3 +180,14 @@ Performance regressions don't show up in `bun run test` — they show up later a
 - **Never justify a scope cut, a capped limit, a skipped capability, or a "simpler" path with genre or name reasoning** — "retro engines don't need X", "games like this rarely do Y", "it's a retro engine so Z is overkill". These are not arguments; they are assumptions dressed as ones.
 - Scope decisions rest on **real technical trade-offs, measured cost, WebGL2-reachability, or explicit project direction** (roadmap / backlog / ADR). If the honest reason to defer something is "it's bigger than this slice" or "it commits us to an SSBO/compute dependency", say that — don't reach for the genre.
 - A capability the roadmap plans (e.g. clustered shading) is planned because it's correct, not because the engine is "fancy enough" for it. Defer it for sequencing/cost reasons and track it (§8), never because the name implies it's unnecessary.
+
+## 13. Engine components declare their serialization
+
+Reflection is how the engine round-trips world state into scenes and back ([ADR-0060](docs/adr/ADR-0060-reflection-and-serialization.md), [ADR-0061](docs/adr/ADR-0061-reflection-on-engine-components.md)). For that to hold, every component is a deliberate decision — serialized or not — never an accident.
+
+- **Every component type defined in `packages/*/src/**` (engine or any internal package) has a reflection schema**, registered by its owning plugin (`app.registerComponent(Ctor, schema, { name })` in `build()`), **unless it is deliberately not serialized.**
+- **"Deliberately not serialized" is a real, named category**, not an oversight: derived/computed state recomputed by a system (`GlobalTransform`, the inherited/view visibility booleans), reciprocal relationship targets rebuilt from their edge (`Children`), transient caches, and runtime-only handles with no persistent identity. A derived component is simply not registered; a single non-persisted field on an otherwise-serialized component uses `.skip()`.
+- **The default is persistence.** If a component (or field) is authored state a consumer would expect to survive a saved scene, it has a schema. Adding a new authored component without one is a gap to fix, not a default to accept.
+- Registration is **per owning plugin** (the `AppTypeRegistry` resource accumulates them), never one central dump. A stable `name` is mandatory — never the class name (minification-unsafe).
+
+The registry is populated slice by slice as systems are touched; components not yet decided are a tracked gap, not a silent one — the end state is every component classified.
