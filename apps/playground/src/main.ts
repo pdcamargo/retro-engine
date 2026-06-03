@@ -11,6 +11,7 @@ import { LoggingPlugin } from './logging-plugin';
 import { materialShowcasePlugin } from './material-showcase-plugin';
 import { motionVectorsShowcasePlugin } from './motion-vectors-showcase-plugin';
 import { primitivesShowcasePlugin } from './primitives-showcase-plugin';
+import { serializeShowcasePlugin } from './serialize-showcase-plugin';
 import { shapesShowcasePlugin } from './shapes-showcase-plugin';
 import { sliceShowcasePlugin } from './slice-showcase-plugin';
 import { spriteShowcasePlugin } from './sprite-showcase-plugin';
@@ -56,6 +57,10 @@ if (!(canvas instanceof HTMLCanvasElement)) {
 //                     cube (materials.getMut), a breathing sphere
 //                     (meshes.getMut), and a row of cubes spawned from runtime
 //                     meshes.add / materials.add.
+//   `?mode=serialize` → reflection round-trip (ADR-0061): a real graph is
+//                     serialized to JSON (console), then spawnScene'd back into
+//                     the live world and rendered — the root spins so the child
+//                     orbits, proving the hierarchy was rebuilt from JSON.
 //   anything else   → Phase 7.5 primitives demo.
 // All demos stay discoverable from one bundle.
 const mode = new URLSearchParams(window.location.search).get('mode');
@@ -86,7 +91,9 @@ const showcase =
                         ? assetShowcasePlugin
                         : mode === 'gltf'
                           ? gltfShowcasePlugin
-                          : primitivesShowcasePlugin;
+                          : mode === 'serialize'
+                            ? serializeShowcasePlugin
+                            : primitivesShowcasePlugin;
 
 const renderer = createWebGPURenderer(canvas);
 const app = new App({
