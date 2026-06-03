@@ -1,7 +1,7 @@
 # Scenes and Prefabs
 
 - **Created:** 2026-05-21
-- **Status:** Future direction (designed in-house — not waiting on upstream)
+- **Status:** Active — phase 1 + the load/unload lifecycle shipped (ADR-0062). Later phases (templates/patches, composition, observers, hot-reload, studio) remain sketches.
 
 ## Goal
 
@@ -15,7 +15,7 @@ We're done when: a scene file (format TBD) can be loaded as an asset, its entiti
 
 Each phase is a sketch. Promote when prerequisites land and a real consumer asks for it.
 
-1. **Scene-as-asset format** — JSON, custom DSL (`.scene` files with a hand-rolled parser), or both. Driven by reflection: every serializable component declares its schema, the format references types by registered name. **Open** — see below.
+1. **Scene-as-asset format** — **Shipped (ADR-0062).** JSON `.scene` files load through the `AssetServer` into an `Assets<Scene>` store (`ScenePlugin`); driven by reflection — components declare their schema, the format references types by registered name. The whole lifecycle landed with it: `SceneRoot` + a reactor instantiate the graph once ready, and `App.addScene(state, handle)` gates spawn/teardown behind a `States` value. A custom DSL stays deferred (JSON-first lean below).
 2. **Entity templates with named parameters** — a template defines a prototype entity graph (`Player` template = `[Transform, Sprite('player.png'), Health(100)]`). Parameters substitute at spawn time (`spawn(Player, { position: ..., health: 200 })`).
 3. **Entity patches** — apply a template to an existing entity rather than spawning fresh. Lets you "add the Damaged state visuals" to an existing entity without rebuilding it. BSN's core idea, adapted.
 4. **Spawn integration with Required Components** — spawning a template uses the M2 Required Components mechanism. Scene/prefab definitions list the explicit components; required dependencies fill in.
@@ -28,11 +28,11 @@ Each phase is a sketch. Promote when prerequisites land and a real consumer asks
 
 - **Format choice.** JSON is the path of least resistance and works with any editor. A custom `.scene` DSL is more readable for hand-authored scenes (BSN's pitch). We can do both — JSON canonical, DSL as syntactic sugar that desugars to JSON — but adding a custom parser is real work. Default lean: JSON first, DSL later if hand-authoring becomes painful.
 - **Relationship to GUID asset handles.** Scenes reference other assets (textures, audio, child scenes) by handle. Decided as part of `asset-system.md`; scenes adopt whatever handle shape it picks.
-- **Teardown ordering on `OnExit(SceneId)`.** Despawn entities first, then remove state-scoped resources, then run user `OnExit` systems? Or user systems first so they can read the world one last time? Recommended default: user `OnExit` → despawn → resource removal. Lock at execution.
+- **Teardown ordering on `OnExit(SceneId)`.** **Locked (ADR-0062): user `OnExit` → scene despawn → state-scoped resource removal.** Realized through `OnExit` registration order — the scene despawn is registered by `App.addScene`, so `OnExit` systems registered before that call run before the despawn (and can read the live scene one last time); the state machine removes scoped resources afterwards. Explicit `OnExit` ordering (independent of registration order) is deferred.
 - **Resource definitions in scene files.** Should a scene declare its state-scoped resources inline (e.g., `resources: { GameMode: Survival }`), or only entities? Probably yes — but then the resource type must be reflection-registered. Decide once reflection lands.
 - **Observer serialization.** Serializing the *binding* (which observer is attached to which event on which entity) is easy. Serializing the *handler* is hard — the handler is code. Default: handlers are registered by name (`onClick: 'showDialog'`), the registry maps name → function, the scene file references names only. Like Unity's UnityEvents.
 - **Prefab override semantics.** When a prefab is spawned with parameter overrides, do the overrides persist on the entity, or are they "one-shot at spawn"? Bevy BSN's answer is one-shot. We probably do the same; if not, we need to track which fields are template-default vs instance-override.
-- **What's the relationship between scenes and `States`?** Recommended default: a scene is identified by a `States` value (`enum SceneId { MainMenu, Level1, Level2 }`) and `States` transitions drive scene loads. Whether scenes are *exactly* states, or scenes are an additional abstraction on top, is locked at execution.
+- **What's the relationship between scenes and `States`?** **Locked (ADR-0062): a scene is an abstraction *on top of* States, not identical to them.** `App.addScene(stateValue, handle)` binds a scene to a `States` value; the transition drives spawn (`OnEnter`) and teardown (`OnExit`). A scene is referenced by a state value rather than *being* one, so a state can carry a scene and other behavior, and an entity-level `SceneRoot` can spawn a scene with no state at all.
 
 ## Relationship to glTF instantiation
 

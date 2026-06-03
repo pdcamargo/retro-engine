@@ -11,6 +11,7 @@ import { LoggingPlugin } from './logging-plugin';
 import { materialShowcasePlugin } from './material-showcase-plugin';
 import { motionVectorsShowcasePlugin } from './motion-vectors-showcase-plugin';
 import { primitivesShowcasePlugin } from './primitives-showcase-plugin';
+import { sceneShowcasePlugin } from './scene-showcase-plugin';
 import { serializeShowcasePlugin } from './serialize-showcase-plugin';
 import { shapesShowcasePlugin } from './shapes-showcase-plugin';
 import { sliceShowcasePlugin } from './slice-showcase-plugin';
@@ -61,6 +62,9 @@ if (!(canvas instanceof HTMLCanvasElement)) {
 //                     serialized to JSON (console), then spawnScene'd back into
 //                     the live world and rendered — the root spins so the child
 //                     orbits, proving the hierarchy was rebuilt from JSON.
+//   `?mode=scene`   → scene lifecycle (ADR-0062): a Scene asset gated behind a
+//                     States value spawns on enter and tears down on exit. Press
+//                     Space to toggle Showing/Hidden; the camera persists.
 //   anything else   → Phase 7.5 primitives demo.
 // All demos stay discoverable from one bundle.
 const mode = new URLSearchParams(window.location.search).get('mode');
@@ -93,7 +97,9 @@ const showcase =
                           ? gltfShowcasePlugin
                           : mode === 'serialize'
                             ? serializeShowcasePlugin
-                            : primitivesShowcasePlugin;
+                            : mode === 'scene'
+                              ? sceneShowcasePlugin
+                              : primitivesShowcasePlugin;
 
 const renderer = createWebGPURenderer(canvas);
 const app = new App({

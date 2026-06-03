@@ -7,9 +7,13 @@ import type {
 } from '@retro-engine/renderer-core';
 import { World } from '@retro-engine/ecs';
 import type { ComponentType } from '@retro-engine/ecs';
+import type { Handle } from '@retro-engine/assets';
 import type { RegisteredType, RegisterOptions, Schema } from '@retro-engine/reflect';
 
 import { AppTypeRegistry } from './scene/app-type-registry';
+import type { Scene } from './scene/scene-asset';
+import { registerSceneState } from './scene/scene-state';
+import type { AddSceneOptions } from './scene/scene-state';
 
 import type { CameraView } from './camera/camera';
 import { ClearColor } from './camera/clear-color';
@@ -123,6 +127,13 @@ export type { DeserializeOptions } from './scene/deserialize';
 export { deserializeScene } from './scene/deserialize';
 export type { SpawnSceneOptions } from './scene/spawn';
 export { spawnScene } from './scene/spawn';
+export { Scene, Scenes } from './scene/scene-asset';
+export { createSceneImporter, createSceneSerializer } from './scene/scene-importer';
+export { SceneInstance, SceneRoot } from './scene/scene-root';
+export { addSceneInstantiation } from './scene/scene-reactor';
+export { ScenePlugin } from './scene/scene-plugin';
+export { SceneStateRoots } from './scene/scene-state';
+export type { AddSceneOptions } from './scene/scene-state';
 export type { PreprocessOptions, SpecializeFn } from './shader';
 export {
   PipelineCache,
@@ -1144,6 +1155,28 @@ export class App {
    */
   insertStateScopedResource<S extends object>(value: S, resource: object): this {
     registerStateScopedResource(this.stateRegistry, value, resource);
+    return this;
+  }
+
+  /**
+   * Bind a scene asset to a state value: spawn the scene on `OnEnter(state)` and
+   * tear it down on `OnExit(state)`. A `SceneRoot` is spawned on enter; the scene
+   * instantiates under it once the asset is ready, and despawning the root on exit
+   * cascades through the subtree with no leaked entities.
+   *
+   * Add `ScenePlugin` (for the `Scenes` store + reactor) and call `initState` for
+   * the state type before this. Teardown runs in `OnExit` registration order, so
+   * any `OnExit` systems registered **before** this call run before the scene is
+   * despawned; state-scoped resources are removed afterwards.
+   *
+   * @example
+   * ```ts
+   * app.initState(SceneId, SceneId.MainMenu);
+   * app.addScene(SceneId.Level1, assetServer.load<Scene>('level1.scene'));
+   * ```
+   */
+  addScene<S extends object>(state: S, handle: Handle<Scene>, opts?: AddSceneOptions): this {
+    registerSceneState(this, state, handle, opts);
     return this;
   }
 
