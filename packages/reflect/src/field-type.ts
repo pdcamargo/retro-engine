@@ -25,7 +25,8 @@ export type FieldKind =
   | 'color'
   | 'entity'
   | 'handle'
-  | 'type';
+  | 'type'
+  | 'variant';
 
 /**
  * Presentational hints attached to a field with {@link FieldType.meta}. Ignored
@@ -61,6 +62,9 @@ interface FieldState {
   readonly enumValues: readonly (string | number)[] | undefined;
   readonly assetType: string | undefined;
   readonly nestedCtor: ComponentType<object> | undefined;
+  readonly variantTag: string | undefined;
+  readonly variants: Readonly<Record<string, Readonly<Record<string, FieldType<unknown>>>>> | undefined;
+  readonly variantStringArms: boolean;
 }
 
 /**
@@ -99,6 +103,12 @@ export class FieldType<T> {
   readonly assetType: string | undefined;
   /** Constructor of the nested registered type for `type`. */
   readonly nestedCtor: ComponentType<object> | undefined;
+  /** Discriminant property name for `variant`. */
+  readonly variantTag: string | undefined;
+  /** Arm name → field schema for `variant`; an empty schema is a payload-less arm. */
+  readonly variants: Readonly<Record<string, Readonly<Record<string, FieldType<unknown>>>>> | undefined;
+  /** When true, payload-less arms are bare strings and the lone arm with payload is untagged. */
+  readonly variantStringArms: boolean;
 
   constructor(state: FieldState) {
     this.kind = state.kind;
@@ -113,6 +123,9 @@ export class FieldType<T> {
     this.enumValues = state.enumValues;
     this.assetType = state.assetType;
     this.nestedCtor = state.nestedCtor;
+    this.variantTag = state.variantTag;
+    this.variants = state.variants;
+    this.variantStringArms = state.variantStringArms;
   }
 
   private clone<U>(patch: Partial<FieldState>): FieldType<U> {
@@ -163,6 +176,9 @@ const base = (kind: FieldKind, extra?: Partial<FieldState>): FieldState => ({
   enumValues: undefined,
   assetType: undefined,
   nestedCtor: undefined,
+  variantTag: undefined,
+  variants: undefined,
+  variantStringArms: false,
   ...extra,
 });
 
@@ -173,6 +189,18 @@ type InferTuple<E extends readonly FieldType<unknown>[]> = {
 type InferStruct<S extends Record<string, FieldType<unknown>>> = {
   [K in keyof S]: S[K] extends FieldType<infer U> ? U : never;
 };
+
+type VariantArms = Record<string, Record<string, FieldType<unknown>>>;
+
+/** Tagged form: each arm carries the discriminant property. */
+type TaggedUnion<Tag extends string, A extends VariantArms> = {
+  [K in keyof A]: { readonly [P in Tag]: K } & InferStruct<A[K]>;
+}[keyof A];
+
+/** String-or-struct form: payload-less arms are bare string literals; an arm with payload is its struct. */
+type StringOrStructUnion<A extends VariantArms> = {
+  [K in keyof A]: keyof A[K] extends never ? K & string : InferStruct<A[K]>;
+}[keyof A];
 
 /**
  * The field-type vocabulary. Each entry produces a {@link FieldType} whose
@@ -248,5 +276,33 @@ export const t = {
    */
   type<C extends ComponentType<object>>(ctor: C): FieldType<InstanceType<C>> {
     return new FieldType<InstanceType<C>>(base('type', { nestedCtor: ctor }));
+  },
+
+  /**
+   * A discriminated union. Each arm names a field schema (an empty schema is a
+   * payload-less arm). By default arms are tagged objects carrying `tag`, e.g.
+   * `t.variant('kind', { none: {}, custom: { color: t.color } })` describes
+   * `{ kind: 'none' } | { kind: 'custom'; color: Color }`.
+   *
+   * Pass `{ stringArms: true }` for the *named-preset-or-custom* shape: each
+   * payload-less arm is a bare string literal and the single arm with a payload
+   * is an untagged object — e.g. `'center' | 'topLeft' | { x: number; y: number }`.
+   *
+   * An arm absent from the schema (a live value whose discriminant names none of
+   * the arms) is omitted on encode, restoring the field's constructed default on
+   * load — the home for union arms that carry runtime-only references.
+   */
+  variant<
+    Tag extends string,
+    A extends VariantArms,
+    O extends { stringArms?: boolean } = Record<never, never>,
+  >(
+    tag: Tag,
+    arms: A,
+    opts?: O,
+  ): FieldType<O extends { stringArms: true } ? StringOrStructUnion<A> : TaggedUnion<Tag, A>> {
+    return new FieldType(
+      base('variant', { variantTag: tag, variants: arms, variantStringArms: opts?.stringArms ?? false }),
+    ) as FieldType<O extends { stringArms: true } ? StringOrStructUnion<A> : TaggedUnion<Tag, A>>;
   },
 } as const;

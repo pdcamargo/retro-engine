@@ -158,9 +158,40 @@ export const encodeValue = (ft: FieldType<unknown>, value: unknown, env: EncodeE
       }
       return encodeComponent(reg, value as object, env);
     }
+    case 'variant': {
+      const { variantTag: tag, variants } = ft;
+      if (tag === undefined || variants === undefined) {
+        throw new Error("reflect: 'variant' field is missing its tag or arms");
+      }
+      if (typeof value === 'string') return value;
+      const obj = value as Record<string, unknown>;
+      const disc = obj[tag];
+      if (typeof disc === 'string') {
+        const arm = variants[disc];
+        // A discriminant naming no schema arm carries runtime-only data; omit it so
+        // the field falls back to its constructed default on load.
+        if (arm === undefined) return undefined;
+        return { [tag]: disc, ...encodeFields(arm, obj, env) };
+      }
+      if (ft.variantStringArms) {
+        const untagged = untaggedArm(variants);
+        if (untagged !== undefined) return encodeFields(untagged, obj, env);
+      }
+      throw new Error(`reflect: 'variant' value is missing its '${tag}' discriminant`);
+    }
     default:
       return assertNever(ft.kind);
   }
+};
+
+/** The lone arm carrying a payload — the untagged object form used by string-or-struct variants. */
+const untaggedArm = (
+  variants: Readonly<Record<string, Readonly<Record<string, FieldType<unknown>>>>>,
+): Readonly<Record<string, FieldType<unknown>>> | undefined => {
+  for (const schema of Object.values(variants)) {
+    if (Object.keys(schema).length > 0) return schema;
+  }
+  return undefined;
 };
 
 /** Decode a single JSON value against its field type back into a runtime value. */
@@ -221,6 +252,31 @@ export const decodeValue = (ft: FieldType<unknown>, json: unknown, env: DecodeEn
         throw new Error(`reflect: nested type ${ctor.name || '<anonymous>'} is not registered`);
       }
       return decodeComponent(reg, json as { version: number; data: Record<string, unknown> }, env);
+    }
+    case 'variant': {
+      const { variantTag: tag, variants } = ft;
+      if (tag === undefined || variants === undefined) {
+        throw new Error("reflect: 'variant' field is missing its tag or arms");
+      }
+      if (typeof json === 'string') return json;
+      const data = json as Record<string, unknown>;
+      const disc = data[tag];
+      if (typeof disc === 'string') {
+        const arm = variants[disc];
+        if (arm === undefined) return undefined;
+        const out: Record<string, unknown> = { [tag]: disc };
+        applyFields(arm, out, data, env);
+        return out;
+      }
+      if (ft.variantStringArms) {
+        const untagged = untaggedArm(variants);
+        if (untagged !== undefined) {
+          const out: Record<string, unknown> = {};
+          applyFields(untagged, out, data, env);
+          return out;
+        }
+      }
+      throw new Error(`reflect: 'variant' data is missing its '${tag}' discriminant`);
     }
     default:
       return assertNever(ft.kind);

@@ -139,6 +139,55 @@ describe('encodeValue / decodeValue', () => {
   });
 });
 
+describe('variant fields', () => {
+  const reg = new TypeRegistry();
+  const e = encEnv(reg);
+  const d = decEnv(reg);
+
+  it('round-trips tagged arms with and without payload', () => {
+    const ft = t.variant('kind', { default: {}, none: {}, custom: { color: t.color } });
+    for (const value of [
+      { kind: 'default' },
+      { kind: 'none' },
+      { kind: 'custom', color: { r: 0.1, g: 0.2, b: 0.3, a: 1 } },
+    ] as const) {
+      const json = encodeValue(ft, value, e);
+      expect(json).toEqual(value);
+      expect(decodeValue(ft, json, d)).toEqual(value);
+    }
+  });
+
+  it('round-trips a tagged arm carrying a typed numeric payload', () => {
+    const ft = t.variant('kind', {
+      windowSize: {},
+      fixed: { width: t.number, height: t.number },
+    });
+    const fixed = { kind: 'fixed', width: 320, height: 180 };
+    expect(decodeValue(ft, encodeValue(ft, fixed, e), d)).toEqual(fixed);
+  });
+
+  it('omits an arm whose discriminant names no schema arm, falling back to a default on load', () => {
+    const ft = t.variant('kind', { primary: {} });
+    // A runtime-only arm (a live GPU reference) is dropped rather than serialized.
+    expect(encodeValue(ft, { kind: 'texture', texture: {} }, e)).toBeUndefined();
+    expect(decodeValue(ft, undefined, d)).toBeUndefined();
+  });
+
+  it('round-trips the string-or-struct shape (bare string arms + untagged custom)', () => {
+    const ft = t.variant(
+      'kind',
+      { center: {}, topLeft: {}, custom: { x: t.number, y: t.number } },
+      { stringArms: true },
+    );
+    expect(encodeValue(ft, 'center', e)).toBe('center');
+    expect(decodeValue(ft, 'center', d)).toBe('center');
+
+    const custom = { x: 0.25, y: 1.2 };
+    expect(encodeValue(ft, custom, e)).toEqual(custom);
+    expect(decodeValue(ft, custom, d)).toEqual(custom);
+  });
+});
+
 describe('encodeComponent / decodeComponent', () => {
   it('round-trips a component and reconstructs the class', () => {
     class Health {
