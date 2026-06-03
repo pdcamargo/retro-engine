@@ -132,12 +132,12 @@ export interface MaterialPluginOptions {
  *   `StandardMaterial` at runtime despite TypeScript's erased generics.
  * - Inserts the {@link Materials} resource (main world) and
  *   {@link RenderMaterials} resource (render world).
- * - Builds the material's `BindGroupLayout` from `M.bindGroup` (ADR-0027).
+ * - Builds the material's `BindGroupLayout` from `M.bindGroup`.
  * - Resolves vertex / fragment shaders against `ShaderRegistry` via the
  *   material's `vertexShader()` / `fragmentShader()` `ShaderRef`s.
  * - Caches a {@link SpecializedRenderPipelines}`<MaterialPipelineKey>` that
  *   varies pipeline state by `(alphaMode, hdr, msaaSamples, vertexLayout)`.
- * - Registers the per-stage systems documented in ADR-0028 §5: prepare
+ * - Registers the per-stage systems: prepare
  *   materials (consume asset events → upload uniforms / build bind groups);
  *   queue materials (iterate visible `Mesh3d` + `MeshMaterial3d<M>` entities,
  *   push phase items into {@link ViewPhases3d}).
