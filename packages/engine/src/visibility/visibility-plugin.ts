@@ -62,6 +62,10 @@ export class VisibilityPlugin implements PluginObject {
       { name: 'Visibility' },
     );
 
+    // Authored opt-out marker — no fields, but it persists so a saved scene keeps
+    // the entity out of frustum culling on load.
+    app.registerComponent(NoFrustumCulling, {}, { name: 'NoFrustumCulling' });
+
     app.addSystem('postUpdate', [Query([Camera, Frustum])], (cameras) => {
       updateFrustaSystem(cameras);
     });

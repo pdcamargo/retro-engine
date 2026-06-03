@@ -13,6 +13,8 @@ import { ShaderRegistry } from '../shader/shader-registry';
 import { Extract, Query, ResMut } from '../system-param';
 import { TonemappingPass3dLabel } from '../tonemapping/tonemapping-node';
 
+import { t } from '@retro-engine/reflect';
+
 import { MotionBlur } from './motion-blur';
 import { makeMotionBlurNode, MotionBlurPass3dLabel } from './motion-blur-node';
 import { MotionBlurPipeline } from './motion-blur-pipeline';
@@ -55,6 +57,12 @@ export class MotionBlurPlugin implements PluginObject {
       );
     }
     (registry as ShaderRegistry).register('retro_engine::motion_blur', MOTION_BLUR_WGSL);
+
+    app.registerComponent(
+      MotionBlur,
+      { samples: t.number, intensity: t.number, shutterAngle: t.number, maxVelocity: t.number },
+      { name: 'MotionBlur' },
+    );
 
     if (app.getResource(MotionBlurPipeline) === undefined) {
       app.insertResource(new MotionBlurPipeline());

@@ -1,7 +1,10 @@
 import type { Entity, Query as QueryHandle } from '@retro-engine/ecs';
+import { asAssetIndex, makeHandle } from '@retro-engine/assets';
+import { t } from '@retro-engine/reflect';
 import type { RenderPassEncoder } from '@retro-engine/renderer-core';
 
 import { SortedCameras } from '../camera/sorted-cameras';
+import type { Image } from '../image/image';
 import { Images } from '../image/images';
 import { RenderImages } from '../image/image-plugin';
 import type { App, RenderContext } from '../index';
@@ -38,7 +41,9 @@ import { SpriteInstanceBuffer } from './sprite-instance-buffer';
 import { SpritePipeline } from './sprite-pipeline';
 import { SPRITE_WGSL } from './sprite.wgsl';
 import { TextureAtlas } from './texture-atlas';
+import type { TextureAtlasLayout } from './texture-atlas-layout';
 import { TextureAtlasLayouts } from './texture-atlas-layouts';
+import { BorderRect, TextureSlicer } from './texture-slicer';
 
 /**
  * Engine plugin owning the built-in batched sprite pipeline.
@@ -118,6 +123,77 @@ export class SpritePlugin implements PluginObject {
     if (app.getResource(TextureAtlasLayouts) === undefined) {
       app.insertResource(new TextureAtlasLayouts());
     }
+
+    // Reflection schemas. Texture handles, tint, footprint, anchor, and the
+    // 9-slice descriptor are authored; AtlasAnimation.elapsedSec is recomputed by
+    // the animator each frame. The 9-slice TextureSlicer + BorderRect register as
+    // nested value types so Sprite.imageMode can embed them.
+    app.registerType(
+      BorderRect,
+      { left: t.number, right: t.number, top: t.number, bottom: t.number },
+      { name: 'BorderRect', make: () => new BorderRect(0, 0, 0, 0) },
+    );
+    app.registerType(
+      TextureSlicer,
+      {
+        border: t.type(BorderRect),
+        centerScaleMode: t.enum('stretch'),
+        sidesScaleMode: t.enum('stretch'),
+        maxCornerScale: t.number.optional(),
+      },
+      {
+        name: 'TextureSlicer',
+        make: () => new TextureSlicer({ border: new BorderRect(0, 0, 0, 0) }),
+      },
+    );
+    app.registerComponent(
+      Sprite,
+      {
+        image: t.handle<Image>('Image').optional(),
+        normalMap: t.handle<Image>('Image').optional(),
+        color: t.vec4,
+        customSize: t.vec2.optional(),
+        rect: t.struct({ min: t.vec2, max: t.vec2 }).optional(),
+        anchor: t.variant(
+          'kind',
+          {
+            center: {},
+            topLeft: {},
+            topRight: {},
+            bottomLeft: {},
+            bottomRight: {},
+            custom: { x: t.number, y: t.number },
+          },
+          { stringArms: true },
+        ),
+        flipX: t.boolean,
+        flipY: t.boolean,
+        imageMode: t
+          .variant('kind', { auto: {}, sliced: { slicer: t.type(TextureSlicer) } })
+          .optional(),
+      },
+      { name: 'Sprite', make: () => new Sprite() },
+    );
+    app.registerComponent(
+      TextureAtlas,
+      { layout: t.handle<TextureAtlasLayout>('TextureAtlasLayout'), index: t.number },
+      { name: 'TextureAtlas', make: () => new TextureAtlas(makeHandle(asAssetIndex(0))) },
+    );
+    app.registerComponent(
+      AtlasAnimation,
+      {
+        firstIndex: t.number,
+        lastIndex: t.number,
+        fps: t.number,
+        mode: t.enum('loop', 'once', 'pingPong'),
+        paused: t.boolean,
+        elapsedSec: t.number.skip(),
+      },
+      {
+        name: 'AtlasAnimation',
+        make: () => new AtlasAnimation({ firstIndex: 0, lastIndex: 0, fps: 0 }),
+      },
+    );
 
     // `'postUpdate'` chain for atlas-driven sprites:
     //   atlas-animation advances TextureAtlas.index over time

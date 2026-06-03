@@ -1,4 +1,5 @@
 import type { ComponentType, Entity, Query as QueryHandle } from '@retro-engine/ecs';
+import { t } from '@retro-engine/reflect';
 
 import { SortedCameras } from '../camera/sorted-cameras';
 import type { App } from '../index';
@@ -137,6 +138,42 @@ export class Light2dPlugin implements PluginObject {
     if (app.getResource(Light2dSettings) === undefined) {
       app.insertResource(new Light2dSettings());
     }
+
+    // AmbientLight2d is a per-entity component (regional or global pool), unlike the
+    // 3D AmbientLight resource. Light2dSettings is a resource → deferred to resource reflection.
+    app.registerComponent(
+      PointLight2d,
+      { color: t.vec3, intensity: t.number, range: t.number, radius: t.number },
+      { name: 'PointLight2d' },
+    );
+    app.registerComponent(
+      SpotLight2d,
+      {
+        color: t.vec3,
+        intensity: t.number,
+        range: t.number,
+        radius: t.number,
+        direction: t.vec2,
+        innerAngle: t.number,
+        outerAngle: t.number,
+      },
+      { name: 'SpotLight2d' },
+    );
+    app.registerComponent(
+      DirectionalLight2d,
+      { color: t.vec3, intensity: t.number, direction: t.vec2 },
+      { name: 'DirectionalLight2d' },
+    );
+    app.registerComponent(
+      AmbientLight2d,
+      { color: t.vec3, intensity: t.number, halfExtents: t.vec2.optional() },
+      { name: 'AmbientLight2d' },
+    );
+    app.registerComponent(
+      LightOccluder2d,
+      { segments: t.array(t.tuple(t.vec2, t.vec2)) },
+      { name: 'LightOccluder2d', make: () => new LightOccluder2d() },
+    );
 
     const graph = app.getResource(RenderGraph);
     if (graph === undefined) {

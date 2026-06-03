@@ -16,6 +16,8 @@ import { Extract, Query, ResMut } from '../system-param';
 import { TonemappingPass3dLabel } from '../tonemapping/tonemapping-node';
 
 import { haltonJitter } from './halton';
+import { t } from '@retro-engine/reflect';
+
 import { Taa } from './taa';
 import { makeTaaNode, TaaPass3dLabel } from './taa-node';
 import { TaaPipeline } from './taa-pipeline';
@@ -62,6 +64,8 @@ export class TaaPlugin implements PluginObject {
       );
     }
     (registry as ShaderRegistry).register('retro_engine::taa', TAA_WGSL);
+
+    app.registerComponent(Taa, { blend: t.number }, { name: 'Taa' });
 
     if (app.getResource(TaaPipeline) === undefined) {
       app.insertResource(new TaaPipeline());

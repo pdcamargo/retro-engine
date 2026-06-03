@@ -1,18 +1,25 @@
-# Engine component registration coverage
+# Resource reflection coverage
 
-- **Created:** 2026-06-03
+- **Created:** 2026-06-03 (rescoped from the component sweep, now shipped)
 
 ## Context
 
-CLAUDE.md §13 requires every component defined in `packages/*/src/**` to declare its serialization — a registered schema, or a deliberate non-serialized classification. ADR-0061 registered the core graph + one renderable family: `Transform`, `Name`, `Parent`, `Visibility`, `Mesh3d`, `MeshMaterial3d<M>`, with `GlobalTransform` / the inherited+view visibility booleans / `Children` deliberately omitted as derived/reciprocal.
+The **component** half of this gap is closed. ADR-0064 registered every authored component across the camera, 3D-light, 2D-light, sprite, 2D-mesh/material, and post-process families, and classified every derived/transient one as a named not-serialized category — so every component under `packages/*/src/**` now declares its serialization (CLAUDE.md §13). Discriminated-union fields ride on the reflect `t.variant` kind (ADR-0063).
 
-Everything else is still unregistered: cameras (`Camera`, the projection components, the `Camera3d` / `Camera2d` bundle parts), 3D lights (`DirectionalLight3d`, `PointLight3d`, `SpotLight3d`, `AmbientLight`, shadow settings), the 2D stack (`Sprite`, `Mesh2d`, `Material2d`, atlas / animation), prepass markers (`DepthPrepass`, `NormalPrepass`, `MotionVectorPrepass`), `NoFrustumCulling`, render-layers, and more. A scene that round-trips a real playable view needs at least the camera + lights registered.
+What remains is **resources**. Reflection ([ADR-0060](../adr/ADR-0060-reflection-and-serialization.md)) deferred resources-as-reflectable: there is no mechanism to round-trip resource-shaped state, so the following are blocked, not classified:
+
+- `AmbientLight` (3D), `Shadow3dSettings`
+- `ClearColor`
+- `Light2dSettings`, `Light2dShadowState`, `Light2dNormalState`
+- any other authored resource a saved scene would be expected to restore (e.g. a global gravity / time-scale resource when added)
+
+Render-world and per-frame resources (`SortedCameras`, `TextureAtlasLayouts`, `Materials*` / `RenderMaterials*`, the `View*` caches) are derived/transient and out of scope regardless of the mechanism.
 
 ## Why deferred
 
-ADR-0061 scoped to the core graph + one renderable family to keep that slice bounded. The rest is fill-in, best done per §13 as each owning system is touched, or as a focused sweep once a consumer (full-scene save/load) needs a given family. No new mechanism is required — each is an `app.registerComponent(...)` in the owning plugin or a documented non-serialized classification.
+A resource carries no entity identity and is not part of the entity-graph the scene codec walks, so it needs its own reflection surface — a registry of authored resource types plus a serialize/deserialize path that writes them into the scene envelope (or a sibling document) and restores them on load. That is a distinct mechanism from component reflection, best designed once a consumer (full project save, or an editor "world settings" panel) needs it. Pin the design to [ADR-0060](../adr/ADR-0060-reflection-and-serialization.md)'s deferred note.
 
 ## Acceptance
 
-- Every component class under `packages/*/src/**` is either registered (schema in its owning plugin) or explicitly classified non-serialized (derived / reciprocal / transient), tracked in a deliberately-omitted list.
-- A scene containing a camera, one or more lights, and a sprite round-trips `serialize → JSON → spawnScene` with those components restored.
+- A mechanism exists to register an authored resource type with a reflection schema and round-trip it through scene save/load.
+- Each authored resource above is either registered or explicitly classified non-serialized (derived/transient), so §13 holds for resources the same way it now holds for components.

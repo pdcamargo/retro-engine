@@ -1,6 +1,7 @@
 import type { ComponentType, Query as QueryHandle } from '@retro-engine/ecs';
 import type { Mat4 } from '@retro-engine/math';
 import { mat4, vec3 } from '@retro-engine/math';
+import { t } from '@retro-engine/reflect';
 
 import { Camera } from '../camera/camera';
 import { PerspectiveProjection } from '../camera/projection';
@@ -152,6 +153,44 @@ export class Light3dPlugin implements PluginObject {
     if (app.getResource(Shadow3dSettings) === undefined) {
       app.insertResource(new Shadow3dSettings());
     }
+
+    // AmbientLight and Shadow3dSettings are resources, not components — they wait
+    // on resource reflection. The per-entity light state registers here.
+    app.registerComponent(
+      DirectionalLight3d,
+      { color: t.vec3, intensity: t.number },
+      { name: 'DirectionalLight3d' },
+    );
+    app.registerComponent(
+      PointLight3d,
+      { color: t.vec3, intensity: t.number, range: t.number, radius: t.number },
+      { name: 'PointLight3d' },
+    );
+    app.registerComponent(
+      SpotLight3d,
+      {
+        color: t.vec3,
+        intensity: t.number,
+        range: t.number,
+        radius: t.number,
+        innerAngle: t.number,
+        outerAngle: t.number,
+      },
+      { name: 'SpotLight3d' },
+    );
+    app.registerComponent(
+      CascadeShadowConfig,
+      {
+        numCascades: t.number,
+        minimumDistance: t.number,
+        maximumDistance: t.number,
+        firstCascadeFarBound: t.number.optional(),
+        overlapProportion: t.number,
+        lambda: t.number,
+      },
+      { name: 'CascadeShadowConfig' },
+    );
+    app.registerComponent(NotShadowCaster, {}, { name: 'NotShadowCaster' });
 
     const graph = app.getResource(RenderGraph);
     if (graph === undefined) {

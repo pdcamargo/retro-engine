@@ -1,6 +1,8 @@
 import type { Handle } from '@retro-engine/assets';
+import { asAssetIndex, makeHandle } from '@retro-engine/assets';
 import type { ComponentType, Entity, Query as QueryHandle } from '@retro-engine/ecs';
 import type { Mat4 } from '@retro-engine/math';
+import { t } from '@retro-engine/reflect';
 import type {
   BindGroupLayout,
   PipelineLayout,
@@ -154,6 +156,19 @@ export class Material2dPlugin<M extends Material2d> implements PluginObject {
     if (app.getResource(ViewPhases2d) === undefined) {
       app.insertResource(new ViewPhases2d());
     }
+
+    // The material handle is the only authored state. Register the synthesized
+    // per-type subclass under a generic-qualified name so a scene's
+    // MeshMaterial2d<Foo> is unambiguous; the make supplies a placeholder handle
+    // decode overwrites. Mirrors MaterialPlugin's 3D registration.
+    app.registerComponent(
+      this.MeshMaterial2d,
+      { handle: t.handle<M>('Materials2d') },
+      {
+        name: `MeshMaterial2d<${this.materialClass.name}>`,
+        make: () => new this.MeshMaterial2d(makeHandle(asAssetIndex(0))),
+      },
+    );
 
     const state = new Material2dPluginState(this);
 

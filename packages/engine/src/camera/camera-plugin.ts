@@ -1,5 +1,6 @@
 import type { Entity } from '@retro-engine/ecs';
 import { mat4, vec3 } from '@retro-engine/math';
+import { t, type FieldType } from '@retro-engine/reflect';
 import type { ResolvedRenderTarget } from '@retro-engine/renderer-core';
 import { BufferUsage, ShaderStage, TextureUsage } from '@retro-engine/renderer-core';
 
@@ -39,6 +40,7 @@ import {
   PerspectiveProjection,
   updateOrthographicArea,
 } from './projection';
+import type { RenderLabel } from '../render-graph/render-label';
 import { RenderLayers } from './render-layers';
 import { SortedCameras } from './sorted-cameras';
 
@@ -320,6 +322,73 @@ export class CameraPlugin implements PluginObject {
     app.insertResource(new ViewPreviousFrame());
     app.insertResource(new ViewJitter());
     app.insertResource(new CurrentHdrView());
+
+    // Reflection schemas. `target` and `depthTarget` register only their data
+    // arms — the surface/texture/view/manual arms carry live GPU references with
+    // no persistent identity, so a camera holding one round-trips back to its
+    // default arm. `computed` is rebuilt each frame from the projection + GlobalTransform.
+    app.registerComponent(
+      Camera,
+      {
+        isActive: t.boolean,
+        order: t.number,
+        hdr: t.boolean,
+        msaaWriteback: t.boolean,
+        viewport: t
+          .struct({
+            physicalPosition: t.struct({ x: t.number, y: t.number }),
+            physicalSize: t.struct({ width: t.number, height: t.number }),
+            depth: t.struct({ min: t.number, max: t.number }),
+          })
+          .optional(),
+        clearColor: t.variant('kind', { default: {}, none: {}, custom: { color: t.color } }),
+        target: t.variant('kind', { primary: {} }),
+        depthTarget: t.variant('kind', { auto: {}, none: {} }),
+        // RenderLabel is a branded string; the brand is phantom, so a plain string round-trips it.
+        subGraph: t.string as FieldType<RenderLabel>,
+        computed: t
+          .struct({
+            targetSize: t.struct({ width: t.number, height: t.number }),
+            viewMatrix: t.mat4,
+            projectionMatrix: t.mat4,
+            viewProjectionMatrix: t.mat4,
+            worldPosition: t.vec3,
+          })
+          .skip(),
+      },
+      { name: 'Camera' },
+    );
+    app.registerComponent(
+      PerspectiveProjection,
+      { fov: t.number, near: t.number, far: t.number, aspectRatio: t.number.skip() },
+      { name: 'PerspectiveProjection' },
+    );
+    app.registerComponent(
+      OrthographicProjection,
+      {
+        near: t.number,
+        far: t.number,
+        viewportOrigin: t.struct({ x: t.number, y: t.number }),
+        scalingMode: t.variant('kind', {
+          windowSize: {},
+          fixed: { width: t.number, height: t.number },
+          autoMin: { minWidth: t.number, minHeight: t.number },
+          autoMax: { maxWidth: t.number, maxHeight: t.number },
+          fixedVertical: { viewportHeight: t.number },
+          fixedHorizontal: { viewportWidth: t.number },
+        }),
+        scale: t.number,
+        area: t
+          .struct({ minX: t.number, minY: t.number, maxX: t.number, maxY: t.number })
+          .skip(),
+      },
+      { name: 'OrthographicProjection' },
+    );
+    app.registerComponent(
+      RenderLayers,
+      { mask: t.number },
+      { name: 'RenderLayers', make: () => new RenderLayers() },
+    );
 
     // Register the canonical view uniform module so user shaders can write
     // `#import retro_engine::view` to pull in the ViewUniform struct + the

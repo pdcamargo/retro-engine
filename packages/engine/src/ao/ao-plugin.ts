@@ -17,6 +17,8 @@ import { RenderSet } from '../render-set';
 import { ShaderRegistry } from '../shader/shader-registry';
 import { Extract, Query, ResMut } from '../system-param';
 
+import { t } from '@retro-engine/reflect';
+
 import { ScreenSpaceAo } from './ao';
 import { AoBindGroupCache } from './ao-bind-group-cache';
 import { AoBlurPipeline } from './ao-blur-pipeline';
@@ -70,6 +72,12 @@ export class AoPlugin implements PluginObject {
     (registry as ShaderRegistry).register('retro_engine::ao_gtao', AO_GTAO_WGSL);
     (registry as ShaderRegistry).register('retro_engine::ao_blur', AO_BLUR_WGSL);
     (registry as ShaderRegistry).register('retro_engine::ao_temporal', AO_TEMPORAL_WGSL);
+
+    app.registerComponent(
+      ScreenSpaceAo,
+      { radius: t.number, intensity: t.number, bias: t.number, slices: t.number, steps: t.number },
+      { name: 'ScreenSpaceAo' },
+    );
 
     if (app.getResource(AoPipeline) === undefined) app.insertResource(new AoPipeline());
     if (app.getResource(AoBlurPipeline) === undefined) app.insertResource(new AoBlurPipeline());

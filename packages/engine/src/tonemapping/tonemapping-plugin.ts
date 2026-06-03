@@ -13,7 +13,9 @@ import { RenderSet } from '../render-set';
 import { ShaderRegistry } from '../shader/shader-registry';
 import { Extract, Query, ResMut } from '../system-param';
 
-import { Tonemapping } from './tonemapping';
+import { t } from '@retro-engine/reflect';
+
+import { Tonemapping, TONEMAPPING_METHODS } from './tonemapping';
 import {
   makeTonemappingNode,
   TonemappingPass2dLabel,
@@ -68,6 +70,12 @@ export class TonemappingPlugin implements PluginObject {
       );
     }
     (registry as ShaderRegistry).register('retro_engine::tonemapping', TONEMAPPING_WGSL);
+
+    app.registerComponent(
+      Tonemapping,
+      { method: t.enum(...TONEMAPPING_METHODS) },
+      { name: 'Tonemapping' },
+    );
 
     if (app.getResource(TonemappingPipeline) === undefined) {
       app.insertResource(new TonemappingPipeline());

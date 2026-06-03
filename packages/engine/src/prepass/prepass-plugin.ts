@@ -89,6 +89,12 @@ export class PrepassPlugin implements PluginObject {
       registry.register('retro_engine::prepass', PREPASS_WGSL);
     }
 
+    // Authored per-camera opt-in markers — no fields, but they persist so a saved
+    // camera keeps its prepass selection on load.
+    app.registerComponent(DepthPrepass, {}, { name: 'DepthPrepass' });
+    app.registerComponent(NormalPrepass, {}, { name: 'NormalPrepass' });
+    app.registerComponent(MotionVectorPrepass, {}, { name: 'MotionVectorPrepass' });
+
     const graph = app.getResource(RenderGraph);
     if (graph === undefined) {
       throw new Error(

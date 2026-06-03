@@ -12,6 +12,7 @@ import { MeshAllocator, MeshAllocatorSettings } from './allocator';
 import { calculateBoundsSystem } from './calculate-bounds';
 import type { Indices } from './indices';
 import { Mesh3d } from './mesh-3d';
+import { Mesh2d } from './mesh-2d';
 import { Meshes } from './meshes';
 import type { MeshAttributeData } from './mesh';
 import type { Mesh } from './mesh';
@@ -114,6 +115,12 @@ export class MeshPlugin implements PluginObject {
       Mesh3d,
       { handle: t.handle<Mesh>('Mesh') },
       { name: 'Mesh3d', make: () => new Mesh3d(makeHandle(asAssetIndex(0))) },
+    );
+    // Mesh2d shares the Meshes store with Mesh3d; same handle wrapper, same key.
+    app.registerComponent(
+      Mesh2d,
+      { handle: t.handle<Mesh>('Mesh') },
+      { name: 'Mesh2d', make: () => new Mesh2d(makeHandle(asAssetIndex(0))) },
     );
 
     // Head of VisibilityPlugin's documented order:
