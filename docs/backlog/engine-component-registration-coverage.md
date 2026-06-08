@@ -11,6 +11,7 @@ The **resource** half is now closed too. [ADR-0069](../adr/ADR-0069-resource-ref
 
 - **Registered (serialized):** `AmbientLight`, `Shadow3dSettings` (Light3dPlugin); `ClearColor` (CameraPlugin); `Light2dSettings` (Light2dPlugin).
 - **Not serialized (derived/transient):** `Light2dShadowState`, `Light2dNormalState` — these were mislabeled here as authored; they hold GPU handles, scratch buffers, and per-frame counters, so they are transient (corrected in ADR-0069's context). Also `GpuLights`, `Shadow3dState`, `SortedCameras`, `TextureAtlasLayouts`, `Materials*` / `RenderMaterials*`, the `View*` caches, and the render-graph phase/pipeline/buffer resources.
+- **Not serialized (startup/app config):** `MeshAllocatorSettings` (`minSlabSize`) — authored, but read once when `MeshPlugin` builds the `MeshAllocator`; it is engine/app tuning, not per-scene content, and changing it after the allocator exists has no effect, so a scene does not carry it.
 
 A global gravity / time-scale resource, when added, registers the same way.
 
