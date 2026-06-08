@@ -7,6 +7,8 @@ import { AssetStores } from '../asset/asset-stores';
 import { Commands, type CommandsHandle } from '../commands';
 import { Parent } from '../hierarchy';
 import type { App } from '../index';
+import { ObserverHandlerRegistry } from '../observer-binding/handler-registry';
+import { resolveObserverBindings } from '../observer-binding/scene-binding';
 import { TemplateRegistry } from '../prefab/template-registry';
 import { expandTemplateRefs } from '../prefab/template-scene';
 
@@ -46,8 +48,10 @@ export interface SpawnSceneOptions {
  * serialized entity is reserved (an empty spawn whose id is available
  * synchronously), then each entity's components are decoded and inserted — with
  * the `Parent` edge routed through `addChild` rather than inserted, so the
- * reciprocal `Children` is built and its hooks fire. The buffer flushes before
- * returning.
+ * reciprocal `Children` is built and its hooks fire. After an entity's
+ * components, its `observers` bindings are attached by name (resolved against the
+ * App's registered handlers), through the same command path as a code-side
+ * `commands.entity(e).observe`. The buffer flushes before returning.
  *
  * @param registry - The registry to decode against. Defaults to the App's
  *   {@link AppTypeRegistry} resource; pass an explicit one for tools/tests.
@@ -84,6 +88,7 @@ export const spawnScene = (
   const env = buildDecodeEnv(registry, idToEntity, decodeOpts);
   const parentReg = registry.getByCtor(Parent);
   const templateReg = app.getResource(TemplateRegistry);
+  const handlerReg = app.getResource(ObserverHandlerRegistry);
 
   // Pass 2: decode + insert every component except Parent, which is routed
   // through addChild so the appendChild op wires both sides and fires hooks.
@@ -118,6 +123,19 @@ export const spawnScene = (
       components.push(decodeComponent(reg, component, env));
     }
     if (components.length > 0) cmd.entity(entity).insert(...components);
+
+    // Attach this entity's observer bindings by name (after components, so an
+    // observer body can already read them). Each rides the same command path as
+    // a code-side `cmd.entity(e).observe`, so cleanup-on-despawn applies.
+    if (
+      serialized.observers !== undefined &&
+      serialized.observers.length > 0 &&
+      handlerReg !== undefined
+    ) {
+      for (const handler of resolveObserverBindings(handlerReg, serialized.observers)) {
+        cmd.entity(entity).observe(handler.event, handler.params, handler.run);
+      }
+    }
   }
 
   app.flushCommands();

@@ -1,7 +1,7 @@
 # Scenes and Prefabs
 
 - **Created:** 2026-05-21
-- **Status:** Active — phase 1 + the load/unload lifecycle (ADR-0062) and templates/patches (ADR-0067) shipped. Later phases (composition, inline observers, hot-reload, studio) remain sketches.
+- **Status:** Active — phase 1 + the load/unload lifecycle (ADR-0062), templates/patches (ADR-0067), and inline observer binding (ADR-0068) shipped. Later phases (composition, hot-reload, studio) remain sketches.
 
 ## Goal
 
@@ -19,7 +19,7 @@ Each phase is a sketch. Promote when prerequisites land and a real consumer asks
 2. **Entity templates with named parameters** — **Shipped (ADR-0067).** `defineTemplate({ name, params, build })` defines a prototype entity graph (`Player` = `[Transform, Sprite('player.png'), Health(100)]`); `spawnTemplate(app, Player, { position, health: 200 })` substitutes typed params (with `.default()`s) at spawn time.
 3. **Entity patches** — **Shipped (ADR-0067).** `applyTemplate(app, entity, template, params?)` applies a template to an existing entity rather than spawning fresh — "add the Damaged state visuals" without rebuilding it (insert overwrites a present component, adds a missing one). BSN's core idea, adapted; overrides are one-shot.
 4. **Spawn integration with Required Components** — **Shipped (ADR-0067).** Template spawn rides the command buffer → `resolveBundle`, so the definition lists the explicit components and transitive `static requires` fill in (explicit template components win).
-5. **Inline observer binding** — a scene definition can attach observers to its entities (`onClick`, `onDamage`, …) without round-tripping through code. Requires the observer system from `observers-and-events.md`.
+5. **Inline observer binding** — **Shipped (ADR-0068).** A scene attaches entity-targeted observers to its entities by referencing registered handler names (`observers: [{ handler: 'onClick' }]`). A handler — registered in code via `app.registerObserverHandler(defineObserverHandler({ name, event, params, run }))` — bundles the event it observes and the body to run, so the scene stays pure data. Built on the observer *runtime* (ADR-0013, already shipped); only the serializable binding layer landed here.
 6. **Scene composition** — a parent scene includes other scenes as nested entities. Lets you build levels by stitching together rooms / encounters / NPCs without duplicating definitions.
 7. **Hot reload** — when a `.scene` file changes during dev, the runtime re-applies it to the live world, diff-based where reflection metadata makes it safe. Worst case: re-trigger `OnExit(SceneId)` → `OnEnter(SceneId)`.
 8. **Studio integration** — scene saver / loader in the studio, scene tree inspector, drag-drop entity into scene, observer binding UI. Far-future; on the studio side, not the engine side.
@@ -30,7 +30,7 @@ Each phase is a sketch. Promote when prerequisites land and a real consumer asks
 - **Relationship to GUID asset handles.** **Resolved (ADR-0065).** Scenes reference assets by GUID, and `spawnScene` restores those handles automatically through the App's `AssetStores` — no caller-injected `resolveHandle`, for assets already in their stores. Disk/manifest load-on-demand stays in `asset-system.md` phases 4–6.
 - **Teardown ordering on `OnExit(SceneId)`.** **Locked (ADR-0062): user `OnExit` → scene despawn → state-scoped resource removal.** Realized through `OnExit` registration order — the scene despawn is registered by `App.addScene`, so `OnExit` systems registered before that call run before the despawn (and can read the live scene one last time); the state machine removes scoped resources afterwards. Explicit `OnExit` ordering (independent of registration order) is deferred.
 - **Resource definitions in scene files.** Should a scene declare its state-scoped resources inline (e.g., `resources: { GameMode: Survival }`), or only entities? Probably yes — but then the resource type must be reflection-registered. Decide once reflection lands.
-- **Observer serialization.** Serializing the *binding* (which observer is attached to which event on which entity) is easy. Serializing the *handler* is hard — the handler is code. Default: handlers are registered by name (`onClick: 'showDialog'`), the registry maps name → function, the scene file references names only. Like Unity's UnityEvents.
+- **Observer serialization.** **Resolved (ADR-0068): handlers are registered by name; the scene references the name only.** Serializing the *binding* is easy; serializing the *handler* is impossible — it's code. So `app.registerObserverHandler(defineObserverHandler({ name, event, params, run }))` bundles the event + params + body under a stable name, and `SerializedEntity.observers` lists `{ handler }` bindings, resolved and attached at spawn through the same `commands.entity(e).observe` path (so teardown via `clearTargetedFor` is automatic). Like Unity's UnityEvents (serialize the method name, resolve at load). Entity-targeted only; global observers stay app code.
 - **Prefab override semantics.** **Locked (ADR-0067): one-shot, in two layers.** A spawn call or scene ref substitutes typed `params`; a scene ref may additionally carry field-level `overrides` overlaid onto the produced components. All overrides apply at spawn and are not tracked afterward — serialization re-emits the expanded components, not the template ref. A persistent / live prefab link (which fields are template-default vs instance-override) is a future ADR with a provenance component if an editor consumer needs it.
 - **What's the relationship between scenes and `States`?** **Locked (ADR-0062): a scene is an abstraction *on top of* States, not identical to them.** `App.addScene(stateValue, handle)` binds a scene to a `States` value; the transition drives spawn (`OnEnter`) and teardown (`OnExit`). A scene is referenced by a state value rather than *being* one, so a state can carry a scene and other behavior, and an entity-level `SceneRoot` can spawn a scene with no state at all.
 
@@ -62,7 +62,7 @@ What we do not borrow:
 - Foundation: `docs/roadmap/engine-foundations.md` (M2 — Required Components + `States` + `Commands` + Plugin lifecycle all participate)
 - Prereq: `docs/roadmap/reflection-and-serialization.md`
 - Prereq: `docs/roadmap/asset-system.md` (handle shape, project format)
-- Prereq: `docs/roadmap/observers-and-events.md` (inline observer binding needs the observer system)
+- Built on: `docs/roadmap/observers-and-events.md` — the observer *runtime* shipped (ADR-0013); inline observer binding (ADR-0068) is the serialization layer on top.
 - Related: `docs/roadmap/gltf.md` (glTF instantiation is the first prefab-instantiation; introduces the shared `Name` component — ADR-0057)
 - Consumer: `docs/roadmap/ui-system.md` (UI screens are scenes)
 - Consumer: `docs/roadmap/studio-imgui.md` (studio's scene editor needs save/load + hot-reload hooks)

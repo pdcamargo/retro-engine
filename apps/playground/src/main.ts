@@ -10,6 +10,7 @@ import { litShowcasePlugin } from './lit-showcase-plugin';
 import { LoggingPlugin } from './logging-plugin';
 import { materialShowcasePlugin } from './material-showcase-plugin';
 import { motionVectorsShowcasePlugin } from './motion-vectors-showcase-plugin';
+import { observerShowcasePlugin } from './observer-showcase-plugin';
 import { prefabShowcasePlugin } from './prefab-showcase-plugin';
 import { primitivesShowcasePlugin } from './primitives-showcase-plugin';
 import { sceneShowcasePlugin } from './scene-showcase-plugin';
@@ -70,6 +71,9 @@ if (!(canvas instanceof HTMLCanvasElement)) {
 //                     spawned twice, one instance is patched to red, and a third
 //                     comes from a scene that embeds the template by name with a
 //                     field-level Transform override.
+//   `?mode=observers` → inline observer binding (ADR-0068): a scene attaches a
+//                     named observer handler to its entity. Press Space to fire a
+//                     Poke at the cube; the scene-bound observer recolors it.
 //   anything else   → Phase 7.5 primitives demo.
 // All demos stay discoverable from one bundle.
 const mode = new URLSearchParams(window.location.search).get('mode');
@@ -106,7 +110,9 @@ const showcase =
                               ? sceneShowcasePlugin
                               : mode === 'prefab'
                                 ? prefabShowcasePlugin
-                                : primitivesShowcasePlugin;
+                                : mode === 'observers'
+                                  ? observerShowcasePlugin
+                                  : primitivesShowcasePlugin;
 
 const renderer = createWebGPURenderer(canvas);
 const app = new App({

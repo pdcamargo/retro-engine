@@ -31,6 +31,17 @@ export interface SerializedTemplateRef {
   readonly overrides?: readonly SerializedOverride[];
 }
 
+/**
+ * A binding of a registered observer handler to a scene entity. The scene names
+ * the handler; the handler — registered in code via
+ * `App.registerObserverHandler` — carries the event it observes and the body to
+ * run. Behavior is referenced by name, never serialized.
+ */
+export interface SerializedObserverBinding {
+  /** Stable name of the registered observer handler to attach to the entity. */
+  readonly handler: string;
+}
+
 /** One entity in a {@link SceneData}: its compact in-scene id and serialized components. */
 export interface SerializedEntity {
   /** Stable id within the scene; entity-typed fields reference entities by this id. */
@@ -42,6 +53,13 @@ export interface SerializedEntity {
    * same type overrides the template's output.
    */
   readonly templates?: readonly SerializedTemplateRef[];
+  /**
+   * Observer handlers to attach to this entity, by registered name. Each names a
+   * handler registered via `App.registerObserverHandler`; the handler carries the
+   * event it observes and the body to run. Attached after the entity's components
+   * are inserted. Behavior is referenced by name, never serialized.
+   */
+  readonly observers?: readonly SerializedObserverBinding[];
 }
 
 /**

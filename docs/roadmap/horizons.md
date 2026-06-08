@@ -14,7 +14,7 @@ Most files in this folder are **sketches**, not researched plans. They capture i
 
 **Scenes & Prefabs (through templates/patches).** See `scenes-and-prefabs.md` for the umbrella; phase 1 + the load/unload lifecycle sealed by **ADR-0062**, prefab templates/patches by **ADR-0067** (`docs/backlog/prefab-templates-and-patches.md`).
 
-This makes scenes *real*: a `Scene` is a loadable asset (`Assets<Scene>` + a `.scene` JSON importer/serializer, opt-in `ScenePlugin`), a `SceneRoot` component + reactor instantiate it once ready (mirroring the glTF precedent, ADR-0057), and `App.addScene(state, handle)` gates the whole graph behind a `States` value — spawning on `OnEnter`, tearing down cleanly on `OnExit`. Handle resolution became automatic shortly after via the App's asset stores (ADR-0065) and a loadable manifest read path (ADR-0066), and prefab templates/patches — named, parameterized recipes spawnable, patchable, and embeddable-by-name in a scene — landed on top (ADR-0067). Scene composition, inline observers, hot-reload, and registering the remaining components stay reserved.
+This makes scenes *real*: a `Scene` is a loadable asset (`Assets<Scene>` + a `.scene` JSON importer/serializer, opt-in `ScenePlugin`), a `SceneRoot` component + reactor instantiate it once ready (mirroring the glTF precedent, ADR-0057), and `App.addScene(state, handle)` gates the whole graph behind a `States` value — spawning on `OnEnter`, tearing down cleanly on `OnExit`. Handle resolution became automatic shortly after via the App's asset stores (ADR-0065) and a loadable manifest read path (ADR-0066), prefab templates/patches — named, parameterized recipes spawnable, patchable, and embeddable-by-name in a scene — landed on top (ADR-0067), and inline observer binding — a scene attaches observers to its entities by referencing registered handler names — landed on the existing observer runtime (ADR-0068). Scene composition, hot-reload, and registering the remaining components stay reserved.
 
 ### Completed before this
 
@@ -25,7 +25,7 @@ This makes scenes *real*: a `Scene` is a loadable asset (`Assets<Scene>` + a `.s
 
 ## Imminent
 
-With scene-as-asset + the lifecycle, automatic GUID resolution + the manifest read path (ADR-0065/0066), and prefab templates/patches (ADR-0067) all landed, the next steps build on them: `scenes-and-prefabs.md` phases 6–7 (scene composition, then hot-reload), the observer system (`observers-and-events.md`) that phase 5's inline binding depends on, and the persistent tier's write/save half (`asset-system.md` phases 4–6). Further `reflection-and-serialization.md` phases (decorators as sugar, resources-as-reflectable, change-detection-by-name) and registering the remaining components promote as consumers demand them.
+With scene-as-asset + the lifecycle, automatic GUID resolution + the manifest read path (ADR-0065/0066), prefab templates/patches (ADR-0067), and inline observer binding (ADR-0068) all landed, the next steps build on them: `scenes-and-prefabs.md` phases 6–7 (scene composition, then hot-reload) and the persistent tier's write/save half (`asset-system.md` phases 4–6). The observer *runtime* phase 5 builds on is already shipped (ADR-0013); the `observers-and-events.md` sketch is now just naming/`Message`-vs-`Event` polish. Further `reflection-and-serialization.md` phases (decorators as sugar, resources-as-reflectable, change-detection-by-name) and registering the remaining components promote as consumers demand them.
 
 ## Future direction (sketches, kept on paper)
 
@@ -40,7 +40,7 @@ Each link below is a sketch. Some are tightly scoped, some are speculative. None
 - `playground-app.md` — beyond the M1 scaffolding: example scenes, production build target.
 - `release-automation.md` — provenance, code signing, auto-update. Gated on the first 0.1.0 publish.
 - `renderer.md` — consolidated long-horizon renderer roadmap (foundations → sprites/materials → lights/glTF → post → GPU-driven → WebGL2 → tooling). Supersedes the earlier `first-render-path.md`, `renderer-graph.md`, and `webgl2-backend.md` sketches.
-- `scenes-and-prefabs.md` — our scene + prefab system, BSN-inspired but designed in-house. **Phase 1 + the lifecycle (ADR-0062) and templates/patches (ADR-0067) shipped**; the remaining phases (composition, inline observers, hot-reload, studio) are still sketches.
+- `scenes-and-prefabs.md` — our scene + prefab system, BSN-inspired but designed in-house. **Phase 1 + the lifecycle (ADR-0062), templates/patches (ADR-0067), and inline observer binding (ADR-0068) shipped**; the remaining phases (composition, hot-reload, studio) are still sketches.
 - `studio-imgui.md` — jsimgui integration with the engine's WebGPU canvas.
 - `studio-mcp.md` — MCP server exposing studio internals to AI agents.
 - `system-params.md` — additional param kinds beyond the M2 core set (`Local<T>`, `MessageReader/Writer<T>`, observers-as-params).

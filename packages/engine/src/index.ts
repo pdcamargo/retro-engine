@@ -27,6 +27,8 @@ import type { Logger } from './log';
 import { engineLogger } from './log';
 import { runFixedMainLoop } from './fixed-time';
 import { MessageRegistry } from './messages';
+import type { ObserverHandler } from './observer-binding/handler';
+import { ObserverHandlerRegistry } from './observer-binding/handler-registry';
 import { ObserverRegistry } from './observers';
 import type { Plugin, PluginObject, PluginsState } from './plugin';
 import { wrapFunctionPlugin } from './plugin';
@@ -125,6 +127,7 @@ export type {
   SceneData,
   SerializedComponent,
   SerializedEntity,
+  SerializedObserverBinding,
   SerializedOverride,
   SerializedTemplateRef,
 } from './scene/scene-data';
@@ -146,6 +149,9 @@ export type { ParamSchema, ResolvedParams, Template, TemplateDefinition } from '
 export { defineTemplate, expandTemplate } from './prefab/template';
 export { TemplateRegistry } from './prefab/template-registry';
 export { applyTemplate, spawnTemplate } from './prefab/template-commands';
+export type { ObserverHandler, ObserverHandlerDefinition } from './observer-binding/handler';
+export { defineObserverHandler } from './observer-binding/handler';
+export { ObserverHandlerRegistry } from './observer-binding/handler-registry';
 export type { PreprocessOptions, SpecializeFn } from './shader';
 export {
   PipelineCache,
@@ -821,6 +827,9 @@ export class App {
     // Templates are App-scoped like the type registry, so a scene can resolve a
     // prefab by name and `spawnTemplate(app, 'Name', ...)` works after `build()`.
     this.insertResource(new TemplateRegistry());
+    // Observer handlers are App-scoped the same way, so a scene can attach an
+    // observer to an entity by referencing a registered handler name.
+    this.insertResource(new ObserverHandlerRegistry());
     // ADR-0020: legacy `AppOptions.clearColor` is sugar for inserting a
     // `ClearColor` resource. CameraPlugin only inserts a default if no
     // ClearColor is already present, so user-supplied values win.
@@ -1315,6 +1324,19 @@ export class App {
    */
   registerTemplate<P extends ParamSchema>(template: Template<P>): Template<P> {
     return this.getResource(TemplateRegistry)!.register(template);
+  }
+
+  /**
+   * Register an {@link ObserverHandler} in this App, keyed by its stable name.
+   * The owning plugin registers its handlers from `build()`; registration is what
+   * lets a scene attach the observer to an entity by referencing the handler name
+   * (the handler carries the event it observes and the body to run). Throws if the
+   * name is already taken.
+   */
+  registerObserverHandler<E extends object, const Ps extends readonly Param<unknown>[]>(
+    handler: ObserverHandler<E, Ps>,
+  ): ObserverHandler<E, Ps> {
+    return this.getResource(ObserverHandlerRegistry)!.register(handler);
   }
 
   /**
