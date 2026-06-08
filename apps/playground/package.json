@@ -5,7 +5,7 @@
   "description": "Browser-only smoke-test app that hosts the engine without Tauri. Used to validate end-to-end engine features quickly.",
   "type": "module",
   "scripts": {
-    "dev": "bun --port 5173 index.html",
+    "dev": "bun --hot dev-server.ts",
     "build": "bun build index.html --outdir dist --minify --target=browser",
     "lint": "oxlint .",
     "typecheck": "tsc --noEmit"

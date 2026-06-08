@@ -139,8 +139,21 @@ export class Light2dPlugin implements PluginObject {
       app.insertResource(new Light2dSettings());
     }
 
+    // Light2dSettings is authored world state — a resource, not a component — so
+    // it registers through registerResource and rides a saved scene's `resources`.
+    app.registerResource(
+      Light2dSettings,
+      {
+        ambient: t.vec4,
+        compositeMode: t.enum('multiply', 'add', 'screen'),
+        normalMapping: t.boolean,
+        normalLightHeight: t.number,
+      },
+      { name: 'Light2dSettings' },
+    );
+
     // AmbientLight2d is a per-entity component (regional or global pool), unlike the
-    // 3D AmbientLight resource. Light2dSettings is a resource → deferred to resource reflection.
+    // 3D AmbientLight resource.
     app.registerComponent(
       PointLight2d,
       { color: t.vec3, intensity: t.number, range: t.number, radius: t.number },

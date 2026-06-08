@@ -1,7 +1,7 @@
 # Reflection and Serialization
 
 - **Created:** 2026-05-21
-- **Status:** Active — v1 shipped 2026-06-02 (ADR-0060); engine-component registration + hook-firing spawn shipped 2026-06-02 (ADR-0061); later phases kept on paper
+- **Status:** Active — v1 shipped 2026-06-02 (ADR-0060); engine-component registration + hook-firing spawn shipped 2026-06-02 (ADR-0061); resources-as-reflectable shipped 2026-06-08 (ADR-0069); later phases kept on paper
 
 ## Goal
 
@@ -27,7 +27,11 @@ The two ADR-0060 reservations above marked **shipped**: *retrofitting engine com
 - `spawnScene(app, scene)` loads through `Commands` with reserved ids so hooks fire, Required Components resolve, and `Children` is rebuilt from each child's serialized `Parent` edge; the bare-`World` `deserializeScene` stays for tools/tests. Save side gains `serializeScene(app)`.
 - Convention codified in CLAUDE.md §13: every engine/internal component declares its serialization (schema or deliberate non-serialized classification).
 
-Still reserved: registering every remaining component (filled in as systems are touched); the Scene asset type + States-gated load/unload + prefab templates/patches (next slice); resources-as-reflectable; decorators; change-detection-by-name; the studio inspector; the persistent GUID→handle asset bridge.
+Still reserved: registering every remaining component (filled in as systems are touched); decorators; change-detection-by-name; the studio inspector.
+
+## Resources-as-reflectable (shipped 2026-06-08 — ADR-0069)
+
+The "resources-as-reflectable" reservation is **shipped**. `App.registerResource(ctor, schema, { name })` mirrors `App.registerComponent`; the schema lives in the App's one `TypeRegistry` while `AppTypeRegistry.resources` records which registered types are resources, so `@retro-engine/reflect` stays agnostic. Resources serialize into the additive `SceneData.resources` against the same env the entities use (so resource `t.entity()` / `t.handle()` fields remap/resolve identically), and `spawnScene` restores them via `insertResource`. Authored world settings (`AmbientLight`, `Shadow3dSettings`, `ClearColor`, `Light2dSettings`) are registered; derived/transient resources are classified not-serialized (CLAUDE.md §13). The persistent GUID→handle asset bridge for save shipped with ADR-0070.
 
 The open questions below are resolved by ADR-0060 for v1 — registration calls first (decorators deferred), explicit stable names, the `t` vocabulary, versioning/migration designed in — and are kept here as historical context.
 
@@ -48,7 +52,7 @@ The open questions below are resolved by ADR-0060 for v1 — registration calls 
 - **Field type vocabulary.** Primitives (`'number'`, `'string'`, `'boolean'`), composites (`{ kind: 'array', of: ... }`, `{ kind: 'tuple', of: [...] }`), entity refs (`{ kind: 'entity' }`), asset handles (`{ kind: 'handle', of: 'Texture' }`). Minimum viable set is small; design for extension.
 - **Versioning + migration.** When a component's field set changes, old scene files break. `@Migrate(fromVersion, migrator)` annotations let new code load old files. Worth designing in from day 1.
 - **Reflection cost at runtime.** A registered type costs memory (the schema metadata) but no per-instance overhead unless you actually serialize. Acceptable.
-- **Should resources be reflectable too?** Probably yes — scene files can include state-scoped resource definitions.
+- **Should resources be reflectable too?** ✅ Resolved (ADR-0069): yes. A scene carries its registered resources in the additive `SceneData.resources`; `App.registerResource` is the entry point.
 - **Generic / parameterized types.** A `Handle<Texture>` is parameterized; reflection needs to express that. Defer until concrete cases demand it.
 
 ## Links

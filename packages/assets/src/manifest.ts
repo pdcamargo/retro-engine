@@ -72,3 +72,29 @@ export const parseAssetManifest = (text: string): AssetManifest => {
   }
   return { entries };
 };
+
+/**
+ * Fold a flat list of entries into an {@link AssetManifestFile} ready to write,
+ * stamping the current {@link MANIFEST_FORMAT_VERSION}. The inverse of
+ * {@link parseAssetManifest}'s GUID-keying: it rejects two entries sharing a
+ * GUID, so `parseAssetManifest(serializeAssetManifest(bakeManifest(e)))`
+ * reproduces the same entry map.
+ */
+export const bakeManifest = (entries: readonly AssetManifestEntry[]): AssetManifestFile => {
+  const seen = new Set<AssetGuid>();
+  for (const entry of entries) {
+    if (seen.has(entry.guid)) {
+      throw new Error(`bakeManifest: duplicate GUID '${entry.guid}'.`);
+    }
+    seen.add(entry.guid);
+  }
+  return { version: MANIFEST_FORMAT_VERSION, entries: [...entries] };
+};
+
+/**
+ * Serialize an {@link AssetManifestFile} to the JSON text an {@link AssetSink}
+ * writes and {@link parseAssetManifest} reads back. The inverse of
+ * {@link parseAssetManifest}.
+ */
+export const serializeAssetManifest = (manifest: AssetManifestFile): string =>
+  JSON.stringify(manifest, null, 2);

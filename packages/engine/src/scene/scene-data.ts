@@ -71,6 +71,16 @@ export interface SceneData {
   /** Wire-format version of the scene envelope (not of any component). */
   readonly version: number;
   readonly entities: readonly SerializedEntity[];
+  /**
+   * Registered App resources captured with the scene, each a reflected
+   * {@link SerializedValue}. Optional and additive: a scene authored without
+   * resources omits the key, so existing scenes round-trip byte-identically and
+   * the envelope version is unchanged. Restored on load by `spawnScene` (a
+   * resource carries no entity identity, so it lives here rather than on an
+   * entity); entity- and handle-typed resource fields remap/resolve through the
+   * same env the entities use.
+   */
+  readonly resources?: readonly SerializedValue[];
 }
 
 /** Current scene wire-format version. */

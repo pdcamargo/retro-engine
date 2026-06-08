@@ -44,6 +44,14 @@ export class AssetStores {
   }
 
   /**
+   * The store bound to `assetType`, or `undefined` if none is registered. Used
+   * by the project-save layer to read an asset's value out for promotion.
+   */
+  storeFor(assetType: string): Assets<unknown> | undefined {
+    return this.stores.get(assetType);
+  }
+
+  /**
    * Resolve the live handle for `guid` in the store bound to `assetType`.
    *
    * Throws if `assetType` has no registered store (a wiring gap — the component

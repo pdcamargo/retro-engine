@@ -206,6 +206,9 @@ export type {
   AssetEvent,
   AssetImporter,
   AssetIndex,
+  AssetSerializer,
+  AssetSerializerRegistry,
+  AssetSink,
   AssetSource,
   Handle,
   LoadContext,
@@ -213,9 +216,14 @@ export type {
 export { AssetPlugin } from './asset/asset-plugin';
 export { AssetServer } from './asset/asset-server';
 export type { AssetLoadFailure, CompletedLoad } from './asset/asset-server';
+export { AssetSerializers, registerAssetSerializer } from './asset/asset-serializers';
 export { ASSET_TYPE, AssetStores, registerAssetStore } from './asset/asset-stores';
 export { FetchAssetSource } from './asset/fetch-source';
+export { HttpPostAssetSink } from './asset/post-sink';
+export { MemoryAssetSink, MemoryAssetSource } from './asset/memory-sink';
+export { ProjectSaveSink } from './asset/project-save-sink';
 export { applyCompletedLoads } from './asset/load-drain';
+export * from './save';
 export {
   alphaModeKey,
   ExtendedMaterial,
@@ -320,6 +328,7 @@ export {
   u32Indices,
 } from './mesh';
 export type { Meshable, MeshBuilder, SphereKind } from './mesh';
+export { MESH_FORMAT_VERSION, createMeshImporter, createMeshSerializer } from './mesh';
 export type {
   Node as RenderNode,
   NodeRunContext as RenderNodeRunContext,
@@ -1314,6 +1323,36 @@ export class App {
     opts?: RegisterOptions<T>,
   ): RegisteredType<T> {
     return this.getResource(AppTypeRegistry)!.registry.registerType(ctor, schema, opts);
+  }
+
+  /**
+   * Register a resource's reflection schema in this App's registry, so it
+   * round-trips into a saved scene and is restored on load. A resource carries
+   * no entity identity, so it lives in `SceneData.resources` rather than on an
+   * entity; the owning plugin registers it from `build()` next to its components,
+   * with a mandatory stable `name` (class names are unreliable under
+   * minification).
+   *
+   * Derived or transient resources — render-world caches, per-frame GPU state,
+   * anything a system recomputes at startup — are deliberately left unregistered:
+   * only authored world/render settings a saved scene should restore belong here.
+   *
+   * @example
+   * ```ts
+   * app.registerResource(AmbientLight, {
+   *   color: t.vec3, brightness: t.number,
+   * }, { name: 'AmbientLight' });
+   * ```
+   */
+  registerResource<T extends object>(
+    ctor: ComponentType<T>,
+    schema: Schema<T>,
+    opts?: RegisterOptions<T>,
+  ): RegisteredType<T> {
+    const atr = this.getResource(AppTypeRegistry)!;
+    const reg = atr.registry.registerType(ctor, schema, opts);
+    atr.resources.set(ctor as ComponentType<object>, reg as RegisteredType);
+    return reg;
   }
 
   /**

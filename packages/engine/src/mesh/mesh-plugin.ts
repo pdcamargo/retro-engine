@@ -3,6 +3,7 @@ import { asAssetIndex, makeHandle } from '@retro-engine/assets';
 import { t } from '@retro-engine/reflect';
 import { vertexFormatByteSize } from '@retro-engine/renderer-core';
 
+import { registerAssetSerializer } from '../asset/asset-serializers';
 import { ASSET_TYPE, registerAssetStore } from '../asset/asset-stores';
 import type { App } from '../index';
 import type { PluginObject } from '../plugin';
@@ -12,6 +13,7 @@ import { NoFrustumCulling } from '../visibility/visibility';
 import { MeshAllocator, MeshAllocatorSettings } from './allocator';
 import { calculateBoundsSystem } from './calculate-bounds';
 import type { Indices } from './indices';
+import { createMeshSerializer } from './mesh-importer';
 import { Mesh3d } from './mesh-3d';
 import { Mesh2d } from './mesh-2d';
 import { Meshes } from './meshes';
@@ -96,6 +98,9 @@ export class MeshPlugin implements PluginObject {
   build(app: App): void {
     if (app.getResource(Meshes) === undefined) app.insertResource(new Meshes());
     registerAssetStore(app, ASSET_TYPE.mesh, app.getResource(Meshes)!);
+    // Make meshes persistable: the write-side serializer pairs with the `.rmesh`
+    // importer the AssetServer registers for reading.
+    registerAssetSerializer(app, ASSET_TYPE.mesh, createMeshSerializer());
     if (app.getResource(MeshAllocatorSettings) === undefined) {
       app.insertResource(new MeshAllocatorSettings());
     }

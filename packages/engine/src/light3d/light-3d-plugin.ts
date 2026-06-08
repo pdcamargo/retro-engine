@@ -154,8 +154,29 @@ export class Light3dPlugin implements PluginObject {
       app.insertResource(new Shadow3dSettings());
     }
 
-    // AmbientLight and Shadow3dSettings are resources, not components — they wait
-    // on resource reflection. The per-entity light state registers here.
+    // Authored world/render settings: resources, not components, so they register
+    // through registerResource and ride a saved scene's `resources`.
+    app.registerResource(
+      AmbientLight,
+      { color: t.vec3, brightness: t.number },
+      { name: 'AmbientLight' },
+    );
+    app.registerResource(
+      Shadow3dSettings,
+      {
+        directionalExtent: t.number,
+        near: t.number,
+        far: t.number,
+        depthBias: t.number,
+        slopeScaleBias: t.number,
+        cullMode: t.enum('back', 'front', 'none'),
+        cascadeBackExtension: t.number,
+        filteringMethod: t.enum('Hardware2x2', 'Castano13', 'Pcf5x5'),
+      },
+      { name: 'Shadow3dSettings' },
+    );
+
+    // The per-entity light state registers as components.
     app.registerComponent(
       DirectionalLight3d,
       { color: t.vec3, intensity: t.number },

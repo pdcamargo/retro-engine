@@ -23,6 +23,9 @@ const validateSceneData = (raw: unknown): SceneData => {
   if (!Array.isArray(data.entities)) {
     throw new Error('Scene: payload is missing an entities array');
   }
+  if (data.resources !== undefined && !Array.isArray(data.resources)) {
+    throw new Error('Scene: payload `resources` must be an array when present');
+  }
   return data as SceneData;
 };
 

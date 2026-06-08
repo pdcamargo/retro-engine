@@ -1,6 +1,6 @@
 import type { Entity } from '@retro-engine/ecs';
 import type { Handle } from '@retro-engine/assets';
-import type { TypeRegistry } from '@retro-engine/reflect';
+import type { DecodeEnv, SerializedValue, TypeRegistry } from '@retro-engine/reflect';
 import { decodeComponent } from '@retro-engine/reflect';
 
 import { AssetStores } from '../asset/asset-stores';
@@ -15,6 +15,27 @@ import { expandTemplateRefs } from '../prefab/template-scene';
 import { AppTypeRegistry } from './app-type-registry';
 import { buildDecodeEnv } from './deserialize';
 import type { SceneData } from './scene-data';
+
+/**
+ * Decode a scene's serialized resources and insert them into the App, using the
+ * same {@link DecodeEnv} the entities decoded against so resource entity- and
+ * handle-typed fields remap/resolve identically. A resource whose type is not
+ * registered is skipped (forward-compat with scenes written by a newer build).
+ *
+ * @internal Called by {@link spawnScene} after the entity pass.
+ */
+const applyResources = (
+  app: App,
+  resources: readonly SerializedValue[],
+  registry: TypeRegistry,
+  env: DecodeEnv,
+): void => {
+  for (const sv of resources) {
+    const reg = registry.get(sv.type);
+    if (reg === undefined) continue;
+    app.insertResource(decodeComponent(reg, sv, env));
+  }
+};
 
 /** Options for {@link spawnScene}. */
 export interface SpawnSceneOptions {
@@ -51,7 +72,9 @@ export interface SpawnSceneOptions {
  * reciprocal `Children` is built and its hooks fire. After an entity's
  * components, its `observers` bindings are attached by name (resolved against the
  * App's registered handlers), through the same command path as a code-side
- * `commands.entity(e).observe`. The buffer flushes before returning.
+ * `commands.entity(e).observe`. Finally, any resources the scene carried
+ * (`SceneData.resources`) are decoded and inserted on the App against the same
+ * decode env. The buffer flushes before returning.
  *
  * @param registry - The registry to decode against. Defaults to the App's
  *   {@link AppTypeRegistry} resource; pass an explicit one for tools/tests.
@@ -136,6 +159,14 @@ export const spawnScene = (
         cmd.entity(entity).observe(handler.event, handler.params, handler.run);
       }
     }
+  }
+
+  // Restore the scene's registered resources against the same env, so a resource
+  // field referencing a scene entity or asset handle resolves like a component's
+  // would. Inserted directly on the App (resources have no entity identity); the
+  // reserved entity ids are already live, so this is order-independent of flush.
+  if (scene.resources !== undefined && scene.resources.length > 0) {
+    applyResources(app, scene.resources, registry, env);
   }
 
   app.flushCommands();

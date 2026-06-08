@@ -13,6 +13,7 @@ import { motionVectorsShowcasePlugin } from './motion-vectors-showcase-plugin';
 import { observerShowcasePlugin } from './observer-showcase-plugin';
 import { prefabShowcasePlugin } from './prefab-showcase-plugin';
 import { primitivesShowcasePlugin } from './primitives-showcase-plugin';
+import { saveShowcasePlugin } from './save-showcase-plugin';
 import { sceneShowcasePlugin } from './scene-showcase-plugin';
 import { serializeShowcasePlugin } from './serialize-showcase-plugin';
 import { shapesShowcasePlugin } from './shapes-showcase-plugin';
@@ -74,6 +75,10 @@ if (!(canvas instanceof HTMLCanvasElement)) {
 //   `?mode=observers` → inline observer binding (ADR-0068): a scene attaches a
 //                     named observer handler to its entity. Press Space to fire a
 //                     Poke at the cube; the scene-bound observer recolors it.
+//   `?mode=save`    → persistent project save round-trip: a scene + world
+//                     settings + a promoted cube mesh are SAVED to disk through
+//                     the browser sink (→ dev server), then reloaded back through
+//                     FetchAssetSource. Needs `bun run dev` (the /save route).
 //   anything else   → Phase 7.5 primitives demo.
 // All demos stay discoverable from one bundle.
 const mode = new URLSearchParams(window.location.search).get('mode');
@@ -112,7 +117,9 @@ const showcase =
                                 ? prefabShowcasePlugin
                                 : mode === 'observers'
                                   ? observerShowcasePlugin
-                                  : primitivesShowcasePlugin;
+                                  : mode === 'save'
+                                    ? saveShowcasePlugin
+                                    : primitivesShowcasePlugin;
 
 const renderer = createWebGPURenderer(canvas);
 const app = new App({

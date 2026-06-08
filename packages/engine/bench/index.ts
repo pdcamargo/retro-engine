@@ -15,6 +15,7 @@ import './commands.bench';
 import './resource-change.bench';
 import './template-spawn.bench';
 import './observer-binding.bench';
+import './save-promote.bench';
 import './shader.bench';
 import './render-graph.bench';
 import './mesh-allocator.bench';

@@ -1,4 +1,5 @@
-import { TypeRegistry } from '@retro-engine/reflect';
+import type { ComponentType } from '@retro-engine/ecs';
+import { TypeRegistry, type RegisteredType } from '@retro-engine/reflect';
 
 /**
  * The reflection registry an {@link App} serializes and deserializes against,
@@ -13,4 +14,13 @@ import { TypeRegistry } from '@retro-engine/reflect';
 export class AppTypeRegistry {
   /** The reflection registry this App serializes/deserializes against. */
   readonly registry: TypeRegistry = new TypeRegistry();
+
+  /**
+   * The subset of {@link registry} types that are App resources, keyed by
+   * constructor. A resource's schema lives in `registry` like any other type;
+   * this map records which of those types the scene serializer should pull off
+   * the App (via its resource store) rather than off entities. Populated by
+   * `App.registerResource`.
+   */
+  readonly resources = new Map<ComponentType<object>, RegisteredType>();
 }

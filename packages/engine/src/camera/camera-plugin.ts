@@ -323,6 +323,10 @@ export class CameraPlugin implements PluginObject {
     app.insertResource(new ViewJitter());
     app.insertResource(new CurrentHdrView());
 
+    // ClearColor is authored world state, not a component — it registers as a
+    // resource so it rides a saved scene's `resources`.
+    app.registerResource(ClearColor, { color: t.color }, { name: 'ClearColor' });
+
     // Reflection schemas. `target` and `depthTarget` register only their data
     // arms — the surface/texture/view/manual arms carry live GPU references with
     // no persistent identity, so a camera holding one round-trips back to its
