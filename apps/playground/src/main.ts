@@ -10,6 +10,7 @@ import { litShowcasePlugin } from './lit-showcase-plugin';
 import { LoggingPlugin } from './logging-plugin';
 import { materialShowcasePlugin } from './material-showcase-plugin';
 import { motionVectorsShowcasePlugin } from './motion-vectors-showcase-plugin';
+import { prefabShowcasePlugin } from './prefab-showcase-plugin';
 import { primitivesShowcasePlugin } from './primitives-showcase-plugin';
 import { sceneShowcasePlugin } from './scene-showcase-plugin';
 import { serializeShowcasePlugin } from './serialize-showcase-plugin';
@@ -65,6 +66,10 @@ if (!(canvas instanceof HTMLCanvasElement)) {
 //   `?mode=scene`   → scene lifecycle (ADR-0062): a Scene asset gated behind a
 //                     States value spawns on enter and tears down on exit. Press
 //                     Space to toggle Showing/Hidden; the camera persists.
+//   `?mode=prefab`  → prefab templates & patches (ADR-0067): a Cube template is
+//                     spawned twice, one instance is patched to red, and a third
+//                     comes from a scene that embeds the template by name with a
+//                     field-level Transform override.
 //   anything else   → Phase 7.5 primitives demo.
 // All demos stay discoverable from one bundle.
 const mode = new URLSearchParams(window.location.search).get('mode');
@@ -99,7 +104,9 @@ const showcase =
                             ? serializeShowcasePlugin
                             : mode === 'scene'
                               ? sceneShowcasePlugin
-                              : primitivesShowcasePlugin;
+                              : mode === 'prefab'
+                                ? prefabShowcasePlugin
+                                : primitivesShowcasePlugin;
 
 const renderer = createWebGPURenderer(canvas);
 const app = new App({

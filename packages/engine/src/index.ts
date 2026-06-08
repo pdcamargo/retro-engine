@@ -32,6 +32,8 @@ import type { Plugin, PluginObject, PluginsState } from './plugin';
 import { wrapFunctionPlugin } from './plugin';
 import type { PluginGroup } from './plugin-group';
 import { PluginGroupBuilder } from './plugin-group';
+import type { ParamSchema, Template } from './prefab/template';
+import { TemplateRegistry } from './prefab/template-registry';
 import { EMPTY_SLOT_VALUES } from './render-graph/slot';
 import { RenderGraph } from './render-graph/render-graph';
 import type { RegisteredSystem } from './schedule';
@@ -119,7 +121,13 @@ export {
 } from './visibility';
 export { Name } from './name';
 export { AppTypeRegistry } from './scene/app-type-registry';
-export type { SceneData, SerializedComponent, SerializedEntity } from './scene/scene-data';
+export type {
+  SceneData,
+  SerializedComponent,
+  SerializedEntity,
+  SerializedOverride,
+  SerializedTemplateRef,
+} from './scene/scene-data';
 export { SCENE_FORMAT_VERSION } from './scene/scene-data';
 export type { SerializeOptions } from './scene/serialize';
 export { serializeScene, serializeWorld } from './scene/serialize';
@@ -134,6 +142,10 @@ export { addSceneInstantiation } from './scene/scene-reactor';
 export { ScenePlugin } from './scene/scene-plugin';
 export { SceneStateRoots } from './scene/scene-state';
 export type { AddSceneOptions } from './scene/scene-state';
+export type { ParamSchema, ResolvedParams, Template, TemplateDefinition } from './prefab/template';
+export { defineTemplate, expandTemplate } from './prefab/template';
+export { TemplateRegistry } from './prefab/template-registry';
+export { applyTemplate, spawnTemplate } from './prefab/template-commands';
 export type { PreprocessOptions, SpecializeFn } from './shader';
 export {
   PipelineCache,
@@ -806,6 +818,9 @@ export class App {
     // plugins can register their component schemas (via registerComponent) as
     // they wire themselves up. CorePlugin — added below — is the first to do so.
     this.insertResource(new AppTypeRegistry());
+    // Templates are App-scoped like the type registry, so a scene can resolve a
+    // prefab by name and `spawnTemplate(app, 'Name', ...)` works after `build()`.
+    this.insertResource(new TemplateRegistry());
     // ADR-0020: legacy `AppOptions.clearColor` is sugar for inserting a
     // `ClearColor` resource. CameraPlugin only inserts a default if no
     // ClearColor is already present, so user-supplied values win.
@@ -1290,6 +1305,16 @@ export class App {
     opts?: RegisterOptions<T>,
   ): RegisteredType<T> {
     return this.getResource(AppTypeRegistry)!.registry.registerType(ctor, schema, opts);
+  }
+
+  /**
+   * Register a {@link Template} in this App, keyed by its stable name. The owning
+   * plugin registers its templates from `build()`; registration is what lets a
+   * scene reference the template by name and `spawnTemplate(app, 'Name', ...)`
+   * resolve it. Throws if the name is already taken.
+   */
+  registerTemplate<P extends ParamSchema>(template: Template<P>): Template<P> {
+    return this.getResource(TemplateRegistry)!.register(template);
   }
 
   /**

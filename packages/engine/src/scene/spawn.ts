@@ -7,6 +7,8 @@ import { AssetStores } from '../asset/asset-stores';
 import { Commands, type CommandsHandle } from '../commands';
 import { Parent } from '../hierarchy';
 import type { App } from '../index';
+import { TemplateRegistry } from '../prefab/template-registry';
+import { expandTemplateRefs } from '../prefab/template-scene';
 
 import { AppTypeRegistry } from './app-type-registry';
 import { buildDecodeEnv } from './deserialize';
@@ -81,12 +83,30 @@ export const spawnScene = (
 
   const env = buildDecodeEnv(registry, idToEntity, decodeOpts);
   const parentReg = registry.getByCtor(Parent);
+  const templateReg = app.getResource(TemplateRegistry);
 
   // Pass 2: decode + insert every component except Parent, which is routed
   // through addChild so the appendChild op wires both sides and fires hooks.
+  // Embedded templates expand first, so an explicit component of the same type
+  // overrides the template's output (resolveBundle keeps the last value on insert).
   for (const serialized of scene.entities) {
     const entity = idToEntity.get(serialized.id)!;
     const components: object[] = [];
+
+    if (
+      serialized.templates !== undefined &&
+      serialized.templates.length > 0 &&
+      templateReg !== undefined
+    ) {
+      for (const produced of expandTemplateRefs(templateReg, registry, serialized.templates, env)) {
+        if (produced instanceof Parent) {
+          cmd.entity(produced.entity).addChild(entity);
+          continue;
+        }
+        components.push(produced);
+      }
+    }
+
     for (const component of serialized.components) {
       const reg = registry.get(component.type);
       if (reg === undefined) continue;
