@@ -20,9 +20,18 @@ import homepage from './index.html';
 const PORT = 5173;
 const SAVE_ROOT = `${import.meta.dir}/saved`;
 
-/** A request sub-path is safe only if it cannot escape SAVE_ROOT. */
-const isSafe = (sub: string | undefined): sub is string =>
-  sub !== undefined && sub.length > 0 && !sub.includes('..');
+/**
+ * The request's path under `prefix`, or `undefined` if it doesn't match or would
+ * escape SAVE_ROOT. Derived from the URL pathname rather than a route param, so
+ * it doesn't depend on Bun's wildcard-param key.
+ */
+const subUnder = (req: Request, prefix: string): string | undefined => {
+  const path = decodeURIComponent(new URL(req.url).pathname);
+  if (!path.startsWith(prefix)) return undefined;
+  const sub = path.slice(prefix.length);
+  if (sub.length === 0 || sub.includes('..')) return undefined;
+  return sub;
+};
 
 Bun.serve({
   port: PORT,
@@ -33,14 +42,14 @@ Bun.serve({
       if (req.method !== 'PUT' && req.method !== 'POST') {
         return new Response('method not allowed', { status: 405 });
       }
-      const sub = req.params['*'];
-      if (!isSafe(sub)) return new Response('forbidden', { status: 403 });
+      const sub = subUnder(req, '/save/');
+      if (sub === undefined) return new Response('forbidden', { status: 403 });
       await Bun.write(`${SAVE_ROOT}/${sub}`, await req.arrayBuffer());
       return new Response(null, { status: 204 });
     },
     '/saved/*': (req) => {
-      const sub = req.params['*'];
-      if (!isSafe(sub)) return new Response('forbidden', { status: 403 });
+      const sub = subUnder(req, '/saved/');
+      if (sub === undefined) return new Response('forbidden', { status: 403 });
       return new Response(Bun.file(`${SAVE_ROOT}/${sub}`));
     },
   },

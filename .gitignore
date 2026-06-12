@@ -44,3 +44,7 @@ coverage/
 
 # Playground dev-server saved projects (?mode=save output)
 apps/playground/saved/
+
+# Playwright MCP scratch output (screenshots, snapshots, console logs)
+.playwright-mcp/
+save-showcase.png
