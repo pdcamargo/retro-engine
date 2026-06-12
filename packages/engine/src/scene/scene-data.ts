@@ -42,6 +42,24 @@ export interface SerializedObserverBinding {
   readonly handler: string;
 }
 
+/**
+ * A reference to a child scene instantiated *live* under an entity (scene
+ * composition). Unlike a {@link SerializedTemplateRef}, which expands to
+ * components at spawn and bakes into the parent on the next save, a scene ref is
+ * a persistent link: the child stays an independent, editable asset addressed by
+ * its GUID, and saving the parent re-emits this reference rather than the child's
+ * expanded entities.
+ *
+ * The referencing ("mount") entity keeps its own components — its `Transform`
+ * positions the instance, a `Name` labels it, a `Parent` nests it — and a single
+ * despawn of it (or any ancestor) tears the whole child instance down. To include
+ * the same child scene more than once, give several entities the same `guid`.
+ */
+export interface SerializedSceneRef {
+  /** GUID of the child {@link import('./scene-asset').Scene} asset to instantiate under this entity. */
+  readonly guid: string;
+}
+
 /** One entity in a {@link SceneData}: its compact in-scene id and serialized components. */
 export interface SerializedEntity {
   /** Stable id within the scene; entity-typed fields reference entities by this id. */
@@ -60,6 +78,14 @@ export interface SerializedEntity {
    * are inserted. Behavior is referenced by name, never serialized.
    */
   readonly observers?: readonly SerializedObserverBinding[];
+  /**
+   * A child scene instantiated live under this entity (composition). On load the
+   * entity gains a `SceneRoot` for the referenced child, which the instantiation
+   * reactor expands and parents beneath it; on save it is re-emitted as the
+   * reference, and the child's instantiated entities are excluded. Resolved by
+   * GUID through the App's `AssetServer` (or a caller-injected resolver).
+   */
+  readonly scene?: SerializedSceneRef;
 }
 
 /**

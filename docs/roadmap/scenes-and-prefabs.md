@@ -1,7 +1,7 @@
 # Scenes and Prefabs
 
 - **Created:** 2026-05-21
-- **Status:** Active — phase 1 + the load/unload lifecycle (ADR-0062), templates/patches (ADR-0067), and inline observer binding (ADR-0068) shipped. Later phases (composition, hot-reload, studio) remain sketches.
+- **Status:** Active — phase 1 + the load/unload lifecycle (ADR-0062), templates/patches (ADR-0067), inline observer binding (ADR-0068), and scene composition (ADR-0071) shipped. Later phases (hot-reload, studio) remain sketches.
 
 ## Goal
 
@@ -20,7 +20,7 @@ Each phase is a sketch. Promote when prerequisites land and a real consumer asks
 3. **Entity patches** — **Shipped (ADR-0067).** `applyTemplate(app, entity, template, params?)` applies a template to an existing entity rather than spawning fresh — "add the Damaged state visuals" without rebuilding it (insert overwrites a present component, adds a missing one). BSN's core idea, adapted; overrides are one-shot.
 4. **Spawn integration with Required Components** — **Shipped (ADR-0067).** Template spawn rides the command buffer → `resolveBundle`, so the definition lists the explicit components and transitive `static requires` fill in (explicit template components win).
 5. **Inline observer binding** — **Shipped (ADR-0068).** A scene attaches entity-targeted observers to its entities by referencing registered handler names (`observers: [{ handler: 'onClick' }]`). A handler — registered in code via `app.registerObserverHandler(defineObserverHandler({ name, event, params, run }))` — bundles the event it observes and the body to run, so the scene stays pure data. Built on the observer *runtime* (ADR-0013, already shipped); only the serializable binding layer landed here.
-6. **Scene composition** — a parent scene includes other scenes as nested entities. Lets you build levels by stitching together rooms / encounters / NPCs without duplicating definitions.
+6. **Scene composition** — **Shipped (ADR-0071).** A `SerializedEntity` gains an optional `scene?: { guid }`: the mount entity carries its own `Transform`/`Name`/`Parent` and additionally points at a child scene by GUID. `spawnScene` turns the ref into a `SceneRoot`, and the existing reactor instantiates the child under it (recursing through deeper refs, loading lazily per depth) — so the same child scene can be instanced many times, each named and positioned by its mount. A **live link**, not a baked copy (the deliberate opposite of ADR-0067's template refs): saving re-emits the ref and excludes the child's entities, so the child stays an independent, editable asset. Cycles are refused via a `Parent`-chain ancestor-GUID walk. Per-instance field overrides *inside* a child (Godot "editable children") are deferred — `docs/backlog/nested-scene-instance-overrides.md`.
 7. **Hot reload** — when a `.scene` file changes during dev, the runtime re-applies it to the live world, diff-based where reflection metadata makes it safe. Worst case: re-trigger `OnExit(SceneId)` → `OnEnter(SceneId)`.
 8. **Studio integration** — scene saver / loader in the studio, scene tree inspector, drag-drop entity into scene, observer binding UI. Far-future; on the studio side, not the engine side.
 

@@ -11,6 +11,50 @@ import {
   type SerializedComponent,
   type SerializedEntity,
 } from './scene-data';
+import { SceneInstance, SceneRoot } from './scene-root';
+
+/**
+ * The result of scanning a world for composition mount entities — those carrying
+ * both a {@link SceneRoot} and a {@link SceneInstance}.
+ *
+ * @internal
+ */
+interface Composition {
+  /**
+   * Entities that belong to a nested child instance. Excluded from this scene's
+   * output — they live in the child `.scene` file, not this one.
+   */
+  readonly excluded: ReadonlySet<Entity>;
+  /**
+   * For each mount entity with a GUID-bearing handle, the child scene GUID to
+   * re-emit as a `scene` ref. A mount whose handle has no GUID is runtime-only:
+   * its instance entities are still excluded, but no ref is emitted.
+   */
+  readonly sceneRefOf: ReadonlyMap<Entity, string>;
+}
+
+/**
+ * Scan the world for composition mount entities and derive what serialization
+ * must do for each: exclude the child's instantiated entities, and re-emit the
+ * mount as a `scene` ref. A non-composed world yields empty sets, so it
+ * serializes byte-identically to before.
+ *
+ * @internal Shared by {@link serializeWorld} and {@link serializeScene}.
+ */
+const collectComposition = (world: World): Composition => {
+  const excluded = new Set<Entity>();
+  const sceneRefOf = new Map<Entity, string>();
+  for (const entity of world.entities()) {
+    const instance = world.getComponent(entity, SceneInstance);
+    if (instance === undefined) continue;
+    const root = world.getComponent(entity, SceneRoot);
+    if (root === undefined) continue;
+    for (const child of instance.entities) excluded.add(child);
+    const guid = root.handle.guid;
+    if (guid !== undefined) sceneRefOf.set(entity, guid);
+  }
+  return { excluded, sceneRefOf };
+};
 
 /** Options for {@link serializeWorld}. */
 export interface SerializeOptions {
@@ -59,8 +103,11 @@ const serializeEntities = (
   env: EncodeEnv,
   idOf: ReadonlyMap<Entity, number>,
   live: readonly Entity[],
-): SerializedEntity[] =>
-  live.map((entity) => {
+  composition: Composition,
+): SerializedEntity[] => {
+  const out: SerializedEntity[] = [];
+  for (const entity of live) {
+    if (composition.excluded.has(entity)) continue;
     const components: SerializedComponent[] = [];
     for (const ctor of world.componentTypesOf(entity)) {
       const reg = registry.getByCtor(ctor);
@@ -69,8 +116,15 @@ const serializeEntities = (
       if (value === undefined) continue;
       components.push(encodeComponent(reg, value, env));
     }
-    return { id: idOf.get(entity)!, components };
-  });
+    const guid = composition.sceneRefOf.get(entity);
+    out.push(
+      guid !== undefined
+        ? { id: idOf.get(entity)!, components, scene: { guid } }
+        : { id: idOf.get(entity)!, components },
+    );
+  }
+  return out;
+};
 
 /**
  * Encode every registered App resource currently present into its
@@ -110,7 +164,7 @@ export const serializeWorld = (
   const { env, idOf, live } = buildEncodeEnv(world, registry, opts);
   return {
     version: SCENE_FORMAT_VERSION,
-    entities: serializeEntities(world, registry, env, idOf, live),
+    entities: serializeEntities(world, registry, env, idOf, live, collectComposition(world)),
   };
 };
 
@@ -126,7 +180,14 @@ export const serializeWorld = (
 export const serializeScene = (app: App, opts: SerializeOptions = {}): SceneData => {
   const registry = app.getResource(AppTypeRegistry)!.registry;
   const { env, idOf, live } = buildEncodeEnv(app.world, registry, opts);
-  const entities = serializeEntities(app.world, registry, env, idOf, live);
+  const entities = serializeEntities(
+    app.world,
+    registry,
+    env,
+    idOf,
+    live,
+    collectComposition(app.world),
+  );
   const resources = serializeResources(app, env);
   return resources.length > 0
     ? { version: SCENE_FORMAT_VERSION, entities, resources }

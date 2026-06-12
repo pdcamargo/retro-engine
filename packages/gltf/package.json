@@ -11,6 +11,9 @@
     "@retro-engine/math": "workspace:*",
     "@retro-engine/renderer-core": "workspace:*"
   },
+  "devDependencies": {
+    "@retro-engine/assets": "workspace:*"
+  },
   "exports": {
     ".": {
       "types": "./src/index.ts",

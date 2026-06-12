@@ -129,6 +129,7 @@ export type {
   SerializedEntity,
   SerializedObserverBinding,
   SerializedOverride,
+  SerializedSceneRef,
   SerializedTemplateRef,
 } from './scene/scene-data';
 export { SCENE_FORMAT_VERSION } from './scene/scene-data';

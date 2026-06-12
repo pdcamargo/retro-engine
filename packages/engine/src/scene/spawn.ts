@@ -1,8 +1,9 @@
 import type { Entity } from '@retro-engine/ecs';
-import type { Handle } from '@retro-engine/assets';
+import type { AssetGuid, Handle } from '@retro-engine/assets';
 import type { DecodeEnv, SerializedValue, TypeRegistry } from '@retro-engine/reflect';
 import { decodeComponent } from '@retro-engine/reflect';
 
+import { AssetServer } from '../asset/asset-server';
 import { AssetStores } from '../asset/asset-stores';
 import { Commands, type CommandsHandle } from '../commands';
 import { Parent } from '../hierarchy';
@@ -14,7 +15,33 @@ import { expandTemplateRefs } from '../prefab/template-scene';
 
 import { AppTypeRegistry } from './app-type-registry';
 import { buildDecodeEnv } from './deserialize';
+import type { Scene } from './scene-asset';
 import type { SceneData } from './scene-data';
+import { SceneRoot } from './scene-root';
+
+/**
+ * Resolve a nested scene reference's GUID to its `Handle<Scene>`. A caller-injected
+ * `resolveHandle` wins (tools/tests, in-memory children); otherwise the child is
+ * loaded by GUID through the App's {@link AssetServer}, which returns the handle
+ * immediately and kicks the child file's load. Throws when neither is available —
+ * composition by GUID needs a manifest-backed `AssetServer` or an explicit resolver.
+ *
+ * @internal Used by {@link spawnScene} to turn a `scene` ref into a `SceneRoot`.
+ */
+const resolveSceneRef = (
+  app: App,
+  guid: string,
+  resolveHandle: SpawnSceneOptions['resolveHandle'],
+): Handle<Scene> => {
+  if (resolveHandle !== undefined) return resolveHandle('Scene', guid) as Handle<Scene>;
+  const server = app.getResource(AssetServer);
+  if (server === undefined) {
+    throw new Error(
+      `scene composition: entity references child scene '${guid}' but the App has no AssetServer and no resolveHandle was provided`,
+    );
+  }
+  return server.loadByGuid<Scene>(guid as AssetGuid);
+};
 
 /**
  * Decode a scene's serialized resources and insert them into the App, using the
@@ -158,6 +185,16 @@ export const spawnScene = (
       for (const handler of resolveObserverBindings(handlerReg, serialized.observers)) {
         cmd.entity(entity).observe(handler.event, handler.params, handler.run);
       }
+    }
+
+    // A nested scene reference becomes a SceneRoot on this entity; the
+    // instantiation reactor expands the child under it on a later frame
+    // (recursing through any deeper refs), and the cascade tears it down. The
+    // caller's resolveHandle propagates onto the nested root so the whole
+    // subtree resolves the same way.
+    if (serialized.scene !== undefined) {
+      const handle = resolveSceneRef(app, serialized.scene.guid, opts.resolveHandle);
+      cmd.entity(entity).insert(new SceneRoot(handle, opts.resolveHandle));
     }
   }
 

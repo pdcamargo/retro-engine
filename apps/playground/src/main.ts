@@ -4,6 +4,7 @@ import { createWebGPURenderer } from '@retro-engine/renderer-webgpu';
 import { aoShowcasePlugin } from './ao-showcase-plugin';
 import { assetShowcasePlugin } from './asset-showcase-plugin';
 import { atlasShowcasePlugin } from './atlas-showcase-plugin';
+import { compositionShowcasePlugin } from './composition-showcase-plugin';
 import { gltfShowcasePlugin } from './gltf-showcase-plugin';
 import { lightsShowcasePlugin } from './lights-showcase-plugin';
 import { litShowcasePlugin } from './lit-showcase-plugin';
@@ -79,6 +80,9 @@ if (!(canvas instanceof HTMLCanvasElement)) {
 //                     settings + a promoted cube mesh are SAVED to disk through
 //                     the browser sink (→ dev server), then reloaded back through
 //                     FetchAssetSource. Needs `bun run dev` (the /save route).
+//   `?mode=compose` → scene composition (ADR-0071): a Level scene nests the same
+//                     Pillar child scene twice as named, positioned instances;
+//                     the live graph is published to `window.__compose`.
 //   anything else   → Phase 7.5 primitives demo.
 // All demos stay discoverable from one bundle.
 const mode = new URLSearchParams(window.location.search).get('mode');
@@ -119,7 +123,9 @@ const showcase =
                                   ? observerShowcasePlugin
                                   : mode === 'save'
                                     ? saveShowcasePlugin
-                                    : primitivesShowcasePlugin;
+                                    : mode === 'compose'
+                                      ? compositionShowcasePlugin
+                                      : primitivesShowcasePlugin;
 
 const renderer = createWebGPURenderer(canvas);
 const app = new App({
