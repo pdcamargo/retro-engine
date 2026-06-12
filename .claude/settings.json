@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(bun run typecheck:*)",
+      "Bash(bun run lint:*)",
+      "Bash(bun run bench)",
+      "Bash(bunx tsc --noEmit:*)",
+      "Bash(bun run test:*)"
+    ]
+  }
+}
