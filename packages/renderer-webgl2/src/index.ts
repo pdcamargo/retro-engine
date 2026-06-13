@@ -92,3 +92,5 @@ export const createWebGL2Renderer = (_canvas: HTMLCanvasElement): Renderer => {
     },
   };
 };
+
+export { createImGuiOverlay } from './imgui-overlay';

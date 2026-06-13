@@ -201,3 +201,5 @@ export { BufferUsage, TextureUsage } from './resources';
 export type { ShaderModule, ShaderModuleDescriptor } from './shader';
 
 export type { Surface, SurfaceConfiguration } from './surface';
+
+export type { SurfaceOverlay } from './surface-overlay';

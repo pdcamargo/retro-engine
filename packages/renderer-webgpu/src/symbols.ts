@@ -6,9 +6,11 @@ import type {
   Buffer,
   CommandBuffer,
   PipelineLayout,
+  Renderer,
   RenderPipeline,
   Sampler,
   ShaderModule,
+  Surface,
   Texture,
   TextureView,
 } from '@retro-engine/renderer-core';
@@ -31,6 +33,8 @@ export const GPU_TEXTURE = Symbol('webgpu.texture');
 export const GPU_VIEW = Symbol('webgpu.textureView');
 export const GPU_SAMPLER = Symbol('webgpu.sampler');
 export const GPU_COMMAND_BUFFER = Symbol('webgpu.commandBuffer');
+export const GPU_DEVICE = Symbol('webgpu.device');
+export const GPU_SURFACE_CONTEXT = Symbol('webgpu.surfaceContext');
 
 export interface InternalShaderModule extends ShaderModule {
   readonly [GPU_MODULE]: GPUShaderModule;
@@ -61,4 +65,22 @@ export interface InternalSampler extends Sampler {
 }
 export interface InternalCommandBuffer extends CommandBuffer {
   readonly [GPU_COMMAND_BUFFER]: GPUCommandBuffer;
+}
+
+/**
+ * The active `GPUDevice` behind a {@link Renderer}, or `undefined` before
+ * `init()` resolves. Exposed for in-package consumers (e.g. the ImGui overlay)
+ * that must drive WebGPU directly without leaking the device past this package.
+ */
+export interface InternalRenderer extends Renderer {
+  readonly [GPU_DEVICE]: GPUDevice | undefined;
+}
+
+/**
+ * The raw `GPUCanvasContext` behind a {@link Surface}. The overlay reads it to
+ * composite onto the surface's current texture through a storage-format view,
+ * matching the swapchain format an external UI backend builds its pipeline for.
+ */
+export interface InternalSurface extends Surface {
+  readonly [GPU_SURFACE_CONTEXT]: GPUCanvasContext;
 }

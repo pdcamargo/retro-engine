@@ -1,7 +1,6 @@
 /// <reference types="@webgpu/types" />
 
 import type {
-  Surface,
   SurfaceConfiguration,
   TextureFormat,
   TextureView,
@@ -9,14 +8,16 @@ import type {
 import { srgbVariantOf } from '@retro-engine/renderer-core';
 
 import { wrapTextureView } from './resources';
+import { GPU_SURFACE_CONTEXT, type InternalSurface } from './symbols';
 
-export const makeSurface = (device: GPUDevice, canvas: HTMLCanvasElement): Surface => {
+export const makeSurface = (device: GPUDevice, canvas: HTMLCanvasElement): InternalSurface => {
   const context = canvas.getContext('webgpu');
   if (!context) throw new Error('Canvas does not support a WebGPU context');
 
   let viewFormat: TextureFormat | undefined;
 
   return {
+    [GPU_SURFACE_CONTEXT]: context,
     configure(descriptor: SurfaceConfiguration): void {
       const storageFormat = descriptor.format;
       const srgbView = srgbVariantOf(storageFormat);

@@ -1,11 +1,27 @@
 # Editor SDK — `@retro-engine/editor-sdk`
 
 - **Created:** 2026-05-21
-- **Status:** Planning
+- **Status:** In progress — package created with the immediate-mode UI foundation (ADR-0072)
 
 ## Goal
 
 `packages/editor-sdk` is the public extension surface for the studio. Plugins can register custom windows, custom dialogs, custom inspectors, and custom asset importers without forking the studio. The SDK is the only thing third-party tooling depends on; the studio's internals stay private.
+
+## Progress (2026-06-12) — ADR-0072
+
+`packages/editor-sdk` now exists. It ships the **UI foundation** the phases below build on:
+
+- `ui` — a normalized, typed, immediate-mode wrapper over Dear ImGui (`ui.window`, `ui.button`, `ui.text`, `ui.checkbox`, `ui.sliderFloat`, `ui.dragFloat`, `ui.colorEdit3`, …). This is the first-class consumer surface; raw jsimgui is never exposed.
+- `ThemeTokens` / `defaultTokens` / `applyTheme` — token-driven theming (typed TS is the canonical token format; placeholder tokens until a design export lands).
+- `uiOverlayPlugin` — drives the per-frame UI on top of the engine render, via the backend-neutral `SurfaceOverlay` injected from the active renderer.
+- **Docking** — `uiOverlayPlugin({ docking: true })`, `ui.dockSpaceOverViewport`, per-window `dock`.
+- **Dock-layout save/restore** — `saveLayout` / `loadLayout` (Dear ImGui `ini`) plus a `layout` option: a baked **default layout** and consumer-provided `persist`/`restore` sinks (so the studio can later store layouts in a project file, not just `localStorage`). Validated in the playground: a default split layout opens pre-docked, user changes persist, and a saved layout is restored over the default. This is the mechanism the docking layout (phase 1) and a future layout-reset/preset command build on.
+
+Window/dialog/inspector/menu registration (phases 1–4) layer on top of this `ui` surface.
+
+## Future direction — declarative authoring over the immediate-mode core
+
+A higher-level, declarative/CSS-like authoring layer (Unity UI-Toolkit / USS analog) for *editor* UI is a candidate future layer **on top of** the immediate-mode `ui` core — describe panels as data/markup, drive ImGui underneath, with the token layer as the styling source of truth. Deferred deliberately: the immediate-mode surface ships first because it matches ImGui's grain; a declarative layer is additive and gets its own ADR when scoped. (Distinct from `docs/roadmap/ui-system.md`, which is the *in-game* ECS UI.)
 
 ## Phases
 

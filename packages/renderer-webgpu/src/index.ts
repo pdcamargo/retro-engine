@@ -46,7 +46,7 @@ import {
   writeTextureImpl,
 } from './resources';
 import { makeSurface } from './surface';
-import { GPU_COMMAND_BUFFER, type InternalCommandBuffer } from './symbols';
+import { GPU_COMMAND_BUFFER, GPU_DEVICE, type InternalCommandBuffer } from './symbols';
 
 /**
  * Create a WebGPU-backed renderer.
@@ -74,7 +74,7 @@ export const createWebGPURenderer = (_canvas: HTMLCanvasElement): Renderer => {
     return device;
   };
 
-  return {
+  const renderer: Renderer = {
     capabilities,
 
     async init(): Promise<void> {
@@ -163,4 +163,13 @@ export const createWebGPURenderer = (_canvas: HTMLCanvasElement): Renderer => {
       dev.queue.submit(buffers.map((b) => (b as InternalCommandBuffer)[GPU_COMMAND_BUFFER]));
     },
   };
+
+  // Expose the post-init device to in-package consumers (the ImGui overlay)
+  // without leaking it onto the public `Renderer` surface (CLAUDE.md §10). The
+  // getter reflects the device once `init()` has resolved.
+  Object.defineProperty(renderer, GPU_DEVICE, { get: (): GPUDevice | undefined => device });
+
+  return renderer;
 };
+
+export { createImGuiOverlay } from './imgui-overlay';

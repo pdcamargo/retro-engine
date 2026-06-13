@@ -20,6 +20,7 @@
       "dependencies": {
         "@retro-engine/assets": "workspace:*",
         "@retro-engine/ecs": "workspace:*",
+        "@retro-engine/editor-sdk": "workspace:*",
         "@retro-engine/engine": "workspace:*",
         "@retro-engine/gltf": "workspace:*",
         "@retro-engine/math": "workspace:*",
@@ -52,6 +53,15 @@
     "packages/ecs": {
       "name": "@retro-engine/ecs",
       "version": "0.0.0",
+    },
+    "packages/editor-sdk": {
+      "name": "@retro-engine/editor-sdk",
+      "version": "0.0.0",
+      "dependencies": {
+        "@mori2003/jsimgui": "0.14.0",
+        "@retro-engine/engine": "workspace:*",
+        "@retro-engine/renderer-core": "workspace:*",
+      },
     },
     "packages/engine": {
       "name": "@retro-engine/engine",
@@ -102,6 +112,7 @@
       "name": "@retro-engine/renderer-webgl2",
       "version": "0.0.0",
       "dependencies": {
+        "@mori2003/jsimgui": "0.14.0",
         "@retro-engine/renderer-core": "workspace:*",
       },
     },
@@ -109,12 +120,16 @@
       "name": "@retro-engine/renderer-webgpu",
       "version": "0.0.0",
       "dependencies": {
+        "@mori2003/jsimgui": "0.14.0",
         "@retro-engine/renderer-core": "workspace:*",
       },
       "devDependencies": {
         "@webgpu/types": "latest",
       },
     },
+  },
+  "patchedDependencies": {
+    "@mori2003/jsimgui@0.14.0": "patches/@mori2003%2Fjsimgui@0.14.0.patch",
   },
   "packages": {
     "@babel/runtime": ["@babel/runtime@7.29.2", "", {}, "sha512-JiDShH45zKHWyGe4ZNVRrCjBz8Nh9TMmZG1kh4QTK8hCBTWBi8Da+i7s1fJw7/lYpM4ccepSNfqzZ/QvABBi5g=="],
@@ -159,7 +174,7 @@
 
     "@manypkg/get-packages": ["@manypkg/get-packages@1.1.3", "", { "dependencies": { "@babel/runtime": "^7.5.5", "@changesets/types": "^4.0.1", "@manypkg/find-root": "^1.1.0", "fs-extra": "^8.1.0", "globby": "^11.0.0", "read-yaml-file": "^1.1.0" } }, "sha512-fo+QhuU3qE/2TQMQmbVMqaQ6EWbMhi4ABWP+O4AM1NqPBuy0OrApV5LO6BrrgnhtAHS2NH6RrVk9OL181tTi8A=="],
 
-    "@mori2003/jsimgui": ["@mori2003/jsimgui@0.13.0", "", {}, "sha512-xlAZg/AFJsnPFP2XyWZDml3Aq/kGyNgdBlUdfwvUIk7JpFf+HbX1FUHAKq4h54RJwa2q8Kt3d2uzdhtpHCih0w=="],
+    "@mori2003/jsimgui": ["@mori2003/jsimgui@0.14.0", "", {}, "sha512-6c4rPiTsSNgKf3qrNjBRx8rnMZf7ouOKAufddh8YN1W6YQoTAA9k1rK9Ke+tt6lzNrs3CECVD54QDqeqBwb3Mw=="],
 
     "@nodelib/fs.scandir": ["@nodelib/fs.scandir@2.1.5", "", { "dependencies": { "@nodelib/fs.stat": "2.0.5", "run-parallel": "^1.1.9" } }, "sha512-vq24Bq3ym5HEQm2NKCr3yXDwjc7vTsEThRDnkp2DK9p1uqLR+DHurm/NOTo0KG7HYHU7eppKZj3MyqYuMBf62g=="],
 
@@ -208,6 +223,8 @@
     "@retro-engine/assets": ["@retro-engine/assets@workspace:packages/assets"],
 
     "@retro-engine/ecs": ["@retro-engine/ecs@workspace:packages/ecs"],
+
+    "@retro-engine/editor-sdk": ["@retro-engine/editor-sdk@workspace:packages/editor-sdk"],
 
     "@retro-engine/engine": ["@retro-engine/engine@workspace:packages/engine"],
 

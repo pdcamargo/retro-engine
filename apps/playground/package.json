@@ -13,6 +13,7 @@
   "dependencies": {
     "@retro-engine/assets": "workspace:*",
     "@retro-engine/ecs": "workspace:*",
+    "@retro-engine/editor-sdk": "workspace:*",
     "@retro-engine/engine": "workspace:*",
     "@retro-engine/gltf": "workspace:*",
     "@retro-engine/math": "workspace:*",

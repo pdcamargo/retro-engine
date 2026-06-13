@@ -6,6 +6,7 @@ import { assetShowcasePlugin } from './asset-showcase-plugin';
 import { atlasShowcasePlugin } from './atlas-showcase-plugin';
 import { compositionShowcasePlugin } from './composition-showcase-plugin';
 import { gltfShowcasePlugin } from './gltf-showcase-plugin';
+import { imguiShowcasePlugin } from './imgui-showcase-plugin';
 import { lightsShowcasePlugin } from './lights-showcase-plugin';
 import { litShowcasePlugin } from './lit-showcase-plugin';
 import { LoggingPlugin } from './logging-plugin';
@@ -83,11 +84,17 @@ if (!(canvas instanceof HTMLCanvasElement)) {
 //   `?mode=compose` → scene composition (ADR-0071): a Level scene nests the same
 //                     Pillar child scene twice as named, positioned instances;
 //                     the live graph is published to `window.__compose`.
+//   `?mode=imgui`   → editor-sdk UI overlay (ADR-0072): a themed demo window with
+//                     a few widgets, drawn through the normalized `ui` wrapper as
+//                     an overlay after the engine render. Backend chosen from the
+//                     active renderer (WebGPU here).
 //   anything else   → Phase 7.5 primitives demo.
 // All demos stay discoverable from one bundle.
 const mode = new URLSearchParams(window.location.search).get('mode');
 const showcase =
-  mode === 'slice'
+  mode === 'imgui'
+    ? imguiShowcasePlugin
+    : mode === 'slice'
     ? sliceShowcasePlugin
     : mode === 'atlas'
       ? atlasShowcasePlugin

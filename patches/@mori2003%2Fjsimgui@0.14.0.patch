@@ -1,0 +1,13 @@
+diff --git a/build/imgui.js b/build/imgui.js
+index 8af4c57c3b8fb88abbec9cc972072631070be4ca..bc5677b1b4f8944a57d95ca59f08dc18b2961321 100644
+--- a/build/imgui.js
++++ b/build/imgui.js
+@@ -11,7 +11,7 @@ export const Mod = {
+         else if (enableFreeType) {
+             MainExport = extensions
+                 ? // @ts-expect-error
+-                    await import("./loader-freetype-extensions.js")
++                    await import("./loader-extensions-freetype.js")
+                 : // @ts-expect-error
+                     await import("./loader-freetype.js");
+         }

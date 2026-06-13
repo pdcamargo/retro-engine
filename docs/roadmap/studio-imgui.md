@@ -1,11 +1,23 @@
 # Studio + jsimgui Integration
 
 - **Created:** 2026-05-21
-- **Status:** Planning
+- **Status:** In progress — foundation landed (ADR-0072), validated in the playground; studio frontend not yet wired
 
 ## Goal
 
-The studio uses [`@mori2003/jsimgui`](https://www.npmjs.com/package/@mori2003/jsimgui) as its UI toolkit, layered on the same WebGPU canvas the engine renders to. ImGui draws after the engine's main pass in the same command encoder. If the upstream package can't share a device cleanly, we fork, patch, and build via Docker.
+The studio uses [`@mori2003/jsimgui`](https://www.npmjs.com/package/@mori2003/jsimgui) as its UI toolkit, layered on the same WebGPU canvas the engine renders to. ImGui draws after the engine's main pass. If the upstream package can't share a device cleanly, we fork, patch, and build via Docker.
+
+## Progress (2026-06-12) — ADR-0072
+
+The integration foundation is built and validated end-to-end in `apps/playground` (`?mode=imgui`), not yet in the studio:
+
+- **Phase 1 (smoke test)** — done in the playground: engine frame + a themed demo window + the Dear ImGui demo, drawn each frame and interactive.
+- **Phase 2 (shared device lifecycle)** — resolved: the backend overlay reads the renderer's `GPUDevice` through `renderer-webgpu`'s internal symbols (`createImGuiOverlay(renderer)`), so engine and ImGui share one device. Open question answered — jsimgui shares a device fine via `Init({ canvas, device })`.
+- **Phase 3 (pass ordering)** — the overlay runs in the render `Cleanup` set, after the main render submits, compositing onto the surface's storage-format view with `loadOp: 'load'` (its own encoder + submit, not the engine's). Open question answered — `EndRender(passEncoder)` records into a caller-owned WebGPU pass.
+- **Phase 5 (theme)** — token-driven theming via `editor-sdk`'s `applyTheme` / `ThemeTokens` (placeholder tokens for now).
+- **Phase 6 (fork)** — not needed; upstream shares the device cleanly. A committed `bun` patch fixes only a loader-filename packaging bug in `@mori2003/jsimgui@0.14.0`.
+
+Remaining: phase 4 (docking layout), wiring the overlay into the actual studio frontend, and the input-routing / hi-DPI open questions there.
 
 ## Phases
 
