@@ -1,5 +1,6 @@
 import { ImGui, ImGuiCond, ImGuiDockNodeFlags, ImVec2, ImVec4 } from '@mori2003/jsimgui';
 
+import { getFont } from './fonts';
 import type { Rgb, Rgba, Vec2 } from './units';
 
 /** Options for {@link Ui.window}. */
@@ -64,6 +65,12 @@ export interface Ui {
   sameLine(): void;
   /** Vertical spacing between widgets. */
   spacing(): void;
+  /**
+   * Run `body` with a registered font active at `sizePixels`. If no font is
+   * registered under `name`, `body` still runs in the current font. Use for
+   * headings or the pixel display face (e.g. `ui.withFont('pixel', 16, ...)`).
+   */
+  withFont(name: string, sizePixels: number, body: () => void): void;
   /** The built-in Dear ImGui demo window — handy while bringing UI up. */
   demoWindow(): void;
   /**
@@ -150,6 +157,20 @@ export const ui: Ui = {
 
   spacing(): void {
     ImGui.Spacing();
+  },
+
+  withFont(name: string, sizePixels: number, body: () => void): void {
+    const font = getFont(name);
+    if (font === undefined) {
+      body();
+      return;
+    }
+    ImGui.PushFontFloat(font, sizePixels);
+    try {
+      body();
+    } finally {
+      ImGui.PopFont();
+    }
   },
 
   demoWindow(): void {

@@ -3,6 +3,7 @@ import type { SurfaceOverlay } from '@retro-engine/renderer-core';
 
 import { applyTheme } from './apply-theme';
 import { enableDocking } from './docking';
+import { type FontSpec, registerFonts } from './fonts';
 import { flushLayoutChange, loadLayout } from './layout';
 import { defaultTokens, type ThemeTokens } from './tokens';
 import { ui, type Ui } from './ui';
@@ -49,6 +50,14 @@ export interface UiOverlayOptions {
    * {@link UiLayoutOptions}.
    */
   readonly layout?: UiLayoutOptions;
+  /**
+   * Fonts to register at startup. Async because font bytes are typically
+   * fetched; resolved once during the overlay's init. The first spec flagged
+   * `default` becomes the editor's default font.
+   */
+  readonly fonts?: () => Promise<readonly FontSpec[]>;
+  /** Global base font size in pixels (`io.FontSizeBase`). Defaults to the binding's default. */
+  readonly fontSizeBase?: number;
 }
 
 /**
@@ -65,6 +74,8 @@ export class UiOverlayPlugin implements PluginObject {
   private readonly tokens: ThemeTokens;
   private readonly docking: boolean;
   private readonly layout: UiLayoutOptions | undefined;
+  private readonly fonts: (() => Promise<readonly FontSpec[]>) | undefined;
+  private readonly fontSizeBase: number | undefined;
   private initStarted = false;
   private initDone = false;
 
@@ -75,6 +86,8 @@ export class UiOverlayPlugin implements PluginObject {
     this.tokens = options.tokens ?? defaultTokens;
     this.docking = options.docking ?? false;
     this.layout = options.layout;
+    this.fonts = options.fonts;
+    this.fontSizeBase = options.fontSizeBase;
   }
 
   name(): string {
@@ -101,22 +114,26 @@ export class UiOverlayPlugin implements PluginObject {
   ready(app: App): boolean {
     if (!this.initStarted) {
       this.initStarted = true;
-      this.overlay
-        .init(this.canvas)
-        .then(() => {
-          if (this.docking) enableDocking();
-          if (this.layout !== undefined) {
-            const ini = this.layout.restore?.() ?? this.layout.default;
-            if (ini !== undefined && ini !== null) loadLayout(ini);
-          }
-          applyTheme(this.tokens);
-          this.initDone = true;
-        })
-        .catch((err: unknown) => {
-          app.logger.error(`UiOverlayPlugin: overlay init failed: ${String(err)}`);
-        });
+      this.setup().catch((err: unknown) => {
+        app.logger.error(`UiOverlayPlugin: overlay init failed: ${String(err)}`);
+      });
     }
     return this.initDone;
+  }
+
+  private async setup(): Promise<void> {
+    await this.overlay.init(this.canvas);
+    if (this.docking) enableDocking();
+    if (this.fonts !== undefined) {
+      const specs = await this.fonts();
+      registerFonts((name, data) => this.overlay.loadFont(name, data), specs, this.fontSizeBase);
+    }
+    if (this.layout !== undefined) {
+      const ini = this.layout.restore?.() ?? this.layout.default;
+      if (ini !== undefined && ini !== null) loadLayout(ini);
+    }
+    applyTheme(this.tokens);
+    this.initDone = true;
   }
 }
 

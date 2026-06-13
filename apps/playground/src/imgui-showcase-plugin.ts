@@ -62,11 +62,29 @@ export const imguiShowcasePlugin: Plugin = (app: App): void => {
   w.__imguiLoadLayout = (ini: string): void => loadLayout(ini);
   w.__imguiResetLayout = (): void => localStorage.removeItem(LAYOUT_KEY);
 
+  const fetchFont = async (file: string): Promise<Uint8Array> => {
+    const res = await fetch(`/fonts/${file}`);
+    return new Uint8Array(await res.arrayBuffer());
+  };
+
   app.addPlugin(
     uiOverlayPlugin({
       overlay,
       canvas,
       docking: true,
+      fontSizeBase: 13, // design-system default editor UI size
+      fonts: async () => {
+        const [jbMono, silkscreen, grotesk] = await Promise.all([
+          fetchFont('JetBrainsMono-Regular.ttf'),
+          fetchFont('Silkscreen-Regular.ttf'),
+          fetchFont('SpaceGrotesk-Regular.ttf'),
+        ]);
+        return [
+          { name: 'ui', data: jbMono, sizePixels: 16, default: true },
+          { name: 'pixel', data: silkscreen, sizePixels: 16 },
+          { name: 'sans', data: grotesk, sizePixels: 16 },
+        ];
+      },
       layout: {
         default: DEFAULT_IMGUI_LAYOUT,
         restore: () => localStorage.getItem(LAYOUT_KEY),
@@ -79,7 +97,7 @@ export const imguiShowcasePlugin: Plugin = (app: App): void => {
 
         ui.window({ title: 'Hierarchy', dock }, () => {
           probe.hierarchyDocked = ui.isWindowDocked();
-          ui.text('Scene');
+          ui.withFont('pixel', 16, () => ui.text('SCENE')); // Silkscreen pixel heading
           ui.separator();
           ui.text('- Camera');
           ui.text('- Sun');

@@ -17,6 +17,10 @@ export const createImGuiOverlay = (_renderer: Renderer): SurfaceOverlay => {
       await ImGuiImplWeb.Init({ canvas, backend: 'webgl2' });
     },
 
+    loadFont(name: string, data: Uint8Array): void {
+      ImGuiImplWeb.LoadFont(name, data);
+    },
+
     beginFrame(): void {
       ImGuiImplWeb.BeginRender();
     },

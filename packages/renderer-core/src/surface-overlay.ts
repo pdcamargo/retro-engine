@@ -25,6 +25,13 @@ export interface SurfaceOverlay {
   init(canvas: HTMLCanvasElement): Promise<void>;
 
   /**
+   * Make a font's bytes available to the overlay under `name`, so the UI layer
+   * can register it by that name. Call before {@link init}'s consumer registers
+   * fonts. `data` is the raw TTF/OTF file contents.
+   */
+  loadFont(name: string, data: Uint8Array): void;
+
+  /**
    * Open a new overlay frame. Issue the frame's UI draw calls after this returns
    * and before {@link endFrame}.
    */

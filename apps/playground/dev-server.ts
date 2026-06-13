@@ -52,6 +52,11 @@ Bun.serve({
       if (sub === undefined) return new Response('forbidden', { status: 403 });
       return new Response(Bun.file(`${SAVE_ROOT}/${sub}`));
     },
+    '/fonts/*': (req) => {
+      const sub = subUnder(req, '/fonts/');
+      if (sub === undefined) return new Response('forbidden', { status: 403 });
+      return new Response(Bun.file(`${import.meta.dir}/fonts/${sub}`));
+    },
   },
 });
 

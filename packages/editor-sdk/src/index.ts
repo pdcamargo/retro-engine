@@ -1,5 +1,7 @@
 export { applyTheme } from './apply-theme';
 export { enableDocking, isDockingEnabled } from './docking';
+export { getFont, registerFonts } from './fonts';
+export type { FontSpec } from './fonts';
 export { flushLayoutChange, loadLayout, saveLayout } from './layout';
 export { uiOverlayPlugin, UiOverlayPlugin } from './plugin';
 export type { UiLayoutOptions, UiOverlayOptions } from './plugin';
