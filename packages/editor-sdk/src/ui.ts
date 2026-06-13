@@ -83,6 +83,15 @@ export interface Ui {
   dockSpaceOverViewport(): number;
   /** Whether the window currently being built is docked. Call inside a window body. */
   isWindowDocked(): boolean;
+  /** The mouse position in screen space. */
+  mousePos(): Vec2;
+  /** The current window's top-left in screen space. Call inside a window body. */
+  windowPos(): Vec2;
+  /**
+   * The mouse position relative to the current window's top-left — `(0, 0)` at
+   * the window's top-left corner, growing right/down. Call inside a window body.
+   */
+  windowMousePos(): Vec2;
 }
 
 /**
@@ -183,5 +192,21 @@ export const ui: Ui = {
 
   isWindowDocked(): boolean {
     return ImGui.IsWindowDocked();
+  },
+
+  mousePos(): Vec2 {
+    const m = ImGui.GetMousePos();
+    return [m.x, m.y];
+  },
+
+  windowPos(): Vec2 {
+    const p = ImGui.GetWindowPos();
+    return [p.x, p.y];
+  },
+
+  windowMousePos(): Vec2 {
+    const m = ImGui.GetMousePos();
+    const p = ImGui.GetWindowPos();
+    return [m.x - p.x, m.y - p.y];
   },
 };

@@ -27,6 +27,9 @@ interface ImGuiProbe {
   hierarchyDocked: boolean;
   inspectorDocked: boolean;
   clicks: number;
+  hierarchyMouseLocal: [number, number];
+  mouseScreen: [number, number];
+  hierarchyWindowPos: [number, number];
 }
 
 export const imguiShowcasePlugin: Plugin = (app: App): void => {
@@ -49,6 +52,9 @@ export const imguiShowcasePlugin: Plugin = (app: App): void => {
     hierarchyDocked: false,
     inspectorDocked: false,
     clicks: 0,
+    hierarchyMouseLocal: [0, 0],
+    mouseScreen: [0, 0],
+    hierarchyWindowPos: [0, 0],
   };
   (window as unknown as { __imguiProbe: ImGuiProbe }).__imguiProbe = probe;
   // Dev helpers (playground only): capture the current layout to bake as the
@@ -103,6 +109,15 @@ export const imguiShowcasePlugin: Plugin = (app: App): void => {
           ui.text('- Sun');
           ui.text('- Cube');
           ui.text('- Cube (1)');
+          ui.separator();
+          // Mouse position local to this panel — (0,0) at the panel's top-left.
+          const local = ui.windowMousePos();
+          const screen = ui.mousePos();
+          const winPos = ui.windowPos();
+          probe.hierarchyMouseLocal = [local[0], local[1]];
+          probe.mouseScreen = [screen[0], screen[1]];
+          probe.hierarchyWindowPos = [winPos[0], winPos[1]];
+          ui.text(`mouse (panel): ${local[0].toFixed(0)}, ${local[1].toFixed(0)}`);
         });
 
         ui.window({ title: 'Inspector', dock }, () => {
