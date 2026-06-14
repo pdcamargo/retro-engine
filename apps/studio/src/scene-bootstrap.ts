@@ -11,6 +11,7 @@ import {
   DepthPrepass,
   DirectionalLight3d,
   EDITOR_GIZMO_LAYER,
+  GridPlugin,
   Light3dPlugin,
   MaterialPlugin,
   Mesh3d,
@@ -67,7 +68,10 @@ export const setupViewportScene = (
     .addPlugin(new PrepassPlugin())
     .addPlugin(new StandardMaterialPlugin())
     .addPlugin(stdMat)
-    .addPlugin(new Light3dPlugin());
+    .addPlugin(new Light3dPlugin())
+    // Editor-only ground grid; opt-in (not auto-installed), and gated to the
+    // editor camera's render layer so it never shows in the Game tab.
+    .addPlugin(new GridPlugin());
 
   app.insertResource(new AmbientLight({ color: vec3.create(0.6, 0.68, 0.82), brightness: 0.12 }));
 

@@ -1,6 +1,6 @@
 /// <reference types="@webgpu/types" />
 
-import { App } from '@retro-engine/engine';
+import { App, EditorGrid, ResMut } from '@retro-engine/engine';
 import {
   createEditor,
   type FontSpec,
@@ -49,6 +49,13 @@ const sceneGizmos = new SceneGizmos(app, editorView);
 // Emit the gizmo handles before the render graph runs (the UI pass that draws
 // the viewport image comes later in the frame, too late to reach the texture).
 app.addSystem('postUpdate', [], () => sceneGizmos.tick());
+
+// The toolbar snap toggle is the editor-side source of truth; mirror it into the
+// engine's grid config so grid visuals + future snap-to-grid read one object.
+app.addSystem('postUpdate', [ResMut(EditorGrid)], (grid) => {
+  grid.snapEnabled = state.snap;
+  grid.snapStep = state.snapStep;
+});
 
 const editor = createEditor({
   brand: 'RETRO ENGINE',

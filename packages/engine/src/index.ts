@@ -512,6 +512,11 @@ export { GizmoMesh, type GizmoDrawRange, type GizmoPipelineKey } from './gizmos/
 export { GizmoPass2dLabel, GizmoPass3dLabel } from './gizmos/gizmo-pass-node';
 export { GizmoPlugin } from './gizmos/gizmo-plugin';
 
+export { EditorGrid } from './grid/grid-config';
+export { GridRenderState, type GridPipelineKey } from './grid/grid-render-state';
+export { GridPass3dLabel } from './grid/grid-pass-node';
+export { GridPlugin } from './grid/grid-plugin';
+
 export { DEFAULT_MOTION_BLUR, MotionBlur } from './motion-blur/motion-blur';
 export { MOTION_BLUR_WGSL } from './motion-blur/motion-blur.wgsl';
 export type { MotionBlurKey } from './motion-blur/motion-blur-pipeline';

@@ -27,6 +27,8 @@ export interface StudioState {
   paused: boolean;
   tool: TransformTool;
   snap: boolean;
+  /** Grid snap increment in world units, surfaced by the snap toggle / grid settings. */
+  snapStep: number;
   gizmos: boolean;
   showProfiler: boolean;
   fps: number;
@@ -48,6 +50,7 @@ export const createState = (scene: Scene): StudioState => ({
   paused: false,
   tool: 'move',
   snap: true,
+  snapStep: 1,
   gizmos: true,
   showProfiler: false,
   fps: 60,
