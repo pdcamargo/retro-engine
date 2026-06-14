@@ -1,4 +1,4 @@
-import { ImGui, type ImFont } from '@mori2003/jsimgui';
+import { FreeTypeLoaderFlags, ImFontConfig, ImGui, type ImFont, Mod } from '@mori2003/jsimgui';
 
 /** A font to register with the UI layer. */
 export interface FontSpec {
@@ -17,9 +17,49 @@ export interface FontSpec {
   readonly sizePixels?: number;
   /** Make this the default UI font (the first spec flagged `default` wins). */
   readonly default?: boolean;
+  /**
+   * Merge this font's glyphs into the previously-registered font rather than
+   * adding a standalone face. Use for an icon font: register the UI font first,
+   * then the icon font with `merge: true`, so a single face carries both the
+   * text and the icon glyphs (referenced by codepoint). Merged fonts get no
+   * registry entry of their own.
+   */
+  readonly merge?: boolean;
+  /**
+   * Minimum horizontal advance for this font's glyphs, in pixels. For a merged
+   * icon font, set this to the icon box size so icons reserve consistent,
+   * monospace-aligned width inline with text.
+   */
+  readonly glyphMinAdvanceX?: number;
+  /**
+   * Inclusive, zero-terminated codepoint ranges to load from this font (e.g.
+   * `[0xe000, 0xf8ff, 0]` for an icon font in the Private Use Area). Required so
+   * a merged icon font's glyphs are actually built into the atlas.
+   */
+  readonly glyphRanges?: readonly number[];
+  /**
+   * Rasterize this font as crisp 1-bit pixels (no anti-aliasing). Use for a
+   * pixel/bitmap display face (e.g. Silkscreen) so it reads as sharp pixels
+   * rather than a blurred outline. Requires the FreeType glyph loader.
+   */
+  readonly crisp?: boolean;
 }
 
 const registry = new Map<string, ImFont>();
+
+/**
+ * Allocate a native {@link ImFontConfig} and restore the defaults ImGui relies
+ * on (the raw struct comes zero-initialized — no C++ ctor runs through embind).
+ */
+const makeConfig = (): ImFontConfig => {
+  const cfg = ImFontConfig.From(new (Mod.export as { ImFontConfig: new () => unknown }).ImFontConfig());
+  cfg.RasterizerMultiply = 1;
+  cfg.RasterizerDensity = 1;
+  cfg.OversampleH = 1;
+  cfg.OversampleV = 1;
+  cfg.GlyphMaxAdvanceX = 3.4028235e38; // FLT_MAX
+  return cfg;
+};
 
 /**
  * Register fonts with the active UI context. `load` hands each font's bytes to
@@ -39,7 +79,21 @@ export const registerFonts = (
   const io = ImGui.GetIO();
   for (const spec of specs) {
     load(spec.name, spec.data);
-    const font = io.Fonts.AddFontFromFileTTF(spec.name, spec.sizePixels ?? 16);
+    const size = spec.sizePixels ?? 16;
+    const ranges = spec.glyphRanges !== undefined ? [...spec.glyphRanges] : null;
+    if (spec.merge === true) {
+      const cfg = makeConfig();
+      cfg.MergeMode = true;
+      cfg.GlyphMinAdvanceX = spec.glyphMinAdvanceX ?? 0;
+      io.Fonts.AddFontFromFileTTF(spec.name, size, cfg, ranges);
+      continue;
+    }
+    let cfg: ImFontConfig | null = null;
+    if (spec.crisp === true) {
+      cfg = makeConfig();
+      cfg.FontLoaderFlags = FreeTypeLoaderFlags.Monochrome | FreeTypeLoaderFlags.NoHinting;
+    }
+    const font = io.Fonts.AddFontFromFileTTF(spec.name, size, cfg, ranges);
     registry.set(spec.name, font);
     if (spec.default === true) io.FontDefault = font;
   }

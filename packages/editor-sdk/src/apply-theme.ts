@@ -1,5 +1,6 @@
 import { ImGui, ImGuiCol, ImVec2, ImVec4 } from '@mori2003/jsimgui';
 
+import { setActivePalette } from './palette';
 import { resolveTheme } from './theme';
 import type { ThemeTokens } from './tokens';
 import type { Srgb8, Vec2 } from './units';
@@ -24,6 +25,7 @@ const vec2 = (v: Vec2): ImVec2 => new ImVec2(v[0], v[1]);
  */
 export const applyTheme = (tokens: ThemeTokens): void => {
   const { palette: p, metrics: m } = resolveTheme(tokens);
+  setActivePalette(p);
   const style = ImGui.GetStyle();
 
   // Spacing & sizing.
@@ -74,7 +76,8 @@ export const applyTheme = (tokens: ThemeTokens): void => {
   c[ImGuiCol.PopupBg] = color(p.gray2, 0.98);
   c[ImGuiCol.Border] = color(p.gray6);
   c[ImGuiCol.BorderShadow] = color(p.gray0, 0);
-  c[ImGuiCol.MenuBarBg] = color(p.gray3);
+  // Menu bar is the darkest surface (gray-0); the toolbar below it is raised (gray-3).
+  c[ImGuiCol.MenuBarBg] = color(p.gray0);
 
   // Title bar.
   c[ImGuiCol.TitleBg] = color(p.gray3);

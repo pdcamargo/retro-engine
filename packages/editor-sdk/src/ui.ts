@@ -1,22 +1,87 @@
-import { ImGui, ImGuiCond, ImGuiDockNodeFlags, ImVec2, ImVec4 } from '@mori2003/jsimgui';
+import {
+  ImGui,
+  ImGuiChildFlags,
+  ImGuiCond,
+  ImGuiDockNodeFlags,
+  ImGuiStyleVar,
+  ImGuiWindowFlags,
+  ImVec2,
+  ImVec4,
+} from '@mori2003/jsimgui';
 
 import { getFont } from './fonts';
+import { drawIcon } from './icon-shapes';
+import type { IconName } from './icons';
+import { getActivePalette, packU32 } from './palette';
 import type { Rgb, Rgba, Vec2 } from './units';
 
+const v2 = (p: Vec2): ImVec2 => new ImVec2(p[0], p[1]);
+const toVec2 = (v: ImVec2): Vec2 => [v.x, v.y];
+
+/** Per-glyph advance as a fraction of font size for the monospace UI font (JetBrains Mono ≈ 0.6em). */
+const MONO_ADVANCE = 0.6;
+
+/** Per-window chrome toggles for {@link Ui.window}, mapped to native window flags. */
+export interface WindowFlags {
+  readonly noTitleBar?: boolean;
+  readonly noResize?: boolean;
+  readonly noMove?: boolean;
+  readonly noScrollbar?: boolean;
+  readonly noScrollWithMouse?: boolean;
+  readonly noCollapse?: boolean;
+  readonly noBackground?: boolean;
+  readonly noDocking?: boolean;
+  readonly noSavedSettings?: boolean;
+  readonly noBringToFrontOnFocus?: boolean;
+  readonly noNavFocus?: boolean;
+  readonly menuBar?: boolean;
+  readonly alwaysAutoResize?: boolean;
+}
+
+const windowFlags = (f: WindowFlags | undefined): number => {
+  if (f === undefined) return 0;
+  let flags = 0;
+  const F = ImGuiWindowFlags;
+  if (f.noTitleBar) flags |= F.NoTitleBar;
+  if (f.noResize) flags |= F.NoResize;
+  if (f.noMove) flags |= F.NoMove;
+  if (f.noScrollbar) flags |= F.NoScrollbar;
+  if (f.noScrollWithMouse) flags |= F.NoScrollWithMouse;
+  if (f.noCollapse) flags |= F.NoCollapse;
+  if (f.noBackground) flags |= F.NoBackground;
+  if (f.noDocking) flags |= F.NoDocking;
+  if (f.noSavedSettings) flags |= F.NoSavedSettings;
+  if (f.noBringToFrontOnFocus) flags |= F.NoBringToFrontOnFocus;
+  if (f.noNavFocus) flags |= F.NoNavFocus;
+  if (f.menuBar) flags |= F.MenuBar;
+  if (f.alwaysAutoResize) flags |= F.AlwaysAutoResize;
+  return flags;
+};
+
 /** Options for {@link Ui.window}. */
-export interface WindowOptions {
+export interface WindowOptions extends WindowFlags {
   /** Title bar text and the window's stable identity. */
   readonly title: string;
   /** Initial top-left position in pixels, applied only on first appearance. */
   readonly pos?: Vec2;
+  /** Forced position every frame (for pinned chrome like toolbars / status bars). */
+  readonly fixedPos?: Vec2;
   /** Initial size in pixels, applied only on first appearance. */
   readonly size?: Vec2;
+  /** Forced size every frame (for pinned chrome). */
+  readonly fixedSize?: Vec2;
   /**
-   * Dock this window into the node with this id on first appearance (e.g. the id
-   * returned by {@link Ui.dockSpaceOverViewport}). Requires docking to be enabled.
-   * Once docked the user can drag it elsewhere.
+   * Dock this window into the node with this id on first appearance. Requires
+   * docking to be enabled. Once docked the user can drag it elsewhere.
    */
   readonly dock?: number;
+  /** Override the window's inner padding (e.g. `[0, 0]` for trees/tables that manage their own). */
+  readonly padding?: Vec2;
+  /**
+   * Show a close button. Called on the frame the user clicks it. The window is
+   * still opened/closed correctly this frame.
+   */
+  readonly onClose?: () => void;
 }
 
 /** Options for {@link Ui.dragFloat}. */
@@ -27,6 +92,32 @@ export interface DragFloatOptions {
   readonly min?: number;
   /** Inclusive upper bound. */
   readonly max?: number;
+  /** `printf`-style display format, e.g. `'%.2f'`. */
+  readonly format?: string;
+}
+
+/** Options for {@link Ui.child}. */
+export interface ChildOptions {
+  /** Region size; `0` on an axis fills the remaining space. */
+  readonly size?: Vec2;
+  /** Draw the 1px child border. */
+  readonly border?: boolean;
+  /** Hide the vertical scrollbar. */
+  readonly noScrollbar?: boolean;
+  /** Override inner padding (e.g. `[0, 0]` for flush content). */
+  readonly padding?: Vec2;
+}
+
+/** Options for {@link Ui.inputText}. */
+export interface InputTextOptions {
+  /** Greyed placeholder shown when empty (rendered via hint). */
+  readonly hint?: string;
+  /** Mask the input. */
+  readonly password?: boolean;
+  /** Disallow edits. */
+  readonly readOnly?: boolean;
+  /** Width in pixels; defaults to the available content width. */
+  readonly width?: number;
 }
 
 /**
@@ -43,28 +134,108 @@ export interface Ui {
    * correctly regardless.
    */
   window(options: WindowOptions, body: () => void): void;
+  /**
+   * A bordered, optionally-scrolling child region. `body` always runs; returns
+   * nothing — pair size/padding via {@link ChildOptions}.
+   */
+  child(id: string, options: ChildOptions, body: () => void): void;
+  /** Group the widgets emitted by `body` into a single layout item. */
+  group(body: () => void): void;
+  /** Scope an id around `body` so identical child labels stay unique. */
+  withId(id: string, body: () => void): void;
+  /** Run `body` with an overridden item spacing (e.g. `0,0` for contiguous list rows). */
+  withItemSpacing(x: number, y: number, body: () => void): void;
+
   /** A line of text. */
   text(value: string): void;
   /** A line of dimmed/secondary text. */
   textDisabled(value: string): void;
+  /** A line of muted (label-weight) text. */
+  textMuted(value: string): void;
   /** A line of text in an explicit color. */
   textColored(color: Rgba, value: string): void;
+  /** Wrapping text. */
+  textWrapped(value: string): void;
+  /** A horizontal rule with a centered label. */
+  separatorText(label: string): void;
+  /** A single icon glyph (from the merged icon font), optionally tinted. */
+  icon(name: IconName | (string & {}), color?: Rgba): void;
+
   /** A clickable button. Returns `true` on the frame it is clicked. */
   button(label: string, size?: Vec2): boolean;
+  /** A borderless region that reports clicks/hover — the base for custom-drawn controls. */
+  invisibleButton(id: string, size: Vec2): boolean;
   /** A checkbox. Returns the next checked state. */
   checkbox(label: string, value: boolean): boolean;
+  /** A radio button. Returns `true` when picked this frame. */
+  radio(label: string, active: boolean): boolean;
+  /** A selectable row. Returns `true` on the frame it is clicked. */
+  selectable(label: string, selected?: boolean, size?: Vec2): boolean;
   /** A horizontal slider over `[min, max]`. Returns the next value. */
   sliderFloat(label: string, value: number, min: number, max: number): number;
   /** A click-drag numeric field. Returns the next value. */
   dragFloat(label: string, value: number, options?: DragFloatOptions): number;
+  /** A single-line text field. Returns the next string. */
+  inputText(label: string, value: string, options?: InputTextOptions): string;
+  /** An integer field with ± steppers. Returns the next value. */
+  inputInt(label: string, value: number, step?: number, stepFast?: number): number;
   /** An RGB color swatch + editor. Returns the next color. */
   colorEdit3(label: string, value: Rgb): Rgb;
+  /** An RGBA color swatch + editor. Returns the next color. */
+  colorEdit4(label: string, value: Rgba): Rgba;
+
   /** A horizontal rule. */
   separator(): void;
-  /** Continue the next widget on the same line as the previous one. */
-  sameLine(): void;
+  /**
+   * Continue the next widget on the same line. `offsetX` sets an absolute local x
+   * (0 = default flow); `spacing` overrides the gap from the previous item
+   * (0 = flush).
+   */
+  sameLine(offsetX?: number, spacing?: number): void;
   /** Vertical spacing between widgets. */
   spacing(): void;
+  /** An empty layout item of the given size. */
+  dummy(size: Vec2): void;
+  /** Vertically center the next text to match a following framed widget. */
+  alignTextToFramePadding(): void;
+  /** Indent subsequent items. */
+  indent(width?: number): void;
+  /** Remove one level of indent. */
+  unindent(width?: number): void;
+  /** Position the next widget so it ends flush with the right edge of the content region. */
+  rightAlign(width: number): void;
+  /** Set the width of the next item in pixels (negative measures from the right edge). */
+  setNextItemWidth(width: number): void;
+
+  /** Whether the last item is hovered. */
+  isItemHovered(): boolean;
+  /** Whether the last item is held down. */
+  isItemActive(): boolean;
+  /** Whether the last item was clicked this frame (button 0 by default). */
+  isItemClicked(button?: number): boolean;
+  /** The last item's bounding rect in screen space, as `[min, max]`. */
+  itemRect(): readonly [Vec2, Vec2];
+
+  /** A terse hover tooltip for the last item. */
+  setItemTooltip(text: string): void;
+
+  /** The width of the content region remaining on the current line/column. */
+  contentAvail(): Vec2;
+  /** The standard framed-widget height for the current style/font. */
+  frameHeight(): number;
+  /** The current font's line height. */
+  textLineHeight(): number;
+  /** The rendered size of `text` in the current font. */
+  calcTextSize(text: string): Vec2;
+  /** The cursor position in screen space (where the next item draws). */
+  cursorScreenPos(): Vec2;
+  /** Move the cursor to an absolute screen position. */
+  setCursorScreenPos(pos: Vec2): void;
+  /** The cursor x within the current window's local coordinates. */
+  cursorPosX(): number;
+  /** Set the cursor x within the current window's local coordinates. */
+  setCursorPosX(x: number): void;
+
   /**
    * Run `body` with a registered font active at `sizePixels`. If no font is
    * registered under `name`, `body` still runs in the current font. Use for
@@ -77,10 +248,14 @@ export interface Ui {
    * Emit a full-viewport host dockspace that windows can dock into, and return
    * its node id (pass it as {@link WindowOptions.dock}). The empty center is
    * transparent, so the engine render shows through where nothing is docked.
-   * Call once per frame, before the windows that dock into it. Requires docking
-   * to be enabled (see `enableDocking`).
    */
   dockSpaceOverViewport(): number;
+  /**
+   * Emit a dockspace with a fixed id inside the current window (the editor shell
+   * uses this so toolbars/status bars can sit outside it). The empty center is
+   * transparent. Windows bind to its nodes via the saved layout.
+   */
+  dockSpace(id: number): void;
   /** Whether the window currently being built is docked. Call inside a window body. */
   isWindowDocked(): boolean;
   /** The mouse position in screen space. */
@@ -94,6 +269,10 @@ export interface Ui {
   windowMousePos(): Vec2;
 }
 
+const colored = (color: Rgba, value: string): void => {
+  ImGui.TextColored(new ImVec4(color[0], color[1], color[2], color[3]), value);
+};
+
 /**
  * The normalized immediate-mode UI surface. Stateless: every call forwards to
  * the active UI context, so it is safe to share a single instance.
@@ -101,17 +280,71 @@ export interface Ui {
 export const ui: Ui = {
   window(options: WindowOptions, body: () => void): void {
     if (options.pos !== undefined) {
-      ImGui.SetNextWindowPos(new ImVec2(options.pos[0], options.pos[1]), ImGuiCond.FirstUseEver);
+      ImGui.SetNextWindowPos(v2(options.pos), ImGuiCond.FirstUseEver);
+    }
+    if (options.fixedPos !== undefined) {
+      ImGui.SetNextWindowPos(v2(options.fixedPos), ImGuiCond.Always);
     }
     if (options.size !== undefined) {
-      ImGui.SetNextWindowSize(new ImVec2(options.size[0], options.size[1]), ImGuiCond.FirstUseEver);
+      ImGui.SetNextWindowSize(v2(options.size), ImGuiCond.FirstUseEver);
+    }
+    if (options.fixedSize !== undefined) {
+      ImGui.SetNextWindowSize(v2(options.fixedSize), ImGuiCond.Always);
     }
     if (options.dock !== undefined) {
       ImGui.SetNextWindowDockID(options.dock, ImGuiCond.FirstUseEver);
     }
-    const expanded = ImGui.Begin(options.title);
+    const pad = options.padding;
+    if (pad !== undefined) ImGui.PushStyleVarImVec2(ImGuiStyleVar.WindowPadding, v2(pad));
+    const open: [boolean] | null = options.onClose !== undefined ? [true] : null;
+    const expanded = ImGui.Begin(options.title, open, windowFlags(options));
     if (expanded) body();
     ImGui.End();
+    if (pad !== undefined) ImGui.PopStyleVar();
+    if (open !== null && !open[0]) options.onClose?.();
+  },
+
+  child(id: string, options: ChildOptions, body: () => void): void {
+    let childFlags = 0;
+    if (options.border === true) childFlags |= ImGuiChildFlags.Borders;
+    const wFlags = options.noScrollbar === true ? ImGuiWindowFlags.NoScrollbar : 0;
+    const pad = options.padding;
+    if (pad !== undefined) {
+      // A borderless child ignores WindowPadding unless this flag is set.
+      childFlags |= ImGuiChildFlags.AlwaysUseWindowPadding;
+      ImGui.PushStyleVarImVec2(ImGuiStyleVar.WindowPadding, v2(pad));
+    }
+    const visible = ImGui.BeginChild(id, v2(options.size ?? [0, 0]), childFlags, wFlags);
+    if (visible) body();
+    ImGui.EndChild();
+    if (pad !== undefined) ImGui.PopStyleVar();
+  },
+
+  group(body: () => void): void {
+    ImGui.BeginGroup();
+    try {
+      body();
+    } finally {
+      ImGui.EndGroup();
+    }
+  },
+
+  withId(id: string, body: () => void): void {
+    ImGui.PushID(id);
+    try {
+      body();
+    } finally {
+      ImGui.PopID();
+    }
+  },
+
+  withItemSpacing(x: number, y: number, body: () => void): void {
+    ImGui.PushStyleVarImVec2(ImGuiStyleVar.ItemSpacing, new ImVec2(x, y));
+    try {
+      body();
+    } finally {
+      ImGui.PopStyleVar(1);
+    }
   },
 
   text(value: string): void {
@@ -122,20 +355,57 @@ export const ui: Ui = {
     ImGui.TextDisabled(value);
   },
 
+  textMuted(value: string): void {
+    colored([...rgbOf(getActivePalette().textMuted), 1] as Rgba, value);
+  },
+
   textColored(color: Rgba, value: string): void {
-    ImGui.TextColored(new ImVec4(color[0], color[1], color[2], color[3]), value);
+    colored(color, value);
+  },
+
+  textWrapped(value: string): void {
+    ImGui.TextWrapped(value);
+  },
+
+  separatorText(label: string): void {
+    ImGui.SeparatorText(label);
+  },
+
+  icon(name, color): void {
+    const sz = ImGui.GetTextLineHeight();
+    const tm = getActivePalette().text;
+    const c: Rgba = color ?? [tm[0] / 255, tm[1] / 255, tm[2] / 255, 1];
+    const col = packU32(
+      Math.round(c[0] * 255),
+      Math.round(c[1] * 255),
+      Math.round(c[2] * 255),
+      Math.round(c[3] * 255),
+    );
+    const start = ImGui.GetCursorScreenPos();
+    drawIcon(name, [start.x, start.y + 1], sz, col);
+    ImGui.Dummy(new ImVec2(sz, sz));
   },
 
   button(label: string, size?: Vec2): boolean {
-    return size === undefined
-      ? ImGui.Button(label)
-      : ImGui.Button(label, new ImVec2(size[0], size[1]));
+    return size === undefined ? ImGui.Button(label) : ImGui.Button(label, v2(size));
+  },
+
+  invisibleButton(id: string, size: Vec2): boolean {
+    return ImGui.InvisibleButton(id, v2(size));
   },
 
   checkbox(label: string, value: boolean): boolean {
     const ref: [boolean] = [value];
     ImGui.Checkbox(label, ref);
     return ref[0];
+  },
+
+  radio(label: string, active: boolean): boolean {
+    return ImGui.RadioButton(label, active);
+  },
+
+  selectable(label: string, selected?: boolean, size?: Vec2): boolean {
+    return ImGui.Selectable(label, selected ?? false, 0, size === undefined ? undefined : v2(size));
   },
 
   sliderFloat(label: string, value: number, min: number, max: number): number {
@@ -146,7 +416,27 @@ export const ui: Ui = {
 
   dragFloat(label: string, value: number, options?: DragFloatOptions): number {
     const ref: [number] = [value];
-    ImGui.DragFloat(label, ref, options?.speed, options?.min, options?.max);
+    ImGui.DragFloat(label, ref, options?.speed, options?.min, options?.max, options?.format);
+    return ref[0];
+  },
+
+  inputText(label: string, value: string, options?: InputTextOptions): string {
+    const ref: [string] = [value];
+    if (options?.width !== undefined) ImGui.SetNextItemWidth(options.width);
+    let flags = 0;
+    if (options?.password === true) flags |= 1 << 15; // ImGuiInputTextFlags_Password
+    if (options?.readOnly === true) flags |= 1 << 14; // ImGuiInputTextFlags_ReadOnly
+    if (options?.hint !== undefined) {
+      ImGui.InputTextWithHint(label, options.hint, ref, value.length + 256, flags);
+    } else {
+      ImGui.InputText(label, ref, value.length + 256, flags);
+    }
+    return ref[0];
+  },
+
+  inputInt(label: string, value: number, step?: number, stepFast?: number): number {
+    const ref: [number] = [value];
+    ImGui.InputInt(label, ref, step ?? 1, stepFast ?? 10);
     return ref[0];
   },
 
@@ -156,16 +446,104 @@ export const ui: Ui = {
     return [ref[0], ref[1], ref[2]];
   },
 
+  colorEdit4(label: string, value: Rgba): Rgba {
+    const ref: [number, number, number, number] = [value[0], value[1], value[2], value[3]];
+    ImGui.ColorEdit4(label, ref);
+    return [ref[0], ref[1], ref[2], ref[3]];
+  },
+
   separator(): void {
     ImGui.Separator();
   },
 
-  sameLine(): void {
-    ImGui.SameLine();
+  sameLine(offsetX?: number, spacing?: number): void {
+    ImGui.SameLine(offsetX ?? 0, spacing);
   },
 
   spacing(): void {
     ImGui.Spacing();
+  },
+
+  dummy(size: Vec2): void {
+    ImGui.Dummy(v2(size));
+  },
+
+  alignTextToFramePadding(): void {
+    ImGui.AlignTextToFramePadding();
+  },
+
+  indent(width?: number): void {
+    ImGui.Indent(width);
+  },
+
+  unindent(width?: number): void {
+    ImGui.Unindent(width);
+  },
+
+  rightAlign(width: number): void {
+    const avail = ImGui.GetContentRegionAvail();
+    const x = ImGui.GetCursorPosX() + Math.max(0, avail.x - width);
+    ImGui.SetCursorPosX(x);
+  },
+
+  setNextItemWidth(width: number): void {
+    ImGui.SetNextItemWidth(width);
+  },
+
+  isItemHovered(): boolean {
+    return ImGui.IsItemHovered();
+  },
+
+  isItemActive(): boolean {
+    return ImGui.IsItemActive();
+  },
+
+  isItemClicked(button?: number): boolean {
+    return ImGui.IsItemClicked(button);
+  },
+
+  itemRect(): readonly [Vec2, Vec2] {
+    return [toVec2(ImGui.GetItemRectMin()), toVec2(ImGui.GetItemRectMax())];
+  },
+
+  setItemTooltip(text: string): void {
+    ImGui.SetItemTooltip(text);
+  },
+
+  contentAvail(): Vec2 {
+    return toVec2(ImGui.GetContentRegionAvail());
+  },
+
+  frameHeight(): number {
+    return ImGui.GetFrameHeight();
+  },
+
+  textLineHeight(): number {
+    return ImGui.GetTextLineHeight();
+  },
+
+  calcTextSize(text: string): Vec2 {
+    // The binding's CalcTextSize defaults text_end to "" and measures a
+    // zero-length range, so it can't be used. The UI font is monospace, so a
+    // per-glyph advance estimate is accurate enough for layout/alignment.
+    const fs = ImGui.GetFontSize();
+    return [text.length * fs * MONO_ADVANCE, fs];
+  },
+
+  cursorScreenPos(): Vec2 {
+    return toVec2(ImGui.GetCursorScreenPos());
+  },
+
+  setCursorScreenPos(pos: Vec2): void {
+    ImGui.SetCursorScreenPos(v2(pos));
+  },
+
+  cursorPosX(): number {
+    return ImGui.GetCursorPosX();
+  },
+
+  setCursorPosX(x: number): void {
+    ImGui.SetCursorPosX(x);
   },
 
   withFont(name: string, sizePixels: number, body: () => void): void {
@@ -190,18 +568,20 @@ export const ui: Ui = {
     return ImGui.DockSpaceOverViewport(0, null, ImGuiDockNodeFlags.PassthruCentralNode);
   },
 
+  dockSpace(id: number): void {
+    ImGui.DockSpace(id, undefined, ImGuiDockNodeFlags.PassthruCentralNode);
+  },
+
   isWindowDocked(): boolean {
     return ImGui.IsWindowDocked();
   },
 
   mousePos(): Vec2 {
-    const m = ImGui.GetMousePos();
-    return [m.x, m.y];
+    return toVec2(ImGui.GetMousePos());
   },
 
   windowPos(): Vec2 {
-    const p = ImGui.GetWindowPos();
-    return [p.x, p.y];
+    return toVec2(ImGui.GetWindowPos());
   },
 
   windowMousePos(): Vec2 {
@@ -210,3 +590,5 @@ export const ui: Ui = {
     return [m.x - p.x, m.y - p.y];
   },
 };
+
+const rgbOf = (c: readonly [number, number, number]): Rgb => [c[0] / 255, c[1] / 255, c[2] / 255];

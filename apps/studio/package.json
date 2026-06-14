@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "bun --port 1420 index.html",
+    "dev:web": "bun --hot dev-server.ts",
     "build": "bun build index.html --outdir dist --minify --target=browser",
     "lint": "oxlint .",
     "test": "bun test",
@@ -16,6 +17,7 @@
   },
   "dependencies": {
     "@mori2003/jsimgui": "latest",
+    "@retro-engine/editor-sdk": "workspace:*",
     "@retro-engine/engine": "workspace:*",
     "@retro-engine/renderer-webgpu": "workspace:*",
     "@tauri-apps/api": "^2.0.0"

@@ -10,6 +10,16 @@ import {
   type InternalSurface,
 } from './symbols';
 
+/** Options for {@link createImGuiOverlay}. */
+export interface ImGuiOverlayOptions {
+  /**
+   * Glyph rasterizer backend. `truetype` (default) uses the lightweight built-in
+   * loader; `freetype` rasterizes a wider range of fonts faithfully (needed by
+   * some icon fonts whose outlines the truetype loader renders as `.notdef`).
+   */
+  readonly fontLoader?: 'truetype' | 'freetype';
+}
+
 /**
  * Create a WebGPU-backed {@link SurfaceOverlay} for the immediate-mode UI layer.
  *
@@ -19,8 +29,12 @@ import {
  * texture with a load operation, so the engine's render is preserved beneath it.
  *
  * @param renderer The active WebGPU renderer.
+ * @param options  Overlay setup options (e.g. the glyph rasterizer backend).
  */
-export const createImGuiOverlay = (renderer: Renderer): SurfaceOverlay => {
+export const createImGuiOverlay = (
+  renderer: Renderer,
+  options: ImGuiOverlayOptions = {},
+): SurfaceOverlay => {
   let device: GPUDevice | undefined;
 
   return {
@@ -31,7 +45,12 @@ export const createImGuiOverlay = (renderer: Renderer): SurfaceOverlay => {
           'createImGuiOverlay: renderer has no device — call Renderer.init() before SurfaceOverlay.init()',
         );
       }
-      await ImGuiImplWeb.Init({ canvas, device, backend: 'webgpu' });
+      await ImGuiImplWeb.Init({
+        canvas,
+        device,
+        backend: 'webgpu',
+        fontLoader: options.fontLoader ?? 'truetype',
+      });
     },
 
     loadFont(name: string, data: Uint8Array): void {

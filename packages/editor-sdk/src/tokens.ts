@@ -29,6 +29,8 @@ export interface RetroPalette {
   readonly gray8: Srgb8;
   /** Default text. */
   readonly text: Srgb8;
+  /** Secondary text — labels, inactive captions. */
+  readonly textMuted: Srgb8;
   /** Disabled / secondary text. */
   readonly textFaint: Srgb8;
   /** Lighter accent (histogram hover). */
@@ -43,6 +45,10 @@ export interface RetroPalette {
   readonly amber400: Srgb8;
   /** Plot-line hover. */
   readonly amber500: Srgb8;
+  /** Danger / errors / the X axis. */
+  readonly red400: Srgb8;
+  /** Play-mode signal — the inset viewport border while running. */
+  readonly magenta400: Srgb8;
   /** Near-white — nav windowing highlight, table zebra. */
   readonly white: Srgb8;
   /** Green-tinted title bar of the focused window. */
@@ -123,6 +129,7 @@ export const defaultTokens: ThemeTokens = {
     gray7: [58, 77, 84],
     gray8: [88, 109, 116],
     text: [194, 208, 200],
+    textMuted: [138, 162, 156],
     textFaint: [88, 109, 116],
     green300: [92, 240, 154],
     green400: [52, 224, 122],
@@ -130,6 +137,8 @@ export const defaultTokens: ThemeTokens = {
     cyan400: [56, 217, 240],
     amber400: [255, 194, 51],
     amber500: [255, 176, 0],
+    red400: [240, 85, 106],
+    magenta400: [232, 73, 200],
     white: [241, 250, 244],
     titleActive: [21, 33, 28],
     borderSubtle: [24, 35, 38],
