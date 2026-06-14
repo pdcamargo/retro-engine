@@ -1,43 +1,15 @@
-// Bench runner entry for @retro-engine/engine. Pretty-prints mitata's default
+// Bench runner entry for @retro-engine/math. Pretty-prints mitata's default
 // summary unless `--json` is passed, in which case the normalized snapshot
 // (see docs/adr/ADR-0017 for schema) is written to stdout.
 //
 // Usage:
 //   bun run bench/index.ts             # human-readable summary
 //   bun run bench/index.ts --json      # normalized JSON snapshot
-//   bun run bench/index.ts --filter p  # mitata filter regex applied to bench names
+//   bun run bench/index.ts --filter a  # mitata filter regex applied to bench names
 
 import { run } from 'mitata';
 
-import './propagation.bench';
-import './calculate-bounds.bench';
-import './commands.bench';
-import './resource-change.bench';
-import './template-spawn.bench';
-import './observer-binding.bench';
-import './save-promote.bench';
-import './shader.bench';
-import './render-graph.bench';
-import './mesh-allocator.bench';
-import './sprite-batch.bench';
-import './sprite-batch-z-sort.bench';
-import './sprite-slice.bench';
-import './atlas-sync.bench';
-import './atlas-animation.bench';
-import './material2d-prepare.bench';
-import './mesh-instancing.bench';
-import './retained-instance-prepare.bench';
-import './event-driven-cull-prepare.bench';
-import './light-2d.bench';
-import './light-2d-shadow.bench';
-import './light-3d.bench';
-import './shadow-3d.bench';
-import './tonemapping.bench';
-import './prepass-motion-vectors.bench';
-import './motion-blur.bench';
-import './taa.bench';
-import './ao.bench';
-import './gizmo-buffer.bench';
+import './ray.bench';
 
 interface NormalizedBench {
   readonly key: string;
@@ -93,7 +65,7 @@ if (wantJson) {
   }
   const report: NormalizedReport = {
     schema: 1,
-    package: '@retro-engine/engine',
+    package: '@retro-engine/math',
     captured_at: new Date().toISOString(),
     runtime: runtimeId,
     benches,

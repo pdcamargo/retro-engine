@@ -4,6 +4,7 @@ import { t } from '@retro-engine/reflect';
 import { AoPlugin } from './ao/ao-plugin';
 import { CameraPlugin } from './camera/camera-plugin';
 import { RemovedComponents } from './change-detection';
+import { GizmoPlugin } from './gizmos/gizmo-plugin';
 import { Children, Parent, propagateTransformsGated } from './hierarchy';
 import { ImagePlugin } from './image/image-plugin';
 import type { App } from './index';
@@ -121,5 +122,8 @@ export class CorePlugin implements PluginObject {
     // After MotionBlurPlugin so its finish() can order the TAA resolve ahead of
     // the blur and tonemap nodes.
     app.addPlugin(new TaaPlugin());
+    // Last in the post chain: its finish() orders the gizmo pass after the
+    // temporal/post nodes (so handles stay crisp) and before tonemap.
+    app.addPlugin(new GizmoPlugin());
   }
 }

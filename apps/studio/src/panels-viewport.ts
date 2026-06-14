@@ -11,6 +11,7 @@ import {
   type Vec2,
 } from '@retro-engine/editor-sdk';
 
+import { type SceneGizmos } from './gizmo-wiring';
 import { type StudioState } from './state';
 import { type ViewportTarget } from './viewport';
 
@@ -46,7 +47,7 @@ const chip = (
 const drawViewport = (
   ui: EditorContext['ui'],
   view: ViewportTarget,
-): { min: Vec2; max: Vec2; iw: number; ih: number } => {
+): { min: Vec2; max: Vec2; iw: number; ih: number; hovered: boolean } => {
   const min = ui.cursorScreenPos();
   const [w, h] = ui.contentAvail();
   const iw = Math.max(1, Math.floor(w));
@@ -54,20 +55,27 @@ const drawViewport = (
   view.ensureSize(iw, ih);
   view.visibleThisFrame = true;
   view.localMouse = ui.windowMousePos();
-  if (view.ref !== null) ImGui.Image(view.ref, new ImVec2(w, h));
-  else ui.dummy([w, h]);
-  return { min, max: [min[0] + w, min[1] + h], iw, ih };
+  let hovered = false;
+  if (view.ref !== null) {
+    ImGui.Image(view.ref, new ImVec2(w, h));
+    hovered = ImGui.IsItemHovered();
+  } else ui.dummy([w, h]);
+  return { min, max: [min[0] + w, min[1] + h], iw, ih, hovered };
 };
 
 /** The Scene viewport — the editor camera's live render with status chrome. */
-export const scenePanel = (state: StudioState, view: ViewportTarget): PanelDef => ({
+export const scenePanel = (state: StudioState, view: ViewportTarget, gizmos?: SceneGizmos): PanelDef => ({
   id: '/scene',
   title: 'Scene',
   icon: 'move-3d',
   slot: 'center',
   flush: true,
   render: ({ ui }: EditorContext): void => {
-    const { min, max, iw, ih } = drawViewport(ui, view);
+    const { min, max, iw, ih, hovered } = drawViewport(ui, view);
+    // Editor transform gizmos: capture input here (UI pass); the 3D handles are
+    // emitted from a postUpdate system, the 2D drag readout is drawn here.
+    gizmos?.capture({ x: min[0], y: min[1], width: iw, height: ih }, hovered);
+    gizmos?.drawOverlay();
     const dl = Draw.window();
     const p = getActivePalette();
 

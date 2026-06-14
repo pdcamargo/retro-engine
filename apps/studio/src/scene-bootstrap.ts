@@ -10,6 +10,7 @@ import {
   Cuboid,
   DepthPrepass,
   DirectionalLight3d,
+  EDITOR_GIZMO_LAYER,
   Light3dPlugin,
   MaterialPlugin,
   Mesh3d,
@@ -18,16 +19,19 @@ import {
   Plane3d,
   PrepassPlugin,
   Query,
+  RenderLayers,
   ResMut,
   Sphere,
   StandardMaterial,
   StandardMaterialPlugin,
   Taa,
+  Torus,
   Transform,
 } from '@retro-engine/engine';
 import { mat4, quat, type Vec3, vec3, vec4 } from '@retro-engine/math';
 import { type Renderer } from '@retro-engine/renderer-core';
 
+import { EditorGizmo } from './gizmo-wiring';
 import { type ViewportTarget } from './viewport';
 
 // The editor's own free-look camera is studio infrastructure, not user scene
@@ -77,6 +81,7 @@ export const setupViewportScene = (
       const groundMesh = meshes.add(new Plane3d().mesh().build());
       const cubeMesh = meshes.add(new Cuboid().mesh().build());
       const sphereMesh = meshes.add(new Sphere({ radius: 0.6 }).mesh().uv(48, 32).build());
+      const torusMesh = meshes.add(new Torus({ majorRadius: 0.55, minorRadius: 0.2 }).mesh().build());
 
       const groundMat = materials.add(
         new StandardMaterial({ baseColor: vec4.create(0.62, 0.64, 0.66, 1), roughness: 0.92 }),
@@ -98,6 +103,13 @@ export const setupViewportScene = (
           roughness: 0.3,
         }),
       );
+      const violetMat = materials.add(
+        new StandardMaterial({
+          baseColor: vec4.create(0.55, 0.4, 0.85, 1),
+          metallic: 0.2,
+          roughness: 0.4,
+        }),
+      );
 
       // Ground: the unit plane scaled to a 20×20 floor.
       cmd.spawn(
@@ -105,23 +117,44 @@ export const setupViewportScene = (
         new stdMat.MeshMaterial3d(groundMat),
         new Transform(vec3.create(0, 0, 0), undefined, vec3.create(20, 1, 20)),
       );
+      // Each manipulable primitive carries a different gizmo mode (see
+      // gizmo-wiring.ts) so the Scene viewport shows Move, Rotate, Scale, and the
+      // combined "All" gizmo side by side.
+      // Spread across a ~6-unit square so the four constant-size gizmos never
+      // overlap (each spans roughly two units on screen).
       cmd.spawn(
         new Mesh3d(cubeMesh),
         new stdMat.MeshMaterial3d(redMat),
-        new Transform(vec3.create(-1.6, 0.5, 0.2)),
+        new Transform(vec3.create(-3, 0.5, -2.5)),
+        new EditorGizmo('move'),
       );
       cmd.spawn(
         new Mesh3d(sphereMesh),
         new stdMat.MeshMaterial3d(blueMat),
-        new Transform(vec3.create(0.4, 0.6, -0.6)),
+        new Transform(vec3.create(3, 0.6, -2.5)),
+        new EditorGizmo('rotate'),
       );
       const goldTransform = new Transform(
-        vec3.create(1.9, 0.7, 0.9),
+        vec3.create(3, 0.7, 2.5),
         undefined,
         vec3.create(0.8, 1.4, 0.8),
       );
       quat.fromEuler(0, 0.6, 0, 'xyz', goldTransform.rotation);
-      cmd.spawn(new Mesh3d(cubeMesh), new stdMat.MeshMaterial3d(goldMat), goldTransform);
+      cmd.spawn(
+        new Mesh3d(cubeMesh),
+        new stdMat.MeshMaterial3d(goldMat),
+        goldTransform,
+        new EditorGizmo('scale'),
+      );
+      // Fourth element: a torus with the combined Move/Rotate/Scale gizmo.
+      const torusTransform = new Transform(vec3.create(-3, 0.7, 2.5));
+      quat.fromEuler(Math.PI / 2, 0, 0, 'xyz', torusTransform.rotation);
+      cmd.spawn(
+        new Mesh3d(torusMesh),
+        new stdMat.MeshMaterial3d(violetMat),
+        torusTransform,
+        new EditorGizmo('all'),
+      );
 
       // Sun: a directional light aimed down toward the ground (forward = −Z).
       const sunTransform = new Transform();
@@ -136,12 +169,15 @@ export const setupViewportScene = (
           order: 0,
           target: CameraRenderTarget.texture(editorView.texture!),
           clearColor: ClearColorConfig.custom({ r: 0.1, g: 0.11, b: 0.13, a: 1 }),
-          transform: lookFrom(vec3.create(5.5, 4, 7), vec3.create(0, 0.6, 0)),
+          transform: lookFrom(vec3.create(8, 6.5, 10), vec3.create(0, 0.3, 0)),
         }),
         new DepthPrepass(),
         new MotionVectorPrepass(),
         new Taa(),
         new EditorCameraTag(),
+        // Opt this camera into the editor gizmo layer; the game camera keeps the
+        // default mask, so editor handles never show in the Game tab.
+        RenderLayers.layers(0, EDITOR_GIZMO_LAYER),
       );
 
       // Game camera → Game tab. Renders every frame regardless of play state;

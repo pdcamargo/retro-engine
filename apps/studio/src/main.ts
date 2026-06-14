@@ -13,6 +13,7 @@ import {
 import { createImGuiOverlay, createWebGPURenderer } from '@retro-engine/renderer-webgpu';
 
 import { drawDialogs, menus, statusBar, toolbar } from './chrome';
+import { SceneGizmos } from './gizmo-wiring';
 import { assetsPanel, consolePanel, profilerPanel, systemsPanel } from './panels-dock';
 import { inspectorPanel } from './panels-inspector';
 import { hierarchyPanel } from './panels-left';
@@ -44,6 +45,10 @@ const state = createState(scene);
 const editorView = new ViewportTarget();
 const gameView = new ViewportTarget();
 setupViewportScene(app, renderer, editorView, gameView);
+const sceneGizmos = new SceneGizmos(app, editorView);
+// Emit the gizmo handles before the render graph runs (the UI pass that draws
+// the viewport image comes later in the frame, too late to reach the texture).
+app.addSystem('postUpdate', [], () => sceneGizmos.tick());
 
 const editor = createEditor({
   brand: 'RETRO ENGINE',
@@ -52,7 +57,7 @@ const editor = createEditor({
 
 editor
   .addPanel(hierarchyPanel(state))
-  .addPanel(scenePanel(state, editorView))
+  .addPanel(scenePanel(state, editorView, sceneGizmos))
   .addPanel(gamePanel(state, gameView))
   .addPanel(inspectorPanel(state))
   .addPanel(consolePanel(state))

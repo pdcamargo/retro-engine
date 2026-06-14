@@ -31,6 +31,23 @@ export {
 } from './components';
 export { enableDocking, isDockingEnabled } from './docking';
 export { Draw } from './draw';
+export {
+  dashedLine,
+  type GizmoCamera,
+  type GizmoConfig,
+  type GizmoDragReadout,
+  type GizmoHandle,
+  type GizmoInput,
+  type GizmoMode,
+  type GizmoPointer,
+  type GizmosLike,
+  type GizmoSpace,
+  type GizmoState,
+  type GizmoTarget,
+  labelChip,
+  TransformGizmo,
+  worldToScreen,
+} from './gizmo';
 export { drawIcon } from './icon-shapes';
 export {
   createEditor,

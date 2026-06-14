@@ -500,6 +500,18 @@ export {
 export { TonemappingPlugin } from './tonemapping/tonemapping-plugin';
 export { ViewTonemapping } from './tonemapping/view-tonemapping';
 
+export { Gizmos, type GizmoDrawOptions } from './gizmos/gizmos';
+export {
+  DEFAULT_GIZMO_MASK,
+  EDITOR_GIZMO_LAYER,
+  EDITOR_GIZMO_MASK,
+  GIZMO_VERTEX_FLOATS,
+  GIZMO_VERTEX_STRIDE,
+} from './gizmos/gizmo-layers';
+export { GizmoMesh, type GizmoDrawRange, type GizmoPipelineKey } from './gizmos/gizmo-mesh';
+export { GizmoPass2dLabel, GizmoPass3dLabel } from './gizmos/gizmo-pass-node';
+export { GizmoPlugin } from './gizmos/gizmo-plugin';
+
 export { DEFAULT_MOTION_BLUR, MotionBlur } from './motion-blur/motion-blur';
 export { MOTION_BLUR_WGSL } from './motion-blur/motion-blur.wgsl';
 export type { MotionBlurKey } from './motion-blur/motion-blur-pipeline';
