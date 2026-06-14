@@ -36,7 +36,7 @@ export class ViewportTarget {
 
   private renderer: Renderer | null = null;
   private format: TextureFormat = 'rgba8unorm';
-  private resized = false;
+  private stale: Texture | null = null;
 
   /**
    * Allocate the first texture. Call once after the renderer's device is ready
@@ -69,19 +69,21 @@ export class ViewportTarget {
   }
 
   /**
-   * Returns `true` once after each (re)allocation, so the resize system swaps the
-   * camera's target to {@link texture} exactly when it changes.
+   * The pre-resize texture, returned exactly once after a reallocation (then
+   * cleared). A redirect system uses it to re-point whichever camera was
+   * rendering into this viewport at the new {@link texture}, identifying the
+   * camera by the texture it holds rather than by any editor-owned marker.
    */
-  consumeResized(): boolean {
-    if (!this.resized) return false;
-    this.resized = false;
-    return true;
+  takeStale(): Texture | null {
+    const s = this.stale;
+    this.stale = null;
+    return s;
   }
 
   private allocate(): void {
     const renderer = this.renderer;
     if (renderer === null) return;
-    this.texture?.destroy();
+    const previous = this.texture;
     this.texture = renderer.createTexture({
       width: this.width,
       height: this.height,
@@ -91,6 +93,11 @@ export class ViewportTarget {
     });
     // Force a fresh ImGui handle for the new GPUTexture on the next ensureSize.
     this.ref = null;
-    this.resized = true;
+    if (previous !== null) {
+      // Keep the prior texture's identity for one cycle so the redirect system
+      // can match the camera still pointing at it; the GPU resource is freed.
+      this.stale = previous;
+      previous.destroy();
+    }
   }
 }

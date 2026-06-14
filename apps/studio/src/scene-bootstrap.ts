@@ -30,10 +30,12 @@ import { type Renderer } from '@retro-engine/renderer-core';
 
 import { type ViewportTarget } from './viewport';
 
-// Studio-local markers so the resize systems can address each camera. These live
-// in the app (not a shipped package), so they need no reflection schema.
+// The editor's own free-look camera is studio infrastructure, not user scene
+// content — this marker exists so a future hierarchy/serialization pass can
+// exclude it (see docs/roadmap/editor-viewport.md). The game camera gets no such
+// marker: it is authored by the user, and the studio merely redirects its render
+// target into the Game tab. Studio-local, so no reflection schema is needed.
 class EditorCameraTag {}
-class GameCameraTag {}
 
 /** Orientation+position that frames `target` from `eye` for a camera (looks down −Z). */
 const lookFrom = (eye: Vec3, target: Vec3): Transform => {
@@ -155,7 +157,6 @@ export const setupViewportScene = (
         new DepthPrepass(),
         new MotionVectorPrepass(),
         new Taa(),
-        new GameCameraTag(),
       );
 
       // Clear-only primary camera: nothing else targets the swapchain, so this
@@ -170,15 +171,23 @@ export const setupViewportScene = (
     },
   );
 
-  // On a panel resize the viewport reallocates its texture; point the matching
-  // camera at the new one. The camera plugin re-reads `target` each frame, so the
-  // swap takes effect next frame.
-  app.addSystem('update', [Query([Camera, EditorCameraTag])], (q) => {
-    if (!editorView.consumeResized() || editorView.texture === null) return;
-    for (const row of q.entries()) (row[1] as Camera).target = CameraRenderTarget.texture(editorView.texture);
-  });
-  app.addSystem('update', [Query([Camera, GameCameraTag])], (q) => {
-    if (!gameView.consumeResized() || gameView.texture === null) return;
-    for (const row of q.entries()) (row[1] as Camera).target = CameraRenderTarget.texture(gameView.texture);
+  // On a panel resize the viewport reallocates its texture; re-point whichever
+  // camera was rendering into it at the new one — matched by the texture the
+  // camera still holds, so the game camera needs no editor-owned marker. The
+  // camera plugin re-reads `target` each frame, so the swap takes effect next
+  // frame.
+  const views = [editorView, gameView];
+  app.addSystem('update', [Query([Camera])], (q) => {
+    for (const view of views) {
+      const stale = view.takeStale();
+      if (stale === null || view.texture === null) continue;
+      const next = CameraRenderTarget.texture(view.texture);
+      for (const row of q.entries()) {
+        const camera = row[1] as Camera;
+        if (camera.target.kind === 'texture' && camera.target.texture === stale) {
+          camera.target = next;
+        }
+      }
+    }
   });
 };
