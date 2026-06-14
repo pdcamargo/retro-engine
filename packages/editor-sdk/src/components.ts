@@ -449,7 +449,7 @@ export const widgets: Widgets = {
         const dl = Draw.window();
         dl.rectFilled([p0[0], fmin[1]], [p0[0] + chipW, fmax[1]], chipColor, 2, ROUND_LEFT);
         const ts = ui.calcTextSize(chipText);
-        dl.text([p0[0] + (chipW - ts[0]) / 2, (fmin[1] + fmax[1]) / 2 - ts[1] / 2], srgbU32(p.white), chipText);
+        dl.text([p0[0] + (chipW - ts[0]) / 2, (fmin[1] + fmax[1]) / 2 - ts[1] / 2], srgbU32(p.gray0), chipText);
       }
     });
     return value;
