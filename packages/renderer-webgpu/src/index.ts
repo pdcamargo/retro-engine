@@ -173,3 +173,10 @@ export const createWebGPURenderer = (_canvas: HTMLCanvasElement): Renderer => {
 };
 
 export { createImGuiOverlay } from './imgui-overlay';
+
+// The raw `GPUTexture` behind a HAL `Texture`, reachable via the `GPU_TEXTURE`
+// symbol. Exposed so a host that drives an external GPU library directly (e.g.
+// handing an offscreen render target to an ImGui image binding) can obtain the
+// underlying handle. `GPU*` types still never appear on the public HAL surface.
+export { GPU_TEXTURE, GPU_VIEW } from './symbols';
+export type { InternalTexture, InternalTextureView } from './symbols';

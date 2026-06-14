@@ -18,7 +18,9 @@ import { inspectorPanel } from './panels-inspector';
 import { hierarchyPanel } from './panels-left';
 import { gamePanel, scenePanel } from './panels-viewport';
 import { createScene } from './scene-data';
+import { setupViewportScene } from './scene-bootstrap';
 import { createState } from './state';
+import { ViewportTarget } from './viewport';
 
 const LAYOUT_KEY = 'retro.studio.layout';
 
@@ -37,6 +39,12 @@ const app = new App({ renderer, canvas, clearColor: { r: 0.027, g: 0.043, b: 0.0
 const scene = createScene();
 const state = createState(scene);
 
+// Offscreen render targets for the Scene (editor) and Game viewports, plus the
+// 3D scene and cameras that render into them.
+const editorView = new ViewportTarget();
+const gameView = new ViewportTarget();
+setupViewportScene(app, renderer, editorView, gameView);
+
 const editor = createEditor({
   brand: 'RETRO ENGINE',
   branch: () => 'main · level_01.scene',
@@ -44,8 +52,8 @@ const editor = createEditor({
 
 editor
   .addPanel(hierarchyPanel(state))
-  .addPanel(scenePanel(state))
-  .addPanel(gamePanel(state))
+  .addPanel(scenePanel(state, editorView))
+  .addPanel(gamePanel(state, gameView))
   .addPanel(inspectorPanel(state))
   .addPanel(consolePanel(state))
   .addPanel(assetsPanel(state))

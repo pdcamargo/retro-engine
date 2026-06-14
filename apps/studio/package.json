@@ -19,6 +19,8 @@
     "@mori2003/jsimgui": "latest",
     "@retro-engine/editor-sdk": "workspace:*",
     "@retro-engine/engine": "workspace:*",
+    "@retro-engine/math": "workspace:*",
+    "@retro-engine/renderer-core": "workspace:*",
     "@retro-engine/renderer-webgpu": "workspace:*",
     "@tauri-apps/api": "^2.0.0"
   },
