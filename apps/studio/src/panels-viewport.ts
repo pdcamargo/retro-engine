@@ -38,15 +38,6 @@ const chip = (
   return w + 6;
 };
 
-const drawGizmo = (dl: Draw, cx: number, cy: number): void => {
-  const p = getActivePalette();
-  const len = 34;
-  dl.line([cx, cy], [cx + len, cy], srgbU32(p.red400), 2); // X
-  dl.line([cx, cy], [cx, cy - len], srgbU32(p.green400), 2); // Y
-  dl.line([cx, cy], [cx - len * 0.7, cy + len * 0.5], srgbU32(p.cyan400), 2); // Z
-  dl.circleFilled([cx, cy], 3, srgbU32(p.amber400));
-};
-
 /**
  * Size the viewport to its panel, draw the live render, and record the panel's
  * visibility + local cursor (for a future ray-pick). Returns the panel's screen
@@ -92,9 +83,6 @@ export const scenePanel = (state: StudioState, view: ViewportTarget): PanelDef =
     const entW = chipWidth('box', entText);
     chip(dl, ui, [max[0] - fpsW - 8, min[1] + 8], 'activity', fpsText, srgbU32(p.green400));
     chip(dl, ui, [max[0] - fpsW - entW - 8, min[1] + 8], 'box', entText, srgbU32(p.textMuted));
-
-    // Orientation axis indicator (bottom-left).
-    drawGizmo(dl, min[0] + 34, max[1] - 36);
 
     if (state.playing) dl.rect([min[0] + 2, min[1] + 2], [max[0] - 2, max[1] - 2], srgbU32(p.magenta400), 0, 2);
   },
