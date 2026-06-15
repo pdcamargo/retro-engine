@@ -134,6 +134,16 @@ export const toolbar = (state: StudioState, editor: Editor): ToolbarDef => ({
       }
     }
     vsep(ui);
+    // Scene viewport projection: orthographic 2D or perspective 3D.
+    groupWell(ui, 2);
+    if (widgets.iconButton('view-3d', 'box', { active: state.viewMode === '3d', tooltip: '3D view (3)', size: 'sm' })) {
+      state.viewMode = '3d';
+    }
+    ui.sameLine(0, TOOL_GAP);
+    if (widgets.iconButton('view-2d', 'grid-2x2', { active: state.viewMode === '2d', tooltip: '2D view (2)', size: 'sm' })) {
+      state.viewMode = '2d';
+    }
+    vsep(ui);
     if (widgets.iconButton('snap', 'grid-3x3', { active: state.snap, tooltip: 'Snap to grid', size: 'sm' })) {
       state.snap = !state.snap;
     }

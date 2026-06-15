@@ -32,6 +32,12 @@ import { GridRenderState } from './grid-render-state';
  * nodes exist): inserts the grid pass into `Core3d`, ordered after the
  * transparent pass and every present post pass (TAA, motion blur, tonemap),
  * and before the gizmo pass so transform handles draw on top.
+ *
+ * The single pass serves both editor viewing modes: {@link EditorGrid.plane}
+ * selects the XZ ground plane (perspective 3D camera) or the XY work plane
+ * (orthographic 2D camera), and the shader sizes and fades the grid
+ * accordingly. An editor that toggles its viewport between perspective and
+ * orthographic drives `plane` in step.
  */
 export class GridPlugin implements PluginObject {
   name(): string {

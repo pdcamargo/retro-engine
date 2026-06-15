@@ -145,15 +145,15 @@ export class GridRenderState {
     s[17] = config.majorEvery;
     s[18] = config.planeHeight;
     s[19] = config.fadeEnd;
-    // params1: fade start, fade end.
+    // params1: fade start, fade end, plane (0 = XZ ground, 1 = XY work plane).
     s[20] = config.fadeStart;
     s[21] = config.fadeEnd;
-    s[22] = 0;
+    s[22] = config.plane === 'xy' ? 1 : 0;
     s[23] = 0;
     app.renderer.writeBuffer(this.uniformBuffer!, 0, s as unknown as BufferSource);
   }
 
-  /** The pipeline for a target format / depth mode. Caller must have initialised first. */
+  /** The grid pipeline for a target format / depth mode. Caller must have initialised first. */
   pipeline(key: GridPipelineKey): RenderPipeline {
     if (this.specialized === undefined) {
       throw new Error('GridRenderState.pipeline: not initialised — call ensureInitialised first.');

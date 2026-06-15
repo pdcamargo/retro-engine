@@ -1,6 +1,22 @@
 import { type Color, color } from '@retro-engine/math';
 
 /**
+ * Which plane the editor grid is drawn on.
+ *
+ * - `'xz'` — the horizontal ground plane (`y = planeHeight`), with a
+ *   camera-distance radial fade. The plane a perspective 3D editor camera
+ *   looks down onto.
+ * - `'xy'` — the vertical work plane (`z = planeHeight`), sized to fill an
+ *   orthographic view with no distance fade. The plane an orthographic 2D
+ *   editor camera frames head-on.
+ *
+ * The grid pass renders whichever plane this selects, so an editor that
+ * toggles its viewport between perspective (3D) and orthographic (2D) drives
+ * this in step with the camera projection.
+ */
+export type GridPlane = 'xz' | 'xy';
+
+/**
  * Configuration for the editor reference grid drawn on a ground plane.
  *
  * Inserted as an App resource by {@link GridPlugin}. Mutate its fields at any
@@ -15,6 +31,14 @@ import { type Color, color } from '@retro-engine/math';
 export class EditorGrid {
   /** Whether the grid is drawn at all. */
   enabled = true;
+
+  /**
+   * Which plane the grid is drawn on: the horizontal `'xz'` ground plane (for
+   * a perspective 3D camera) or the vertical `'xy'` work plane (for an
+   * orthographic 2D camera). A studio that toggles its viewport between 3D and
+   * 2D drives this in step with the camera projection.
+   */
+  plane: GridPlane = 'xz';
 
   /** World-space Y the grid plane sits at. */
   planeHeight = 0;

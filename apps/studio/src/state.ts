@@ -2,6 +2,7 @@
 // it stands in for what will eventually be engine resources (selection, play
 // state, the active gizmo, editor preferences). Not wired to the engine yet.
 
+import { type ViewMode } from './editor-camera';
 import { type Scene } from './scene-data';
 
 export type TransformTool = 'select' | 'move' | 'rotate' | 'scale';
@@ -25,6 +26,8 @@ export interface StudioState {
   selected: string | null;
   playing: boolean;
   paused: boolean;
+  /** Scene viewport projection: orthographic 2D or perspective 3D. */
+  viewMode: ViewMode;
   tool: TransformTool;
   snap: boolean;
   /** Grid snap increment in world units, surfaced by the snap toggle / grid settings. */
@@ -48,6 +51,7 @@ export const createState = (scene: Scene): StudioState => ({
   selected: 'player',
   playing: false,
   paused: false,
+  viewMode: '3d',
   tool: 'move',
   snap: true,
   snapStep: 1,

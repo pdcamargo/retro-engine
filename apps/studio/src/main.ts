@@ -1,6 +1,6 @@
 /// <reference types="@webgpu/types" />
 
-import { App, EditorGrid, ResMut } from '@retro-engine/engine';
+import { App, Commands, EditorGrid, ResMut } from '@retro-engine/engine';
 import {
   createEditor,
   type FontSpec,
@@ -13,6 +13,7 @@ import {
 import { createImGuiOverlay, createWebGPURenderer } from '@retro-engine/renderer-webgpu';
 
 import { drawDialogs, menus, statusBar, toolbar } from './chrome';
+import { SceneCameraController } from './editor-camera';
 import { SceneGizmos } from './gizmo-wiring';
 import { assetsPanel, consolePanel, profilerPanel, systemsPanel } from './panels-dock';
 import { inspectorPanel } from './panels-inspector';
@@ -50,6 +51,25 @@ const sceneGizmos = new SceneGizmos(app, editorView);
 // the viewport image comes later in the frame, too late to reach the texture).
 app.addSystem('postUpdate', [], () => sceneGizmos.tick());
 
+// Editor camera navigation. The controller reads viewport input in the Scene
+// panel body (UI pass) and applies it here, before postUpdate recomputes the
+// camera matrices.
+const sceneCamera = new SceneCameraController(app, editorView);
+
+// Reconcile the toolbar/hotkey view mode with the live camera: on a change,
+// swap the editor camera's projection (perspective ↔ orthographic) and point
+// the editor grid at the matching plane (XZ ground for 3D, XY work plane for
+// 2D). Runs before the controller tick so the new projection is in place when
+// the transform is written on the toggle frame.
+app.addSystem('update', [Commands, ResMut(EditorGrid)], (cmd, grid) => {
+  if (state.viewMode !== sceneCamera.appliedMode) {
+    sceneCamera.setMode(cmd, state.viewMode);
+    grid.plane = state.viewMode === '2d' ? 'xy' : 'xz';
+  }
+});
+
+app.addSystem('update', [], () => sceneCamera.tick());
+
 // The toolbar snap toggle is the editor-side source of truth; mirror it into the
 // engine's grid config so grid visuals + future snap-to-grid read one object.
 app.addSystem('postUpdate', [ResMut(EditorGrid)], (grid) => {
@@ -64,7 +84,7 @@ const editor = createEditor({
 
 editor
   .addPanel(hierarchyPanel(state))
-  .addPanel(scenePanel(state, editorView, sceneGizmos))
+  .addPanel(scenePanel(state, editorView, sceneGizmos, sceneCamera))
   .addPanel(gamePanel(state, gameView))
   .addPanel(inspectorPanel(state))
   .addPanel(consolePanel(state))
@@ -85,8 +105,9 @@ interface StudioProbe {
   dockingEnabled: boolean;
   selected: string | null;
   playing: boolean;
+  viewMode: string;
 }
-const probe: StudioProbe = { dockingEnabled: false, selected: null, playing: false };
+const probe: StudioProbe = { dockingEnabled: false, selected: null, playing: false, viewMode: '3d' };
 (window as unknown as { __studioProbe: StudioProbe }).__studioProbe = probe;
 // Dev helper: capture the live dock layout to bake as a default.
 (window as unknown as { __studioLayout: () => string }).__studioLayout = () => saveLayout();
@@ -120,6 +141,7 @@ app.addPlugin(
       probe.dockingEnabled = isDockingEnabled();
       probe.selected = state.selected;
       probe.playing = state.playing;
+      probe.viewMode = state.viewMode;
     },
   }),
 );

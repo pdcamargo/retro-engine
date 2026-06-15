@@ -10,7 +10,6 @@ import {
   Cuboid,
   DepthPrepass,
   DirectionalLight3d,
-  EDITOR_GIZMO_LAYER,
   GridPlugin,
   Light3dPlugin,
   MaterialPlugin,
@@ -20,7 +19,6 @@ import {
   Plane3d,
   PrepassPlugin,
   Query,
-  RenderLayers,
   ResMut,
   Sphere,
   StandardMaterial,
@@ -29,27 +27,12 @@ import {
   Torus,
   Transform,
 } from '@retro-engine/engine';
-import { mat4, quat, type Vec3, vec3, vec4 } from '@retro-engine/math';
+import { quat, vec3, vec4 } from '@retro-engine/math';
 import { type Renderer } from '@retro-engine/renderer-core';
 
+import { defaultEditorTransform, lookFrom, spawnEditorCamera } from './editor-camera';
 import { EditorGizmo } from './gizmo-wiring';
 import { type ViewportTarget } from './viewport';
-
-// The editor's own free-look camera is studio infrastructure, not user scene
-// content — this marker exists so a future hierarchy/serialization pass can
-// exclude it (see docs/roadmap/editor-viewport.md). The game camera gets no such
-// marker: it is authored by the user, and the studio merely redirects its render
-// target into the Game tab. Studio-local, so no reflection schema is needed.
-class EditorCameraTag {}
-
-/** Orientation+position that frames `target` from `eye` for a camera (looks down −Z). */
-const lookFrom = (eye: Vec3, target: Vec3): Transform => {
-  const view = mat4.lookAt(eye, target, vec3.create(0, 1, 0));
-  // Pass an explicit dst so the result is typed as the narrow `Quat`, not the
-  // wide arg type wgpu-matrix infers for a dst-less generic call.
-  const rotation = quat.fromMat(mat4.inverse(view), quat.create());
-  return new Transform(eye, rotation);
-};
 
 /**
  * Register the rendering plugins, insert ambient light, spawn the demo scene
@@ -165,24 +148,10 @@ export const setupViewportScene = (
       quat.fromEuler(-Math.PI / 3, Math.PI / 5, 0, 'xyz', sunTransform.rotation);
       cmd.spawn(new DirectionalLight3d({ intensity: 3.2 }), sunTransform);
 
-      // Editor camera → Scene tab. HDR + depth/motion prepasses + TAA = the
-      // high-quality anti-aliased path (the engine's MSAA is not yet wired).
-      cmd.spawn(
-        ...Camera3d({
-          hdr: true,
-          order: 0,
-          target: CameraRenderTarget.texture(editorView.texture!),
-          clearColor: ClearColorConfig.custom({ r: 0.1, g: 0.11, b: 0.13, a: 1 }),
-          transform: lookFrom(vec3.create(8, 6.5, 10), vec3.create(0, 0.3, 0)),
-        }),
-        new DepthPrepass(),
-        new MotionVectorPrepass(),
-        new Taa(),
-        new EditorCameraTag(),
-        // Opt this camera into the editor gizmo layer; the game camera keeps the
-        // default mask, so editor handles never show in the Game tab.
-        RenderLayers.layers(0, EDITOR_GIZMO_LAYER),
-      );
+      // Editor camera → Scene tab. Spawned in perspective; the view toggle
+      // swaps its projection to orthographic on demand. The controller drives
+      // navigation; this just stands up the initial camera framing the demo.
+      spawnEditorCamera(cmd, editorView.texture!, defaultEditorTransform());
 
       // Game camera → Game tab. Renders every frame regardless of play state;
       // Play will later gate simulation systems, never this render.

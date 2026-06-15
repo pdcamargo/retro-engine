@@ -11,7 +11,9 @@ import {
   type Vec2,
 } from '@retro-engine/editor-sdk';
 
+import { type SceneCameraController } from './editor-camera';
 import { type SceneGizmos } from './gizmo-wiring';
+import { handleShortcuts } from './shortcuts';
 import { type StudioState } from './state';
 import { type ViewportTarget } from './viewport';
 
@@ -64,7 +66,12 @@ const drawViewport = (
 };
 
 /** The Scene viewport — the editor camera's live render with status chrome. */
-export const scenePanel = (state: StudioState, view: ViewportTarget, gizmos?: SceneGizmos): PanelDef => ({
+export const scenePanel = (
+  state: StudioState,
+  view: ViewportTarget,
+  gizmos?: SceneGizmos,
+  controller?: SceneCameraController,
+): PanelDef => ({
   id: '/scene',
   title: 'Scene',
   icon: 'move-3d',
@@ -76,12 +83,18 @@ export const scenePanel = (state: StudioState, view: ViewportTarget, gizmos?: Sc
     // emitted from a postUpdate system, the 2D drag readout is drawn here.
     gizmos?.capture({ x: min[0], y: min[1], width: iw, height: ih }, hovered);
     gizmos?.drawOverlay();
+    // Editor camera navigation + keyboard shortcuts share this pass: ImGui input
+    // is only live while the panel body runs. The controller applies movement
+    // from an update system; the shortcuts mutate editor state in place.
+    controller?.capture(ih, hovered);
+    if (controller !== undefined) handleShortcuts(state, controller, hovered);
     const dl = Draw.window();
     const p = getActivePalette();
 
     // Top status chips (left), info chips (right).
+    const is2d = state.viewMode === '2d';
     let x = min[0] + 8;
-    x += chip(dl, ui, [x, min[1] + 8], 'video', 'Perspective', srgbU32(p.text));
+    x += chip(dl, ui, [x, min[1] + 8], is2d ? 'grid-2x2' : 'video', is2d ? 'Orthographic' : 'Perspective', srgbU32(p.text));
     x += chip(dl, ui, [x, min[1] + 8], 'maximize', `${iw}×${ih}`, srgbU32(p.textMuted));
     if (state.playing) chip(dl, ui, [x, min[1] + 8], null, 'PLAYING', srgbU32(p.magenta400));
     const ents = state.scene.entities.filter((e) => e.group !== true).length;
