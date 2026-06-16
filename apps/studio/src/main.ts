@@ -19,6 +19,7 @@ import { assetsPanel, consolePanel, profilerPanel, systemsPanel } from './panels
 import { inspectorPanel } from './panels-inspector';
 import { hierarchyPanel } from './panels-left';
 import { gamePanel, scenePanel } from './panels-viewport';
+import { createPlatformHost } from './platform/create-platform-host';
 import { createScene } from './scene-data';
 import { setupViewportScene } from './scene-bootstrap';
 import { createState } from './state';
@@ -106,46 +107,66 @@ interface StudioProbe {
   selected: string | null;
   playing: boolean;
   viewMode: string;
+  platformKind: 'browser' | 'tauri';
 }
-const probe: StudioProbe = { dockingEnabled: false, selected: null, playing: false, viewMode: '3d' };
+const probe: StudioProbe = {
+  dockingEnabled: false,
+  selected: null,
+  playing: false,
+  viewMode: '3d',
+  platformKind: 'browser',
+};
 (window as unknown as { __studioProbe: StudioProbe }).__studioProbe = probe;
 // Dev helper: capture the live dock layout to bake as a default.
 (window as unknown as { __studioLayout: () => string }).__studioLayout = () => saveLayout();
 
-app.addPlugin(
-  uiOverlayPlugin({
-    overlay: createImGuiOverlay(renderer, { fontLoader: 'freetype' }),
-    canvas,
-    docking: true,
-    fontSizeBase: 13,
-    fonts: async (): Promise<readonly FontSpec[]> => {
-      const [jbMono, lucide] = await Promise.all([
-        fetchFont('JetBrainsMono-Regular.ttf'),
-        fetchFont('lucide.ttf'),
-      ]);
-      // The brand wordmark is drawn as a crisp pixel font (the bundled FreeType
-      // build anti-aliases pixel faces), so no Silkscreen face is loaded.
-      return [
-        { name: 'ui', data: jbMono, sizePixels: 16, default: true },
-        { name: 'icons', data: lucide, sizePixels: 16 },
-      ];
-    },
-    layout: {
-      default: editor.defaultLayout(),
-      restore: () => localStorage.getItem(LAYOUT_KEY),
-      persist: (ini) => localStorage.setItem(LAYOUT_KEY, ini),
-    },
-    draw: (): void => {
-      editor.draw();
-      drawDialogs({ ui, widgets }, state);
-      probe.dockingEnabled = isDockingEnabled();
-      probe.selected = state.selected;
-      probe.playing = state.playing;
-      probe.viewMode = state.viewMode;
-    },
-  }),
-);
+// The platform host (native under Tauri, web in the browser) resolves async, and
+// the overlay's layout.restore is synchronous — so pick the host and pre-load the
+// saved layout before wiring the overlay, then start the frame loop.
+void (async (): Promise<void> => {
+  const platform = await createPlatformHost();
+  probe.platformKind = platform.kind;
+  (window as unknown as { __studioPrefs: typeof platform.preferences }).__studioPrefs = platform.preferences;
 
-app.run().catch((err: unknown) => {
+  const savedLayout = await platform.preferences.get(LAYOUT_KEY);
+
+  app.addPlugin(
+    uiOverlayPlugin({
+      overlay: createImGuiOverlay(renderer, { fontLoader: 'freetype' }),
+      canvas,
+      docking: true,
+      fontSizeBase: 13,
+      fonts: async (): Promise<readonly FontSpec[]> => {
+        const [jbMono, lucide] = await Promise.all([
+          fetchFont('JetBrainsMono-Regular.ttf'),
+          fetchFont('lucide.ttf'),
+        ]);
+        // The brand wordmark is drawn as a crisp pixel font (the bundled FreeType
+        // build anti-aliases pixel faces), so no Silkscreen face is loaded.
+        return [
+          { name: 'ui', data: jbMono, sizePixels: 16, default: true },
+          { name: 'icons', data: lucide, sizePixels: 16 },
+        ];
+      },
+      layout: {
+        default: editor.defaultLayout(),
+        restore: () => savedLayout,
+        persist: (ini) => {
+          void platform.preferences.set(LAYOUT_KEY, ini);
+        },
+      },
+      draw: (): void => {
+        editor.draw();
+        drawDialogs({ ui, widgets }, state);
+        probe.dockingEnabled = isDockingEnabled();
+        probe.selected = state.selected;
+        probe.playing = state.playing;
+        probe.viewMode = state.viewMode;
+      },
+    }),
+  );
+
+  await app.run();
+})().catch((err: unknown) => {
   console.error('[studio] failed to run', err);
 });

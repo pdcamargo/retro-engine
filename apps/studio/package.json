@@ -18,6 +18,7 @@
   "dependencies": {
     "@mori2003/jsimgui": "latest",
     "@retro-engine/ecs": "workspace:*",
+    "@retro-engine/editor-platform": "workspace:*",
     "@retro-engine/editor-sdk": "workspace:*",
     "@retro-engine/engine": "workspace:*",
     "@retro-engine/math": "workspace:*",

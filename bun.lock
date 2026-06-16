@@ -1,5 +1,6 @@
 {
   "lockfileVersion": 1,
+  "configVersion": 0,
   "workspaces": {
     "": {
       "name": "retro-engine",
@@ -38,6 +39,7 @@
       "dependencies": {
         "@mori2003/jsimgui": "latest",
         "@retro-engine/ecs": "workspace:*",
+        "@retro-engine/editor-platform": "workspace:*",
         "@retro-engine/editor-sdk": "workspace:*",
         "@retro-engine/engine": "workspace:*",
         "@retro-engine/math": "workspace:*",
@@ -56,6 +58,10 @@
     },
     "packages/ecs": {
       "name": "@retro-engine/ecs",
+      "version": "0.0.0",
+    },
+    "packages/editor-platform": {
+      "name": "@retro-engine/editor-platform",
       "version": "0.0.0",
     },
     "packages/editor-sdk": {
@@ -228,6 +234,8 @@
     "@retro-engine/assets": ["@retro-engine/assets@workspace:packages/assets"],
 
     "@retro-engine/ecs": ["@retro-engine/ecs@workspace:packages/ecs"],
+
+    "@retro-engine/editor-platform": ["@retro-engine/editor-platform@workspace:packages/editor-platform"],
 
     "@retro-engine/editor-sdk": ["@retro-engine/editor-sdk@workspace:packages/editor-sdk"],
 
