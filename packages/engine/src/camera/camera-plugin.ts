@@ -21,6 +21,7 @@ import {
 import { ClearColor } from './clear-color';
 import { CurrentHdrView } from './current-hdr-view';
 import { jitterProjection, ViewJitter } from './jitter';
+import { MainCamera } from './main-camera';
 import { ShaderRegistry } from '../shader/shader-registry';
 import {
   ExtractedCamera,
@@ -393,6 +394,8 @@ export class CameraPlugin implements PluginObject {
       { mask: t.number },
       { name: 'RenderLayers', make: () => new RenderLayers() },
     );
+    // Pure marker designating the primary game camera; no fields to persist.
+    app.registerComponent(MainCamera, {}, { name: 'MainCamera' });
 
     // Register the canonical view uniform module so user shaders can write
     // `#import retro_engine::view` to pull in the ViewUniform struct + the

@@ -70,6 +70,7 @@ export {
   ScalingMode,
   updateOrthographicArea,
 } from './camera/projection';
+export { MainCamera } from './camera/main-camera';
 export { RenderLayers, renderLayersIntersect } from './camera/render-layers';
 export { SortedCameras } from './camera/sorted-cameras';
 export {

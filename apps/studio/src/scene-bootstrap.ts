@@ -1,28 +1,25 @@
+import { type Entity } from '@retro-engine/ecs';
 import {
   type App,
   AmbientLight,
   Camera,
   Camera2d,
-  Camera3d,
   CameraRenderTarget,
   ClearColorConfig,
   Commands,
-  DepthPrepass,
   GridPlugin,
   Light3dPlugin,
+  MainCamera,
   MaterialPlugin,
-  MotionVectorPrepass,
-  Name,
   PrepassPlugin,
   Query,
   StandardMaterial,
   StandardMaterialPlugin,
-  Taa,
 } from '@retro-engine/engine';
 import { vec3 } from '@retro-engine/math';
 import { type Renderer } from '@retro-engine/renderer-core';
 
-import { defaultEditorTransform, lookFrom, spawnEditorCamera } from './editor-camera';
+import { defaultEditorTransform, spawnEditorCamera } from './editor-camera';
 import { EditorOnly } from './editor-markers';
 import { type ViewportTarget } from './viewport';
 
@@ -65,23 +62,9 @@ export const setupViewportScene = (
       // (Tagged EditorOnly inside spawnEditorCamera.)
       spawnEditorCamera(cmd, editorView.texture!, defaultEditorTransform());
 
-      // Game camera → Game tab. The scene's "Main Camera" — authored content the
-      // user controls, so it shows in the hierarchy (not tagged EditorOnly).
-      // Renders every frame regardless of play state; Play will later gate
-      // simulation systems, never this render.
-      cmd.spawn(
-        ...Camera3d({
-          hdr: true,
-          order: 1,
-          target: CameraRenderTarget.texture(gameView.texture!),
-          clearColor: ClearColorConfig.custom({ r: 0.06, g: 0.07, b: 0.09, a: 1 }),
-          transform: lookFrom(vec3.create(0, 1.7, 6.5), vec3.create(0, 0.8, 0)),
-        }),
-        new DepthPrepass(),
-        new MotionVectorPrepass(),
-        new Taa(),
-        new Name('Main Camera'),
-      );
+      // The game "Main Camera" is authored scene content (see installShowcaseScene),
+      // not spawned here. The editor redirects it into the Game tab each frame
+      // (the Main Camera → Game tab system below).
 
       // Clear-only primary camera: nothing else targets the swapchain, so this
       // opens the one pass that clears it before the ImGui overlay composites
@@ -96,23 +79,54 @@ export const setupViewportScene = (
     },
   );
 
-  // On a panel resize the viewport reallocates its texture; re-point whichever
-  // camera was rendering into it at the new one — matched by the texture the
-  // camera still holds, so the game camera needs no editor-owned marker. The
-  // camera plugin re-reads `target` each frame, so the swap takes effect next
-  // frame.
-  const views = [editorView, gameView];
+  // Editor camera → Scene tab. On a panel resize the viewport reallocates its
+  // texture; re-point the camera still holding the previous one at the new
+  // texture (matched by the stale handle). The camera plugin re-reads `target`
+  // each frame, so the swap takes effect next frame.
   app.addSystem('update', [Query([Camera])], (q) => {
-    for (const view of views) {
-      const stale = view.takeStale();
-      if (stale === null || view.texture === null) continue;
-      const next = CameraRenderTarget.texture(view.texture);
-      for (const row of q.entries()) {
-        const camera = row[1] as Camera;
-        if (camera.target.kind === 'texture' && camera.target.texture === stale) {
-          camera.target = next;
-        }
+    const stale = editorView.takeStale();
+    if (stale === null || editorView.texture === null) return;
+    const next = CameraRenderTarget.texture(editorView.texture);
+    for (const row of q.entries()) {
+      const camera = row[1] as Camera;
+      if (camera.target.kind === 'texture' && camera.target.texture === stale) {
+        camera.target = next;
       }
     }
   });
+
+  // Main Camera → Game tab. The authored game camera loads with target =
+  // primary (its build-time meaning: render to screen); redirect it into the
+  // Game tab's offscreen texture every frame. Re-pointing only when it differs
+  // covers both initial load (arrives as primary) and resize (arrives holding
+  // the prior, now-freed texture) without leaning on a stale-texture match.
+  app.addSystem('update', [Query([Camera, MainCamera])], (q) => {
+    if (gameView.texture === null) return;
+    for (const row of q.entries()) {
+      const camera = row[1] as Camera;
+      const target = camera.target;
+      if (target.kind !== 'texture' || target.texture !== gameView.texture) {
+        camera.target = CameraRenderTarget.texture(gameView.texture);
+      }
+    }
+  });
+
+  // Guarantee a Main Camera. Explicit authoring wins; if a loaded scene carries
+  // none, promote the highest-order game camera so the Game tab isn't blank.
+  // Editor infrastructure (the Scene-tab camera, the clear camera) is
+  // EditorOnly, so it's never eligible — promotion only ever tags authored
+  // content. The insert flushes next frame, when the redirect above picks it up.
+  app.addSystem(
+    'update',
+    [Commands, Query([MainCamera]), Query([Camera], { without: [EditorOnly] })],
+    (cmd, tagged, cameras) => {
+      if (tagged.first() !== undefined) return;
+      let best: { entity: Entity; order: number } | null = null;
+      for (const row of cameras.entries()) {
+        const order = (row[1] as Camera).order;
+        if (best === null || order > best.order) best = { entity: row[0], order };
+      }
+      if (best !== null) cmd.entity(best.entity).insert(new MainCamera());
+    },
+  );
 };

@@ -11,17 +11,29 @@ import { quat, vec3, vec4 } from '@retro-engine/math';
 import { t } from '@retro-engine/reflect';
 import { World } from '@retro-engine/ecs';
 import { type AssetGuid, type Handle, makeHandle } from '@retro-engine/assets';
-import type { App, AssetSource, Mesh, SceneData, SerializedComponent } from '@retro-engine/engine';
+import type {
+  App,
+  AssetSource,
+  Mesh,
+  SceneData,
+  SerializedComponent,
+  SerializedEntity,
+} from '@retro-engine/engine';
 import {
   AppTypeRegistry,
   AssetPlugin,
   AssetServer,
+  Camera3d,
+  ClearColorConfig,
   Commands,
   Cuboid,
   defineTemplate,
+  DepthPrepass,
+  MainCamera,
   MaterialPlugin,
   Mesh3d,
   Meshes,
+  MotionVectorPrepass,
   Name,
   ResMut,
   SCENE_FORMAT_VERSION,
@@ -31,10 +43,13 @@ import {
   serializeWorld,
   spawnScene,
   StandardMaterial,
+  Taa,
   Transform,
   Visibility,
 } from '@retro-engine/engine';
 import { type Gltf, GltfPlugin, GltfSceneRoot } from '@retro-engine/gltf';
+
+import { lookFrom } from './editor-camera';
 
 import binUrl from '../models/Clover_1.bin';
 import gltfUrl from '../models/Clover_1.gltf';
@@ -177,7 +192,35 @@ export const installShowcaseScene = (app: App, deps: ShowcaseDeps): void => {
         return makeHandle(0 as never);
       };
 
-      const idMap = spawnScene(app, deps.scene, undefined, { resolveHandle });
+      // Main Camera: the game's primary view, authored like any saved entity so
+      // it round-trips through the scene path instead of being hand-wired. It
+      // serializes with target = primary (the build-time meaning: render to
+      // screen); the editor redirects it into the Game tab at runtime. Authored
+      // in a throwaway world (Camera3d is a bundle), then spliced under the
+      // showcase root as one more entity — the same pattern as the child scene.
+      const cameraWorld = new World();
+      cameraWorld.spawn(
+        ...Camera3d({
+          hdr: true,
+          order: 1,
+          clearColor: ClearColorConfig.custom({ r: 0.06, g: 0.07, b: 0.09, a: 1 }),
+          transform: lookFrom(vec3.create(0, 1.7, 6.5), vec3.create(0, 0.8, 0)),
+        }),
+        new DepthPrepass(),
+        new MotionVectorPrepass(),
+        new Taa(),
+        new MainCamera(),
+        new Name('Main Camera'),
+      );
+      const serializedCamera = serializeWorld(cameraWorld, registry).entities[0];
+      if (serializedCamera === undefined) throw new Error('studio showcase: Main Camera failed to serialize');
+      const cameraEntity: SerializedEntity = {
+        ...serializedCamera,
+        id: Math.max(...deps.scene.entities.map((e) => e.id)) + 1,
+        components: [...serializedCamera.components, parentOf(0)],
+      };
+      const scene: SceneData = { ...deps.scene, entities: [...deps.scene.entities, cameraEntity] };
+      const idMap = spawnScene(app, scene, undefined, { resolveHandle });
 
       // glTF model — instantiated programmatically (GltfSceneRoot has no schema,
       // so it can't live in the serialized scene). Named + parented under the
