@@ -7,46 +7,40 @@ import {
   CameraRenderTarget,
   ClearColorConfig,
   Commands,
-  Cuboid,
   DepthPrepass,
-  DirectionalLight3d,
   GridPlugin,
   Light3dPlugin,
   MaterialPlugin,
-  Mesh3d,
-  Meshes,
   MotionVectorPrepass,
-  Plane3d,
+  Name,
   PrepassPlugin,
   Query,
-  ResMut,
-  Sphere,
   StandardMaterial,
   StandardMaterialPlugin,
   Taa,
-  Torus,
-  Transform,
 } from '@retro-engine/engine';
-import { quat, vec3, vec4 } from '@retro-engine/math';
+import { vec3 } from '@retro-engine/math';
 import { type Renderer } from '@retro-engine/renderer-core';
 
 import { defaultEditorTransform, lookFrom, spawnEditorCamera } from './editor-camera';
-import { EditorGizmo } from './gizmo-wiring';
+import { EditorOnly } from './editor-markers';
 import { type ViewportTarget } from './viewport';
 
 /**
- * Register the rendering plugins, insert ambient light, spawn the demo scene
- * (ground + a few lit/shadowed primitives + a sun), and stand up the editor and
- * game cameras that render into the two viewport textures. Reference content for
- * "the engine is renderable in the editor" — swap for a loaded scene later.
+ * Register the rendering plugins, insert ambient light, and stand up the editor
+ * cameras. The editor camera (Scene tab) and the swapchain-clear camera are
+ * editor infrastructure, tagged `EditorOnly` so the hierarchy hides them; the
+ * game "Main Camera" (Game tab) is authored content the user controls, so it
+ * stays visible (and named). The sun and the rest of the authored scene are
+ * loaded through the SceneSource (see `installShowcaseScene`).
  */
 export const setupViewportScene = (
   app: App,
   renderer: Renderer,
   editorView: ViewportTarget,
   gameView: ViewportTarget,
+  stdMat: MaterialPlugin<StandardMaterial>,
 ): void => {
-  const stdMat = new MaterialPlugin(StandardMaterial);
   app
     .addPlugin(new PrepassPlugin())
     .addPlugin(new StandardMaterialPlugin())
@@ -60,101 +54,21 @@ export const setupViewportScene = (
 
   app.addSystem(
     'startup',
-    [Commands, ResMut(Meshes), ResMut(stdMat.Materials)],
-    (cmd, meshes, materials) => {
+    [Commands],
+    (cmd) => {
       editorView.init(renderer);
       gameView.init(renderer);
 
-      const groundMesh = meshes.add(new Plane3d().mesh().build());
-      const cubeMesh = meshes.add(new Cuboid().mesh().build());
-      const sphereMesh = meshes.add(new Sphere({ radius: 0.6 }).mesh().uv(48, 32).build());
-      const torusMesh = meshes.add(new Torus({ majorRadius: 0.55, minorRadius: 0.2 }).mesh().build());
-
-      const groundMat = materials.add(
-        new StandardMaterial({ baseColor: vec4.create(0.62, 0.64, 0.66, 1), roughness: 0.92 }),
-      );
-      const redMat = materials.add(
-        new StandardMaterial({ baseColor: vec4.create(0.85, 0.23, 0.27, 1), roughness: 0.55 }),
-      );
-      const blueMat = materials.add(
-        new StandardMaterial({
-          baseColor: vec4.create(0.22, 0.45, 0.85, 1),
-          metallic: 0.1,
-          roughness: 0.25,
-        }),
-      );
-      const goldMat = materials.add(
-        new StandardMaterial({
-          baseColor: vec4.create(0.9, 0.72, 0.28, 1),
-          metallic: 0.9,
-          roughness: 0.3,
-        }),
-      );
-      const violetMat = materials.add(
-        new StandardMaterial({
-          baseColor: vec4.create(0.55, 0.4, 0.85, 1),
-          metallic: 0.2,
-          roughness: 0.4,
-        }),
-      );
-
-      // Ground: the unit plane scaled to a 20×20 floor.
-      cmd.spawn(
-        new Mesh3d(groundMesh),
-        new stdMat.MeshMaterial3d(groundMat),
-        new Transform(vec3.create(0, 0, 0), undefined, vec3.create(20, 1, 20)),
-      );
-      // Each manipulable primitive carries a different gizmo mode (see
-      // gizmo-wiring.ts) so the Scene viewport shows Move, Rotate, Scale, and the
-      // combined "All" gizmo side by side.
-      // Spread across a ~6-unit square so the four constant-size gizmos never
-      // overlap (each spans roughly two units on screen).
-      cmd.spawn(
-        new Mesh3d(cubeMesh),
-        new stdMat.MeshMaterial3d(redMat),
-        new Transform(vec3.create(-3, 0.5, -2.5)),
-        new EditorGizmo('move'),
-      );
-      cmd.spawn(
-        new Mesh3d(sphereMesh),
-        new stdMat.MeshMaterial3d(blueMat),
-        new Transform(vec3.create(3, 0.6, -2.5)),
-        new EditorGizmo('rotate'),
-      );
-      const goldTransform = new Transform(
-        vec3.create(3, 0.7, 2.5),
-        undefined,
-        vec3.create(0.8, 1.4, 0.8),
-      );
-      quat.fromEuler(0, 0.6, 0, 'xyz', goldTransform.rotation);
-      cmd.spawn(
-        new Mesh3d(cubeMesh),
-        new stdMat.MeshMaterial3d(goldMat),
-        goldTransform,
-        new EditorGizmo('scale'),
-      );
-      // Fourth element: a torus with the combined Move/Rotate/Scale gizmo.
-      const torusTransform = new Transform(vec3.create(-3, 0.7, 2.5));
-      quat.fromEuler(Math.PI / 2, 0, 0, 'xyz', torusTransform.rotation);
-      cmd.spawn(
-        new Mesh3d(torusMesh),
-        new stdMat.MeshMaterial3d(violetMat),
-        torusTransform,
-        new EditorGizmo('all'),
-      );
-
-      // Sun: a directional light aimed down toward the ground (forward = −Z).
-      const sunTransform = new Transform();
-      quat.fromEuler(-Math.PI / 3, Math.PI / 5, 0, 'xyz', sunTransform.rotation);
-      cmd.spawn(new DirectionalLight3d({ intensity: 3.2 }), sunTransform);
-
       // Editor camera → Scene tab. Spawned in perspective; the view toggle
       // swaps its projection to orthographic on demand. The controller drives
-      // navigation; this just stands up the initial camera framing the demo.
+      // navigation; this just stands up the initial camera framing the scene.
+      // (Tagged EditorOnly inside spawnEditorCamera.)
       spawnEditorCamera(cmd, editorView.texture!, defaultEditorTransform());
 
-      // Game camera → Game tab. Renders every frame regardless of play state;
-      // Play will later gate simulation systems, never this render.
+      // Game camera → Game tab. The scene's "Main Camera" — authored content the
+      // user controls, so it shows in the hierarchy (not tagged EditorOnly).
+      // Renders every frame regardless of play state; Play will later gate
+      // simulation systems, never this render.
       cmd.spawn(
         ...Camera3d({
           hdr: true,
@@ -166,6 +80,7 @@ export const setupViewportScene = (
         new DepthPrepass(),
         new MotionVectorPrepass(),
         new Taa(),
+        new Name('Main Camera'),
       );
 
       // Clear-only primary camera: nothing else targets the swapchain, so this
@@ -176,6 +91,7 @@ export const setupViewportScene = (
           order: -100,
           clearColor: ClearColorConfig.custom({ r: 0.027, g: 0.043, b: 0.039, a: 1 }),
         }),
+        new EditorOnly(),
       );
     },
   );

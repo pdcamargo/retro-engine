@@ -8,6 +8,8 @@ The transform gizmos (ADR-0075) currently bind to entities through a studio-loca
 
 A real editor drives a **single** gizmo from the active tool + current selection, not one fixed gizmo per object. That needs the selection state to resolve to live ECS entities.
 
+**Update (2026-06-16, ADR-0079):** the first scope bullet below is delivered — the hierarchy is backed by the live world and `state.selectedEntity` now resolves to an `Entity`. Remaining: viewport ray-picking and driving one `TransformGizmo` from `(tool, selection)`, retiring the `EditorGizmo` demo markers.
+
 ## Why deferred
 
 Depends on two pieces that are their own work: viewport ray-picking (panel cursor → world ray → entity hit-test, the `ViewportTarget.localMouse` plumbing already anticipates this) and a hierarchy/selection model backed by real ECS entities rather than the mock `scene-data` tree.

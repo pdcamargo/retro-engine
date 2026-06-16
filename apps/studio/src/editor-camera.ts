@@ -20,6 +20,7 @@ import {
 import { mat4, quat, type Vec3, vec3 } from '@retro-engine/math';
 import { type Texture } from '@retro-engine/renderer-core';
 
+import { EditorOnly } from './editor-markers';
 import { type ViewportTarget } from './viewport';
 
 /** The editor viewport's projection mode. Persisted in `StudioState.viewMode`. */
@@ -75,6 +76,7 @@ export const spawnEditorCamera = (cmd: CommandsHandle, texture: Texture, transfo
     new MotionVectorPrepass(),
     new Taa(),
     new EditorCameraTag(),
+    new EditorOnly(),
     RenderLayers.layers(0, EDITOR_GIZMO_LAYER),
   );
 };

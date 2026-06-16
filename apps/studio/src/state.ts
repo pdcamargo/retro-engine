@@ -2,6 +2,8 @@
 // it stands in for what will eventually be engine resources (selection, play
 // state, the active gizmo, editor preferences). Not wired to the engine yet.
 
+import { type Entity } from '@retro-engine/ecs';
+
 import { type ViewMode } from './editor-camera';
 import { type Scene } from './scene-data';
 
@@ -22,8 +24,14 @@ export interface ProjectSettings {
 
 export interface StudioState {
   scene: Scene;
-  /** Selected entity id, or `null`. Drives the inspector. */
+  /** Selected item in the mock asset browser, or `null`. */
   selected: string | null;
+  /** Selected entity in the live ECS world, or `null`. Drives the hierarchy + inspector. */
+  selectedEntity: Entity | null;
+  /** Entities the user has collapsed in the hierarchy (default expanded; rebuilt each frame). */
+  collapsed: Set<Entity>;
+  /** Reveal derived / non-serializable components in the inspector (a debug view). */
+  debugMode: boolean;
   playing: boolean;
   paused: boolean;
   /** Scene viewport projection: orthographic 2D or perspective 3D. */
@@ -48,7 +56,10 @@ export interface StudioState {
 /** Build the studio's initial editor state around a scene. */
 export const createState = (scene: Scene): StudioState => ({
   scene,
-  selected: 'player',
+  selected: null,
+  selectedEntity: null,
+  collapsed: new Set(),
+  debugMode: false,
   playing: false,
   paused: false,
   viewMode: '3d',

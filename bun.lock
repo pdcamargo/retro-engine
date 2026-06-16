@@ -38,10 +38,12 @@
       "version": "0.0.0",
       "dependencies": {
         "@mori2003/jsimgui": "latest",
+        "@retro-engine/assets": "workspace:*",
         "@retro-engine/ecs": "workspace:*",
         "@retro-engine/editor-platform": "workspace:*",
         "@retro-engine/editor-sdk": "workspace:*",
         "@retro-engine/engine": "workspace:*",
+        "@retro-engine/gltf": "workspace:*",
         "@retro-engine/math": "workspace:*",
         "@retro-engine/renderer-core": "workspace:*",
         "@retro-engine/renderer-webgpu": "workspace:*",
@@ -69,8 +71,10 @@
       "version": "0.0.0",
       "dependencies": {
         "@mori2003/jsimgui": "0.14.0",
+        "@retro-engine/ecs": "workspace:*",
         "@retro-engine/engine": "workspace:*",
         "@retro-engine/math": "workspace:*",
+        "@retro-engine/reflect": "workspace:*",
         "@retro-engine/renderer-core": "workspace:*",
       },
     },

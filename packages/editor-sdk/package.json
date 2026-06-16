@@ -35,8 +35,10 @@
   },
   "dependencies": {
     "@mori2003/jsimgui": "0.14.0",
+    "@retro-engine/ecs": "workspace:*",
     "@retro-engine/engine": "workspace:*",
     "@retro-engine/math": "workspace:*",
+    "@retro-engine/reflect": "workspace:*",
     "@retro-engine/renderer-core": "workspace:*"
   }
 }

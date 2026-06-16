@@ -1,10 +1,12 @@
 /// <reference types="@webgpu/types" />
 
-import { App, Commands, EditorGrid, ResMut } from '@retro-engine/engine';
+import { App, AppTypeRegistry, Commands, EditorGrid, MaterialPlugin, ResMut, StandardMaterial } from '@retro-engine/engine';
 import {
+  buildOutline,
   createEditor,
   type FontSpec,
   isDockingEnabled,
+  listComponents,
   saveLayout,
   ui,
   uiOverlayPlugin,
@@ -14,6 +16,8 @@ import { createImGuiOverlay, createWebGPURenderer } from '@retro-engine/renderer
 
 import { drawDialogs, menus, statusBar, toolbar } from './chrome';
 import { SceneCameraController } from './editor-camera';
+import { EditorOnly } from './editor-markers';
+import { studioClassifiers } from './entity-classifiers';
 import { SceneGizmos } from './gizmo-wiring';
 import { assetsPanel, consolePanel, profilerPanel, systemsPanel } from './panels-dock';
 import { inspectorPanel } from './panels-inspector';
@@ -22,6 +26,8 @@ import { gamePanel, scenePanel } from './panels-viewport';
 import { createPlatformHost } from './platform/create-platform-host';
 import { createScene } from './scene-data';
 import { setupViewportScene } from './scene-bootstrap';
+import { inMemorySceneSource } from './scene-source';
+import { installShowcaseScene, SHOWCASE_SCENE } from './showcase-scene';
 import { createState } from './state';
 import { ViewportTarget } from './viewport';
 
@@ -46,7 +52,8 @@ const state = createState(scene);
 // 3D scene and cameras that render into them.
 const editorView = new ViewportTarget();
 const gameView = new ViewportTarget();
-setupViewportScene(app, renderer, editorView, gameView);
+const stdMat = new MaterialPlugin(StandardMaterial);
+setupViewportScene(app, renderer, editorView, gameView, stdMat);
 const sceneGizmos = new SceneGizmos(app, editorView);
 // Emit the gizmo handles before the render graph runs (the UI pass that draws
 // the viewport image comes later in the frame, too late to reach the texture).
@@ -84,10 +91,10 @@ const editor = createEditor({
 });
 
 editor
-  .addPanel(hierarchyPanel(state))
+  .addPanel(hierarchyPanel(state, app))
   .addPanel(scenePanel(state, editorView, sceneGizmos, sceneCamera))
   .addPanel(gamePanel(state, gameView))
-  .addPanel(inspectorPanel(state))
+  .addPanel(inspectorPanel(state, app))
   .addPanel(consolePanel(state))
   .addPanel(assetsPanel(state))
   .addPanel(systemsPanel(state))
@@ -104,7 +111,7 @@ const fetchFont = async (file: string): Promise<Uint8Array> => {
 // Probe for the Playwright fidelity check — docking + panel state without pixels.
 interface StudioProbe {
   dockingEnabled: boolean;
-  selected: string | null;
+  selected: number | null;
   playing: boolean;
   viewMode: string;
   platformKind: 'browser' | 'tauri';
@@ -119,6 +126,29 @@ const probe: StudioProbe = {
 (window as unknown as { __studioProbe: StudioProbe }).__studioProbe = probe;
 // Dev helper: capture the live dock layout to bake as a default.
 (window as unknown as { __studioLayout: () => string }).__studioLayout = () => saveLayout();
+// Dev helper: read the live entity outline + the selected entity's components,
+// so the Playwright fidelity check can assert the tree/inspector without pixels.
+(window as unknown as { __studioInspect: (sel?: number) => unknown }).__studioInspect = (sel) => {
+  const target = typeof sel === 'number' ? sel : state.selectedEntity;
+  return {
+    selected: state.selectedEntity,
+    outline: buildOutline(app.world, {
+      classifiers: studioClassifiers,
+      registry: state.debugMode ? undefined : app.getResource(AppTypeRegistry)!.registry,
+      skip: (e) => !state.debugMode && app.world.has(e, EditorOnly),
+    }).map((n) => ({
+      entity: n.entity,
+      name: n.name,
+      depth: n.depth,
+      kind: n.class.kind,
+      components: n.componentCount,
+    })),
+    components:
+      target !== null && app.world.hasEntity(target as never)
+        ? listComponents(app.world, app.getResource(AppTypeRegistry)!.registry, target as never)
+        : [],
+  };
+};
 
 // The platform host (native under Tauri, web in the browser) resolves async, and
 // the overlay's layout.restore is synchronous — so pick the host and pre-load the
@@ -129,6 +159,11 @@ void (async (): Promise<void> => {
   (window as unknown as { __studioPrefs: typeof platform.preferences }).__studioPrefs = platform.preferences;
 
   const savedLayout = await platform.preferences.get(LAYOUT_KEY);
+
+  // Opinionated, host-agnostic scene load: today an in-memory showcase, later a
+  // browser endpoint or a Tauri file behind the same SceneSource contract.
+  const initialScene = await inMemorySceneSource(SHOWCASE_SCENE).load();
+  installShowcaseScene(app, { material: stdMat, scene: initialScene });
 
   app.addPlugin(
     uiOverlayPlugin({
@@ -159,7 +194,7 @@ void (async (): Promise<void> => {
         editor.draw();
         drawDialogs({ ui, widgets }, state);
         probe.dockingEnabled = isDockingEnabled();
-        probe.selected = state.selected;
+        probe.selected = state.selectedEntity;
         probe.playing = state.playing;
         probe.viewMode = state.viewMode;
       },

@@ -29,6 +29,7 @@ export {
   type Widgets,
   widgets,
 } from './components';
+export { type ComponentEntry, listComponents } from './component-list';
 export { enableDocking, isDockingEnabled } from './docking';
 export { Draw } from './draw';
 export {
@@ -101,3 +102,11 @@ export type {
   WindowOptions,
 } from './ui';
 export type { Rgb, Rgba, Srgb8, Vec2 } from './units';
+export {
+  type BuildOutlineOptions,
+  buildOutline,
+  defaultClassifiers,
+  type EntityClass,
+  type EntityClassifier,
+  type OutlineNode,
+} from './world-outline';

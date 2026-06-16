@@ -26,6 +26,11 @@ A higher-level, declarative/CSS-like authoring layer (Unity UI-Toolkit / USS ana
 
 ## Phases
 
+> **Progress (2026-06-16, ADR-0079):** Phase 6's first cut landed — UI-agnostic
+> readers (`buildOutline`, `listComponents`) turn a live `World` + reflection
+> registry into hierarchy/inspector view-models, consumed by the studio panels.
+> Field editing (the reflective inspector, Phase 3) is still to come.
+
 1. **Window registration API** — declare a window class (or factory), get a slot in the studio's docking layout. Lifecycle hooks: `onOpen`, `onTick`, `onClose`.
 2. **Dialog API** — modal and modeless dialogs, return promises for results.
 3. **Inspector registration** — given a component type, register a custom editor view. Defaults to a generic reflective inspector.

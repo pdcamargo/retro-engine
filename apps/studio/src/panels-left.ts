@@ -1,28 +1,26 @@
-import { Draw, drawIcon, type EditorContext, getActivePalette, type PanelDef, srgbU32 } from '@retro-engine/editor-sdk';
+import {
+  buildOutline,
+  Draw,
+  drawIcon,
+  type EditorContext,
+  getActivePalette,
+  type PanelDef,
+  srgbU32,
+} from '@retro-engine/editor-sdk';
+import { type App, AppTypeRegistry } from '@retro-engine/engine';
 
-import { componentCount, type Entity } from './scene-data';
+import { studioClassifiers } from './entity-classifiers';
+import { EditorOnly } from './editor-markers';
 import { type StudioState } from './state';
 
-const isHidden = (state: StudioState, e: Entity): boolean => {
-  let parent = e.parent;
-  while (parent !== undefined) {
-    const p = state.scene.entities.find((x) => x.id === parent);
-    if (p === undefined) break;
-    if (!p.open) return true;
-    parent = p.parent;
-  }
-  return false;
-};
-
-/** The HIERARCHY panel — entity tree with filter, selection, and visibility toggles. */
-export const hierarchyPanel = (state: StudioState): PanelDef => ({
+/** The HIERARCHY panel — the live entity tree with filter, selection, and expand/collapse. */
+export const hierarchyPanel = (state: StudioState, app: App): PanelDef => ({
   id: '/hierarchy',
   title: 'Hierarchy',
   icon: 'list-tree',
   slot: 'left',
   flush: true,
   render: ({ ui, widgets }: EditorContext): void => {
-    const scene = state.scene;
     const p = getActivePalette();
     const SEARCH_H = 38;
     const FOOTER_H = 26;
@@ -47,42 +45,53 @@ export const hierarchyPanel = (state: StudioState): PanelDef => ({
       }
       ui.sameLine(0, 2);
       if (widgets.iconButton('hier-collapse', 'chevrons-down-up', { tooltip: 'Collapse all', size: 'sm' })) {
-        for (const e of scene.entities) if (e.group === true) e.open = false;
+        for (const node of buildOutline(app.world)) if (node.hasChildren) state.collapsed.add(node.entity);
       }
     });
     Draw.window().line([searchTop[0], searchTop[1] + SEARCH_H], [searchTop[0] + 9999, searchTop[1] + SEARCH_H], srgbU32(p.borderSubtle));
 
-    // Tree scrolls internally; footer stays pinned (panel window has no scrollbar).
+    // Read the live world into a flattened tree each frame. Collapsed subtrees
+    // are omitted by the reader; selection + expand state live on StudioState
+    // keyed by entity (the model is rebuilt, so it can't live on the nodes).
     const filter = state.entityFilter.trim().toLowerCase();
+    const nodes = buildOutline(app.world, {
+      isOpen: (e) => !state.collapsed.has(e),
+      // Editor-owned entities (cameras, lights, helpers) are hidden from the
+      // authored tree unless debug mode reveals them.
+      skip: (e) => !state.debugMode && app.world.has(e, EditorOnly),
+      classifiers: studioClassifiers,
+      // Badge counts non-derived components so it matches the inspector; in debug
+      // mode the inspector also lists derived ones, so count everything.
+      registry: state.debugMode ? undefined : app.getResource(AppTypeRegistry)!.registry,
+    });
     const treeH = Math.max(48, totalH - SEARCH_H - FOOTER_H - 8);
     ui.child('hier-tree', { size: [0, treeH], border: false, padding: [4, 4] }, () => {
       ui.withItemSpacing(0, 0, () => {
-        for (const e of scene.entities) {
-          if (isHidden(state, e)) continue;
-          if (filter !== '' && !e.name.toLowerCase().includes(filter)) continue;
-          const count = componentCount(scene, e.id);
+        for (const node of nodes) {
+          if (filter !== '' && !node.name.toLowerCase().includes(filter)) continue;
           const result = widgets.treeItem({
-            id: e.id,
-            label: e.name,
-            icon: e.icon,
-            depth: e.depth,
-            hasChildren: e.group === true,
-            open: e.open,
-            selected: state.selected === e.id,
-            badge: count > 0 ? String(count) : undefined,
-            visible: e.group === true ? undefined : e.visible,
+            id: String(node.entity),
+            label: node.name,
+            icon: node.class.icon,
+            depth: node.depth,
+            hasChildren: node.hasChildren,
+            open: !state.collapsed.has(node.entity),
+            selected: state.selectedEntity === node.entity,
+            badge: node.componentCount > 0 ? String(node.componentCount) : undefined,
           });
-          if (result.toggled) e.open = !e.open;
-          else if (result.visibilityToggled) e.visible = !e.visible;
-          else if (result.clicked) state.selected = e.id;
+          if (result.toggled) {
+            if (state.collapsed.has(node.entity)) state.collapsed.delete(node.entity);
+            else state.collapsed.add(node.entity);
+          } else if (result.clicked) {
+            state.selectedEntity = node.entity;
+          }
         }
       });
     });
     const footTop = ui.cursorScreenPos();
     Draw.window().line([footTop[0], footTop[1]], [footTop[0] + 9999, footTop[1]], srgbU32(p.borderSubtle));
     ui.child('hier-footer', { size: [0, 0], border: false, padding: [8, 6] }, () => {
-      const n = scene.entities.filter((e) => e.group !== true).length;
-      ui.textColored([0.2, 0.88, 0.48, 1], String(n));
+      ui.textColored([0.2, 0.88, 0.48, 1], String(nodes.length));
       ui.sameLine(0, 5);
       ui.textDisabled('entities');
     });
