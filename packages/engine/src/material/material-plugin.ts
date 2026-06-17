@@ -810,6 +810,15 @@ class MaterialPluginState<M extends Material> {
       const materialInstance = mainWorldMaterials?.get(entry.materialHandle as Handle<M>);
       const matFlags = materialInstance?.prepassWrites?.();
       if (matFlags === undefined) continue;
+      // Only opaque geometry contributes to the screen-space prepass. The
+      // prepass rasterises whole primitives, so an alpha-tested or blended
+      // material would write depth (and normals / motion vectors) for texels
+      // its forward pass later discards — and the prepass cannot reproduce the
+      // forward pass's exact per-fragment coverage, so any such texel leaves
+      // depth with no shaded colour, punching a clear-coloured hole through
+      // everything behind it. Alpha-masked / transparent materials establish
+      // their own depth in the forward pass instead.
+      if ((materialInstance?.alphaMode?.() ?? 'opaque') !== 'opaque') continue;
       const flags = intersectPrepassFlags(cameraFlags, matFlags);
       if (!prepassFlagsAny(flags)) continue;
 
