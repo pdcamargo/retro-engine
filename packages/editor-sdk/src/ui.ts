@@ -9,6 +9,7 @@ import {
   ImVec4,
 } from '@mori2003/jsimgui';
 
+import type { ItemEdges } from './edit/emitter';
 import { getFont } from './fonts';
 import { drawIcon } from './icon-shapes';
 import type { IconName } from './icons';
@@ -145,6 +146,8 @@ export interface Ui {
   withId(id: string, body: () => void): void;
   /** Run `body` with an overridden item spacing (e.g. `0,0` for contiguous list rows). */
   withItemSpacing(x: number, y: number, body: () => void): void;
+  /** Run `body` with widgets greyed and non-interactive when `disabled` is true (a read-only view). */
+  withDisabled(disabled: boolean, body: () => void): void;
 
   /** A line of text. */
   text(value: string): void;
@@ -213,6 +216,14 @@ export interface Ui {
   isItemActive(): boolean;
   /** Whether the last item was clicked this frame (button 0 by default). */
   isItemClicked(button?: number): boolean;
+  /** Whether the last item began interaction this frame (a drag/scrub started). */
+  isItemActivated(): boolean;
+  /** Whether the last item ended interaction this frame after an edit (drag released, field blurred). */
+  isItemDeactivatedAfterEdit(): boolean;
+  /** Whether the last item's value changed this frame. */
+  isItemEdited(): boolean;
+  /** The last item's interaction edges in one read — for coalescing a scrub into a single undo step. */
+  itemEdges(): ItemEdges;
   /** The last item's bounding rect in screen space, as `[min, max]`. */
   itemRect(): readonly [Vec2, Vec2];
 
@@ -344,6 +355,15 @@ export const ui: Ui = {
       body();
     } finally {
       ImGui.PopStyleVar(1);
+    }
+  },
+
+  withDisabled(disabled: boolean, body: () => void): void {
+    ImGui.BeginDisabled(disabled);
+    try {
+      body();
+    } finally {
+      ImGui.EndDisabled();
     }
   },
 
@@ -500,6 +520,26 @@ export const ui: Ui = {
 
   isItemClicked(button?: number): boolean {
     return ImGui.IsItemClicked(button);
+  },
+
+  isItemActivated(): boolean {
+    return ImGui.IsItemActivated();
+  },
+
+  isItemDeactivatedAfterEdit(): boolean {
+    return ImGui.IsItemDeactivatedAfterEdit();
+  },
+
+  isItemEdited(): boolean {
+    return ImGui.IsItemEdited();
+  },
+
+  itemEdges(): ItemEdges {
+    return {
+      activated: ImGui.IsItemActivated(),
+      deactivatedAfterEdit: ImGui.IsItemDeactivatedAfterEdit(),
+      edited: ImGui.IsItemEdited(),
+    };
   },
 
   itemRect(): readonly [Vec2, Vec2] {

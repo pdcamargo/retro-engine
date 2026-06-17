@@ -1,4 +1,5 @@
 import { ImGui, ImGuiKey } from '@mori2003/jsimgui';
+import type { History } from '@retro-engine/editor-sdk';
 
 import { type SceneCameraController } from './editor-camera';
 import { type StudioState, type TransformTool } from './state';
@@ -17,6 +18,13 @@ export const EDITOR_SHORTCUTS: ReadonlyArray<{ group: string; items: ReadonlyArr
       { keys: '2', label: '2D (orthographic) view' },
       { keys: '3', label: '3D (perspective) view' },
       { keys: 'F', label: 'Frame scene' },
+    ],
+  },
+  {
+    group: 'Edit',
+    items: [
+      { keys: '⌘Z', label: 'Undo' },
+      { keys: '⌘Y / ⇧⌘Z', label: 'Redo' },
     ],
   },
   {
@@ -68,5 +76,24 @@ export const handleShortcuts = (
   if (pressed(ImGuiKey._F)) controller.frame();
   for (const { key, tool } of TOOL_KEYS) {
     if (pressed(key)) state.tool = tool;
+  }
+};
+
+/**
+ * Dispatch undo/redo for this frame: `Ctrl+Z` undoes, `Ctrl+Y` or `Ctrl+Shift+Z`
+ * redoes. App-wide (not gated on viewport hover), but skipped while a text field
+ * is active so in-field editing keeps its own undo. Call once per frame from the
+ * UI draw callback, where key state is live.
+ */
+export const handleHistoryShortcuts = (history: History): void => {
+  if (ImGui.GetIO().WantTextInput) return;
+  const ctrl = ImGuiKey.ImGuiMod_Ctrl;
+  const shift = ImGuiKey.ImGuiMod_Shift;
+  if (ImGui.IsKeyChordPressed(ctrl | ImGuiKey._Z)) {
+    if (history.canUndo) history.undo();
+    return;
+  }
+  if (ImGui.IsKeyChordPressed(ctrl | ImGuiKey._Y) || ImGui.IsKeyChordPressed(ctrl | shift | ImGuiKey._Z)) {
+    if (history.canRedo) history.redo();
   }
 };

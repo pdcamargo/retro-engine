@@ -5,6 +5,7 @@ import {
   buildOutline,
   createEditor,
   type FontSpec,
+  History,
   isDockingEnabled,
   listComponents,
   saveLayout,
@@ -27,6 +28,7 @@ import { createPlatformHost } from './platform/create-platform-host';
 import { createScene } from './scene-data';
 import { setupViewportScene } from './scene-bootstrap';
 import { inMemorySceneSource } from './scene-source';
+import { handleHistoryShortcuts } from './shortcuts';
 import { installShowcaseScene, SHOWCASE_SCENE } from './showcase-scene';
 import { createState } from './state';
 import { ViewportTarget } from './viewport';
@@ -47,6 +49,13 @@ const app = new App({ renderer, canvas, clearColor: { r: 0.027, g: 0.043, b: 0.0
 
 const scene = createScene();
 const state = createState(scene);
+
+// Editor undo/redo. Binds to the live world + the same reflection registry the
+// plugins populate; inspector edits route through it and are undoable.
+const history = new History(
+  { world: app.world, registry: app.getResource(AppTypeRegistry)!.registry },
+  { capacity: 200 },
+);
 
 // Offscreen render targets for the Scene (editor) and Game viewports, plus the
 // 3D scene and cameras that render into them.
@@ -90,18 +99,23 @@ const editor = createEditor({
   branch: () => 'main · level_01.scene',
 });
 
+// Author Transform rotations as Euler angles (degrees) — friendlier than raw
+// quaternion x/y/z/w. Swap to a single 2D angle with `{ widget: 'angle2d' }`, or
+// remove this amendment to edit the raw quaternion components.
+editor.inspector.amend('Transform', [{ kind: 'field', name: 'rotation' }] as const, { widget: 'euler' });
+
 editor
   .addPanel(hierarchyPanel(state, app))
   .addPanel(scenePanel(state, editorView, sceneGizmos, sceneCamera))
   .addPanel(gamePanel(state, gameView))
-  .addPanel(inspectorPanel(state, app))
+  .addPanel(inspectorPanel(state, app, editor.inspector, history))
   .addPanel(consolePanel(state))
   .addPanel(assetsPanel(state))
   .addPanel(systemsPanel(state))
   .addPanel(profilerPanel(state))
   .setToolbar(toolbar(state, editor))
   .setStatusBar(statusBar(state));
-for (const menu of menus(state)) editor.addMenu(menu);
+for (const menu of menus(state, history)) editor.addMenu(menu);
 
 const fetchFont = async (file: string): Promise<Uint8Array> => {
   const res = await fetch(`/fonts/${file}`);
@@ -191,6 +205,7 @@ void (async (): Promise<void> => {
         },
       },
       draw: (): void => {
+        handleHistoryShortcuts(history);
         editor.draw();
         drawDialogs({ ui, widgets }, state);
         probe.dockingEnabled = isDockingEnabled();

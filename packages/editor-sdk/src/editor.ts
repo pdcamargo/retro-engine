@@ -5,6 +5,7 @@ import { widgets } from './components';
 import { Draw } from './draw';
 import { buildDefaultLayout, type DockSlot, DockNodeId, type LayoutDims, nodeForSlot } from './editor-layout';
 import { drawIcon } from './icon-shapes';
+import { createInspectorRegistry, type InspectorRegistry } from './inspector/inspector-registry';
 import { drawPixelText, pixelTextWidth } from './pixel-font';
 import { type IconName } from './icons';
 import { getActivePalette, srgbU32 } from './palette';
@@ -123,6 +124,14 @@ export class Editor {
   private toolbar: ToolbarDef | undefined;
   private statusBar: StatusBarDef | undefined;
   private readonly options: EditorOptions;
+
+  /**
+   * The inspector extension surface: register custom property renderers,
+   * whole-component editors, and per-field amendments. Pre-seeded with the
+   * baseline renderer for every reflection field kind, so components render
+   * fully with no registration.
+   */
+  readonly inspector: InspectorRegistry = createInspectorRegistry();
 
   constructor(options: EditorOptions = {}) {
     this.options = options;

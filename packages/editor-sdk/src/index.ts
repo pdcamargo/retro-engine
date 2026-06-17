@@ -31,6 +31,30 @@ export {
 } from './components';
 export { type ComponentEntry, listComponents } from './component-list';
 export { enableDocking, isDockingEnabled } from './docking';
+export { applyEdit, type EditTarget, revertEdit, writeFieldLive } from './edit/apply';
+export { snapshotComponent, snapshotValue, valueEquals } from './edit/clone';
+export type {
+  AddComponentCommand,
+  CustomCommand,
+  EditCommand,
+  RemoveComponentCommand,
+  SetFieldCommand,
+} from './edit/command';
+export { createDirectEmitter, type EditEmitter, type ItemEdges, type ScalarEdit } from './edit/emitter';
+export { createHistoryEmitter } from './edit/emitter-history';
+export { type FieldPath, type FieldPathSegment, pathKeyOf, readPath, writePathLeaf } from './edit/field-path';
+export { History, type HistoryEntrySummary, type HistoryOptions } from './edit/history';
+export { type FieldAmendment, humanize, type ResolvedFieldMeta, resolveMeta } from './inspector/amendments';
+export {
+  type ComponentEditor,
+  type ComponentEditorContext,
+  defaultComponentEditor,
+} from './inspector/component-editor';
+export { type ComponentKey, createInspectorRegistry, InspectorRegistry } from './inspector/inspector-registry';
+export { renderComponentBody, type RenderComponentBodyRequest } from './inspector/inspector-body';
+export { type PropertyFieldRequest, renderPropertyField } from './inspector/property-field';
+export { type ChildRequest, type PropertyContext, type PropertyRenderer } from './inspector/property-types';
+export { colorToHex, defaultValueFor, hexToColor } from './inspector/renderers-bridge';
 export { Draw } from './draw';
 export {
   dashedLine,

@@ -1,10 +1,14 @@
 import {
+  createHistoryEmitter,
   Draw,
   drawIcon,
   type EditorContext,
   getActivePalette,
+  type History,
+  type InspectorRegistry,
   listComponents,
   type PanelDef,
+  renderComponentBody,
   srgbU32,
   type Tone,
   toneColors,
@@ -14,12 +18,17 @@ import { type App, AppTypeRegistry, Name } from '@retro-engine/engine';
 import { type StudioState } from './state';
 
 /**
- * The INSPECTOR panel — the selected entity's name, its serializable components
- * by reflection name, and (in debug mode) the derived components the engine does
- * not persist. Field editing arrives with the reflective inspector; this lists
- * names only.
+ * The INSPECTOR panel — the selected entity's name and its serializable
+ * components, each expanded into editable fields via the reflective property
+ * inspector. Edits flow through the undo history. Derived components the engine
+ * does not persist appear (names only) in debug mode.
  */
-export const inspectorPanel = (state: StudioState, app: App): PanelDef => ({
+export const inspectorPanel = (
+  state: StudioState,
+  app: App,
+  inspector: InspectorRegistry,
+  history: History,
+): PanelDef => ({
   id: '/inspector',
   title: 'Inspector',
   icon: 'sliders-horizontal',
@@ -63,7 +72,22 @@ export const inspectorPanel = (state: StudioState, app: App): PanelDef => ({
         ui.textDisabled('No serializable components on this entity.');
       } else {
         for (const [i, comp] of serializable.entries()) {
-          widgets.collapsingHeader(`comp-${i}`, { title: comp.name, icon: 'component', defaultOpen: false });
+          const open = widgets.collapsingHeader(`comp-${i}`, { title: comp.name, icon: 'component', defaultOpen: true });
+          if (!open) continue;
+          const reg = registry.get(comp.name);
+          if (reg === undefined) continue;
+          const instance = app.world.getComponent(selected, reg.ctor);
+          if (instance === undefined) continue;
+          renderComponentBody({
+            ui,
+            widgets,
+            reflect: registry,
+            inspector,
+            instance,
+            registered: reg,
+            readonly: state.playing,
+            edit: createHistoryEmitter(history, selected, reg.name),
+          });
         }
       }
 

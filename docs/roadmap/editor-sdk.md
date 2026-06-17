@@ -29,7 +29,16 @@ A higher-level, declarative/CSS-like authoring layer (Unity UI-Toolkit / USS ana
 > **Progress (2026-06-16, ADR-0079):** Phase 6's first cut landed — UI-agnostic
 > readers (`buildOutline`, `listComponents`) turn a live `World` + reflection
 > registry into hierarchy/inspector view-models, consumed by the studio panels.
-> Field editing (the reflective inspector, Phase 3) is still to come.
+>
+> **Progress (2026-06-16, ADR-0082):** Phase 3 landed — the reflective property
+> inspector. Typed renderers per `FieldKind` with a `renderPropertyField`
+> dispatcher, a registration surface on `editor.inspector` (`InspectorRegistry`:
+> custom renderers, custom component editors, per-field amendments), and an
+> undo/redo `History` behind an `EditEmitter` boundary. Answered the open question
+> below in favor of a **runtime registry** over decorators/schema files; decorator
+> sugar is deferred to backlog as pure sugar over `amend(...)`. Reference pickers
+> (entity/handle), `mat4` editing, and structural array/component edits are deferred
+> (backlog).
 
 1. **Window registration API** — declare a window class (or factory), get a slot in the studio's docking layout. Lifecycle hooks: `onOpen`, `onTick`, `onClose`.
 2. **Dialog API** — modal and modeless dialogs, return promises for results.

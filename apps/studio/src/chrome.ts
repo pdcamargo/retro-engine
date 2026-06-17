@@ -3,6 +3,7 @@ import {
   type EditorContext,
   type Editor,
   getActivePalette,
+  type History,
   type MenuDef,
   type Rgba,
   srgbU32,
@@ -25,7 +26,7 @@ const vsep = (ui: EditorContext['ui']): void => {
 };
 
 /** The menu bar definitions — File / Edit / Entity / Component / Run / Help. */
-export const menus = (state: StudioState): MenuDef[] => [
+export const menus = (state: StudioState, history: History): MenuDef[] => [
   {
     id: '/file',
     label: 'File',
@@ -43,8 +44,8 @@ export const menus = (state: StudioState): MenuDef[] => [
     id: '/edit',
     label: 'Edit',
     items: () => [
-      { label: 'Undo', shortcut: '⌘Z' },
-      { label: 'Redo', shortcut: '⇧⌘Z' },
+      { label: 'Undo', shortcut: '⌘Z', disabled: !history.canUndo, onClick: () => history.undo() },
+      { label: 'Redo', shortcut: '⇧⌘Z', disabled: !history.canRedo, onClick: () => history.redo() },
       { separator: true },
       { label: 'Cut', shortcut: '⌘X' },
       { label: 'Copy', shortcut: '⌘C' },
