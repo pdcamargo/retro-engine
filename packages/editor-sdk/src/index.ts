@@ -64,7 +64,9 @@ export { type ChildRequest, type PropertyContext, type PropertyRenderer } from '
 export { colorToHex, defaultValueFor, hexToColor } from './inspector/renderers-bridge';
 export { Draw } from './draw';
 export {
+  type AxisPick,
   dashedLine,
+  defaultViewportGizmoOptions,
   type GizmoCamera,
   type GizmoConfig,
   type GizmoDragReadout,
@@ -78,6 +80,12 @@ export {
   type GizmoTarget,
   labelChip,
   TransformGizmo,
+  type ViewportAxisStyle,
+  ViewportGizmo,
+  type ViewportGizmoInput,
+  type ViewportGizmoOptions,
+  type ViewportGizmoOutput,
+  type ViewportGizmoPlacement,
   worldToScreen,
 } from './gizmo';
 export { drawIcon } from './icon-shapes';

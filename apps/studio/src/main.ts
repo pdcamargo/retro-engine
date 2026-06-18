@@ -30,6 +30,7 @@ import { ScenePicker } from './scene-picker';
 import { createScene } from './scene-data';
 import { setupViewportScene } from './scene-bootstrap';
 import { inMemorySceneSource } from './scene-source';
+import { SceneOrientationGizmo } from './viewport-gizmo-wiring';
 import { handleHistoryShortcuts } from './shortcuts';
 import { installShowcaseScene, SHOWCASE_SCENE } from './showcase-scene';
 import { createState } from './state';
@@ -79,6 +80,11 @@ app.addSystem('postUpdate', [], () => scenePicker.pick(sceneGizmos.isActive()));
 // camera matrices.
 const sceneCamera = new SceneCameraController(app, editorView);
 
+// The viewport orientation gizmo (top-right of the Scene view): reflects the
+// editor camera's orientation, drag to orbit, click an axis to align. Draws +
+// captures in the Scene panel body; forwards orbit/align to the controller.
+const orientationGizmo = new SceneOrientationGizmo(app, editorView, state, sceneCamera);
+
 // Reconcile the toolbar/hotkey view mode with the live camera: on a change,
 // swap the editor camera's projection (perspective ↔ orthographic) and point
 // the editor grid at the matching plane (XZ ground for 3D, XY work plane for
@@ -112,7 +118,7 @@ editor.inspector.amend('Transform', [{ kind: 'field', name: 'rotation' }] as con
 
 editor
   .addPanel(hierarchyPanel(state, app))
-  .addPanel(scenePanel(state, editorView, sceneGizmos, sceneCamera, scenePicker))
+  .addPanel(scenePanel(state, editorView, sceneGizmos, sceneCamera, scenePicker, orientationGizmo))
   .addPanel(gamePanel(state, gameView))
   .addPanel(inspectorPanel(state, app, editor.inspector, history))
   .addPanel(historyPanel(state, app, history))

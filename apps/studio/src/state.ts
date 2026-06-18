@@ -3,6 +3,7 @@
 // state, the active gizmo, editor preferences). Not wired to the engine yet.
 
 import { type Entity } from '@retro-engine/ecs';
+import { defaultViewportGizmoOptions, type ViewportGizmoOptions } from '@retro-engine/editor-sdk';
 
 import { type ViewMode } from './editor-camera';
 import { type Scene } from './scene-data';
@@ -55,6 +56,8 @@ export interface StudioState {
   /** Project Settings dialog. */
   settingsOpen: boolean;
   settings: ProjectSettings;
+  /** Live appearance + behavior config for the Scene viewport orientation gizmo. */
+  viewportGizmo: ViewportGizmoOptions;
 }
 
 /** Build the studio's initial editor state around a scene. */
@@ -89,6 +92,7 @@ export const createState = (scene: Scene): StudioState => ({
     clearColor: '#0B1110',
     renderLayer: 'Default',
   },
+  viewportGizmo: defaultViewportGizmoOptions(),
 });
 
 /** Count of enabled systems (drives the Systems tab badge + status bar). */

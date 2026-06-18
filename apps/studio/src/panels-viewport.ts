@@ -16,6 +16,7 @@ import { type SceneGizmos } from './gizmo-wiring';
 import { type ScenePicker } from './scene-picker';
 import { handleShortcuts } from './shortcuts';
 import { type StudioState } from './state';
+import { type SceneOrientationGizmo } from './viewport-gizmo-wiring';
 import { type ViewportTarget } from './viewport';
 
 const CHIP_H = 19;
@@ -73,6 +74,7 @@ export const scenePanel = (
   gizmos?: SceneGizmos,
   controller?: SceneCameraController,
   picker?: ScenePicker,
+  orientation?: SceneOrientationGizmo,
 ): PanelDef => ({
   id: '/scene',
   title: 'Scene',
@@ -81,32 +83,31 @@ export const scenePanel = (
   flush: true,
   render: ({ ui }: EditorContext): void => {
     const { min, max, iw, ih, hovered } = drawViewport(ui, view);
+    const rect = { x: min[0], y: min[1], width: iw, height: ih };
+    // The orientation gizmo (top-right) gets first claim on the pointer: while it
+    // is hovered or dragging, viewport navigation, transform handles, and picking
+    // all stand down so the user only drives the widget.
+    const gizmoActive = orientation?.drawAndCapture(rect, hovered) ?? false;
+    const navHovered = hovered && !gizmoActive;
     // Editor transform gizmos: capture input here (UI pass); the 3D handles are
     // emitted from a postUpdate system, the 2D drag readout is drawn here.
-    gizmos?.capture({ x: min[0], y: min[1], width: iw, height: ih }, hovered);
-    picker?.capture({ x: min[0], y: min[1], width: iw, height: ih }, hovered);
+    gizmos?.capture(rect, navHovered);
+    picker?.capture(rect, navHovered);
     gizmos?.drawOverlay();
     // Editor camera navigation + keyboard shortcuts share this pass: ImGui input
     // is only live while the panel body runs. The controller applies movement
     // from an update system; the shortcuts mutate editor state in place.
-    controller?.capture(ih, hovered);
+    controller?.capture(ih, navHovered);
     if (controller !== undefined) handleShortcuts(state, controller, hovered);
     const dl = Draw.window();
     const p = getActivePalette();
 
-    // Top status chips (left), info chips (right).
+    // Top status chips (left); the top-right is the orientation gizmo's corner.
     const is2d = state.viewMode === '2d';
     let x = min[0] + 8;
     x += chip(dl, ui, [x, min[1] + 8], is2d ? 'grid-2x2' : 'video', is2d ? 'Orthographic' : 'Perspective', srgbU32(p.text));
     x += chip(dl, ui, [x, min[1] + 8], 'maximize', `${iw}×${ih}`, srgbU32(p.textMuted));
     if (state.playing) chip(dl, ui, [x, min[1] + 8], null, 'PLAYING', srgbU32(p.magenta400));
-    const ents = state.scene.entities.filter((e) => e.group !== true).length;
-    const fpsText = `${state.fps} fps`;
-    const entText = `${ents} ent`;
-    const fpsW = chipWidth('activity', fpsText);
-    const entW = chipWidth('box', entText);
-    chip(dl, ui, [max[0] - fpsW - 8, min[1] + 8], 'activity', fpsText, srgbU32(p.green400));
-    chip(dl, ui, [max[0] - fpsW - entW - 8, min[1] + 8], 'box', entText, srgbU32(p.textMuted));
 
     if (state.playing) dl.rect([min[0] + 2, min[1] + 2], [max[0] - 2, max[1] - 2], srgbU32(p.magenta400), 0, 2);
   },

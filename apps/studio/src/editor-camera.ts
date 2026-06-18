@@ -15,8 +15,10 @@ import {
   RenderLayers,
   ScalingMode,
   Taa,
+  Time,
   Transform,
 } from '@retro-engine/engine';
+import { type AxisPick } from '@retro-engine/editor-sdk';
 import { mat4, quat, type Vec3, vec3 } from '@retro-engine/math';
 import { type Texture } from '@retro-engine/renderer-core';
 
@@ -48,6 +50,17 @@ const ORBIT_SENS = 0.01; // radians / pixel
 const DOLLY_STEP = 0.12; // fraction of pivot distance per wheel notch
 const ZOOM_RATE = 0.12; // 2D zoom per wheel notch
 const MAX_PITCH = (89 * Math.PI) / 180;
+const TURN_RATE = 2 * Math.PI; // radians/second base speed for the orientation-gizmo snap
+const SNAP_EPSILON = 1e-3; // angular tolerance (rad) at which a snap animation completes
+
+/** A pending axis-align request from the orientation gizmo. */
+interface SnapRequest {
+  yaw: number;
+  pitch: number;
+  radius: number;
+  animated: boolean;
+  speed: number;
+}
 
 /** Orientation+position that frames `target` from `eye` (looks down −Z). */
 export const lookFrom = (eye: Vec3, target: Vec3): Transform => {
@@ -149,6 +162,11 @@ export class SceneCameraController {
   private gesture: Gesture = 'none';
   private lastMouse: [number, number] = [0, 0];
 
+  // Orientation-gizmo requests, applied in `tick` so the controller stays the
+  // single writer of the camera transform.
+  private pendingOrbit: [number, number] = [0, 0];
+  private snap: SnapRequest | null = null;
+
   constructor(
     private readonly app: App,
     private readonly view: ViewportTarget,
@@ -229,6 +247,32 @@ export class SceneCameraController {
     }
   }
 
+  /**
+   * Orbit the 3D view by the given yaw/pitch deltas (radians) — the orientation
+   * gizmo's drag gesture. Queued and applied in {@link tick}. No-op in 2D (the
+   * gizmo wiring promotes the view to 3D first when configured to).
+   */
+  requestOrbit(dYaw: number, dPitch: number): void {
+    this.pendingOrbit[0] += dYaw;
+    this.pendingOrbit[1] += dPitch;
+  }
+
+  /**
+   * Align the 3D view to look down a world axis — the orientation gizmo's
+   * click. Looks at the current focus point from the axis side, keeping the
+   * current orbit distance. When `animated`, {@link tick} eases the rotation in
+   * over a few frames; otherwise it applies immediately.
+   */
+  snapToAxis(pick: AxisPick, opts: { animated: boolean; speed: number }): void {
+    const axis = pick.axis === 'x' ? [1, 0, 0] : pick.axis === 'y' ? [0, 1, 0] : [0, 0, 1];
+    // Look from the axis side toward the pivot: forward points along −axis·sign.
+    const f: [number, number, number] = [-pick.sign * axis[0]!, -pick.sign * axis[1]!, -pick.sign * axis[2]!];
+    const pitch = clamp(Math.asin(clamp(f[1], -1, 1)), -MAX_PITCH, MAX_PITCH);
+    // Top/bottom views leave heading undefined — keep the current yaw.
+    const yaw = Math.abs(f[1]) > 0.9999 ? this.yaw : Math.atan2(f[0], -f[2]);
+    this.snap = { yaw, pitch, radius: dist(this.eye, this.pivot), animated: opts.animated, speed: Math.max(0.01, opts.speed) };
+  }
+
   /** Apply captured input and write the camera transform. Call from an `update` system. */
   tick(): void {
     const cam = this.findEditorCamera();
@@ -238,9 +282,63 @@ export class SceneCameraController {
     if (input !== null) {
       if (this.appliedMode === '3d') this.applyInput3d(cam, input);
       else this.applyInput2d(input);
+      // Any manual navigation cancels an in-progress axis-align.
+      if (this.navigating || input.wheel !== 0) this.snap = null;
     }
-    if (this.appliedMode === '3d') this.writeTransform3d(cam.entity);
-    else this.writeTransform2d(cam.entity);
+    if (this.appliedMode === '3d') {
+      this.applyPendingOrbit();
+      this.advanceSnap();
+      this.writeTransform3d(cam.entity);
+    } else {
+      // The gizmo only drives the 3D view; drop any stale requests.
+      this.pendingOrbit[0] = this.pendingOrbit[1] = 0;
+      this.snap = null;
+      this.writeTransform2d(cam.entity);
+    }
+  }
+
+  /** Apply (and clear) the orientation gizmo's queued orbit deltas. */
+  private applyPendingOrbit(): void {
+    const [dYaw, dPitch] = this.pendingOrbit;
+    this.pendingOrbit[0] = this.pendingOrbit[1] = 0;
+    if (dYaw === 0 && dPitch === 0) return;
+    this.snap = null; // dragging overrides a click-to-align
+    this.yaw += dYaw;
+    this.pitch = clamp(this.pitch - dPitch, -MAX_PITCH, MAX_PITCH);
+    this.placeEyeFromAngles(dist(this.eye, this.pivot));
+  }
+
+  /** Step the active axis-align toward its target, easing when animated. */
+  private advanceSnap(): void {
+    const snap = this.snap;
+    if (snap === null) return;
+    if (!snap.animated) {
+      this.yaw = snap.yaw;
+      this.pitch = snap.pitch;
+      this.placeEyeFromAngles(snap.radius);
+      this.snap = null;
+      return;
+    }
+    const dt = this.app.getResource(Time)?.real.delta ?? 1 / 60;
+    const step = dt * TURN_RATE * snap.speed;
+    const dYaw = wrapPi(snap.yaw - this.yaw);
+    const dPitch = snap.pitch - this.pitch;
+    if (Math.abs(dYaw) <= step && Math.abs(dPitch) <= step) {
+      this.yaw = snap.yaw;
+      this.pitch = snap.pitch;
+      this.snap = null;
+    } else {
+      this.yaw += clamp(dYaw, -step, step);
+      this.pitch += clamp(dPitch, -step, step);
+      if (Math.abs(dYaw) < SNAP_EPSILON && Math.abs(dPitch) < SNAP_EPSILON) this.snap = null;
+    }
+    this.placeEyeFromAngles(snap.radius);
+  }
+
+  /** Reposition the eye to look at the pivot from `radius` away, per yaw/pitch. */
+  private placeEyeFromAngles(radius: number): void {
+    const f = this.forward();
+    this.eye = [this.pivot[0] - f[0] * radius, this.pivot[1] - f[1] * radius, this.pivot[2] - f[2] * radius];
   }
 
   /**
@@ -398,6 +496,12 @@ const axis = (pos: ImGuiKey, neg: ImGuiKey): number =>
   (ImGui.IsKeyDown(pos) ? 1 : 0) - (ImGui.IsKeyDown(neg) ? 1 : 0);
 
 const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
+
+/** Wrap an angle to `(−π, π]` so a snap eases along the shortest path. */
+const wrapPi = (a: number): number => {
+  const t = ((a + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI);
+  return t - Math.PI;
+};
 
 type Vec3Tuple = readonly [number, number, number];
 
