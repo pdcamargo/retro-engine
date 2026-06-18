@@ -16,6 +16,42 @@ export interface HistoryEntrySummary {
   readonly label: string;
 }
 
+/** The category of a timeline entry — a history view tints its icon by this. */
+export type HistoryEntryKind = 'setField' | 'addComponent' | 'removeComponent' | 'custom' | 'batch';
+
+/**
+ * A read-only view of one timeline entry (whether applied or redoable), carrying
+ * just enough to present it: a label, a category, and — for entries that target a
+ * single component — the entity, component name, edited field, and before/after
+ * values a richer view can format into a delta. Grouped (batch) entries expose
+ * only their label and `'batch'` kind.
+ */
+export interface HistoryEntryView {
+  readonly label: string;
+  readonly kind: HistoryEntryKind;
+  /** The entity the entry targets, for single-command entries. */
+  readonly entity?: Entity;
+  /** The stable reflection name of the component the entry touched, for single-command entries. */
+  readonly componentName?: string;
+  /** The edited field — the last path segment (`setField` entries only). */
+  readonly field?: string | undefined;
+  /** Deep-cloned value before the edit (`setField` entries only). */
+  readonly before?: unknown;
+  /** Deep-cloned value after the edit (`setField` entries only). */
+  readonly after?: unknown;
+}
+
+/**
+ * The full timeline for a history view: every entry oldest-first (applied past,
+ * then the redoable future), with a cursor at the current (live) state.
+ */
+export interface HistoryView {
+  /** All entries, oldest first; entries after {@link currentIndex} are the redoable future. */
+  readonly entries: readonly HistoryEntryView[];
+  /** Index of the current (live) state — the last applied entry; `-1` when nothing is applied. */
+  readonly currentIndex: number;
+}
+
 /** Options for a {@link History}. */
 export interface HistoryOptions {
   /** Maximum retained undo entries; older entries drop off the bottom. Defaults to 200. */
@@ -52,6 +88,31 @@ const setFieldCommand = (
   after,
   label: `Set ${componentName}`,
 });
+
+/** The edited leaf as a display string — a field's name or a bracketed index. */
+const lastField = (path: FieldPath): string | undefined => {
+  const seg = path[path.length - 1];
+  if (seg === undefined) return undefined;
+  return seg.kind === 'field' ? seg.name : `[${seg.index}]`;
+};
+
+/** Project one stack item into the read-only {@link HistoryEntryView} a view consumes. */
+const toView = (item: HistoryItem): HistoryEntryView => {
+  if (item.kind === 'batch') return { label: item.label, kind: 'batch' };
+  const c = item.command;
+  if (c.kind === 'setField') {
+    return {
+      label: c.label,
+      kind: 'setField',
+      entity: c.entity,
+      componentName: c.componentName,
+      field: lastField(c.path),
+      before: c.before,
+      after: c.after,
+    };
+  }
+  return { label: c.label, kind: c.kind, entity: c.entity, componentName: c.componentName };
+};
 
 /**
  * The studio's undo/redo stack. Holds past and future edits as data commands and
@@ -92,6 +153,19 @@ export class History {
   /** Past entries, oldest first — for a history view. */
   entries(): readonly HistoryEntrySummary[] {
     return this.past.map((item) => ({ label: item.kind === 'single' ? item.command.label : item.label }));
+  }
+
+  /**
+   * The full timeline — applied past then redoable future, oldest first — and the
+   * cursor at the current state, for a history panel. Entries after
+   * {@link HistoryView.currentIndex} are the redoable tail; jump to any of them
+   * with {@link jumpTo}. A pending (mid-drag) edit is not yet an entry and does
+   * not appear until the interaction ends.
+   */
+  view(): HistoryView {
+    const entries: HistoryEntryView[] = this.past.map(toView);
+    for (let i = this.future.length - 1; i >= 0; i--) entries.push(toView(this.future[i]!));
+    return { entries, currentIndex: this.past.length - 1 };
   }
 
   /**
@@ -157,23 +231,48 @@ export class History {
   /** Undo the most recent entry. */
   undo(): void {
     this.flushPending();
-    const item = this.past.pop();
-    if (item === undefined) return;
-    if (item.kind === 'single') revertEdit(item.command, this.target);
-    else for (let i = item.commands.length - 1; i >= 0; i--) revertEdit(item.commands[i]!, this.target);
-    this.future.push(item);
-    this.onChange();
+    if (this.stepBack()) this.onChange();
   }
 
   /** Redo the most recently undone entry. */
   redo(): void {
     this.flushPending();
+    if (this.stepForward()) this.onChange();
+  }
+
+  /**
+   * Jump the world to the state at `index` in {@link view} — the entry that index
+   * addresses becomes current — undoing or redoing as many entries as it takes.
+   * Pass `-1` to undo everything. The index is clamped to the timeline, and the
+   * whole jump fires {@link HistoryOptions.onChange} at most once.
+   */
+  jumpTo(index: number): void {
+    this.flushPending();
+    const target = Math.max(-1, Math.min(index, this.past.length + this.future.length - 1));
+    let changed = false;
+    while (this.past.length - 1 > target && this.stepBack()) changed = true;
+    while (this.past.length - 1 < target && this.stepForward()) changed = true;
+    if (changed) this.onChange();
+  }
+
+  /** Revert one applied entry (past → future). Returns false when there is none. */
+  private stepBack(): boolean {
+    const item = this.past.pop();
+    if (item === undefined) return false;
+    if (item.kind === 'single') revertEdit(item.command, this.target);
+    else for (let i = item.commands.length - 1; i >= 0; i--) revertEdit(item.commands[i]!, this.target);
+    this.future.push(item);
+    return true;
+  }
+
+  /** Re-apply one undone entry (future → past). Returns false when there is none. */
+  private stepForward(): boolean {
     const item = this.future.pop();
-    if (item === undefined) return;
+    if (item === undefined) return false;
     if (item.kind === 'single') applyEdit(item.command, this.target);
     else for (const command of item.commands) applyEdit(command, this.target);
     this.past.push(item);
-    this.onChange();
+    return true;
   }
 
   /** Drop all history (e.g. on scene load or play/stop). */

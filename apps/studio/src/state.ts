@@ -32,6 +32,10 @@ export interface StudioState {
   collapsed: Set<Entity>;
   /** Reveal derived / non-serializable components in the inspector (a debug view). */
   debugMode: boolean;
+  /** Last history cursor the panel rendered — drives auto-scroll only when it changes. */
+  historyLastCurrent: number;
+  /** Clear-history confirmation dialog is open. */
+  historyClearConfirm: boolean;
   playing: boolean;
   paused: boolean;
   /** Scene viewport projection: orthographic 2D or perspective 3D. */
@@ -60,6 +64,8 @@ export const createState = (scene: Scene): StudioState => ({
   selectedEntity: null,
   collapsed: new Set(),
   debugMode: false,
+  historyLastCurrent: -1,
+  historyClearConfirm: false,
   playing: false,
   paused: false,
   viewMode: '3d',

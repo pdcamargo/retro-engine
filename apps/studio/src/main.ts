@@ -21,6 +21,7 @@ import { EditorOnly } from './editor-markers';
 import { studioClassifiers } from './entity-classifiers';
 import { SceneGizmos } from './gizmo-wiring';
 import { assetsPanel, consolePanel, profilerPanel, systemsPanel } from './panels-dock';
+import { historyPanel } from './panels-history';
 import { inspectorPanel } from './panels-inspector';
 import { hierarchyPanel } from './panels-left';
 import { gamePanel, scenePanel } from './panels-viewport';
@@ -109,6 +110,7 @@ editor
   .addPanel(scenePanel(state, editorView, sceneGizmos, sceneCamera))
   .addPanel(gamePanel(state, gameView))
   .addPanel(inspectorPanel(state, app, editor.inspector, history))
+  .addPanel(historyPanel(state, app, history))
   .addPanel(consolePanel(state))
   .addPanel(assetsPanel(state))
   .addPanel(systemsPanel(state))
@@ -207,7 +209,7 @@ void (async (): Promise<void> => {
       draw: (): void => {
         handleHistoryShortcuts(history);
         editor.draw();
-        drawDialogs({ ui, widgets }, state);
+        drawDialogs({ ui, widgets }, state, history);
         probe.dockingEnabled = isDockingEnabled();
         probe.selected = state.selectedEntity;
         probe.playing = state.playing;

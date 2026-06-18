@@ -11,6 +11,7 @@ import {
   type ToolbarDef,
 } from '@retro-engine/editor-sdk';
 
+import { historyClearDialog } from './history-clear-dialog';
 import { projectSettingsDialog } from './project-settings';
 import { enabledSystems, frameMs, type StudioState, type TransformTool } from './state';
 
@@ -46,6 +47,12 @@ export const menus = (state: StudioState, history: History): MenuDef[] => [
     items: () => [
       { label: 'Undo', shortcut: '⌘Z', disabled: !history.canUndo, onClick: () => history.undo() },
       { label: 'Redo', shortcut: '⇧⌘Z', disabled: !history.canRedo, onClick: () => history.redo() },
+      {
+        label: 'Clear History',
+        icon: 'trash-2',
+        disabled: !history.canUndo && !history.canRedo,
+        onClick: () => (state.historyClearConfirm = true),
+      },
       { separator: true },
       { label: 'Cut', shortcut: '⌘X' },
       { label: 'Copy', shortcut: '⌘C' },
@@ -218,7 +225,8 @@ export const statusBar = (state: StudioState): StatusBarDef => ({
   },
 });
 
-/** Draw the Project Settings modal (call once per frame after the shell). */
-export const drawDialogs = (ctx: EditorContext, state: StudioState): void => {
+/** Draw the studio's modal dialogs (call once per frame after the shell). */
+export const drawDialogs = (ctx: EditorContext, state: StudioState, history: History): void => {
   projectSettingsDialog(ctx, state);
+  historyClearDialog(ctx, state, history);
 };

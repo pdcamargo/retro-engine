@@ -43,7 +43,14 @@ export type {
 export { createDirectEmitter, type EditEmitter, type ItemEdges, type ScalarEdit } from './edit/emitter';
 export { createHistoryEmitter } from './edit/emitter-history';
 export { type FieldPath, type FieldPathSegment, pathKeyOf, readPath, writePathLeaf } from './edit/field-path';
-export { History, type HistoryEntrySummary, type HistoryOptions } from './edit/history';
+export {
+  History,
+  type HistoryEntryKind,
+  type HistoryEntrySummary,
+  type HistoryEntryView,
+  type HistoryOptions,
+  type HistoryView,
+} from './edit/history';
 export { type FieldAmendment, humanize, type ResolvedFieldMeta, resolveMeta } from './inspector/amendments';
 export {
   type ComponentEditor,
