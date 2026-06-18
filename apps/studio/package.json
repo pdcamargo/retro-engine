@@ -24,6 +24,7 @@
     "@retro-engine/engine": "workspace:*",
     "@retro-engine/gltf": "workspace:*",
     "@retro-engine/math": "workspace:*",
+    "@retro-engine/reflect": "workspace:*",
     "@retro-engine/renderer-core": "workspace:*",
     "@retro-engine/renderer-webgpu": "workspace:*",
     "@tauri-apps/api": "^2.0.0"
