@@ -1,6 +1,7 @@
 import type { Mat4, Vec3 } from 'wgpu-matrix';
 import { vec3 } from 'wgpu-matrix';
 
+import type { Aabb } from './aabb';
 import type { Plane } from './plane';
 
 /** Direction vectors shorter than this are treated as degenerate. */
@@ -102,6 +103,44 @@ export const rayPlaneIntersect = (ray: Ray, plane: Plane): number => {
     plane.normal[2]! * ray.direction[2]!;
   if (Math.abs(denom) < EPSILON) return NaN;
   return -(plane.signedDistance(ray.origin)) / denom;
+};
+
+/**
+ * Distance along `ray` to where it first enters the axis-aligned box `aabb`, or
+ * `null` when the ray never intersects it. A ray whose origin already lies inside
+ * the box returns `0`; a box entirely behind the origin returns `null`.
+ *
+ * Uses the slab method: clip the ray against each axis-aligned pair of planes and
+ * keep the overlapping `t` interval, rejecting as soon as it becomes empty. An
+ * axis-parallel component (direction ≈ 0) that starts outside its slab misses
+ * immediately. Because {@link Ray.direction} is unit length the returned `t` is a
+ * true Euclidean distance, directly comparable across boxes for nearest-hit picking.
+ */
+export const rayAabbIntersect = (ray: Ray, aabb: Aabb): number | null => {
+  let tMin = 0;
+  let tMax = Infinity;
+  for (let axis = 0; axis < 3; axis++) {
+    const o = ray.origin[axis]!;
+    const d = ray.direction[axis]!;
+    const lo = aabb.center[axis]! - aabb.halfExtents[axis]!;
+    const hi = aabb.center[axis]! + aabb.halfExtents[axis]!;
+    if (Math.abs(d) < EPSILON) {
+      if (o < lo || o > hi) return null;
+      continue;
+    }
+    const inv = 1 / d;
+    let t1 = (lo - o) * inv;
+    let t2 = (hi - o) * inv;
+    if (t1 > t2) {
+      const tmp = t1;
+      t1 = t2;
+      t2 = tmp;
+    }
+    if (t1 > tMin) tMin = t1;
+    if (t2 < tMax) tMax = t2;
+    if (tMin > tMax) return null;
+  }
+  return tMin;
 };
 
 /** Closest-point result for {@link rayClosestPointToRay}. */

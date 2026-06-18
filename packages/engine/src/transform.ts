@@ -89,8 +89,6 @@ export class Transform {
  * - `out[12..15]` = column 3 = `(t.x, t.y, t.z, 1)`
  *
  * Writes to `out` in place; returns `out`.
- *
- * @internal Engine-private helper used by `propagateTransforms`.
  */
 export const composeTransformInto = (
   out: Mat4,
@@ -119,4 +117,57 @@ export const composeTransformInto = (
   out[13] = translation[1]!;
   out[14] = translation[2]!;
   return out;
+};
+
+// Scratch rotation matrix reused by `decomposeTransformInto`.
+const decomposeRotScratch = mat4.identity();
+
+/**
+ * Decompose a column-major affine 4x4 matrix into translation, rotation, and
+ * per-axis scale, writing each into the provided outputs. The inverse of
+ * {@link composeTransformInto}.
+ *
+ * Scale is taken as the length of each basis column, with the X component
+ * negated when the matrix has a negative determinant (a mirrored basis) so the
+ * extracted rotation stays a proper rotation. A matrix combining non-uniform
+ * scale with rotation in its parent chain can carry shear that no single TRS can
+ * represent exactly; in that case the result is the nearest TRS (rotation taken
+ * from the scale-normalized, orthonormalized basis).
+ *
+ * Pure translation/rotation/uniform-scale matrices round-trip exactly.
+ */
+export const decomposeTransformInto = (translation: Vec3, rotation: Quat, scale: Vec3, m: Mat4): void => {
+  translation[0] = m[12]!;
+  translation[1] = m[13]!;
+  translation[2] = m[14]!;
+
+  let sx = Math.hypot(m[0]!, m[1]!, m[2]!);
+  const sy = Math.hypot(m[4]!, m[5]!, m[6]!);
+  const sz = Math.hypot(m[8]!, m[9]!, m[10]!);
+  const det =
+    m[0]! * (m[5]! * m[10]! - m[6]! * m[9]!) -
+    m[4]! * (m[1]! * m[10]! - m[2]! * m[9]!) +
+    m[8]! * (m[1]! * m[6]! - m[2]! * m[5]!);
+  if (det < 0) sx = -sx;
+  scale[0] = sx;
+  scale[1] = sy;
+  scale[2] = sz;
+
+  // Normalize each basis column to recover a pure rotation, guarding against a
+  // zero-scale axis (a collapsed transform leaves that column at identity).
+  const r = decomposeRotScratch;
+  const ix = sx !== 0 ? 1 / sx : 0;
+  const iy = sy !== 0 ? 1 / sy : 0;
+  const iz = sz !== 0 ? 1 / sz : 0;
+  r[0] = m[0]! * ix;
+  r[1] = m[1]! * ix;
+  r[2] = m[2]! * ix;
+  r[4] = m[4]! * iy;
+  r[5] = m[5]! * iy;
+  r[6] = m[6]! * iy;
+  r[8] = m[8]! * iz;
+  r[9] = m[9]! * iz;
+  r[10] = m[10]! * iz;
+  quat.fromMat(r, rotation);
+  quat.normalize(rotation, rotation);
 };

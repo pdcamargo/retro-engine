@@ -3,7 +3,7 @@ import { describe, expect, it } from 'bun:test';
 import { World } from '@retro-engine/ecs';
 import { mat4, quat, vec3 } from '@retro-engine/math';
 
-import { composeTransformInto, GlobalTransform, Transform } from './transform';
+import { composeTransformInto, decomposeTransformInto, GlobalTransform, Transform } from './transform';
 
 describe('Transform — defaults', () => {
   it('default ctor yields identity TRS', () => {
@@ -127,5 +127,33 @@ describe('composeTransformInto', () => {
       vec3.create(1, 1, 1),
     );
     expect(result).toBe(out);
+  });
+});
+
+describe('decomposeTransformInto', () => {
+  it('round-trips translation + uniform scale exactly', () => {
+    const m = composeTransformInto(mat4.create(), vec3.create(3, -4, 5), quat.identity(), vec3.create(2, 2, 2));
+    const ot = vec3.create(0, 0, 0);
+    const or = quat.identity();
+    const os = vec3.create(1, 1, 1);
+    decomposeTransformInto(ot, or, os, m);
+    expect(ot[0]).toBeCloseTo(3, 5);
+    expect(ot[1]).toBeCloseTo(-4, 5);
+    expect(ot[2]).toBeCloseTo(5, 5);
+    expect(os[0]).toBeCloseTo(2, 5);
+    expect(os[1]).toBeCloseTo(2, 5);
+    expect(os[2]).toBeCloseTo(2, 5);
+  });
+
+  it('round-trips rotation + non-uniform scale through a recomposed matrix', () => {
+    const r = quat.fromAxisAngle(vec3.normalize(vec3.create(0.2, 1, 0.5)), 0.9);
+    const original = composeTransformInto(mat4.create(), vec3.create(1, 2, 3), r, vec3.create(2, 3, 4));
+    const ot = vec3.create(0, 0, 0);
+    const or = quat.identity();
+    const os = vec3.create(1, 1, 1);
+    decomposeTransformInto(ot, or, os, original);
+    // Recomposing the decomposed TRS must reproduce the original matrix.
+    const rebuilt = composeTransformInto(mat4.create(), ot, or, os);
+    for (let i = 0; i < 16; i++) expect(rebuilt[i]).toBeCloseTo(original[i]!, 4);
   });
 });

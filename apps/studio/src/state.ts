@@ -7,7 +7,7 @@ import { type Entity } from '@retro-engine/ecs';
 import { type ViewMode } from './editor-camera';
 import { type Scene } from './scene-data';
 
-export type TransformTool = 'select' | 'move' | 'rotate' | 'scale';
+export type TransformTool = 'select' | 'move' | 'rotate' | 'scale' | 'all';
 
 export type AssetZoom = 'list' | 'sm' | 'md' | 'lg';
 

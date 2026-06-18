@@ -128,11 +128,16 @@ const groupWell = (ui: EditorContext['ui'], count: number): void => {
 /** The toolbar: transform tools, snap/gizmo toggles, profiler, the play group, layout/settings. */
 export const toolbar = (state: StudioState, editor: Editor): ToolbarDef => ({
   render: ({ ui, widgets }: EditorContext, width: number): void => {
-    const tools: { tool: TransformTool; icon: 'mouse-pointer-2' | 'move' | 'rotate-3d' | 'scaling'; tip: string }[] = [
+    const tools: {
+      tool: TransformTool;
+      icon: 'mouse-pointer-2' | 'move' | 'rotate-3d' | 'scaling' | 'axis-3d';
+      tip: string;
+    }[] = [
       { tool: 'select', icon: 'mouse-pointer-2', tip: 'Select (Q)' },
       { tool: 'move', icon: 'move', tip: 'Move (W)' },
       { tool: 'rotate', icon: 'rotate-3d', tip: 'Rotate (E)' },
       { tool: 'scale', icon: 'scaling', tip: 'Scale (R)' },
+      { tool: 'all', icon: 'axis-3d', tip: 'Transform — move/rotate/scale (T)' },
     ];
     groupWell(ui, tools.length);
     for (const [i, t] of tools.entries()) {

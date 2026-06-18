@@ -26,6 +26,7 @@ import { inspectorPanel } from './panels-inspector';
 import { hierarchyPanel } from './panels-left';
 import { gamePanel, scenePanel } from './panels-viewport';
 import { createPlatformHost } from './platform/create-platform-host';
+import { ScenePicker } from './scene-picker';
 import { createScene } from './scene-data';
 import { setupViewportScene } from './scene-bootstrap';
 import { inMemorySceneSource } from './scene-source';
@@ -64,10 +65,14 @@ const editorView = new ViewportTarget();
 const gameView = new ViewportTarget();
 const stdMat = new MaterialPlugin(StandardMaterial);
 setupViewportScene(app, renderer, editorView, gameView, stdMat);
-const sceneGizmos = new SceneGizmos(app, editorView);
+const sceneGizmos = new SceneGizmos(app, editorView, state);
+// Click-to-select in the Scene viewport, sharing the editor camera with the gizmo.
+const scenePicker = new ScenePicker(app, editorView, state);
 // Emit the gizmo handles before the render graph runs (the UI pass that draws
 // the viewport image comes later in the frame, too late to reach the texture).
+// Pick after the gizmo tick so an in-progress drag (the transform lock) skips it.
 app.addSystem('postUpdate', [], () => sceneGizmos.tick());
+app.addSystem('postUpdate', [], () => scenePicker.pick(sceneGizmos.isActive()));
 
 // Editor camera navigation. The controller reads viewport input in the Scene
 // panel body (UI pass) and applies it here, before postUpdate recomputes the
@@ -107,7 +112,7 @@ editor.inspector.amend('Transform', [{ kind: 'field', name: 'rotation' }] as con
 
 editor
   .addPanel(hierarchyPanel(state, app))
-  .addPanel(scenePanel(state, editorView, sceneGizmos, sceneCamera))
+  .addPanel(scenePanel(state, editorView, sceneGizmos, sceneCamera, scenePicker))
   .addPanel(gamePanel(state, gameView))
   .addPanel(inspectorPanel(state, app, editor.inspector, history))
   .addPanel(historyPanel(state, app, history))

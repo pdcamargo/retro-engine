@@ -108,7 +108,7 @@ export type { NextStateInstance, StateInstance } from './state';
 export { NextState, State } from './state';
 export type { FixedClock, RealClock, VirtualClock } from './time';
 export { Time } from './time';
-export { GlobalTransform, Transform } from './transform';
+export { composeTransformInto, decomposeTransformInto, GlobalTransform, Transform } from './transform';
 export type { ChildBuilder } from './hierarchy';
 export { Children, Parent } from './hierarchy';
 export {

@@ -13,6 +13,7 @@ import {
 
 import { type SceneCameraController } from './editor-camera';
 import { type SceneGizmos } from './gizmo-wiring';
+import { type ScenePicker } from './scene-picker';
 import { handleShortcuts } from './shortcuts';
 import { type StudioState } from './state';
 import { type ViewportTarget } from './viewport';
@@ -71,6 +72,7 @@ export const scenePanel = (
   view: ViewportTarget,
   gizmos?: SceneGizmos,
   controller?: SceneCameraController,
+  picker?: ScenePicker,
 ): PanelDef => ({
   id: '/scene',
   title: 'Scene',
@@ -82,6 +84,7 @@ export const scenePanel = (
     // Editor transform gizmos: capture input here (UI pass); the 3D handles are
     // emitted from a postUpdate system, the 2D drag readout is drawn here.
     gizmos?.capture({ x: min[0], y: min[1], width: iw, height: ih }, hovered);
+    picker?.capture({ x: min[0], y: min[1], width: iw, height: ih }, hovered);
     gizmos?.drawOverlay();
     // Editor camera navigation + keyboard shortcuts share this pass: ImGui input
     // is only live while the panel body runs. The controller applies movement

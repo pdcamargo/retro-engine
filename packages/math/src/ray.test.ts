@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'bun:test';
 import { mat4, vec3 } from 'wgpu-matrix';
 
+import { Aabb } from './aabb';
 import { Plane } from './plane';
-import { Ray, rayClosestPointToRay, rayPlaneIntersect, signedAngleOnPlane } from './ray';
+import { Ray, rayAabbIntersect, rayClosestPointToRay, rayPlaneIntersect, signedAngleOnPlane } from './ray';
 
 const expectVec3Close = (actual: Float32Array | number[], expected: [number, number, number]) => {
   expect(actual[0]).toBeCloseTo(expected[0], 4);
@@ -81,6 +82,44 @@ describe('rayClosestPointToRay', () => {
     const { tA, tB } = rayClosestPointToRay(a, b);
     expect(tA).toBe(0);
     expect(tB).toBe(0);
+  });
+});
+
+describe('rayAabbIntersect', () => {
+  const unitBox = new Aabb(vec3.create(0, 0, 0), vec3.create(1, 1, 1));
+
+  it('returns the entry distance for a head-on hit', () => {
+    const ray = new Ray(vec3.create(0, 0, 5), vec3.create(0, 0, -1));
+    expect(rayAabbIntersect(ray, unitBox)).toBeCloseTo(4, 5); // enters at z = 1
+  });
+
+  it('returns 0 when the origin is inside the box', () => {
+    const ray = new Ray(vec3.create(0, 0, 0), vec3.create(1, 0, 0));
+    expect(rayAabbIntersect(ray, unitBox)).toBe(0);
+  });
+
+  it('misses a box the ray passes beside', () => {
+    const ray = new Ray(vec3.create(3, 3, 5), vec3.create(0, 0, -1));
+    expect(rayAabbIntersect(ray, unitBox)).toBeNull();
+  });
+
+  it('misses a box entirely behind the origin', () => {
+    const ray = new Ray(vec3.create(0, 0, 5), vec3.create(0, 0, 1));
+    expect(rayAabbIntersect(ray, unitBox)).toBeNull();
+  });
+
+  it('handles an axis-parallel ray that grazes outside its slab', () => {
+    const ray = new Ray(vec3.create(0, 2, 5), vec3.create(0, 0, -1));
+    expect(rayAabbIntersect(ray, unitBox)).toBeNull();
+  });
+
+  it('picks the nearer of two boxes by comparing t', () => {
+    const ray = new Ray(vec3.create(0, 0, 10), vec3.create(0, 0, -1));
+    const near = new Aabb(vec3.create(0, 0, 4), vec3.create(1, 1, 1));
+    const far = new Aabb(vec3.create(0, 0, 0), vec3.create(1, 1, 1));
+    const tNear = rayAabbIntersect(ray, near)!;
+    const tFar = rayAabbIntersect(ray, far)!;
+    expect(tNear).toBeLessThan(tFar);
   });
 });
 

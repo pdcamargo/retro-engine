@@ -34,6 +34,7 @@ export const EDITOR_SHORTCUTS: ReadonlyArray<{ group: string; items: ReadonlyArr
       { keys: 'W', label: 'Move' },
       { keys: 'E', label: 'Rotate' },
       { keys: 'R', label: 'Scale' },
+      { keys: 'T', label: 'Transform (all)' },
     ],
   },
   {
@@ -52,6 +53,7 @@ const TOOL_KEYS: ReadonlyArray<{ key: ImGuiKey; tool: TransformTool }> = [
   { key: ImGuiKey._W, tool: 'move' },
   { key: ImGuiKey._E, tool: 'rotate' },
   { key: ImGuiKey._R, tool: 'scale' },
+  { key: ImGuiKey._T, tool: 'all' },
 ];
 
 /**
