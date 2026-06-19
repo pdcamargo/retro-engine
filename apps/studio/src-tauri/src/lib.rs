@@ -181,6 +181,7 @@ pub fn run() {
   tauri::Builder::default()
     .plugin(tauri_plugin_shell::init())
     .plugin(tauri_plugin_dialog::init())
+    .plugin(tauri_plugin_fs::init())
     .manage(ProjectRoot::default())
     .setup(|app| {
       if cfg!(debug_assertions) {

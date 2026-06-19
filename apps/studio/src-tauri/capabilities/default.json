@@ -8,6 +8,16 @@
   "permissions": [
     "core:default",
     "dialog:default",
+    "fs:allow-watch",
+    "fs:allow-unwatch",
+    {
+      "identifier": "fs:scope",
+      "allow": [
+        {
+          "path": "$HOME/**"
+        }
+      ]
+    },
     {
       "identifier": "shell:allow-execute",
       "allow": [
