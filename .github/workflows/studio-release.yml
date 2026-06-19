@@ -43,6 +43,22 @@ jobs:
       - name: Build engine packages
         run: bunx turbo run build
 
+      # The studio ships Bun as a Tauri sidecar (externalBin) so it can build a
+      # user's project without a user-installed runtime. Stage the runner's Bun
+      # under the host target triple the bundler expects.
+      - name: Stage Bun sidecar
+        shell: bash
+        run: |
+          TRIPLE=$(rustc -vV | sed -n 's/^host: //p')
+          mkdir -p apps/studio/src-tauri/binaries
+          SRC="$(command -v bun)"
+          if [[ "$TRIPLE" == *windows* ]]; then
+            cp "${SRC}.exe" "apps/studio/src-tauri/binaries/bun-${TRIPLE}.exe" 2>/dev/null || cp "$SRC" "apps/studio/src-tauri/binaries/bun-${TRIPLE}.exe"
+          else
+            cp "$SRC" "apps/studio/src-tauri/binaries/bun-${TRIPLE}"
+          fi
+          ls -l apps/studio/src-tauri/binaries
+
       - name: Build and release studio
         uses: tauri-apps/tauri-action@v0
         env:

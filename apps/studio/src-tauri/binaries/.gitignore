@@ -1,0 +1,3 @@
+# Sidecar binaries are fetched per-platform in CI, never committed.
+bun-*
+!README.md

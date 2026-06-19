@@ -1,3 +1,5 @@
+import { isTauri } from '@retro-engine/editor-platform';
+
 /** The artifact of building a project: a loadable ESM module URL. */
 export interface BuildResult {
   /** URL the studio dynamically imports to get the project's default export. */
@@ -30,7 +32,23 @@ export const endpointProjectBuilder = (baseUrl = ''): ProjectBuilder => ({
 });
 
 /**
- * Select the builder for the current host. The Tauri sidecar builder lands with
- * the native build path; the browser endpoint is the default and the test path.
+ * Tauri builder: invoke the `project_build` command, which runs the bundled Bun
+ * sidecar (`bun install` + the build script) and returns the bundled JS. The
+ * Tauri API is lazy-imported so a plain-browser bundle never pulls it onto its
+ * boot path (ADR-0078).
  */
-export const createProjectBuilder = (): ProjectBuilder => endpointProjectBuilder();
+export const tauriProjectBuilder = (): ProjectBuilder => ({
+  async build(projectDir) {
+    const { invoke } = await import('@tauri-apps/api/core');
+    const code = await invoke<string>('project_build', { projectDir });
+    const blob = new Blob([code], { type: 'text/javascript' });
+    return { entryUrl: URL.createObjectURL(blob) };
+  },
+});
+
+/**
+ * Select the builder for the current host: the Tauri sidecar natively, the dev
+ * server's `/project/build` endpoint in a plain browser (and the test path).
+ */
+export const createProjectBuilder = (): ProjectBuilder =>
+  isTauri() ? tauriProjectBuilder() : endpointProjectBuilder();

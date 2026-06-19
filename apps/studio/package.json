@@ -8,6 +8,8 @@
     "dev": "bun --port 1420 index.html",
     "dev:web": "bun --hot dev-server.ts",
     "build": "bun build index.html --outdir dist --minify-whitespace --minify-syntax --target=browser",
+    "build:project-script": "bun build scripts/build-project-cli.ts --target=bun --outfile=src-tauri/scripts/build-project.js",
+    "build:tauri": "bun run build && bun run build:project-script",
     "lint": "oxlint .",
     "test": "bun test",
     "typecheck": "tsc --noEmit",

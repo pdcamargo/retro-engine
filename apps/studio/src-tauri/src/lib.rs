@@ -47,9 +47,64 @@ fn pref_remove(app: tauri::AppHandle, key: String) -> Result<(), String> {
     write_prefs(&app, &map)
 }
 
+// Build a project's user code with the bundled Bun sidecar: `bun install` to
+// resolve the project's `@retro-engine/*` (so the build can enumerate their
+// exports), then the bundled build script, which emits an ESM bundle that
+// resolves those imports to the studio's live instances at runtime. Returns the
+// bundle text; the frontend wraps it in a blob URL and imports it.
+#[tauri::command]
+async fn project_build(app: tauri::AppHandle, project_dir: String) -> Result<String, String> {
+    use tauri::path::BaseDirectory;
+    use tauri_plugin_shell::ShellExt;
+
+    let script = app
+        .path()
+        .resolve("scripts/build-project.js", BaseDirectory::Resource)
+        .map_err(|e| e.to_string())?;
+    let entry = format!("{project_dir}/src/game.ts");
+
+    let install = app
+        .shell()
+        .sidecar("bun")
+        .map_err(|e| e.to_string())?
+        .args(["install"])
+        .current_dir(PathBuf::from(project_dir.clone()))
+        .output()
+        .await
+        .map_err(|e| e.to_string())?;
+    if !install.status.success() {
+        return Err(format!(
+            "bun install failed: {}",
+            String::from_utf8_lossy(&install.stderr)
+        ));
+    }
+
+    let build = app
+        .shell()
+        .sidecar("bun")
+        .map_err(|e| e.to_string())?
+        .args(vec![
+            script.to_string_lossy().to_string(),
+            "--entry".to_string(),
+            entry,
+        ])
+        .current_dir(PathBuf::from(project_dir))
+        .output()
+        .await
+        .map_err(|e| e.to_string())?;
+    if !build.status.success() {
+        return Err(format!(
+            "project build failed: {}",
+            String::from_utf8_lossy(&build.stderr)
+        ));
+    }
+    Ok(String::from_utf8_lossy(&build.stdout).into_owned())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
+    .plugin(tauri_plugin_shell::init())
     .setup(|app| {
       if cfg!(debug_assertions) {
         app.handle().plugin(
@@ -60,7 +115,7 @@ pub fn run() {
       }
       Ok(())
     })
-    .invoke_handler(tauri::generate_handler![pref_get, pref_set, pref_remove])
+    .invoke_handler(tauri::generate_handler![pref_get, pref_set, pref_remove, project_build])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
 }
