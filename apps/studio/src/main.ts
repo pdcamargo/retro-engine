@@ -1,6 +1,6 @@
 /// <reference types="@webgpu/types" />
 
-import { App, AppTypeRegistry, Commands, EditorGrid, MaterialPlugin, ResMut, StandardMaterial } from '@retro-engine/engine';
+import { App, AppTypeRegistry, Commands, EditorGrid, inState, MaterialPlugin, ResMut, StandardMaterial } from '@retro-engine/engine';
 import {
   buildOutline,
   createEditor,
@@ -269,7 +269,8 @@ void (async (): Promise<void> => {
   if (projectDir !== null) {
     try {
       const project = await buildProjectModule(createProjectBuilder(), projectDir);
-      applyProject(app, project);
+      // Gate the project's gameplay systems behind Play, so they don't run while editing.
+      applyProject(app, project, inState(SimState.Play));
       // Code-derived index: the project's systems/components/resources/editors,
       // beyond the engine + editor baseline captured above.
       projectCodeIndex = buildCodeIndex(app, editor.inspector, baseline);
@@ -327,7 +328,10 @@ void (async (): Promise<void> => {
       console.error('[studio] failed to load project scene', err);
     }
   }
-  if (!sceneLoaded) {
+  // The showcase is the no-project welcome content. Once a project is open it is
+  // never shown — even if its startup scene is empty or fails to resolve, the
+  // viewport reflects the project (just editor infra), not demo content.
+  if (!sceneLoaded && projectDir === null) {
     const initialScene = await inMemorySceneSource(SHOWCASE_SCENE).load();
     installShowcaseScene(app, { material: stdMat, scene: initialScene });
   }

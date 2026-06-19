@@ -1,4 +1,4 @@
-import type { App, PluginObject } from '@retro-engine/engine';
+import type { AddSystemOptions, App, PluginObject, RunCondition } from '@retro-engine/engine';
 import type { ProjectDefinition } from '@retro-engine/project';
 import type { EditorExtension } from '@retro-engine/project/editor';
 
@@ -45,8 +45,36 @@ export const buildProjectModule = async (
  * the App is in its `Building` phase — loading a project is an App-rebuild, wired
  * by the studio boot (a running App rejects `addPlugins`).
  */
-export const applyProject = (app: App, project: ProjectDefinition): void => {
-  app.addPlugins(project.plugins.map(asUserPlugin));
+/**
+ * Add a loaded project's plugins to a fresh, still-building `App` (project load is
+ * an App-rebuild, ADR-0091). When `playGate` is given (e.g. `inState(SimState.Play)`),
+ * every system the project registers is gated behind it — so user gameplay runs only
+ * in Play, not while editing — except one-shot `startup` and engine `render` systems.
+ */
+export const applyProject = (app: App, project: ProjectDefinition, playGate?: RunCondition): void => {
+  const plugins = project.plugins.map(asUserPlugin);
+  if (playGate === undefined) {
+    app.addPlugins(plugins);
+    return;
+  }
+
+  // Inject the play gate as a runIf on the project's per-frame systems by
+  // intercepting addSystem for the duration of the build (only user plugins run
+  // here, so no engine system is gated). Restored in `finally`.
+  const original = app.addSystem.bind(app) as (...args: unknown[]) => unknown;
+  const patched = app as unknown as {
+    addSystem: (stage: string, params: unknown, fn: unknown, options?: AddSystemOptions) => unknown;
+  };
+  patched.addSystem = (stage, params, fn, options) => {
+    if (stage === 'startup' || stage === 'render') return original(stage, params, fn, options);
+    const runIf = options?.runIf ? options.runIf.and(playGate) : playGate;
+    return original(stage, params, fn, { ...options, runIf });
+  };
+  try {
+    app.addPlugins(plugins);
+  } finally {
+    delete (app as unknown as { addSystem?: unknown }).addSystem;
+  }
 };
 
 /**

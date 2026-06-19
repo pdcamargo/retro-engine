@@ -4,13 +4,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import * as engine from '@retro-engine/engine';
-import { App, AppTypeRegistry } from '@retro-engine/engine';
+import { App, AppTypeRegistry, RunCondition } from '@retro-engine/engine';
 import { createWebGPURenderer } from '@retro-engine/renderer-webgpu';
 
 import { publishHost } from '../host-bridge';
 import { buildProject } from './build-project';
 import { applyProject, loadEditorExtensions, loadProjectModule } from './load-project';
 import type { InspectorRegistry } from '@retro-engine/editor-sdk';
+import type { ProjectDefinition } from '@retro-engine/project';
 
 // Publish the studio's live engine packages so built user code resolves to them.
 publishHost();
@@ -116,5 +117,34 @@ describe('project loader', () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  test('gates project systems behind the play condition, except startup', () => {
+    const recorded: { stage: string; runIf: unknown }[] = [];
+    const stub = {
+      addSystem: (stage: string, _p: unknown, _f: unknown, options?: { runIf?: unknown }) => {
+        recorded.push({ stage, runIf: options?.runIf });
+      },
+      addPlugins: (plugins: { build(app: unknown): void }[]) => {
+        for (const p of plugins) p.build(stub);
+      },
+    };
+    const project = {
+      plugins: [
+        {
+          name: () => 'P',
+          build: (app: App) => {
+            app.addSystem('update', [], () => {}, { name: 'u' });
+            app.addSystem('startup', [], () => {}, { name: 's' });
+          },
+        },
+      ],
+    } as unknown as ProjectDefinition;
+
+    const gate = new RunCondition(() => true);
+    applyProject(stub as unknown as App, project, gate);
+
+    expect(recorded.find((r) => r.stage === 'update')?.runIf).toBe(gate);
+    expect(recorded.find((r) => r.stage === 'startup')?.runIf).toBeUndefined();
   });
 });
