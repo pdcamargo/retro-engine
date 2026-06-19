@@ -31,6 +31,9 @@ import { loadProjectScene, scanProjectManifest } from './project/project-scene';
 
 // Publish the studio's engine packages so built user code resolves to live instances.
 publishHost();
+// Mark this as an editor session — user code reads it via isEditorHint() to gate
+// editor-only behavior; a standalone runtime leaves it unset.
+(globalThis as unknown as { __retroEditorHint?: boolean }).__retroEditorHint = true;
 
 import { drawDialogs, menus, statusBar, toolbar } from './chrome';
 import { SceneCameraController } from './editor-camera';

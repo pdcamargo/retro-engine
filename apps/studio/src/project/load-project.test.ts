@@ -12,6 +12,7 @@ import { buildProject } from './build-project';
 import { applyProject, loadEditorExtensions, loadProjectModule } from './load-project';
 import type { InspectorRegistry } from '@retro-engine/editor-sdk';
 import type { ProjectDefinition } from '@retro-engine/project';
+import { runInEditor } from '@retro-engine/project';
 
 // Publish the studio's live engine packages so built user code resolves to them.
 publishHost();
@@ -119,16 +120,17 @@ describe('project loader', () => {
     }
   });
 
-  test('gates project systems behind the play condition, except startup', () => {
-    const recorded: { stage: string; runIf: unknown }[] = [];
+  test('gates project systems behind the play condition, except startup + runInEditor', () => {
+    const recorded: { name: unknown; runIf: unknown }[] = [];
     const stub = {
-      addSystem: (stage: string, _p: unknown, _f: unknown, options?: { runIf?: unknown }) => {
-        recorded.push({ stage, runIf: options?.runIf });
+      addSystem: (_stage: string, _p: unknown, _f: unknown, options?: { name?: unknown; runIf?: unknown }) => {
+        recorded.push({ name: options?.name, runIf: options?.runIf });
       },
       addPlugins: (plugins: { build(app: unknown): void }[]) => {
         for (const p of plugins) p.build(stub);
       },
     };
+    const tool = runInEditor(() => {});
     const project = {
       plugins: [
         {
@@ -136,6 +138,7 @@ describe('project loader', () => {
           build: (app: App) => {
             app.addSystem('update', [], () => {}, { name: 'u' });
             app.addSystem('startup', [], () => {}, { name: 's' });
+            app.addSystem('update', [], tool, { name: 'tool' });
           },
         },
       ],
@@ -144,7 +147,8 @@ describe('project loader', () => {
     const gate = new RunCondition(() => true);
     applyProject(stub as unknown as App, project, gate);
 
-    expect(recorded.find((r) => r.stage === 'update')?.runIf).toBe(gate);
-    expect(recorded.find((r) => r.stage === 'startup')?.runIf).toBeUndefined();
+    expect(recorded.find((r) => r.name === 'u')?.runIf).toBe(gate);
+    expect(recorded.find((r) => r.name === 's')?.runIf).toBeUndefined();
+    expect(recorded.find((r) => r.name === 'tool')?.runIf).toBeUndefined();
   });
 });

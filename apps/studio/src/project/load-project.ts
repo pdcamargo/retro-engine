@@ -1,5 +1,6 @@
 import type { AddSystemOptions, App, PluginObject, RunCondition } from '@retro-engine/engine';
 import type { ProjectDefinition } from '@retro-engine/project';
+import { isRunInEditor } from '@retro-engine/project';
 import type { EditorExtension } from '@retro-engine/project/editor';
 
 import type { ProjectBuilder } from './project-builder';
@@ -66,7 +67,10 @@ export const applyProject = (app: App, project: ProjectDefinition, playGate?: Ru
     addSystem: (stage: string, params: unknown, fn: unknown, options?: AddSystemOptions) => unknown;
   };
   patched.addSystem = (stage, params, fn, options) => {
-    if (stage === 'startup' || stage === 'render') return original(stage, params, fn, options);
+    // runInEditor (tool) systems and one-shot startup / engine render run ungated.
+    if (stage === 'startup' || stage === 'render' || isRunInEditor(fn)) {
+      return original(stage, params, fn, options);
+    }
     const runIf = options?.runIf ? options.runIf.and(playGate) : playGate;
     return original(stage, params, fn, { ...options, runIf });
   };

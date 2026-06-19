@@ -45,3 +45,5 @@ export interface ProjectDefinition {
  * time.
  */
 export const defineProject = (definition: ProjectDefinition): ProjectDefinition => definition;
+
+export { isEditorHint, isRunInEditor, runInEditor } from './editor-hint';
