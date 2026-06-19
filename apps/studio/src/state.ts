@@ -37,7 +37,9 @@ export interface StudioState {
   historyLastCurrent: number;
   /** Clear-history confirmation dialog is open. */
   historyClearConfirm: boolean;
+  /** Mirror of the engine's {@link SimState}: true in Play or Paused. Synced each frame from the App. */
   playing: boolean;
+  /** Mirror of {@link SimState}: true only when play mode is paused. */
   paused: boolean;
   /** Scene viewport projection: orthographic 2D or perspective 3D. */
   viewMode: ViewMode;
@@ -94,13 +96,6 @@ export const createState = (scene: Scene): StudioState => ({
   },
   viewportGizmo: defaultViewportGizmoOptions(),
 });
-
-/** Count of enabled systems (drives the Systems tab badge + status bar). */
-export const enabledSystems = (state: StudioState): number => state.scene.systems.filter((s) => s.on).length;
-
-/** Sum of per-frame system cost (status bar + profiler footer). */
-export const frameMs = (state: StudioState): number =>
-  state.scene.systems.filter((s) => s.on).reduce((acc, s) => acc + s.ms, 0);
 
 /** The asset preview tile size for the current zoom. */
 export const tileFor = (zoom: AssetZoom): number => (zoom === 'lg' ? 120 : zoom === 'sm' ? 64 : zoom === 'list' ? 0 : 88);

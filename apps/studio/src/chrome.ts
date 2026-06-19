@@ -1,11 +1,15 @@
+import type { App } from '@retro-engine/engine';
 import {
+  currentSimState,
   Draw,
   type EditorContext,
   type Editor,
   getActivePalette,
   type History,
   type MenuDef,
+  requestSimState,
   type Rgba,
+  SimState,
   srgbU32,
   type StatusBarDef,
   type ToolbarDef,
@@ -13,7 +17,8 @@ import {
 
 import { historyClearDialog } from './history-clear-dialog';
 import { projectSettingsDialog } from './project-settings';
-import { enabledSystems, frameMs, type StudioState, type TransformTool } from './state';
+import { type StudioState, type TransformTool } from './state';
+import { enabledSystemCount, systemsFrameMs } from './systems-view';
 
 const rgba = (c: readonly [number, number, number], a = 1): Rgba => [c[0] / 255, c[1] / 255, c[2] / 255, a];
 
@@ -98,17 +103,27 @@ export const menus = (state: StudioState, history: History): MenuDef[] => [
   },
 ];
 
-const togglePlay = (state: StudioState): void => {
-  state.playing = !state.playing;
-  if (state.playing) {
+// Play ↔ Stop. Drives the engine's SimState; `state.playing`/`paused` are mirrors
+// synced from it each frame. The transition applies on the next frame.
+const togglePlay = (state: StudioState, app: App): void => {
+  const sim = currentSimState(app);
+  if (sim === SimState.Edit || sim === undefined) {
+    requestSimState(app, SimState.Play);
     state.scene.console.push({
       time: '12:05:01',
       lvl: 'cmd',
-      text: `entering play mode — ${enabledSystems(state)} systems running`,
+      text: `entering play mode — ${enabledSystemCount(app)} systems running`,
     });
   } else {
-    state.paused = false;
+    requestSimState(app, SimState.Edit);
   }
+};
+
+// Pause ↔ resume, only meaningful while in play mode.
+const togglePause = (app: App): void => {
+  const sim = currentSimState(app);
+  if (sim === SimState.Play) requestSimState(app, SimState.Paused);
+  else if (sim === SimState.Paused) requestSimState(app, SimState.Play);
 };
 
 const BTN = 26;
@@ -126,7 +141,7 @@ const groupWell = (ui: EditorContext['ui'], count: number): void => {
 };
 
 /** The toolbar: transform tools, snap/gizmo toggles, profiler, the play group, layout/settings. */
-export const toolbar = (state: StudioState, editor: Editor): ToolbarDef => ({
+export const toolbar = (state: StudioState, editor: Editor, app: App): ToolbarDef => ({
   render: ({ ui, widgets }: EditorContext, width: number): void => {
     const tools: {
       tool: TransformTool;
@@ -176,12 +191,14 @@ export const toolbar = (state: StudioState, editor: Editor): ToolbarDef => ({
     ui.setCursorPosX(width / 2 - playW / 2);
     groupWell(ui, 3);
     if (state.playing) {
-      if (widgets.iconButton('play', 'square', { active: true, tooltip: 'Stop', size: 'sm' })) togglePlay(state);
+      if (widgets.iconButton('play', 'square', { active: true, tooltip: 'Stop', size: 'sm' })) togglePlay(state, app);
     } else if (widgets.iconButton('play', 'play', { tooltip: 'Play', size: 'sm' })) {
-      togglePlay(state);
+      togglePlay(state, app);
     }
     ui.sameLine(0, TOOL_GAP);
-    widgets.iconButton('pause', 'pause', { active: state.paused, tooltip: 'Pause', size: 'sm' });
+    if (widgets.iconButton('pause', 'pause', { active: state.paused, tooltip: 'Pause', size: 'sm' }) && state.playing) {
+      togglePause(app);
+    }
     ui.sameLine(0, TOOL_GAP);
     widgets.iconButton('step', 'skip-forward', { tooltip: 'Step', size: 'sm' });
 
@@ -197,7 +214,7 @@ export const toolbar = (state: StudioState, editor: Editor): ToolbarDef => ({
 });
 
 /** The status bar: readiness, counts, and toolchain info. */
-export const statusBar = (state: StudioState): StatusBarDef => ({
+export const statusBar = (state: StudioState, app: App): StatusBarDef => ({
   render: ({ ui }: EditorContext, width: number): void => {
     const p = getActivePalette();
     const muted = rgba(p.textFaint);
@@ -212,8 +229,8 @@ export const statusBar = (state: StudioState): StatusBarDef => ({
     const n = state.scene.entities.filter((e) => e.group !== true).length;
     seg('circle-check', 'Ready', rgba(p.green400));
     seg('box', `${n} entities`, muted);
-    seg('workflow', `${enabledSystems(state)} systems`, muted);
-    seg('cpu', `${frameMs(state).toFixed(1)} ms/frame`, muted);
+    seg('workflow', `${enabledSystemCount(app)} systems`, muted);
+    seg('cpu', `${systemsFrameMs(app).toFixed(1)} ms/frame`, muted);
     // Right side, measured so it ends flush with the right edge.
     const ts = 'TypeScript 5.6';
     const hot = ' Hot reload on';

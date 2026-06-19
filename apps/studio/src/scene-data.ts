@@ -37,13 +37,6 @@ export interface Entity {
   visible: boolean;
 }
 
-export interface SystemRow {
-  name: string;
-  stage: 'Update' | 'FixedUpdate' | 'Render';
-  ms: number;
-  on: boolean;
-}
-
 export interface SpriteSub {
   name: string;
 }
@@ -69,7 +62,6 @@ export interface ConsoleLine {
 export interface Scene {
   entities: Entity[];
   components: Record<string, ComponentModel[]>;
-  systems: SystemRow[];
   assets: AssetItem[];
   console: ConsoleLine[];
 }
@@ -155,15 +147,6 @@ export const createScene = (): Scene => ({
       },
     ],
   },
-
-  systems: [
-    { name: 'InputSystem', stage: 'Update', ms: 0.21, on: true },
-    { name: 'MovementSystem', stage: 'Update', ms: 0.44, on: true },
-    { name: 'PhysicsSystem', stage: 'FixedUpdate', ms: 1.82, on: true },
-    { name: 'AnimationSystem', stage: 'Update', ms: 0.36, on: true },
-    { name: 'RenderSystem', stage: 'Render', ms: 2.14, on: true },
-    { name: 'AudioSystem', stage: 'Update', ms: 0.09, on: false },
-  ],
 
   assets: [
     {

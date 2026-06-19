@@ -4,11 +4,14 @@ import { App, AppTypeRegistry, Commands, EditorGrid, MaterialPlugin, ResMut, Sta
 import {
   buildOutline,
   createEditor,
+  currentSimState,
   type FontSpec,
   History,
+  initSimState,
   isDockingEnabled,
   listComponents,
   saveLayout,
+  SimState,
   ui,
   uiOverlayPlugin,
   widgets,
@@ -48,7 +51,18 @@ canvas.width = canvas.clientWidth * dpr;
 canvas.height = canvas.clientHeight * dpr;
 
 const renderer = createWebGPURenderer(canvas);
-const app = new App({ renderer, canvas, clearColor: { r: 0.027, g: 0.043, b: 0.039, a: 1 } });
+// profileSystems: the studio measures per-system frame cost for the Systems panel.
+// defaultSystemOrigin: systems the studio registers directly are editor scaffolding,
+// not user game code, so they bucket under "Editor" by default.
+const app = new App({
+  renderer,
+  canvas,
+  clearColor: { r: 0.027, g: 0.043, b: 0.039, a: 1 },
+  profileSystems: true,
+  defaultSystemOrigin: 'editor',
+});
+// Engine-backed play state (Edit/Play/Paused) the toolbar drives and panels reflect.
+initSimState(app);
 
 const scene = createScene();
 const state = createState(scene);
@@ -72,8 +86,8 @@ const scenePicker = new ScenePicker(app, editorView, state);
 // Emit the gizmo handles before the render graph runs (the UI pass that draws
 // the viewport image comes later in the frame, too late to reach the texture).
 // Pick after the gizmo tick so an in-progress drag (the transform lock) skips it.
-app.addSystem('postUpdate', [], () => sceneGizmos.tick());
-app.addSystem('postUpdate', [], () => scenePicker.pick(sceneGizmos.isActive()));
+app.addSystem('postUpdate', [], () => sceneGizmos.tick(), { name: 'editor-gizmos' });
+app.addSystem('postUpdate', [], () => scenePicker.pick(sceneGizmos.isActive()), { name: 'editor-scene-picker' });
 
 // Editor camera navigation. The controller reads viewport input in the Scene
 // panel body (UI pass) and applies it here, before postUpdate recomputes the
@@ -95,16 +109,16 @@ app.addSystem('update', [Commands, ResMut(EditorGrid)], (cmd, grid) => {
     sceneCamera.setMode(cmd, state.viewMode);
     grid.plane = state.viewMode === '2d' ? 'xy' : 'xz';
   }
-});
+}, { name: 'editor-camera-mode' });
 
-app.addSystem('update', [], () => sceneCamera.tick());
+app.addSystem('update', [], () => sceneCamera.tick(), { name: 'editor-camera-tick' });
 
 // The toolbar snap toggle is the editor-side source of truth; mirror it into the
 // engine's grid config so grid visuals + future snap-to-grid read one object.
 app.addSystem('postUpdate', [ResMut(EditorGrid)], (grid) => {
   grid.snapEnabled = state.snap;
   grid.snapStep = state.snapStep;
-});
+}, { name: 'editor-grid-snap' });
 
 const editor = createEditor({
   brand: 'RETRO ENGINE',
@@ -124,10 +138,10 @@ editor
   .addPanel(historyPanel(state, app, history))
   .addPanel(consolePanel(state))
   .addPanel(assetsPanel(state))
-  .addPanel(systemsPanel(state))
-  .addPanel(profilerPanel(state))
-  .setToolbar(toolbar(state, editor))
-  .setStatusBar(statusBar(state));
+  .addPanel(systemsPanel(app))
+  .addPanel(profilerPanel(app))
+  .setToolbar(toolbar(state, editor, app))
+  .setStatusBar(statusBar(state, app));
 for (const menu of menus(state, history)) editor.addMenu(menu);
 
 const fetchFont = async (file: string): Promise<Uint8Array> => {
@@ -153,6 +167,21 @@ const probe: StudioProbe = {
 (window as unknown as { __studioProbe: StudioProbe }).__studioProbe = probe;
 // Dev helper: capture the live dock layout to bake as a default.
 (window as unknown as { __studioLayout: () => string }).__studioLayout = () => saveLayout();
+// Dev helper: read the live schedule + play state, so the Playwright fidelity
+// check can assert the Systems panel's data (origin buckets, ms, enabled) without pixels.
+(window as unknown as { __studioSystems: () => unknown }).__studioSystems = () => ({
+  simState: currentSimState(app)?.name ?? null,
+  groups: app.describeSchedule().map((g) => ({
+    stage: g.stage,
+    systems: g.systems.map((s) => ({
+      name: s.name,
+      origin: s.origin,
+      plugin: s.originPlugin,
+      enabled: s.enabled,
+      avgMs: s.avgMs,
+    })),
+  })),
+});
 // Dev helper: read the live entity outline + the selected entity's components,
 // so the Playwright fidelity check can assert the tree/inspector without pixels.
 (window as unknown as { __studioInspect: (sel?: number) => unknown }).__studioInspect = (sel) => {
@@ -218,6 +247,11 @@ void (async (): Promise<void> => {
         },
       },
       draw: (): void => {
+        // Mirror the engine's play state into the studio's UI booleans so panels
+        // that don't hold the App (viewports, inspector) read one source of truth.
+        const sim = currentSimState(app);
+        state.playing = sim === SimState.Play || sim === SimState.Paused;
+        state.paused = sim === SimState.Paused;
         handleHistoryShortcuts(history);
         editor.draw();
         drawDialogs({ ui, widgets }, state, history);

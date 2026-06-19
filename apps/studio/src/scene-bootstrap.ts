@@ -77,6 +77,7 @@ export const setupViewportScene = (
         new EditorOnly(),
       );
     },
+    { name: 'editor-viewport-setup' },
   );
 
   // Editor camera → Scene tab. On a panel resize the viewport reallocates its
@@ -93,7 +94,7 @@ export const setupViewportScene = (
         camera.target = next;
       }
     }
-  });
+  }, { name: 'editor-scene-retarget' });
 
   // Main Camera → Game tab. The authored game camera loads with target =
   // primary (its build-time meaning: render to screen); redirect it into the
@@ -109,7 +110,7 @@ export const setupViewportScene = (
         camera.target = CameraRenderTarget.texture(gameView.texture);
       }
     }
-  });
+  }, { name: 'editor-game-retarget' });
 
   // Guarantee a Main Camera. Explicit authoring wins; if a loaded scene carries
   // none, promote the highest-order game camera so the Game tab isn't blank.
@@ -128,5 +129,6 @@ export const setupViewportScene = (
       }
       if (best !== null) cmd.entity(best.entity).insert(new MainCamera());
     },
+    { name: 'editor-ensure-main-camera' },
   );
 };
