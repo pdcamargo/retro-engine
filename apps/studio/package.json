@@ -31,7 +31,8 @@
     "@retro-engine/renderer-core": "workspace:*",
     "@retro-engine/renderer-webgpu": "workspace:*",
     "@tauri-apps/api": "^2.0.0",
-    "@tauri-apps/plugin-dialog": "^2.0.0"
+    "@tauri-apps/plugin-dialog": "^2.0.0",
+    "smol-toml": "^1.3.0"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0",

@@ -15,6 +15,18 @@ import { colorRenderer, mat4Renderer, quatRenderer, vec2Renderer, vec3Renderer, 
 /** Keys a custom editor / renderer / amendment by component constructor or its stable reflection name. */
 export type ComponentKey = ComponentType<object> | string;
 
+/** A summary of one component's editor customizations, returned by {@link InspectorRegistry.describe}. */
+export interface InspectorCustomization {
+  /** The component this customizes, by constructor or stable reflection name. */
+  readonly component: ComponentKey;
+  /** Whether a custom whole-component editor is registered. */
+  readonly hasEditor: boolean;
+  /** Count of per-field renderers registered for this component. */
+  readonly fieldRenderers: number;
+  /** Count of field amendments layered over this component. */
+  readonly amendments: number;
+}
+
 const innerMap = <V>(
   byCtor: Map<ComponentType<object>, Map<string, V>>,
   byName: Map<string, Map<string, V>>,
@@ -101,6 +113,31 @@ export class InspectorRegistry {
     const key = pathKeyOf(path);
     map.set(key, { ...map.get(key), ...amendment });
     return this;
+  }
+
+  /**
+   * Enumerate the components this registry customizes — which have a custom
+   * whole-component editor, per-field renderers, or amendments. For tooling
+   * (a project index showing "this component has a custom editor"); kind/widget/
+   * type renderers are global, not per-component, and are not reported here.
+   */
+  describe(): readonly InspectorCustomization[] {
+    const out = new Map<ComponentKey, { hasEditor: boolean; fieldRenderers: number; amendments: number }>();
+    const at = (key: ComponentKey) => {
+      let e = out.get(key);
+      if (e === undefined) {
+        e = { hasEditor: false, fieldRenderers: 0, amendments: 0 };
+        out.set(key, e);
+      }
+      return e;
+    };
+    for (const key of this.editorsByCtor.keys()) at(key).hasEditor = true;
+    for (const key of this.editorsByName.keys()) at(key).hasEditor = true;
+    for (const [key, m] of this.fieldRenderersByCtor) at(key).fieldRenderers += m.size;
+    for (const [key, m] of this.fieldRenderersByName) at(key).fieldRenderers += m.size;
+    for (const [key, m] of this.amendmentsByCtor) at(key).amendments += m.size;
+    for (const [key, m] of this.amendmentsByName) at(key).amendments += m.size;
+    return [...out].map(([component, info]) => ({ component, ...info }));
   }
 
   getKindRenderer(kind: FieldKind): PropertyRenderer | undefined {

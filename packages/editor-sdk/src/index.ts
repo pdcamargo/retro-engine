@@ -57,7 +57,12 @@ export {
   type ComponentEditorContext,
   defaultComponentEditor,
 } from './inspector/component-editor';
-export { type ComponentKey, createInspectorRegistry, InspectorRegistry } from './inspector/inspector-registry';
+export {
+  type ComponentKey,
+  createInspectorRegistry,
+  type InspectorCustomization,
+  InspectorRegistry,
+} from './inspector/inspector-registry';
 export { renderComponentBody, type RenderComponentBodyRequest } from './inspector/inspector-body';
 export { type PropertyFieldRequest, renderPropertyField } from './inspector/property-field';
 export { type ChildRequest, type PropertyContext, type PropertyRenderer } from './inspector/property-types';
