@@ -22,7 +22,9 @@ import { publishHost } from './host-bridge';
 import { createProjectBuilder } from './project/project-builder';
 import { applyProject, buildProjectModule } from './project/load-project';
 import { currentProjectDir, setCurrentProjectDir } from './project/current-project';
-import { buildCodeIndex, captureBaseline, type CodeIndex } from './project/project-index';
+import { buildCodeIndex, captureBaseline, type CodeIndex, parseProjectDescriptor } from './project/project-index';
+import { createProjectIo } from './project/project-io';
+import { projectStateKey } from './project/project-state';
 
 // Publish the studio's engine packages so built user code resolves to live instances.
 publishHost();
@@ -232,7 +234,21 @@ void (async (): Promise<void> => {
   probe.platformKind = platform.kind;
   (window as unknown as { __studioPrefs: typeof platform.preferences }).__studioPrefs = platform.preferences;
 
-  const savedLayout = await platform.preferences.get(LAYOUT_KEY);
+  // Read the open project's descriptor (best-effort) so its dock layout + window
+  // state persist per-project (keyed by project id in the app config), not globally.
+  const projectDir = await currentProjectDir(platform);
+  let projectId: string | null = null;
+  if (projectDir !== null) {
+    try {
+      const io = createProjectIo(platform, projectDir);
+      const descriptor = parseProjectDescriptor(new TextDecoder().decode(await io.source.read('project.retroengine')));
+      projectId = descriptor.projectId.length > 0 ? descriptor.projectId : null;
+    } catch (err) {
+      console.error('[studio] could not read project.retroengine', err);
+    }
+  }
+  const layoutKey = projectId !== null ? projectStateKey(projectId, 'layout') : LAYOUT_KEY;
+  const savedLayout = await platform.preferences.get(layoutKey);
 
   // Open project / App-rebuild: opening a project re-launches the studio session
   // (a clean App rebuild). When one is set, build + apply its plugins now — the
@@ -240,7 +256,6 @@ void (async (): Promise<void> => {
   // resources register into the live App + AppTypeRegistry the editor reads.
   const baseline = captureBaseline(app);
   let projectCodeIndex: CodeIndex | null = null;
-  const projectDir = await currentProjectDir(platform);
   if (projectDir !== null) {
     try {
       const project = await buildProjectModule(createProjectBuilder(), projectDir);
@@ -290,7 +305,7 @@ void (async (): Promise<void> => {
         default: editor.defaultLayout(),
         restore: () => savedLayout,
         persist: (ini) => {
-          void platform.preferences.set(LAYOUT_KEY, ini);
+          void platform.preferences.set(layoutKey, ini);
         },
       },
       draw: (): void => {
