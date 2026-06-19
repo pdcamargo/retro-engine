@@ -7,10 +7,10 @@ import { createSceneImporter } from './scene-importer';
 import { addSceneInstantiation } from './scene-reactor';
 
 /**
- * Adds `.scene` loading and instantiation to an `App`.
+ * Adds `.rescene` loading and instantiation to an `App`.
  *
  * On build it registers the {@link Scene} importer on the {@link AssetServer}
- * (so `assetServer.load<Scene>('x.scene')` yields a `Handle<Scene>`), inserts the
+ * (so `assetServer.load<Scene>('x.rescene')` yields a `Handle<Scene>`), inserts the
  * {@link Scenes} store, and installs the reactor that turns a `SceneRoot` entity
  * into a live entity graph once its scene is ready. Opt-in: an `App` that never
  * loads scenes pays nothing.
@@ -39,7 +39,7 @@ export class ScenePlugin implements PluginObject {
       app.insertResource(scenes);
     }
 
-    server.registerLoader('scene', scenes, createSceneImporter());
+    server.registerLoader('rescene', scenes, createSceneImporter());
     addSceneInstantiation(app);
   }
 }

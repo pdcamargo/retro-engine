@@ -24,7 +24,7 @@ export class Scene {
 /**
  * App-level store mapping {@link import('@retro-engine/assets').Handle}s to
  * {@link Scene} instances. Inserted as a resource by `ScenePlugin`; the scene
- * loader commits parsed `.scene` files here, and runtime code may `scenes.add(...)`
+ * loader commits parsed `.rescene` files here, and runtime code may `scenes.add(...)`
  * an in-memory scene. The `SceneRoot` reactor reads from this store.
  */
 export class Scenes extends Assets<Scene> {}

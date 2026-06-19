@@ -1,6 +1,7 @@
 # ADR-0070: Project save format + write sink
 
-- **Status:** Accepted
+- **Status:** Superseded by ADR-0089 (on-disk text formats + manifest model; the
+  `AssetSink`/`serializeProject` write-tier architecture stands)
 - **Date:** 2026-06-08
 
 ## Context

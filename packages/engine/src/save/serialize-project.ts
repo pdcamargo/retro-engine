@@ -1,5 +1,6 @@
 import type { AssetGuid, AssetManifestEntry, AssetManifestFile, Handle } from '@retro-engine/assets';
 import { bakeManifest, generateAssetGuid, serializeAssetManifest } from '@retro-engine/assets';
+import { stringify as stringifyYaml } from 'yaml';
 
 import { AssetSerializers } from '../asset/asset-serializers';
 import { AssetStores } from '../asset/asset-stores';
@@ -39,7 +40,7 @@ export interface ProjectDocFile {
 
 /** A scene to write into the project: where its file goes, its identity, and its data. */
 export interface ScenePromotion {
-  /** Location of the scene file (e.g. `'scenes/main.scene'`). */
+  /** Location of the scene file (e.g. `'scenes/main.rescene'`). */
   readonly location: string;
   /** Stable identity for the scene asset. Defaults to a fresh v4 GUID. */
   readonly guid?: AssetGuid;
@@ -95,7 +96,7 @@ const encodeText = (text: string): Uint8Array => new TextEncoder().encode(text);
  * @example
  * ```ts
  * const project = serializeProject(app, {
- *   scenes: [{ location: 'scenes/main.scene', data: serializeScene(app) }],
+ *   scenes: [{ location: 'scenes/main.rescene', data: serializeScene(app) }],
  *   promotions: [{ handle: meshHandle, kind: ASSET_TYPE.mesh, extension: 'rmesh' }],
  * });
  * for (const file of project.files) await sink.write(file.location, file.bytes);
@@ -143,14 +144,14 @@ export const serializeProject = (app: App, opts: SerializeProjectOptions): Saved
     }
   }
 
-  // Scenes: the JSON document IS the bytes; each is a GUID-addressable asset
-  // loaded by extension on reload (`.scene` → the scene importer).
+  // Scenes: the YAML document IS the bytes; each is a GUID-addressable asset
+  // loaded by extension on reload (`.rescene` → the scene importer).
   const sceneGuids: AssetGuid[] = [];
   for (const scene of opts.scenes) {
     const guid = scene.guid ?? generateAssetGuid();
     sceneGuids.push(guid);
     entries.push({ guid, location: scene.location, kind: SCENE_ASSET_KIND });
-    files.push({ location: scene.location, bytes: encodeText(JSON.stringify(scene.data)) });
+    files.push({ location: scene.location, bytes: encodeText(stringifyYaml(scene.data)) });
     files.push({
       location: `${scene.location}.meta`,
       bytes: encodeText(serializeMeta(bakeMeta(guid))),

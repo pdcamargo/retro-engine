@@ -78,7 +78,7 @@ describe('project save → load round-trip (in-memory sink, real read path)', ()
 
     const sceneData = serializeScene(app1); // carries ClearColor + AmbientLight + Shadow3dSettings
     const saved = serializeProject(app1, {
-      scenes: [{ location: 'scenes/main.scene', data: sceneData }],
+      scenes: [{ location: 'scenes/main.rescene', data: sceneData }],
       promotions: [{ handle: meshHandle, kind: ASSET_TYPE.mesh, extension: 'rmesh' }],
     });
 
@@ -93,7 +93,7 @@ describe('project save → load round-trip (in-memory sink, real read path)', ()
     // --- App #2: fresh App over a source reading those same bytes. ---
     const app2 = buildApp(new MemoryAssetSource(sink.files));
     const server = app2.getResource(AssetServer)!;
-    // `.scene` importer comes from ScenePlugin; register the `.rmesh` importer.
+    // `.rescene` importer comes from ScenePlugin; register the `.rmesh` importer.
     server.registerLoader('rmesh', app2.getResource(Meshes)!, createMeshImporter());
 
     // Read half: manifest-only (never the .meta sidecars) → loadByGuid each →

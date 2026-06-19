@@ -1302,7 +1302,7 @@ export class App {
    * @example
    * ```ts
    * app.initState(SceneId, SceneId.MainMenu);
-   * app.addScene(SceneId.Level1, assetServer.load<Scene>('level1.scene'));
+   * app.addScene(SceneId.Level1, assetServer.load<Scene>('level1.rescene'));
    * ```
    */
   addScene<S extends object>(state: S, handle: Handle<Scene>, opts?: AddSceneOptions): this {

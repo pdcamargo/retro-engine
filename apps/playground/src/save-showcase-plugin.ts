@@ -122,7 +122,7 @@ export const saveShowcasePlugin: Plugin = (app) => {
   const saveAndReload = async (cube: Handle<Mesh>): Promise<void> => {
     try {
       const project = serializeProject(app, {
-        scenes: [{ location: 'scenes/main.scene', data: serializeScene(app) }],
+        scenes: [{ location: 'scenes/main.rescene', data: serializeScene(app) }],
         promotions: [{ handle: cube, kind: ASSET_TYPE.mesh, extension: 'rmesh' }],
       });
 
@@ -137,7 +137,7 @@ export const saveShowcasePlugin: Plugin = (app) => {
       const meshes = new Meshes();
       const scenes = new Scenes();
       server.registerLoader('rmesh', meshes, createMeshImporter());
-      server.registerLoader('scene', scenes, createSceneImporter());
+      server.registerLoader('rescene', scenes, createSceneImporter());
 
       await server.loadManifest('assets.manifest.json');
       for (const entry of project.manifest.entries) server.loadByGuid(entry.guid);

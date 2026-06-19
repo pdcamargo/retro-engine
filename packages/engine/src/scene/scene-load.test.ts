@@ -189,15 +189,15 @@ describe('App.addScene — States-gated lifecycle', () => {
 });
 
 describe('Scene asset loading', () => {
-  it('loads a .scene file through the AssetServer into the Scenes store', async () => {
+  it('loads a .rescene file through the AssetServer into the Scenes store', async () => {
     const data = cubeScene();
     const app = new App({ renderer: makeHeadlessRenderer() });
-    app.addPlugin(new AssetPlugin({ source: sourceFrom({ 'level.scene': JSON.stringify(data) }) }));
+    app.addPlugin(new AssetPlugin({ source: sourceFrom({ 'level.rescene': JSON.stringify(data) }) }));
     app.addPlugin(new ScenePlugin());
-    app.advanceFrame(0); // build → registers the '.scene' loader
+    app.advanceFrame(0); // build → registers the '.rescene' loader
 
     const server = app.getResource(AssetServer)!;
-    const handle = server.load<Scene>('level.scene');
+    const handle = server.load<Scene>('level.rescene');
     await server.settle();
     app.advanceFrame();
 
@@ -211,18 +211,18 @@ describe('Scene asset loading', () => {
     const spy = createWarnSpy();
     const app = new App({ renderer: makeHeadlessRenderer(), logger: spy.logger });
     app.addPlugin(
-      new AssetPlugin({ source: sourceFrom({ 'bad.scene': JSON.stringify({ version: 999, entities: [] }) }) }),
+      new AssetPlugin({ source: sourceFrom({ 'bad.rescene': JSON.stringify({ version: 999, entities: [] }) }) }),
     );
     app.addPlugin(new ScenePlugin());
     app.advanceFrame(0);
 
     const server = app.getResource(AssetServer)!;
-    const handle = server.load<Scene>('bad.scene');
+    const handle = server.load<Scene>('bad.rescene');
     await server.settle();
     app.advanceFrame();
 
     expect(app.getResource(Scenes)!.get(handle)).toBeUndefined();
-    expect(spy.warns.some((m) => m.includes('bad.scene'))).toBe(true);
+    expect(spy.warns.some((m) => m.includes('bad.rescene'))).toBe(true);
   });
 
   it('round-trips a Scene through the serializer', () => {

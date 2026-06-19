@@ -39,6 +39,7 @@
     "@retro-engine/ecs": "workspace:*",
     "@retro-engine/math": "workspace:*",
     "@retro-engine/reflect": "workspace:*",
-    "@retro-engine/renderer-core": "workspace:*"
+    "@retro-engine/renderer-core": "workspace:*",
+    "yaml": "^2.7.0"
   }
 }
