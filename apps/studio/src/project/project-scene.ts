@@ -2,8 +2,12 @@ import type { AssetGuid, AssetManifest, AssetSource } from '@retro-engine/assets
 import type { App } from '@retro-engine/engine';
 import {
   applyCompletedLoads,
+  ASSET_TYPE,
   AssetPlugin,
   AssetServer,
+  createMeshImporter,
+  Meshes,
+  registerAssetStore,
   scanMetaManifest,
   ScenePlugin,
   Scenes,
@@ -24,8 +28,9 @@ export const scanProjectManifest = async (
  * Load the project's startup scene from disk and spawn it into the world — the
  * host-backed `SceneSource` the studio uses instead of the in-memory showcase
  * when a project is open. Adds the asset + scene plugins over the project source,
- * adopts the scanned manifest, loads the scene by GUID, settles, and spawns.
- * Returns false (so the caller can fall back) if the scene isn't found.
+ * adopts the scanned manifest, loads the scene by GUID, settles, and spawns — the
+ * scene's referenced assets then stream in on demand (ADR-0100), not as a bulk
+ * preload. Returns false (so the caller can fall back) if the scene isn't found.
  */
 export const loadProjectScene = async (
   app: App,
@@ -37,6 +42,18 @@ export const loadProjectScene = async (
   app.addPlugin(new ScenePlugin());
 
   const server = app.getResource(AssetServer)!;
+  // Project file loaders the engine has no default for: a `.rmesh` decodes to a
+  // Mesh in the project's Meshes store, so a scene that references a mesh by GUID
+  // streams it in through the on-demand resolver. (Image/material loaders join
+  // here as those project asset types are exercised.)
+  let meshes = app.getResource(Meshes);
+  if (meshes === undefined) {
+    meshes = new Meshes();
+    app.insertResource(meshes);
+    registerAssetStore(app, ASSET_TYPE.mesh, meshes);
+  }
+  server.registerLoader('rmesh', meshes, createMeshImporter());
+
   server.setManifest(manifest);
   server.loadByGuid(startupSceneGuid as AssetGuid);
   await server.settle();
