@@ -54,12 +54,24 @@ describe('TypeRegistry', () => {
     expect(entry.name).toBe('Velocity');
   });
 
-  it('throws when no stable name can be resolved', () => {
+  it('defaults the name to the class name when none is given', () => {
+    class Spawner {
+      rate = 1;
+    }
+    const reg = new TypeRegistry();
+    const entry = reg.registerComponent(Spawner, { rate: t.number });
+    expect(entry.name).toBe('Spawner');
+    expect(reg.get('Spawner')?.ctor).toBe(Spawner);
+  });
+
+  it('throws for an anonymous class with no stable name', () => {
     class Anonymous {
       value = 1;
     }
+    // Simulate a fully minified/anonymous constructor: empty ctor.name, no explicit name.
+    Object.defineProperty(Anonymous, 'name', { value: '' });
     const reg = new TypeRegistry();
-    expect(() => reg.registerComponent(Anonymous, { value: t.number })).toThrow(/explicit stable name/);
+    expect(() => reg.registerComponent(Anonymous, { value: t.number })).toThrow(/anonymous class/);
   });
 
   it('throws when two constructors claim the same name', () => {

@@ -18,7 +18,12 @@ export interface Migration {
 
 /** Options for {@link TypeRegistry.registerType} / {@link TypeRegistry.registerComponent}. */
 export interface RegisterOptions<T> {
-  /** Stable name to key this type by. Required unless the class has a static `typeName`. */
+  /**
+   * Stable name to key this type by. Defaults to the class name (`ctor.name`).
+   * Pass an explicit name to namespace it (e.g. `"mygame/Player"`) or to keep
+   * the serialized name fixed across a future class rename. Required only for
+   * anonymous classes, whose `ctor.name` is empty.
+   */
   readonly name?: string;
   /** Schema version of the current shape. Defaults to `1`. */
   readonly version?: number;
@@ -52,8 +57,9 @@ const resolveName = (ctor: ComponentType<object>, explicit: string | undefined):
   if (explicit !== undefined && explicit.length > 0) return explicit;
   const fromStatic = (ctor as unknown as { readonly typeName?: unknown }).typeName;
   if (typeof fromStatic === 'string' && fromStatic.length > 0) return fromStatic;
+  if (ctor.name.length > 0) return ctor.name;
   throw new Error(
-    `reflect: registering ${ctor.name || '<anonymous>'} requires an explicit stable name — pass { name } or set a static typeName. Class names are unreliable under minification.`,
+    'reflect: cannot register an anonymous class without a stable name — pass { name }.',
   );
 };
 

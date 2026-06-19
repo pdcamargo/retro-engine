@@ -183,11 +183,11 @@ Performance regressions don't show up in `bun run test` — they show up later a
 
 ## 13. Engine components declare their serialization
 
-Reflection is how the engine round-trips world state into scenes and back ([ADR-0060](docs/adr/ADR-0060-reflection-and-serialization.md), [ADR-0061](docs/adr/ADR-0061-reflection-on-engine-components.md)). For that to hold, every component is a deliberate decision — serialized or not — never an accident.
+Reflection is how the engine round-trips world state into scenes and back ([ADR-0060](docs/adr/ADR-0060-reflection-and-serialization.md), [ADR-0061](docs/adr/ADR-0061-reflection-on-engine-components.md); name resolution updated by [ADR-0088](docs/adr/ADR-0088-reflection-names-default-to-ctor-name.md)). For that to hold, every component is a deliberate decision — serialized or not — never an accident.
 
-- **Every component type defined in `packages/*/src/**` (engine or any internal package) has a reflection schema**, registered by its owning plugin (`app.registerComponent(Ctor, schema, { name })` in `build()`), **unless it is deliberately not serialized.**
+- **Every component type defined in `packages/*/src/**` (engine or any internal package) has a reflection schema**, registered by its owning plugin (`app.registerComponent(Ctor, schema)` in `build()`), **unless it is deliberately not serialized.**
 - **"Deliberately not serialized" is a real, named category**, not an oversight: derived/computed state recomputed by a system (`GlobalTransform`, the inherited/view visibility booleans), reciprocal relationship targets rebuilt from their edge (`Children`), transient caches, and runtime-only handles with no persistent identity. A derived component is simply not registered; a single non-persisted field on an otherwise-serialized component uses `.skip()`.
 - **The default is persistence.** If a component (or field) is authored state a consumer would expect to survive a saved scene, it has a schema. Adding a new authored component without one is a gap to fix, not a default to accept.
-- Registration is **per owning plugin** (the `AppTypeRegistry` resource accumulates them), never one central dump. A stable `name` is mandatory — never the class name (minification-unsafe).
+- Registration is **per owning plugin** (the `AppTypeRegistry` resource accumulates them), never one central dump. The stable `name` defaults to `ctor.name` (ADR-0088); pass an explicit `{ name }` only to namespace a type or to keep its serialized name fixed across a class rename. Component-producing builds keep identifier minification off so `ctor.name` survives (see ADR-0088 for the build recipe).
 
 The registry is populated slice by slice as systems are touched; components not yet decided are a tracked gap, not a silent one — the end state is every component classified.
