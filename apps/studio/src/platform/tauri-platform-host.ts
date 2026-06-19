@@ -25,8 +25,16 @@ export class TauriPlatformHost implements PlatformHost {
   readonly kind = 'tauri' as const;
   readonly capabilities: PlatformCapabilities = {
     preferences: true,
-    filesystem: false,
-    dialogs: false,
+    filesystem: true,
+    dialogs: true,
   };
   readonly preferences: PreferenceStore = new TauriPreferenceStore();
+
+  async openProject(): Promise<string | null> {
+    const { open } = await import('@tauri-apps/plugin-dialog');
+    const picked = await open({ directory: true, multiple: false, title: 'Open Retro Engine project' });
+    if (typeof picked !== 'string') return null;
+    await invoke('set_project_root', { path: picked });
+    return picked;
+  }
 }

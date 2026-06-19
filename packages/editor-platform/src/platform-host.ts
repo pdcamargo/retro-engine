@@ -16,4 +16,11 @@ export interface PlatformHost {
   readonly capabilities: PlatformCapabilities;
   /** Persistent key/value store. Always present ({@link PlatformCapabilities.preferences}). */
   readonly preferences: PreferenceStore;
+  /**
+   * Prompt the user to choose a project directory and return its absolute path,
+   * or `null` if cancelled. Present only when {@link PlatformCapabilities.dialogs}
+   * and {@link PlatformCapabilities.filesystem} are true (a native shell); absent
+   * in a plain browser.
+   */
+  openProject?(): Promise<string | null>;
 }

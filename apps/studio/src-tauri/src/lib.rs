@@ -1,8 +1,83 @@
 use std::collections::HashMap;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
 use tauri::Manager;
+
+// The opened project's root directory, set by `set_project_root` and used to
+// scope all project file I/O. Held in Tauri-managed state for the app lifetime.
+#[derive(Default)]
+struct ProjectRoot(Mutex<Option<PathBuf>>);
+
+// Resolve a project-relative path against the root, rejecting traversal. The
+// project commands are the one fs entry point, so the guard lives here.
+fn resolve_in_root(root: &Path, relative: &str) -> Result<PathBuf, String> {
+    if relative.split(['/', '\\']).any(|seg| seg == "..") {
+        return Err(format!("project path traversal rejected: {relative}"));
+    }
+    Ok(root.join(relative))
+}
+
+fn project_root_path(state: &tauri::State<ProjectRoot>) -> Result<PathBuf, String> {
+    state
+        .0
+        .lock()
+        .map_err(|e| e.to_string())?
+        .clone()
+        .ok_or_else(|| "no project root set".to_string())
+}
+
+fn walk_files(dir: &Path, base: &Path, out: &mut Vec<String>) -> Result<(), String> {
+    for entry in fs::read_dir(dir).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let path = entry.path();
+        if path.is_dir() {
+            walk_files(&path, base, out)?;
+        } else if let Ok(rel) = path.strip_prefix(base) {
+            out.push(rel.to_string_lossy().replace('\\', "/"));
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn set_project_root(state: tauri::State<ProjectRoot>, path: String) -> Result<(), String> {
+    *state.0.lock().map_err(|e| e.to_string())? = Some(PathBuf::from(path));
+    Ok(())
+}
+
+#[tauri::command]
+fn project_read_file(state: tauri::State<ProjectRoot>, relative: String) -> Result<Vec<u8>, String> {
+    let root = project_root_path(&state)?;
+    fs::read(resolve_in_root(&root, &relative)?).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn project_write_file(
+    state: tauri::State<ProjectRoot>,
+    relative: String,
+    contents: Vec<u8>,
+) -> Result<(), String> {
+    let root = project_root_path(&state)?;
+    let path = resolve_in_root(&root, &relative)?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    fs::write(path, contents).map_err(|e| e.to_string())
+}
+
+// All files under `relative`, recursively, as project-relative `/`-separated paths.
+#[tauri::command]
+fn project_read_dir(state: tauri::State<ProjectRoot>, relative: String) -> Result<Vec<String>, String> {
+    let root = project_root_path(&state)?;
+    let start = resolve_in_root(&root, &relative)?;
+    let mut out = Vec::new();
+    if start.is_dir() {
+        walk_files(&start, &root, &mut out)?;
+    }
+    Ok(out)
+}
 
 // Native preference store: one JSON object persisted at
 // `<app config dir>/preferences.json`. Mirrors the browser host's
@@ -105,6 +180,8 @@ async fn project_build(app: tauri::AppHandle, project_dir: String) -> Result<Str
 pub fn run() {
   tauri::Builder::default()
     .plugin(tauri_plugin_shell::init())
+    .plugin(tauri_plugin_dialog::init())
+    .manage(ProjectRoot::default())
     .setup(|app| {
       if cfg!(debug_assertions) {
         app.handle().plugin(
@@ -115,7 +192,16 @@ pub fn run() {
       }
       Ok(())
     })
-    .invoke_handler(tauri::generate_handler![pref_get, pref_set, pref_remove, project_build])
+    .invoke_handler(tauri::generate_handler![
+      pref_get,
+      pref_set,
+      pref_remove,
+      project_build,
+      set_project_root,
+      project_read_file,
+      project_write_file,
+      project_read_dir
+    ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
 }
