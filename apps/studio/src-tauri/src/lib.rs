@@ -3,7 +3,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
+use percent_encoding::percent_decode_str;
+use tauri::ipc::{InvokeBody, Request, Response};
 use tauri::Manager;
+use tauri_plugin_fs::FsExt;
 
 // The opened project's root directory, set by `set_project_root` and used to
 // scope all project file I/O. Held in Tauri-managed state for the app lifetime.
@@ -41,30 +44,62 @@ fn walk_files(dir: &Path, base: &Path, out: &mut Vec<String>) -> Result<(), Stri
     Ok(())
 }
 
+// Record the opened project's root AND tighten the runtime scopes to it: the
+// asset protocol (large-binary streaming) and the fs watch can now only reach
+// this directory, replacing the broad `$HOME/**` static scope. Must be called on
+// every boot that opens a project, not just from the dialog — a persisted project
+// has no dialog, so the studio calls this before its first read.
 #[tauri::command]
-fn set_project_root(state: tauri::State<ProjectRoot>, path: String) -> Result<(), String> {
-    *state.0.lock().map_err(|e| e.to_string())? = Some(PathBuf::from(path));
+fn set_project_root(
+    app: tauri::AppHandle,
+    state: tauri::State<ProjectRoot>,
+    path: String,
+) -> Result<(), String> {
+    let root = PathBuf::from(&path);
+    app.asset_protocol_scope()
+        .allow_directory(&root, true)
+        .map_err(|e| e.to_string())?;
+    app.fs_scope()
+        .allow_directory(&root, true)
+        .map_err(|e| e.to_string())?;
+    *state.0.lock().map_err(|e| e.to_string())? = Some(root);
+    log::info!("set_project_root: {path} (asset + fs scope granted)");
     Ok(())
 }
 
+// Returns the file's bytes as a raw IPC response (octet-stream), bypassing JSON
+// number-array marshalling so large reads don't pay the serialization cost.
 #[tauri::command]
-fn project_read_file(state: tauri::State<ProjectRoot>, relative: String) -> Result<Vec<u8>, String> {
+fn project_read_file(state: tauri::State<ProjectRoot>, relative: String) -> Result<Response, String> {
     let root = project_root_path(&state)?;
-    fs::read(resolve_in_root(&root, &relative)?).map_err(|e| e.to_string())
+    let bytes = fs::read(resolve_in_root(&root, &relative)?).map_err(|e| e.to_string())?;
+    Ok(Response::new(bytes))
 }
 
+// Writes a file from a raw IPC request body (the bytes are the ArrayBuffer
+// payload, no JSON array). The project-relative location rides in the
+// percent-encoded `x-path` header since the body slot is the raw bytes.
 #[tauri::command]
-fn project_write_file(
-    state: tauri::State<ProjectRoot>,
-    relative: String,
-    contents: Vec<u8>,
-) -> Result<(), String> {
+fn project_write_file(state: tauri::State<ProjectRoot>, request: Request) -> Result<(), String> {
+    let header = request
+        .headers()
+        .get("x-path")
+        .ok_or_else(|| "project_write_file: missing x-path header".to_string())?
+        .to_str()
+        .map_err(|e| e.to_string())?;
+    let relative = percent_decode_str(header)
+        .decode_utf8()
+        .map_err(|e| e.to_string())?
+        .into_owned();
+    let InvokeBody::Raw(bytes) = request.body() else {
+        return Err("project_write_file: request body must be raw bytes".to_string());
+    };
     let root = project_root_path(&state)?;
     let path = resolve_in_root(&root, &relative)?;
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
-    fs::write(path, contents).map_err(|e| e.to_string())
+    fs::write(path, bytes).map_err(|e| e.to_string())
 }
 
 // All files under `relative`, recursively, as project-relative `/`-separated paths.
@@ -101,6 +136,14 @@ fn read_prefs(app: &tauri::AppHandle) -> Result<HashMap<String, String>, String>
 fn write_prefs(app: &tauri::AppHandle, map: &HashMap<String, String>) -> Result<(), String> {
     let bytes = serde_json::to_vec_pretty(map).map_err(|e| e.to_string())?;
     fs::write(prefs_path(app)?, bytes).map_err(|e| e.to_string())
+}
+
+// Mirror the webview's console to the dev terminal, so a native session's
+// frontend logs (project load, scene load, errors) are observable without
+// devtools. App-local command; no capability entry needed.
+#[tauri::command]
+fn studio_log(message: String) {
+    log::info!(target: "webview", "{message}");
 }
 
 #[tauri::command]
@@ -152,6 +195,7 @@ async fn project_build(
         return Err(format!("project build entry traversal rejected: {rel_entry}"));
     }
     let entry = format!("{project_dir}/{rel_entry}");
+    log::info!("project_build: bun install + build {entry} (script {})", script.display());
 
     let install = app
         .shell()
@@ -188,7 +232,9 @@ async fn project_build(
             String::from_utf8_lossy(&build.stderr)
         ));
     }
-    Ok(String::from_utf8_lossy(&build.stdout).into_owned())
+    let bundle = String::from_utf8_lossy(&build.stdout).into_owned();
+    log::info!("project_build: ok, {} bytes", bundle.len());
+    Ok(bundle)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -209,6 +255,7 @@ pub fn run() {
       Ok(())
     })
     .invoke_handler(tauri::generate_handler![
+      studio_log,
       pref_get,
       pref_set,
       pref_remove,

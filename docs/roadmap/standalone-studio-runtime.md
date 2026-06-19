@@ -1,7 +1,7 @@
 # Standalone Studio — runtime integration
 
 - **Created:** 2026-06-19
-- **Status:** Planning
+- **Status:** Phase 1 done (ADR-0099) · Phases 2–4 pending
 
 ## Goal
 
@@ -21,7 +21,8 @@ hot-reloads on a code edit — proven on a live shell, not just the gate chain.
 
 ## Phases
 
-1. **Runtime-verify + harden native integration** — `tauri dev`/`tauri build` with a real
+1. **Runtime-verify + harden native integration** — ✅ **done (ADR-0099)**; proven on a live
+   `tauri dev` shell against `../retro-game-sample`. — `tauri dev`/`tauri build` with a real
    per-platform bun in `src-tauri/binaries/`; prove Open Project dialog → `set_project_root`
    → `project_build` sidecar → host-bridge load → user content appears; fix what breaks.
    Known issues: `project_read_file`/`project_write_file` marshal bytes as JSON number
@@ -43,19 +44,18 @@ hot-reloads on a code edit — proven on a live shell, not just the gate chain.
    wired the routing; execute the rebuild on a `*.ts` change), preserve editor state across
    reload, debounce/coalesce, surface build diagnostics in the Console.
 
-## Open questions
+## Open questions — RESOLVED (2026-06-19)
 
-Each likely becomes a decision ADR.
-
-- **Thumbnail caching.** Cache to the git-ignored `.re/` machine cache (keyed by GUID +
-  content hash, invalidated on change) vs regenerate in-memory each session. Trade-offs:
-  cold-open speed vs disk footprint vs staleness vs cross-machine portability.
-- **Hot-reload granularity.** Hot per-system swap without a full App-rebuild (needs new
-  engine support for removable/replaceable systems on a running schedule — ADR-0091
-  deferred it) vs keep App-rebuild-on-change.
-- **Binary IPC.** How project file bytes cross the Tauri boundary efficiently (raw
-  request/response vs the current JSON number arrays) — small docs vs large assets.
-- **Scope tightening.** Per-project asset-protocol + fs-watch scopes vs the v0 `$HOME/**`.
+- **Thumbnail caching → disk `.re/` + content-hash + in-memory GPU LRU.** One 256px master
+  per asset at `.re/thumbnails/<guid>.<hash8>.png` (content-hash invalidated), sampled at all
+  zoom sizes; LRU of GPU textures on top. (Phase 3 / ADR-0101.)
+- **Hot-reload granularity → per-system / per-plugin hot-swap on a running App** (no page
+  reload). Overrides ADR-0091's deferral: serialize the user scene → remove user plugins'
+  systems/components/resources/observers/hooks → re-add the rebuilt plugins → respawn against
+  the name-keyed registry. (Phase 4 / ADR-0102.)
+- **Binary IPC → raw `tauri::ipc::Response` / ArrayBuffer.** ✅ done in Phase 1 (ADR-0099).
+- **Scope tightening → per-project at runtime** via `fs_scope()`/`asset_protocol_scope()
+  `.allow_directory(root)` in `set_project_root`. ✅ done in Phase 1 (ADR-0099).
 
 ## Links
 

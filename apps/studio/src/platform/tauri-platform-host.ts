@@ -7,6 +7,8 @@
 import type { PlatformCapabilities, PlatformHost, PreferenceStore } from '@retro-engine/editor-platform';
 import { invoke } from '@tauri-apps/api/core';
 
+import { setNativeProjectRoot } from '../project/tauri-project-io';
+
 class TauriPreferenceStore implements PreferenceStore {
   async get(key: string): Promise<string | null> {
     return invoke<string | null>('pref_get', { key });
@@ -34,7 +36,7 @@ export class TauriPlatformHost implements PlatformHost {
     const { open } = await import('@tauri-apps/plugin-dialog');
     const picked = await open({ directory: true, multiple: false, title: 'Open Retro Engine project' });
     if (typeof picked !== 'string') return null;
-    await invoke('set_project_root', { path: picked });
+    await setNativeProjectRoot(picked);
     return picked;
   }
 }

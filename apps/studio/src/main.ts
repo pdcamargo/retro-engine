@@ -19,6 +19,7 @@ import {
 import { createImGuiOverlay, createWebGPURenderer } from '@retro-engine/renderer-webgpu';
 
 import { publishHost } from './host-bridge';
+import { mirrorConsoleToNative } from './platform/native-console';
 import { createProjectBuilder } from './project/project-builder';
 import { applyProject, buildEditorExtensions, buildProjectModule } from './project/load-project';
 import { currentProjectDir, setCurrentProjectDir } from './project/current-project';
@@ -28,7 +29,11 @@ import { projectStateKey } from './project/project-state';
 import { engineVersionMismatch, STUDIO_ENGINE_VERSION } from './project/engine-version';
 import { listProjectFiles } from './project/list-files';
 import { loadProjectScene, scanProjectManifest } from './project/project-scene';
+import { setNativeProjectRoot } from './project/tauri-project-io';
+import { watchProject } from './project/project-watcher';
 
+// Mirror webview console to the native terminal (dev observability under Tauri).
+mirrorConsoleToNative();
 // Publish the studio's engine packages so built user code resolves to live instances.
 publishHost();
 // Mark this as an editor session — user code reads it via isEditorHint() to gate
@@ -245,6 +250,15 @@ void (async (): Promise<void> => {
   // Read the open project's descriptor (best-effort) so its dock layout + window
   // state persist per-project (keyed by project id in the app config), not globally.
   const projectDir = await currentProjectDir(platform);
+  // Record the root in the native host (and grant its scopes) before any read —
+  // a persisted project has no dialog to have done it. No-op in the browser.
+  if (projectDir !== null && platform.kind === 'tauri') {
+    try {
+      await setNativeProjectRoot(projectDir);
+    } catch (err) {
+      console.error('[studio] set_project_root failed', err);
+    }
+  }
   let descriptor: ReturnType<typeof parseProjectDescriptor> | null = null;
   if (projectDir !== null) {
     try {
@@ -337,6 +351,18 @@ void (async (): Promise<void> => {
   if (!sceneLoaded && projectDir === null) {
     const initialScene = await inMemorySceneSource(SHOWCASE_SCENE).load();
     installShowcaseScene(app, { material: stdMat, scene: initialScene });
+  }
+
+  // React to external edits (native only; no-op in a plain browser). The full
+  // reactions land in later phases — code rebuild/hot-swap and asset reindex —
+  // so for now each leg surfaces the change. Wiring it here proves the native
+  // fs watch fires against the opened project.
+  if (projectDir !== null && platform.kind === 'tauri') {
+    void watchProject(projectDir, {
+      onRebuild: () => console.log('[studio] code change detected (hot-reload lands in a later phase)'),
+      onReloadScene: (path) => console.log(`[studio] scene changed on disk: ${path}`),
+      onReindex: () => console.log('[studio] assets changed on disk — reindex (lands in a later phase)'),
+    }).catch((err: unknown) => console.error('[studio] project watch failed', err));
   }
 
   app.addPlugin(
