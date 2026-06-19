@@ -50,6 +50,10 @@ export class GltfPlugin implements PluginObject {
     return 'GltfPlugin';
   }
 
+  category(): 'engine' {
+    return 'engine';
+  }
+
   build(app: App): void {
     const server = app.getResource(AssetServer);
     if (server === undefined) {

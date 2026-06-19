@@ -106,7 +106,7 @@ export class ImagePlugin implements PluginObject {
         if (drained.length === 0) return;
         for (const ev of drained) queue.events.push(ev);
       },
-      { set: RenderSet.Extract },
+      { set: RenderSet.Extract, name: 'image-extract' },
     );
 
     // RenderSet.Prepare: consume the queue, allocate / destroy GPU resources,

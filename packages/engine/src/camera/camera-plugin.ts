@@ -444,6 +444,7 @@ export class CameraPlugin implements PluginObject {
           mat4.getTranslation(gt.matrix, c.worldPosition);
         }
       },
+      { name: 'camera-update-computed' },
     );
 
     // RenderSet.Extract: clone active main-world cameras into render-world
@@ -482,7 +483,7 @@ export class CameraPlugin implements PluginObject {
           );
         }
       },
-      { set: RenderSet.Extract },
+      { set: RenderSet.Extract, name: 'camera-extract' },
     );
 
     // RenderSet.Prepare: resolve each extracted camera's target, allocate

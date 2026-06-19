@@ -4,6 +4,21 @@ import type { Param, ResolveCtx, SystemId } from './system-param';
 import type { RunCondition } from './system-param';
 
 /**
+ * Where a registered system came from, used to bucket systems for tooling.
+ *
+ * - `'engine'` — a system registered by an engine framework plugin (the core
+ *   simulation, rendering, transforms, and so on).
+ * - `'editor'` — a system registered by editor / tooling code that hosts the
+ *   engine for authoring; not part of a shipped game.
+ * - `'user'` — a gameplay system registered by application code.
+ *
+ * Resolved at registration: an explicit `origin` on the system's options wins,
+ * otherwise the registering plugin's {@link PluginObject.category} is used,
+ * otherwise `'user'`.
+ */
+export type SystemOrigin = 'engine' | 'editor' | 'user';
+
+/**
  * Internal record for a system registered against a stage. Holds the
  * resolved-by-name ordering metadata (`label`, `before`, `after`) alongside the
  * params, function, and per-system identity used by the runner.
@@ -16,6 +31,12 @@ export interface RegisteredSystem {
   readonly id: SystemId;
   readonly params: ReadonlyArray<Param<unknown>>;
   readonly fn: (...args: unknown[]) => void;
+  /** Human-readable display name, resolved from `name` / `label` / `fn.name` / the system id. */
+  readonly name: string;
+  /** Origin bucket used by tooling to group systems. */
+  readonly origin: SystemOrigin;
+  /** Name of the plugin whose `build()` registered this system, or `null` when registered directly on the App. */
+  readonly originPlugin: string | null;
   readonly runIf?: RunCondition;
   readonly label?: string;
   readonly before?: readonly string[];
@@ -175,7 +196,9 @@ export const topoSort = (
  */
 export const runStage = (stageSystems: StageSystems, app: App, stage: Stage): void => {
   if (stageSystems.length === 0) return;
+  const profiling = app.systemProfilingEnabled;
   for (const sys of stageSystems.ordered()) {
+    if (app.isSystemDisabled(sys.id)) continue;
     if (sys.runIf && !sys.runIf.test(app)) continue;
     const lastSeenTick = app.lastSeenTickOf(sys.id);
     const lastSeenFrame = app.lastSeenFrameOf(sys.id);
@@ -190,12 +213,14 @@ export const runStage = (stageSystems: StageSystems, app: App, stage: Stage): vo
       lastSeenFrame,
     };
     const values = sys.params.map((p) => p.resolve(ctx));
+    const t0 = profiling ? performance.now() : 0;
     try {
       sys.fn(...values);
     } catch (err) {
       app.discardSystemCommands(sys.id);
       throw err;
     }
+    if (profiling) app.recordSystemTime(sys.id, performance.now() - t0);
     app.flushSystemCommands(sys.id, stage);
     app.recordSystemLastSeenTick(sys.id, tickAtRunStart);
     app.recordSystemLastSeenFrame(sys.id, frameAtRunStart);

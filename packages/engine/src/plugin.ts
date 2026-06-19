@@ -1,4 +1,5 @@
 import type { App } from './index';
+import type { SystemOrigin } from './schedule';
 
 /**
  * The App's plugin lifecycle phase.
@@ -60,6 +61,14 @@ export interface PluginObject {
    * function plugins (uniqueness is meaningless for anonymous code).
    */
   isUnique?(): boolean;
+  /**
+   * Origin bucket stamped onto every system this plugin registers, used by
+   * tooling to group systems. Engine framework plugins return `'engine'`;
+   * editor / tooling plugins return `'editor'`. Defaults to `'user'` when
+   * omitted, so application plugins need not implement it. A system may still
+   * override its bucket per-registration via `addSystem`'s `origin` option.
+   */
+  category?(): SystemOrigin;
   /**
    * Primary registration hook. Synchronous; runs at `addPlugin` time while
    * the App is in `'Building'`. Register systems, resources, and component

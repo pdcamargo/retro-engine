@@ -68,7 +68,7 @@ export class VisibilityPlugin implements PluginObject {
 
     app.addSystem('postUpdate', [Query([Camera, Frustum])], (cameras) => {
       updateFrustaSystem(cameras);
-    });
+    }, { name: 'update-frusta' });
 
     app.addSystem(
       'postUpdate',
@@ -86,6 +86,7 @@ export class VisibilityPlugin implements PluginObject {
           removedParents,
         );
       },
+      { name: 'visibility-propagation' },
     );
 
     app.addSystem(
@@ -125,6 +126,7 @@ export class VisibilityPlugin implements PluginObject {
           removedNoFrustum,
         );
       },
+      { name: 'check-visibility' },
     );
   }
 }

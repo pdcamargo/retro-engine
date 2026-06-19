@@ -190,6 +190,10 @@ export class MaterialPlugin<M extends Material> implements PluginObject {
     return `MaterialPlugin<${this.materialClass.name}>`;
   }
 
+  category(): 'engine' {
+    return 'engine';
+  }
+
   isUnique(): boolean {
     return false;
   }
@@ -308,7 +312,7 @@ export class MaterialPlugin<M extends Material> implements PluginObject {
           app.getResource(PrepassFlagsByCamera),
         );
       },
-      { set: RenderSet.Queue },
+      { set: RenderSet.Queue, name: 'material-queue' },
     );
   }
 
@@ -365,7 +369,7 @@ export class MaterialPlugin<M extends Material> implements PluginObject {
           viewBindGroupCache as unknown as ViewBindGroupCache,
         );
       },
-      { set: RenderSet.Queue },
+      { set: RenderSet.Queue, name: 'material-instance-queue' },
     );
   }
 }

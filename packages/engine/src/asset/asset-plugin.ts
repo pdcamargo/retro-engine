@@ -44,6 +44,10 @@ export class AssetPlugin implements PluginObject {
     return 'AssetPlugin';
   }
 
+  category(): 'engine' {
+    return 'engine';
+  }
+
   build(app: App): void {
     const logger = app.logger.child('asset');
     if (app.getResource(AssetServer) === undefined) {

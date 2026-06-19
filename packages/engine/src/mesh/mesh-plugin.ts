@@ -143,6 +143,7 @@ export class MeshPlugin implements PluginObject {
       (meshes, meshables) => {
         calculateBoundsSystem(meshes, meshables, app.world);
       },
+      { name: 'mesh-calculate-bounds' },
     );
 
     // RenderSet.Extract: drain Meshes' pending-change buffer into the
@@ -159,7 +160,7 @@ export class MeshPlugin implements PluginObject {
         // exist. The prepare system clears the queue.
         for (const ev of drained) queue.events.push(ev);
       },
-      { set: RenderSet.Extract },
+      { set: RenderSet.Extract, name: 'mesh-extract' },
     );
 
     // RenderSet.Prepare: consume the queue, allocate GPU storage, build
@@ -196,7 +197,7 @@ export class MeshPlugin implements PluginObject {
         }
         queue.events.length = 0;
       },
-      { set: RenderSet.Prepare },
+      { set: RenderSet.Prepare, name: 'mesh-prepare' },
     );
   }
 }

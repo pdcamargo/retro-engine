@@ -54,11 +54,15 @@ export class CorePlugin implements PluginObject {
     return 'CorePlugin';
   }
 
+  category(): 'engine' {
+    return 'engine';
+  }
+
   build(app: App): void {
     app.insertResource(new Time());
     app.addSystem('first', [ResMut(Time)], (time) => {
       time.tick(app.currentFrameTimestamp());
-    });
+    }, { name: 'time-tick' });
     app.addSystem(
       'postUpdate',
       [
@@ -75,6 +79,7 @@ export class CorePlugin implements PluginObject {
           removedParents,
         );
       },
+      { name: 'transform-propagation' },
     );
     app.registerComponentHook(Children, 'onRemove', (ctx) => {
       for (const child of ctx.value.entities) {

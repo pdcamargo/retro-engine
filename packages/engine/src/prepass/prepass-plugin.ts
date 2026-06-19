@@ -77,6 +77,10 @@ export class PrepassPlugin implements PluginObject {
     return 'PrepassPlugin';
   }
 
+  category(): 'engine' {
+    return 'engine';
+  }
+
   build(app: App): void {
     if (app.getResource(ViewPrepassTargets) === undefined) {
       app.insertResource(new ViewPrepassTargets());

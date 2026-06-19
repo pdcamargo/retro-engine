@@ -128,6 +128,10 @@ export class Light3dPlugin implements PluginObject {
     return 'Light3dPlugin';
   }
 
+  category(): 'engine' {
+    return 'engine';
+  }
+
   build(app: App): void {
     const registry = app.getResource(ShaderRegistry);
     if (registry === undefined) {

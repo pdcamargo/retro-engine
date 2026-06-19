@@ -270,6 +270,10 @@ export class StandardMaterialPlugin implements PluginObject {
     return 'StandardMaterialPlugin';
   }
 
+  category(): 'engine' {
+    return 'engine';
+  }
+
   isUnique(): boolean {
     return false;
   }

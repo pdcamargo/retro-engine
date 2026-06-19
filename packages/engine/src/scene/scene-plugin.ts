@@ -23,6 +23,10 @@ export class ScenePlugin implements PluginObject {
     return 'ScenePlugin';
   }
 
+  category(): 'engine' {
+    return 'engine';
+  }
+
   build(app: App): void {
     const server = app.getResource(AssetServer);
     if (server === undefined) {

@@ -50,7 +50,7 @@ export class RenderGraphPlugin implements PluginObject {
         phases2d.clear();
         phases3d.clear();
       },
-      { set: RenderSet.Queue },
+      { set: RenderSet.Queue, name: 'clear-view-phases' },
     );
   }
 }

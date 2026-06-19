@@ -1035,6 +1035,54 @@
       "mean_ns": 450855.8199356913,
       "p99_ns": 753900,
       "samples": 1555
+    },
+    {
+      "key": "runStage (profiling off) @ 16 systems",
+      "group": null,
+      "args": {},
+      "mean_ns": 723.1023251786191,
+      "p99_ns": 894.6025390625,
+      "samples": 234
+    },
+    {
+      "key": "runStage (profiling on) @ 16 systems",
+      "group": null,
+      "args": {},
+      "mean_ns": 1337.1957653414818,
+      "p99_ns": 1831.166748046875,
+      "samples": 124
+    },
+    {
+      "key": "runStage (profiling off) @ 64 systems",
+      "group": null,
+      "args": {},
+      "mean_ns": 2530.3233680725098,
+      "p99_ns": 2728.200439453125,
+      "samples": 64
+    },
+    {
+      "key": "runStage (profiling on) @ 64 systems",
+      "group": null,
+      "args": {},
+      "mean_ns": 5658.681215639467,
+      "p99_ns": 5849.47705078125,
+      "samples": 27
+    },
+    {
+      "key": "runStage (profiling off) @ 256 systems",
+      "group": null,
+      "args": {},
+      "mean_ns": 11983.580610795454,
+      "p99_ns": 12334.014892578125,
+      "samples": 11
+    },
+    {
+      "key": "runStage (profiling on) @ 256 systems",
+      "group": null,
+      "args": {},
+      "mean_ns": 21942.0073038737,
+      "p99_ns": 22292.8974609375,
+      "samples": 12
     }
   ]
 }

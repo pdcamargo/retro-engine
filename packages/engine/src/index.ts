@@ -38,8 +38,10 @@ import type { ParamSchema, Template } from './prefab/template';
 import { TemplateRegistry } from './prefab/template-registry';
 import { EMPTY_SLOT_VALUES } from './render-graph/slot';
 import { RenderGraph } from './render-graph/render-graph';
-import type { RegisteredSystem } from './schedule';
+import type { RegisteredSystem, SystemOrigin } from './schedule';
 import { runStage, StageSystems } from './schedule';
+import type { SystemInfo, StageGroup } from './schedule-info';
+import { SystemProfiler } from './system-profiler';
 import type { RenderSetName } from './render-set';
 import { RenderSet } from './render-set';
 import {
@@ -100,6 +102,10 @@ export type { PluginGroup } from './plugin-group';
 export { PluginGroupBuilder } from './plugin-group';
 export type { Param, ParamValues, ResolveCtx, SystemId } from './system-param';
 export { ChangedRes, Extract, Query, RenderCtx, Res, ResAdded, ResMut, RunCondition } from './system-param';
+export type { SystemOrigin } from './schedule';
+export type { StageGroup, SystemInfo } from './schedule-info';
+export type { SystemTiming } from './system-profiler';
+export { SystemProfiler } from './system-profiler';
 export type { RenderSetName } from './render-set';
 export { RenderSet } from './render-set';
 export { RemovedComponents } from './change-detection';
@@ -674,6 +680,27 @@ export type Stage =
   | 'fixedLast';
 
 /**
+ * Stages in canonical per-frame execution order, used by
+ * {@link App.describeSchedule} to present the schedule the way it actually
+ * runs. The fixed-timestep stages appear before `update` because the fixed
+ * main loop runs between `preUpdate` and `update`.
+ */
+const SCHEDULE_STAGE_ORDER: readonly Stage[] = [
+  'first',
+  'startup',
+  'preUpdate',
+  'fixedFirst',
+  'fixedPreUpdate',
+  'fixedUpdate',
+  'fixedPostUpdate',
+  'fixedLast',
+  'update',
+  'postUpdate',
+  'last',
+  'render',
+];
+
+/**
  * Per-frame, per-camera context handed to render-stage systems via the
  * `RenderCtx` param. The encoder and pass are scoped to the current camera's
  * render pass and become invalid as soon as the engine closes the pass — do
@@ -717,12 +744,39 @@ export interface AppOptions {
    * plugin output to a studio panel, telemetry pipeline, or test buffer.
    */
   readonly logger?: Logger;
+  /**
+   * When `true`, the App measures each system's per-run wall-clock time into a
+   * {@link SystemProfiler} resource, surfaced through
+   * {@link App.describeSchedule}. Off by default — a shipped game pays nothing.
+   * Editors and profiling tools opt in.
+   */
+  readonly profileSystems?: boolean;
+  /**
+   * Origin bucket for systems registered directly on the App (outside any
+   * plugin) when they don't set their own `origin`. Defaults to `'user'`. An
+   * editor host sets this to `'editor'` so its scaffolding systems bucket
+   * correctly, leaving `'user'` for actual application code. Systems registered
+   * by a plugin take the plugin's category and ignore this.
+   */
+  readonly defaultSystemOrigin?: SystemOrigin;
 }
 
 /** Options that gate or order a registered system. */
 export interface AddSystemOptions {
   /** Composable predicate. If present and `test(app)` returns false, the system is skipped on that tick. */
   readonly runIf?: RunCondition;
+  /**
+   * Human-readable display name for tooling. Falls back to `label`, then the
+   * function's name, then a generated `system #<id>` when omitted.
+   */
+  readonly name?: string;
+  /**
+   * Override the system's origin bucket. When omitted, the bucket is taken
+   * from the registering plugin's {@link PluginObject.category}, defaulting to
+   * `'user'`. Set this on systems registered directly on the App (outside any
+   * plugin) to classify them.
+   */
+  readonly origin?: SystemOrigin;
   /**
    * Free-form label for this system within its stage. Other systems in the
    * same stage can reference the label via `before` / `after`. Labels do
@@ -842,12 +896,30 @@ export class App {
   private readonly pluginNameIndex = new Map<string, PluginObject>();
   private readonly pluginsReadyFlags: boolean[] = [];
   private _pluginsState: PluginsState = 'Building';
+  /**
+   * Stack of plugins whose `build()` is currently executing. A stack, not a
+   * single slot, because a plugin's `build()` may add sub-plugins (e.g.
+   * `CorePlugin` adds the renderer plugins). The top entry attributes any
+   * `addSystem` call to its immediate registering plugin.
+   */
+  private readonly pluginBuildStack: PluginObject[] = [];
+  private readonly disabledSystems = new Set<SystemId>();
+  /** Whether per-system timing is measured this run. Read on the hot path, so a plain field. */
+  readonly systemProfilingEnabled: boolean;
+  private readonly systemProfiler: SystemProfiler | undefined;
+  private readonly defaultSystemOrigin: SystemOrigin;
 
   constructor(options: AppOptions) {
     this.renderer = options.renderer;
     this.canvas = options.canvas;
     this.clearColor = options.clearColor ?? { r: 0, g: 0, b: 0, a: 1 };
     this.logger = options.logger ?? engineLogger;
+    this.systemProfilingEnabled = options.profileSystems ?? false;
+    this.defaultSystemOrigin = options.defaultSystemOrigin ?? 'user';
+    if (this.systemProfilingEnabled) {
+      this.systemProfiler = new SystemProfiler();
+      this.insertResource(this.systemProfiler);
+    }
     // The reflection registry must exist before any plugin's build() runs, so
     // plugins can register their component schemas (via registerComponent) as
     // they wire themselves up. CorePlugin — added below — is the first to do so.
@@ -906,7 +978,12 @@ export class App {
     this.pluginRegistry.push(wrapped);
     this.pluginsReadyFlags.push(false);
     this.pluginNameIndex.set(name, wrapped);
-    wrapped.build(this);
+    this.pluginBuildStack.push(wrapped);
+    try {
+      wrapped.build(this);
+    } finally {
+      this.pluginBuildStack.pop();
+    }
     return this;
   }
 
@@ -1262,10 +1339,18 @@ export class App {
       );
     }
     const id = this.nextSystemId++ as SystemId;
+    const buildingPlugin = this.pluginBuildStack[this.pluginBuildStack.length - 1];
+    const name =
+      options?.name ?? options?.label ?? (fn.name !== '' ? fn.name : undefined) ?? `system #${id}`;
+    const origin = options?.origin ?? this.resolveBuildOrigin();
+    const originPlugin = buildingPlugin?.name() ?? null;
     const entry: RegisteredSystem = {
       id,
       params,
       fn: fn as (...args: unknown[]) => void,
+      name,
+      origin,
+      originPlugin,
       ...(options?.runIf !== undefined ? { runIf: options.runIf } : {}),
       ...(options?.label !== undefined ? { label: options.label } : {}),
       ...(options?.before !== undefined ? { before: options.before } : {}),
@@ -1277,6 +1362,88 @@ export class App {
     // sibling stage — labels are stage-local, so no cross-stage invalidation
     // is needed.
     return this;
+  }
+
+  /**
+   * Resolve the origin bucket for a system registered during the current
+   * `build()`, walking the plugin build stack from the innermost plugin
+   * outward and taking the first declared {@link PluginObject.category}. This
+   * lets a parent plugin (e.g. `CorePlugin`) classify every sub-plugin it adds
+   * without each one re-declaring its category. Defaults to `'user'`.
+   */
+  private resolveBuildOrigin(): SystemOrigin {
+    for (let i = this.pluginBuildStack.length - 1; i >= 0; i -= 1) {
+      const category = this.pluginBuildStack[i]!.category?.();
+      if (category !== undefined) return category;
+    }
+    return this.defaultSystemOrigin;
+  }
+
+  /**
+   * Enable or disable a registered system by id. A disabled system is skipped
+   * by the stage runner every frame — its params are not resolved and its body
+   * never runs — until re-enabled. Disabling an engine system can break the
+   * App; this is a tooling power tool, not a gameplay gate (use `runIf` for
+   * that). Unknown ids are ignored.
+   */
+  setSystemEnabled(id: SystemId, enabled: boolean): void {
+    if (enabled) this.disabledSystems.delete(id);
+    else this.disabledSystems.add(id);
+  }
+
+  /** Whether the system with this id currently runs (the inverse of {@link App.isSystemDisabled}). */
+  isSystemEnabled(id: SystemId): boolean {
+    return !this.disabledSystems.has(id);
+  }
+
+  /**
+   * Whether the system with this id is disabled. Checked by the stage and
+   * render-set runners before resolving params.
+   *
+   * @internal
+   */
+  isSystemDisabled(id: SystemId): boolean {
+    return this.disabledSystems.has(id);
+  }
+
+  /**
+   * Fold one system run's duration into the profiler. No-op when profiling is
+   * off. Called by the runners; not part of the public API.
+   *
+   * @internal
+   */
+  recordSystemTime(id: SystemId, ms: number): void {
+    this.systemProfiler?.record(id, ms);
+  }
+
+  /**
+   * Snapshot the schedule for tooling: every registered system, grouped by
+   * stage in execution order, each stage's systems in topological run order.
+   * Includes display name, origin bucket, registering plugin, enabled state,
+   * and — when {@link AppOptions.profileSystems} is on — rolling per-system
+   * timings. Allocates a fresh, reference-free snapshot per call.
+   */
+  describeSchedule(): readonly StageGroup[] {
+    return SCHEDULE_STAGE_ORDER.map((stage) => ({
+      stage,
+      systems: this.stages[stage].ordered().map((sys) => this.toSystemInfo(sys, stage)),
+    }));
+  }
+
+  private toSystemInfo(sys: RegisteredSystem, stage: Stage): SystemInfo {
+    const timing = this.systemProfiler?.get(sys.id);
+    return {
+      id: sys.id,
+      name: sys.name,
+      stage,
+      origin: sys.origin,
+      originPlugin: sys.originPlugin,
+      enabled: !this.disabledSystems.has(sys.id),
+      hasRunCondition: sys.runIf !== undefined,
+      ...(sys.set !== undefined ? { set: sys.set } : {}),
+      ...(sys.label !== undefined ? { label: sys.label } : {}),
+      ...(timing !== undefined ? { lastMs: timing.lastMs, avgMs: timing.avgMs } : {}),
+    };
   }
 
   /**
@@ -1799,7 +1966,9 @@ export class App {
     render: RenderContext | undefined,
   ): void {
     if (!systems || systems.length === 0) return;
+    const profiling = this.systemProfilingEnabled;
     for (const sys of systems) {
+      if (this.disabledSystems.has(sys.id)) continue;
       if (sys.runIf && !sys.runIf.test(this)) continue;
       const lastSeenTick = this.lastSeenTickOf(sys.id);
       const lastSeenFrame = this.lastSeenFrameOf(sys.id);
@@ -1816,12 +1985,14 @@ export class App {
         ...(render !== undefined ? { render } : {}),
       };
       const values = sys.params.map((p) => p.resolve(ctx));
+      const t0 = profiling ? performance.now() : 0;
       try {
         sys.fn(...values);
       } catch (err) {
         this.discardSystemCommands(sys.id);
         throw err;
       }
+      if (profiling) this.recordSystemTime(sys.id, performance.now() - t0);
       // Commands enqueued by render-stage systems flush against the render
       // world via the standard per-system flush path. Cross-world commands
       // are not supported in Phase 1.

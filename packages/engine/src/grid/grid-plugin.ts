@@ -44,6 +44,10 @@ export class GridPlugin implements PluginObject {
     return 'GridPlugin';
   }
 
+  category(): 'engine' {
+    return 'engine';
+  }
+
   build(app: App): void {
     const registry = app.getResource(ShaderRegistry);
     if (registry === undefined) {

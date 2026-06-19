@@ -10,6 +10,7 @@
 import { run } from 'mitata';
 
 import './propagation.bench';
+import './schedule.bench';
 import './calculate-bounds.bench';
 import './commands.bench';
 import './resource-change.bench';
