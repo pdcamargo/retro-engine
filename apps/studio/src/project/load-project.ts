@@ -1,8 +1,21 @@
-import type { App } from '@retro-engine/engine';
+import type { App, PluginObject } from '@retro-engine/engine';
 import type { ProjectDefinition } from '@retro-engine/project';
 import type { EditorExtension } from '@retro-engine/project/editor';
 
 import type { ProjectBuilder } from './project-builder';
+
+// A project's plugins are user code: default their systems to the 'user' origin
+// bucket (the studio's App defaults to 'editor' for its own scaffolding). A plugin
+// that declares its own category keeps it.
+const asUserPlugin = (p: PluginObject): PluginObject => ({
+  name: () => p.name(),
+  category: () => p.category?.() ?? 'user',
+  build: (app: App) => p.build(app),
+  ...(p.isUnique ? { isUnique: () => p.isUnique!() } : {}),
+  ...(p.ready ? { ready: (app: App) => p.ready!(app) } : {}),
+  ...(p.finish ? { finish: (app: App) => p.finish!(app) } : {}),
+  ...(p.cleanup ? { cleanup: (app: App) => p.cleanup!(app) } : {}),
+});
 
 /**
  * Dynamically import a built project module and validate its default export is a
@@ -33,7 +46,7 @@ export const buildProjectModule = async (
  * by the studio boot (a running App rejects `addPlugins`).
  */
 export const applyProject = (app: App, project: ProjectDefinition): void => {
-  app.addPlugins([...project.plugins]);
+  app.addPlugins(project.plugins.map(asUserPlugin));
 };
 
 /**

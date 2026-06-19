@@ -26,6 +26,8 @@ import { buildCodeIndex, captureBaseline, type CodeIndex, parseProjectDescriptor
 import { createProjectIo } from './project/project-io';
 import { projectStateKey } from './project/project-state';
 import { engineVersionMismatch, STUDIO_ENGINE_VERSION } from './project/engine-version';
+import { listProjectFiles } from './project/list-files';
+import { loadProjectScene, scanProjectManifest } from './project/project-scene';
 
 // Publish the studio's engine packages so built user code resolves to live instances.
 publishHost();
@@ -310,10 +312,25 @@ void (async (): Promise<void> => {
     })();
   };
 
-  // Opinionated, host-agnostic scene load: today an in-memory showcase, later a
-  // browser endpoint or a Tauri file behind the same SceneSource contract.
-  const initialScene = await inMemorySceneSource(SHOWCASE_SCENE).load();
-  installShowcaseScene(app, { material: stdMat, scene: initialScene });
+  // Host-agnostic scene load: the open project's startup scene from disk, or the
+  // in-memory showcase when no project is open (or its scene can't be resolved).
+  let sceneLoaded = false;
+  if (projectDir !== null && descriptor?.startupScene != null && descriptor.startupScene.length > 0) {
+    try {
+      const io = createProjectIo(platform, projectDir);
+      const files = await listProjectFiles(platform);
+      const manifest = await scanProjectManifest(io.source, files);
+      sceneLoaded = await loadProjectScene(app, io.source, manifest, descriptor.startupScene);
+      if (sceneLoaded) console.log(`[studio] loaded startup scene ${descriptor.startupScene}`);
+      else console.warn(`[studio] startup scene ${descriptor.startupScene} not found in project`);
+    } catch (err) {
+      console.error('[studio] failed to load project scene', err);
+    }
+  }
+  if (!sceneLoaded) {
+    const initialScene = await inMemorySceneSource(SHOWCASE_SCENE).load();
+    installShowcaseScene(app, { material: stdMat, scene: initialScene });
+  }
 
   app.addPlugin(
     uiOverlayPlugin({

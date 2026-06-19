@@ -27,6 +27,14 @@ Bun.serve({
       if (sub === undefined) return new Response('forbidden', { status: 403 });
       return new Response(Bun.file(`${import.meta.dir}/fonts/${sub}`));
     },
+    // List every project file (browser fallback for the native project_read_dir).
+    '/project-files': async () => {
+      const projectDir = process.env.RETRO_PROJECT_DIR;
+      if (projectDir === undefined || projectDir.length === 0) return Response.json([]);
+      const files: string[] = [];
+      for await (const f of new Bun.Glob('**/*').scan({ cwd: projectDir, onlyFiles: true })) files.push(f);
+      return Response.json(files);
+    },
     // Read/write a project's files (browser fallback for the native fs source/sink).
     // Scoped to RETRO_PROJECT_DIR; the native studio scopes to the opened root in Rust.
     '/project/*': async (req) => {
