@@ -128,6 +128,7 @@ export {
 } from './palette';
 export { uiOverlayPlugin, UiOverlayPlugin } from './plugin';
 export type { UiLayoutOptions, UiOverlayOptions } from './plugin';
+export { currentSimState, initSimState, requestSimState, SimState } from './sim-state';
 export { resolveTheme } from './theme';
 export { defaultTokens, FontScale } from './tokens';
 export type { RetroPalette, ThemeMetrics, ThemeTokens } from './tokens';

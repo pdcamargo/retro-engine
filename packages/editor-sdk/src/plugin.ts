@@ -94,6 +94,10 @@ export class UiOverlayPlugin implements PluginObject {
     return 'UiOverlayPlugin';
   }
 
+  category(): 'editor' {
+    return 'editor';
+  }
+
   build(app: App): void {
     app.addSystem(
       'render',
