@@ -1,0 +1,41 @@
+{
+  "name": "@retro-engine/create-project",
+  "version": "0.0.0",
+  "description": "Scaffolder for a new Retro Engine game project (project.retroengine + Bun/TS project skeleton).",
+  "type": "module",
+  "bin": {
+    "create-retro-project": "./src/cli.ts"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/scaffold.ts",
+      "default": "./src/scaffold.ts"
+    }
+  },
+  "publishConfig": {
+    "access": "restricted",
+    "registry": "https://npm.pkg.github.com",
+    "bin": {
+      "create-retro-project": "./dist/cli.js"
+    },
+    "exports": {
+      ".": {
+        "types": "./dist/scaffold.d.ts",
+        "default": "./dist/scaffold.js"
+      }
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "lint": "oxlint .",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}

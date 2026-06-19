@@ -58,6 +58,16 @@
       "name": "@retro-engine/assets",
       "version": "0.0.0",
     },
+    "packages/create-project": {
+      "name": "@retro-engine/create-project",
+      "version": "0.0.0",
+      "bin": {
+        "create-retro-project": "./src/cli.ts",
+      },
+      "devDependencies": {
+        "@types/bun": "latest",
+      },
+    },
     "packages/ecs": {
       "name": "@retro-engine/ecs",
       "version": "0.0.0",
@@ -109,6 +119,22 @@
         "wgpu-matrix": "^3.0.0",
       },
     },
+    "packages/project": {
+      "name": "@retro-engine/project",
+      "version": "0.0.0",
+      "dependencies": {
+        "@retro-engine/engine": "workspace:*",
+      },
+      "devDependencies": {
+        "@retro-engine/editor-sdk": "workspace:*",
+      },
+      "peerDependencies": {
+        "@retro-engine/editor-sdk": "workspace:*",
+      },
+      "optionalPeers": [
+        "@retro-engine/editor-sdk",
+      ],
+    },
     "packages/reflect": {
       "name": "@retro-engine/reflect",
       "version": "0.0.0",
@@ -141,6 +167,10 @@
       "devDependencies": {
         "@webgpu/types": "latest",
       },
+    },
+    "packages/tsconfig": {
+      "name": "@retro-engine/tsconfig",
+      "version": "0.0.0",
     },
   },
   "patchedDependencies": {
@@ -237,6 +267,8 @@
 
     "@retro-engine/assets": ["@retro-engine/assets@workspace:packages/assets"],
 
+    "@retro-engine/create-project": ["@retro-engine/create-project@workspace:packages/create-project"],
+
     "@retro-engine/ecs": ["@retro-engine/ecs@workspace:packages/ecs"],
 
     "@retro-engine/editor-platform": ["@retro-engine/editor-platform@workspace:packages/editor-platform"],
@@ -251,6 +283,8 @@
 
     "@retro-engine/playground": ["@retro-engine/playground@workspace:apps/playground"],
 
+    "@retro-engine/project": ["@retro-engine/project@workspace:packages/project"],
+
     "@retro-engine/reflect": ["@retro-engine/reflect@workspace:packages/reflect"],
 
     "@retro-engine/renderer-core": ["@retro-engine/renderer-core@workspace:packages/renderer-core"],
@@ -260,6 +294,8 @@
     "@retro-engine/renderer-webgpu": ["@retro-engine/renderer-webgpu@workspace:packages/renderer-webgpu"],
 
     "@retro-engine/studio": ["@retro-engine/studio@workspace:apps/studio"],
+
+    "@retro-engine/tsconfig": ["@retro-engine/tsconfig@workspace:packages/tsconfig"],
 
     "@tauri-apps/api": ["@tauri-apps/api@2.11.0", "", {}, "sha512-7CinYODhky9lmO23xHnUFv0Xt43fbtWMyxZcLcRBlFkcgXKuEirBvHpmtJ89YMhyeGcq20Wuc47Fa4XjyniywA=="],
 

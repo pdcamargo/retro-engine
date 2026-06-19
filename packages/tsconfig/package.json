@@ -1,0 +1,17 @@
+{
+  "name": "@retro-engine/tsconfig",
+  "version": "0.0.0",
+  "description": "Shared TypeScript base config for Retro Engine game projects.",
+  "type": "module",
+  "exports": {
+    "./tsconfig.json": "./tsconfig.json"
+  },
+  "publishConfig": {
+    "access": "restricted",
+    "registry": "https://npm.pkg.github.com"
+  },
+  "files": [
+    "tsconfig.json",
+    "README.md"
+  ]
+}

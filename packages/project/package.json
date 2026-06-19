@@ -1,0 +1,58 @@
+{
+  "name": "@retro-engine/project",
+  "version": "0.0.0",
+  "description": "Entry-point contract for a Retro Engine game project: defineProject (game runtime) and defineEditorExtensions (studio-only authoring extensions).",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./editor": {
+      "types": "./src/editor.ts",
+      "default": "./src/editor.ts"
+    }
+  },
+  "publishConfig": {
+    "access": "restricted",
+    "registry": "https://npm.pkg.github.com",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "./editor": {
+        "types": "./dist/editor.d.ts",
+        "default": "./dist/editor.js"
+      }
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "lint": "oxlint .",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@retro-engine/engine": "workspace:*"
+  },
+  "peerDependencies": {
+    "@retro-engine/editor-sdk": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "@retro-engine/editor-sdk": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@retro-engine/editor-sdk": "workspace:*"
+  }
+}
