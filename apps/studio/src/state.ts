@@ -6,6 +6,7 @@ import { type Entity } from '@retro-engine/ecs';
 import { defaultViewportGizmoOptions, type ViewportGizmoOptions } from '@retro-engine/editor-sdk';
 
 import { type ViewMode } from './editor-camera';
+import type { ProjectBrowser } from './project/project-browser';
 import { type Scene } from './scene-data';
 
 export type TransformTool = 'select' | 'move' | 'rotate' | 'scale' | 'all';
@@ -50,6 +51,8 @@ export interface StudioState {
   gizmos: boolean;
   showProfiler: boolean;
   fps: number;
+  /** Live project asset browser (file index + thumbnails), or `null` with no project open. */
+  browser: ProjectBrowser | null;
   /** Asset browser. */
   assetSearch: string;
   assetZoom: AssetZoom;
@@ -80,6 +83,7 @@ export const createState = (scene: Scene): StudioState => ({
   gizmos: true,
   showProfiler: false,
   fps: 60,
+  browser: null,
   assetSearch: '',
   assetZoom: 'md',
   entityFilter: '',

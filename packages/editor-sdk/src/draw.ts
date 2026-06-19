@@ -1,4 +1,4 @@
-import { type ImDrawList, ImGui, ImGuiCol, ImVec2 } from '@mori2003/jsimgui';
+import { type ImDrawList, ImGui, ImGuiCol, type ImTextureRef, ImVec2 } from '@mori2003/jsimgui';
 
 import { packU32 } from './palette';
 import type { Vec2 } from './units';
@@ -36,6 +36,11 @@ export class Draw {
 
   line(a: Vec2, b: Vec2, col: number, thickness = 1): void {
     this.dl.AddLine(v(a), v(b), col, thickness);
+  }
+
+  /** Draw a registered texture (an {@link ImTextureRef}) filling `[min, max]`. */
+  image(ref: ImTextureRef, min: Vec2, max: Vec2): void {
+    this.dl.AddImage(ref, v(min), v(max), ZERO, new ImVec2(1, 1));
   }
 
   text(pos: Vec2, col: number, value: string): void {

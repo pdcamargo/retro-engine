@@ -14,6 +14,7 @@ import {
   type Widgets,
 } from '@retro-engine/editor-sdk';
 
+import type { BrowserAsset, ProjectBrowser } from './project/project-browser';
 import { type AssetItem, type ConsoleLevel } from './scene-data';
 import { type AssetZoom, type StudioState, tileFor } from './state';
 import { enabledSystemCount, flattenSystems, groupSystems, pluginLabel, systemsFrameMs } from './systems-view';
@@ -176,6 +177,50 @@ const renderAssetCard = (widgets: Widgets, state: StudioState, asset: AssetItem,
   else if (r.clicked) state.selected = asset.name;
 };
 
+// A live project asset tile: paints the generated thumbnail once ready (image
+// assets), otherwise the widget's procedural preview for the type.
+const renderBrowserCard = (
+  widgets: Widgets,
+  browser: ProjectBrowser,
+  state: StudioState,
+  asset: BrowserAsset,
+  tile: number,
+): void => {
+  const thumbnail = asset.thumbnailable ? browser.thumbnails.get(asset.guid, asset.location) : undefined;
+  const r = widgets.assetCard({
+    id: asset.guid,
+    name: asset.name,
+    type: asset.type,
+    meta: asset.meta,
+    tile,
+    selected: state.selected === asset.guid,
+    thumbnail,
+  });
+  if (r.clicked) state.selected = asset.guid;
+};
+
+// Lay out asset tiles in a wrapping grid (or a single column in list mode).
+const layoutGrid = <T>(
+  ui: EditorContext['ui'],
+  zoom: AssetZoom,
+  items: readonly T[],
+  draw: (item: T, tile: number) => void,
+): void => {
+  if (zoom === 'list') {
+    for (const item of items) draw(item, 28);
+    return;
+  }
+  const tile = tileFor(zoom);
+  const gap = 14;
+  const cols = Math.max(1, Math.floor((ui.contentAvail()[0] + gap) / (tile + gap)));
+  let col = 0;
+  for (const item of items) {
+    if (col > 0) ui.sameLine();
+    draw(item, tile);
+    col = (col + 1) % cols;
+  }
+};
+
 /** The Assets panel — a zoomable, filterable tile grid with sprite-sheet drawers. */
 export const assetsPanel = (state: StudioState): PanelDef => ({
   id: '/assets',
@@ -183,7 +228,7 @@ export const assetsPanel = (state: StudioState): PanelDef => ({
   icon: 'folder-open',
   slot: 'bottom',
   flush: true,
-  count: () => state.scene.assets.length,
+  count: () => state.browser?.assets.length ?? state.scene.assets.length,
   render: ({ ui, widgets }: EditorContext): void => {
     // Sticky toolbar: search, Types dropdown, and the zoom range bar (list → lg).
     const zooms: AssetZoom[] = ['list', 'sm', 'md', 'lg'];
@@ -223,7 +268,21 @@ export const assetsPanel = (state: StudioState): PanelDef => ({
     ui.separator();
 
     const filter = state.assetSearch.trim().toLowerCase();
-    const assets = state.scene.assets.filter((a) => filter === '' || a.name.toLowerCase().includes(filter));
+    const matches = (name: string): boolean => filter === '' || name.toLowerCase().includes(filter);
+
+    // Live project browser: real project assets with generated thumbnails.
+    const browser = state.browser;
+    if (browser !== null) {
+      const assets = browser.assets.filter((a) => matches(a.name));
+      ui.child('assets-grid', { size: [0, 0], border: false, padding: [10, 10] }, () => {
+        layoutGrid(ui, state.assetZoom, assets, (asset, tile) =>
+          renderBrowserCard(widgets, browser, state, asset, tile),
+        );
+      });
+      return;
+    }
+
+    const assets = state.scene.assets.filter((a) => matches(a.name));
     ui.child('assets-grid', { size: [0, 0], border: false, padding: [10, 10] }, () => {
       if (state.assetZoom === 'list') {
         for (const asset of assets) renderAssetCard(widgets, state, asset, 28);

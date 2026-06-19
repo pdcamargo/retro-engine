@@ -31,6 +31,8 @@ import { listProjectFiles } from './project/list-files';
 import { loadProjectScene, scanProjectManifest } from './project/project-scene';
 import { setNativeProjectRoot } from './project/tauri-project-io';
 import { watchProject } from './project/project-watcher';
+import { buildBrowserAssets } from './project/project-browser';
+import { ThumbnailService } from './thumbnails/thumbnail-service';
 
 // Mirror webview console to the native terminal (dev observability under Tauri).
 mirrorConsoleToNative();
@@ -332,15 +334,25 @@ void (async (): Promise<void> => {
 
   // Host-agnostic scene load: the open project's startup scene from disk, or the
   // in-memory showcase when no project is open (or its scene can't be resolved).
+  // The manifest scan also drives the asset browser + thumbnails (ADR-0101).
   let sceneLoaded = false;
-  if (projectDir !== null && descriptor?.startupScene != null && descriptor.startupScene.length > 0) {
+  if (projectDir !== null) {
     try {
       const io = createProjectIo(platform, projectDir);
       const files = await listProjectFiles(platform);
       const manifest = await scanProjectManifest(io.source, files);
-      sceneLoaded = await loadProjectScene(app, io.source, manifest, descriptor.startupScene);
-      if (sceneLoaded) console.log(`[studio] loaded startup scene ${descriptor.startupScene}`);
-      else console.warn(`[studio] startup scene ${descriptor.startupScene} not found in project`);
+      // The asset browser shows the project's real assets with generated previews,
+      // generated lazily as the panel draws each visible tile (once the renderer's
+      // device is up). Pre-warming + an on-disk cache are a follow-up.
+      state.browser = {
+        assets: buildBrowserAssets(manifest),
+        thumbnails: new ThumbnailService(renderer, io.source),
+      };
+      if (descriptor?.startupScene != null && descriptor.startupScene.length > 0) {
+        sceneLoaded = await loadProjectScene(app, io.source, manifest, descriptor.startupScene);
+        if (sceneLoaded) console.log(`[studio] loaded startup scene ${descriptor.startupScene}`);
+        else console.warn(`[studio] startup scene ${descriptor.startupScene} not found in project`);
+      }
     } catch (err) {
       console.error('[studio] failed to load project scene', err);
     }

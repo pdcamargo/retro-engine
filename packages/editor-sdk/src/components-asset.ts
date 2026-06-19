@@ -1,4 +1,4 @@
-import { ImGui, ImGuiCol } from '@mori2003/jsimgui';
+import { ImGui, ImGuiCol, type ImTextureRef } from '@mori2003/jsimgui';
 
 import { Draw } from './draw';
 import { drawIcon } from './icon-shapes';
@@ -63,6 +63,12 @@ export interface AssetCardOptions {
   readonly meta?: string | undefined;
   /** Preview tile size in px (e.g. 64 / 88 / 120). */
   readonly tile: number;
+  /**
+   * A generated preview texture to paint in the tile instead of the procedural
+   * placeholder — one master image sampled at whatever `tile` size is shown.
+   * Absent until the thumbnail is ready (the procedural preview shows meanwhile).
+   */
+  readonly thumbnail?: ImTextureRef | undefined;
   readonly selected?: boolean | undefined;
   readonly checked?: boolean | undefined;
   readonly error?: boolean | undefined;
@@ -87,6 +93,14 @@ const drawPreview = (o: AssetCardOptions, min: Vec2, size: number): void => {
   if (o.error === true) {
     dl.rectFilled(min, max, srgbU32(p.red400, 0.18), 3);
     drawIcon('image', [cx - 9, cy - 9], 18, srgbU32(p.red400));
+    return;
+  }
+  // A ready thumbnail wins over the procedural placeholder: checkerboard behind
+  // (so transparent images read correctly) then the generated master, sampled to
+  // the tile size.
+  if (o.thumbnail !== undefined) {
+    dl.checkerboard(min, max, 8, srgbU32(p.gray5), srgbU32(p.gray3));
+    dl.image(o.thumbnail, min, max);
     return;
   }
   const info = ASSET_TYPES[o.type];
