@@ -9,7 +9,8 @@ import { createWebGPURenderer } from '@retro-engine/renderer-webgpu';
 
 import { publishHost } from '../host-bridge';
 import { buildProject } from './build-project';
-import { applyProject, loadProjectModule } from './load-project';
+import { applyProject, loadEditorExtensions, loadProjectModule } from './load-project';
+import type { InspectorRegistry } from '@retro-engine/editor-sdk';
 
 // Publish the studio's live engine packages so built user code resolves to them.
 publishHost();
@@ -84,6 +85,34 @@ describe('project loader', () => {
       const mana = registry.get('Mana');
       expect(mana).toBeDefined();
       expect(mana!.attachable).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('builds + loads an editor-extensions entry and runs its setup', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'retro-edit-'));
+    try {
+      writeFileSync(
+        join(dir, 'editor.ts'),
+        `
+          import { defineEditorExtensions } from '@retro-engine/project/editor';
+          export default defineEditorExtensions({
+            setup(registry) { registry.registerComponentEditor('Health', {}); },
+          });
+        `,
+      );
+      const { code } = await buildProject({ entrypoint: join(dir, 'editor.ts') });
+      const outFile = join(dir, 'editor.built.mjs');
+      writeFileSync(outFile, code);
+
+      const ext = await loadEditorExtensions(outFile);
+      const registered: string[] = [];
+      const stub = {
+        registerComponentEditor: (key: string) => registered.push(key),
+      } as unknown as InspectorRegistry;
+      ext.setup(stub);
+      expect(registered).toEqual(['Health']);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

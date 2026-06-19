@@ -12,16 +12,23 @@ export interface BuildResult {
  * server, a Tauri implementation drives the Bun sidecar (added later).
  */
 export interface ProjectBuilder {
-  build(projectDir: string): Promise<BuildResult>;
+  /**
+   * Build a project entry (relative to the project, default `src/game.ts`) into a
+   * loadable module URL. Pass `src/editor.ts` to build the editor-extensions entry.
+   */
+  build(projectDir: string, entry?: string): Promise<BuildResult>;
 }
+
+const entryQuery = (entry: string | undefined): string =>
+  entry === undefined ? '' : `&entry=${encodeURIComponent(entry)}`;
 
 /**
  * Browser builder: POST the project dir to the dev server's `/project/build`
  * route, receive the bundled JS, and wrap it in a blob URL to import.
  */
 export const endpointProjectBuilder = (baseUrl = ''): ProjectBuilder => ({
-  async build(projectDir) {
-    const res = await fetch(`${baseUrl}/project/build?dir=${encodeURIComponent(projectDir)}`);
+  async build(projectDir, entry) {
+    const res = await fetch(`${baseUrl}/project/build?dir=${encodeURIComponent(projectDir)}${entryQuery(entry)}`);
     if (!res.ok) {
       throw new Error(`project build failed (${res.status}): ${await res.text()}`);
     }
@@ -38,9 +45,9 @@ export const endpointProjectBuilder = (baseUrl = ''): ProjectBuilder => ({
  * boot path (ADR-0078).
  */
 export const tauriProjectBuilder = (): ProjectBuilder => ({
-  async build(projectDir) {
+  async build(projectDir, entry) {
     const { invoke } = await import('@tauri-apps/api/core');
-    const code = await invoke<string>('project_build', { projectDir });
+    const code = await invoke<string>('project_build', { projectDir, entry: entry ?? null });
     const blob = new Blob([code], { type: 'text/javascript' });
     return { entryUrl: URL.createObjectURL(blob) };
   },

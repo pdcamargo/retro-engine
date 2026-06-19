@@ -48,11 +48,14 @@ Bun.serve({
     // Build a project's user code into a host-resolved ESM bundle (browser path;
     // the Tauri sidecar serves the same artifact natively).
     '/project/build': async (req) => {
-      const dir = new URL(req.url).searchParams.get('dir');
+      const params = new URL(req.url).searchParams;
+      const dir = params.get('dir');
       if (dir === null || dir.length === 0) return new Response('missing dir', { status: 400 });
+      const entry = params.get('entry') ?? 'src/game.ts';
+      if (entry.split('/').includes('..')) return new Response('forbidden', { status: 403 });
       const { buildProject } = await import('./src/project/build-project');
       try {
-        const { code } = await buildProject({ entrypoint: `${dir}/src/game.ts` });
+        const { code } = await buildProject({ entrypoint: `${dir}/${entry}` });
         return new Response(code, { headers: { 'content-type': 'text/javascript' } });
       } catch (err) {
         return new Response(String(err), { status: 500 });

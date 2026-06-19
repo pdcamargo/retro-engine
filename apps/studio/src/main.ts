@@ -20,11 +20,12 @@ import { createImGuiOverlay, createWebGPURenderer } from '@retro-engine/renderer
 
 import { publishHost } from './host-bridge';
 import { createProjectBuilder } from './project/project-builder';
-import { applyProject, buildProjectModule } from './project/load-project';
+import { applyProject, buildEditorExtensions, buildProjectModule } from './project/load-project';
 import { currentProjectDir, setCurrentProjectDir } from './project/current-project';
 import { buildCodeIndex, captureBaseline, type CodeIndex, parseProjectDescriptor } from './project/project-index';
 import { createProjectIo } from './project/project-io';
 import { projectStateKey } from './project/project-state';
+import { engineVersionMismatch, STUDIO_ENGINE_VERSION } from './project/engine-version';
 
 // Publish the studio's engine packages so built user code resolves to live instances.
 publishHost();
@@ -237,16 +238,21 @@ void (async (): Promise<void> => {
   // Read the open project's descriptor (best-effort) so its dock layout + window
   // state persist per-project (keyed by project id in the app config), not globally.
   const projectDir = await currentProjectDir(platform);
-  let projectId: string | null = null;
+  let descriptor: ReturnType<typeof parseProjectDescriptor> | null = null;
   if (projectDir !== null) {
     try {
       const io = createProjectIo(platform, projectDir);
-      const descriptor = parseProjectDescriptor(new TextDecoder().decode(await io.source.read('project.retroengine')));
-      projectId = descriptor.projectId.length > 0 ? descriptor.projectId : null;
+      descriptor = parseProjectDescriptor(new TextDecoder().decode(await io.source.read('project.retroengine')));
+      if (engineVersionMismatch(descriptor.engine, STUDIO_ENGINE_VERSION)) {
+        console.warn(
+          `[studio] project targets engine ${descriptor.engine}, studio provides ${STUDIO_ENGINE_VERSION} — types may not match`,
+        );
+      }
     } catch (err) {
       console.error('[studio] could not read project.retroengine', err);
     }
   }
+  const projectId = descriptor !== null && descriptor.projectId.length > 0 ? descriptor.projectId : null;
   const layoutKey = projectId !== null ? projectStateKey(projectId, 'layout') : LAYOUT_KEY;
   const savedLayout = await platform.preferences.get(layoutKey);
 
@@ -264,6 +270,17 @@ void (async (): Promise<void> => {
       // beyond the engine + editor baseline captured above.
       projectCodeIndex = buildCodeIndex(app, editor.inspector, baseline);
       console.log(`[studio] loaded project ${projectDir}: ${project.plugins.map((p) => p.name()).join(', ')}`);
+
+      // Editor extensions: a second build artifact, loaded only here (never in a
+      // game build), registering custom inspectors into the studio-lifetime registry.
+      if (descriptor?.editorEntry != null) {
+        try {
+          const ext = await buildEditorExtensions(createProjectBuilder(), projectDir, descriptor.editorEntry);
+          ext.setup(editor.inspector);
+        } catch (err) {
+          console.error('[studio] failed to load editor extensions', err);
+        }
+      }
     } catch (err) {
       console.error(`[studio] failed to load project ${projectDir}`, err);
     }

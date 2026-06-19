@@ -1,5 +1,6 @@
 import type { App } from '@retro-engine/engine';
 import type { ProjectDefinition } from '@retro-engine/project';
+import type { EditorExtension } from '@retro-engine/project/editor';
 
 import type { ProjectBuilder } from './project-builder';
 
@@ -33,4 +34,29 @@ export const buildProjectModule = async (
  */
 export const applyProject = (app: App, project: ProjectDefinition): void => {
   app.addPlugins([...project.plugins]);
+};
+
+/**
+ * Dynamically import a built editor-extensions module and validate its default
+ * export. Editor extensions run only in the studio (never a game build) and
+ * register against the studio-lifetime inspector registry, so they survive
+ * project/world reloads.
+ */
+export const loadEditorExtensions = async (entryUrl: string): Promise<EditorExtension> => {
+  const mod = (await import(entryUrl)) as { default?: EditorExtension };
+  const ext = mod.default;
+  if (ext === undefined || typeof ext.setup !== 'function') {
+    throw new Error('editor entry must default-export defineEditorExtensions({ setup })');
+  }
+  return ext;
+};
+
+/** Build a project's editor-extensions entry (a second artifact) and load it. */
+export const buildEditorExtensions = async (
+  builder: ProjectBuilder,
+  projectDir: string,
+  entry: string,
+): Promise<EditorExtension> => {
+  const { entryUrl } = await builder.build(projectDir, entry);
+  return loadEditorExtensions(entryUrl);
 };

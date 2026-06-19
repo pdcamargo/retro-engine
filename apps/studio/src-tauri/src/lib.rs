@@ -128,7 +128,11 @@ fn pref_remove(app: tauri::AppHandle, key: String) -> Result<(), String> {
 // resolves those imports to the studio's live instances at runtime. Returns the
 // bundle text; the frontend wraps it in a blob URL and imports it.
 #[tauri::command]
-async fn project_build(app: tauri::AppHandle, project_dir: String) -> Result<String, String> {
+async fn project_build(
+    app: tauri::AppHandle,
+    project_dir: String,
+    entry: Option<String>,
+) -> Result<String, String> {
     use tauri::path::BaseDirectory;
     use tauri_plugin_shell::ShellExt;
 
@@ -136,7 +140,11 @@ async fn project_build(app: tauri::AppHandle, project_dir: String) -> Result<Str
         .path()
         .resolve("scripts/build-project.js", BaseDirectory::Resource)
         .map_err(|e| e.to_string())?;
-    let entry = format!("{project_dir}/src/game.ts");
+    let rel_entry = entry.unwrap_or_else(|| "src/game.ts".to_string());
+    if rel_entry.split(['/', '\\']).any(|seg| seg == "..") {
+        return Err(format!("project build entry traversal rejected: {rel_entry}"));
+    }
+    let entry = format!("{project_dir}/{rel_entry}");
 
     let install = app
         .shell()
