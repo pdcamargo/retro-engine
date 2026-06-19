@@ -20,7 +20,8 @@ import { createImGuiOverlay, createWebGPURenderer } from '@retro-engine/renderer
 
 import { publishHost } from './host-bridge';
 import { createProjectBuilder } from './project/project-builder';
-import { buildProjectModule } from './project/load-project';
+import { applyProject, buildProjectModule } from './project/load-project';
+import { currentProjectDir, setCurrentProjectDir } from './project/current-project';
 
 // Publish the studio's engine packages so built user code resolves to live instances.
 publishHost();
@@ -231,6 +232,28 @@ void (async (): Promise<void> => {
   (window as unknown as { __studioPrefs: typeof platform.preferences }).__studioPrefs = platform.preferences;
 
   const savedLayout = await platform.preferences.get(LAYOUT_KEY);
+
+  // Open project / App-rebuild: opening a project re-launches the studio session
+  // (a clean App rebuild). When one is set, build + apply its plugins now — the
+  // App is still in its Building phase, so the project's components, systems, and
+  // resources register into the live App + AppTypeRegistry the editor reads.
+  const projectDir = await currentProjectDir(platform);
+  if (projectDir !== null) {
+    try {
+      const project = await buildProjectModule(createProjectBuilder(), projectDir);
+      applyProject(app, project);
+      console.log(`[studio] loaded project ${projectDir}: ${project.plugins.map((p) => p.name()).join(', ')}`);
+    } catch (err) {
+      console.error(`[studio] failed to load project ${projectDir}`, err);
+    }
+  }
+  // Persist a project + reload to (re)build the studio session into it.
+  (window as unknown as { __studioOpenProject: (dir: string) => Promise<void> }).__studioOpenProject = async (
+    dir: string,
+  ) => {
+    await setCurrentProjectDir(platform, dir);
+    window.location.reload();
+  };
 
   // Opinionated, host-agnostic scene load: today an in-memory showcase, later a
   // browser endpoint or a Tauri file behind the same SceneSource contract.
