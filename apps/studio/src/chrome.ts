@@ -31,14 +31,22 @@ const vsep = (ui: EditorContext['ui']): void => {
   ui.sameLine();
 };
 
+/** Studio actions the menu bar invokes that live outside the editor state. */
+export interface MenuActions {
+  /** Prompt for and open a project, re-launching the studio session into it. */
+  openProject(): void;
+}
+
 /** The menu bar definitions — File / Edit / Entity / Component / Run / Help. */
-export const menus = (state: StudioState, history: History): MenuDef[] => [
+export const menus = (state: StudioState, history: History, actions: MenuActions): MenuDef[] => [
   {
     id: '/file',
     label: 'File',
     items: () => [
+      { label: 'Open Project…', icon: 'folder-open', onClick: () => actions.openProject() },
+      { separator: true },
       { label: 'New Scene', icon: 'plus', shortcut: '⌘N' },
-      { label: 'Open Scene…', icon: 'folder-open', shortcut: '⌘O' },
+      { label: 'Open Scene…', shortcut: '⌘O' },
       { separator: true },
       { label: 'Save', icon: 'check', shortcut: '⌘S' },
       { label: 'Save As…', shortcut: '⇧⌘S' },

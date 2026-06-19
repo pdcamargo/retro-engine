@@ -154,7 +154,9 @@ editor
   .addPanel(profilerPanel(app))
   .setToolbar(toolbar(state, editor, app))
   .setStatusBar(statusBar(state, app));
-for (const menu of menus(state, history)) editor.addMenu(menu);
+// Set once the platform host resolves (in the async boot tail); the menu calls through it.
+let openProjectAction: () => void = () => {};
+for (const menu of menus(state, history, { openProject: () => openProjectAction() })) editor.addMenu(menu);
 
 const fetchFont = async (file: string): Promise<Uint8Array> => {
   const res = await fetch(`/fonts/${file}`);
@@ -288,11 +290,24 @@ void (async (): Promise<void> => {
   (window as unknown as { __studioProjectIndex: () => CodeIndex | null }).__studioProjectIndex = () =>
     projectCodeIndex;
   // Persist a project + reload to (re)build the studio session into it.
-  (window as unknown as { __studioOpenProject: (dir: string) => Promise<void> }).__studioOpenProject = async (
-    dir: string,
-  ) => {
+  const openProjectInto = async (dir: string): Promise<void> => {
     await setCurrentProjectDir(platform, dir);
     window.location.reload();
+  };
+  (window as unknown as { __studioOpenProject: (dir: string) => Promise<void> }).__studioOpenProject = openProjectInto;
+
+  // Wire the File ▸ Open Project… menu now that the host is known: native folder
+  // dialog under Tauri, a path prompt in a plain browser.
+  openProjectAction = (): void => {
+    void (async (): Promise<void> => {
+      let dir: string | null = null;
+      if (platform.openProject !== undefined) {
+        dir = await platform.openProject();
+      } else {
+        dir = window.prompt('Open project — absolute path to the project folder:');
+      }
+      if (dir !== null && dir.length > 0) await openProjectInto(dir);
+    })();
   };
 
   // Opinionated, host-agnostic scene load: today an in-memory showcase, later a

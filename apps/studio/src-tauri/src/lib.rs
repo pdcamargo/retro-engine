@@ -136,10 +136,17 @@ async fn project_build(
     use tauri::path::BaseDirectory;
     use tauri_plugin_shell::ShellExt;
 
+    // Bundled resource in a shipped app; in `tauri dev` the resource dir has no
+    // copy, so fall back to the script built into src-tauri/scripts by the
+    // beforeDevCommand (cwd is src-tauri during dev).
     let script = app
         .path()
         .resolve("scripts/build-project.js", BaseDirectory::Resource)
-        .map_err(|e| e.to_string())?;
+        .ok()
+        .filter(|p| p.exists())
+        .or_else(|| std::env::current_dir().ok().map(|d| d.join("scripts/build-project.js")))
+        .filter(|p| p.exists())
+        .ok_or_else(|| "build script not found (run `bun run build:project-script`)".to_string())?;
     let rel_entry = entry.unwrap_or_else(|| "src/game.ts".to_string());
     if rel_entry.split(['/', '\\']).any(|seg| seg == "..") {
         return Err(format!("project build entry traversal rejected: {rel_entry}"));
