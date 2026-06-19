@@ -1,7 +1,7 @@
 # Standalone Studio — runtime integration
 
 - **Created:** 2026-06-19
-- **Status:** Phases 1–2 done (ADR-0099, ADR-0100) · Phases 3–4 pending
+- **Status:** Phases 1–3 done (ADR-0099, ADR-0100, ADR-0101) · Phase 4 pending
 
 ## Goal
 
