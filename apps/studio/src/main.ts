@@ -18,6 +18,13 @@ import {
 } from '@retro-engine/editor-sdk';
 import { createImGuiOverlay, createWebGPURenderer } from '@retro-engine/renderer-webgpu';
 
+import { publishHost } from './host-bridge';
+import { createProjectBuilder } from './project/project-builder';
+import { buildProjectModule } from './project/load-project';
+
+// Publish the studio's engine packages so built user code resolves to live instances.
+publishHost();
+
 import { drawDialogs, menus, statusBar, toolbar } from './chrome';
 import { SceneCameraController } from './editor-camera';
 import { EditorOnly } from './editor-markers';
@@ -165,6 +172,15 @@ const probe: StudioProbe = {
   platformKind: 'browser',
 };
 (window as unknown as { __studioProbe: StudioProbe }).__studioProbe = probe;
+// Dev helper / Playwright probe: build + load a project dir through the host-bridge
+// loader and report what came back (meta + plugin names), proving user code resolves
+// against the studio's live engine. Applying it to a fresh App is the App-rebuild path.
+(window as unknown as { __studioProject: (dir: string) => Promise<unknown> }).__studioProject = async (
+  dir: string,
+) => {
+  const project = await buildProjectModule(createProjectBuilder(), dir);
+  return { meta: project.meta ?? null, plugins: project.plugins.map((p) => p.name()) };
+};
 // Dev helper: capture the live dock layout to bake as a default.
 (window as unknown as { __studioLayout: () => string }).__studioLayout = () => saveLayout();
 // Dev helper: read the live schedule + play state, so the Playwright fidelity
