@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'bun:test';
 
-import { parseAssetManifest } from '@retro-engine/assets';
 import { World, type ComponentType, type Entity } from '@retro-engine/ecs';
 import { vec3 } from '@retro-engine/math';
 
@@ -28,6 +27,7 @@ import {
   Transform,
   applyCompletedLoads,
   createMeshImporter,
+  scanMetaManifest,
   serializeProject,
   u16Indices,
 } from '../index';
@@ -63,8 +63,6 @@ const find = <T extends object>(world: World, type: ComponentType<T>): Entity =>
   throw new Error('no entity with the requested component');
 };
 
-const text = (bytes: Uint8Array): string => new TextDecoder().decode(bytes);
-
 describe('project save → load round-trip (in-memory sink, real read path)', () => {
   it('round-trips entities, hierarchy, a promoted mesh by GUID, and authored resources', async () => {
     // --- App #1: author a graph + resources, then serialize a whole project. ---
@@ -82,9 +80,11 @@ describe('project save → load round-trip (in-memory sink, real read path)', ()
       promotions: [{ handle: meshHandle, kind: ASSET_TYPE.mesh, extension: 'rmesh' }],
     });
 
-    // Pure-data invariant: the baked manifest is exactly what parse reads back.
-    const manifestText = text(saved.files.find((f) => f.location === 'assets.manifest.json')!.bytes);
-    expect(parseAssetManifest(manifestText).entries.size).toBe(2); // the mesh + the scene
+    // Pure-data invariant: the derived manifest covers the mesh + the scene; no
+    // committed manifest is written to disk.
+    expect(saved.manifest.entries.length).toBe(2);
+    expect(saved.files.some((f) => f.location === 'assets.manifest.json')).toBe(false);
+    expect(saved.files.some((f) => f.location === 'project.json')).toBe(false);
 
     // --- Write every file through an in-memory sink (no real I/O). ---
     const sink = new MemoryAssetSink();
@@ -96,18 +96,18 @@ describe('project save → load round-trip (in-memory sink, real read path)', ()
     // `.rescene` importer comes from ScenePlugin; register the `.rmesh` importer.
     server.registerLoader('rmesh', app2.getResource(Meshes)!, createMeshImporter());
 
-    // Read half: manifest-only (never the .meta sidecars) → loadByGuid each →
-    // settle → drain.
-    await server.loadManifest('assets.manifest.json');
-    const manifest = parseAssetManifest(text(sink.files.get('assets.manifest.json')!));
+    // Read half: rebuild the manifest from the `.meta` sidecars (no committed
+    // manifest) → adopt it → loadByGuid each → settle → drain.
+    const manifest = scanMetaManifest(sink.files);
+    expect(manifest.entries.size).toBe(2);
+    server.setManifest(manifest);
     for (const entry of manifest.entries.values()) server.loadByGuid(entry.guid);
     await server.settle();
     applyCompletedLoads(server);
 
-    // Fetch the loaded scene asset by its GUID from the project doc, then spawn it.
-    const projectDoc = JSON.parse(text(sink.files.get('project.json')!)) as { scenes: string[] };
+    // Fetch the loaded scene asset by its GUID (from the saved result), then spawn it.
     const scenes = app2.getResource(Scenes)!;
-    const loadedScene = scenes.get(scenes.handleByGuid(projectDoc.scenes[0]! as never)!)!;
+    const loadedScene = scenes.get(scenes.handleByGuid(saved.scenes[0]!.guid as never)!)!;
     spawnScene(app2, loadedScene.data);
 
     // --- Fidelity: the promoted mesh round-tripped by GUID, bytes intact. ---

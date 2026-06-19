@@ -67,6 +67,6 @@ export const promoteAsset = <T>(
     location,
     bytes: serializer.serialize(value),
     metaLocation,
-    meta: encodeText(serializeMeta(bakeMeta(guid))),
+    meta: encodeText(serializeMeta(bakeMeta(guid, kind))),
   };
 };

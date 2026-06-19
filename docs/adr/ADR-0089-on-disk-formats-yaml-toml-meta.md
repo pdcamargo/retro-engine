@@ -65,6 +65,8 @@ domain (`Cargo.toml`/`pyproject.toml` idiom), distinct from opaque machine state
 - `packages/engine/src/scene/scene-plugin.ts` — registers the `rescene` loader — **landed**
 - `packages/engine/src/save/serialize-project.ts` — scene bytes via YAML — **landed**
 - `packages/engine/package.json` — `yaml` dependency — **landed**
-- `project.retroengine` TOML descriptor + `editor/settings/*.toml` (replacing `project.json`) — _pending_
-- `scanMetaManifest` + dropping the committed manifest from `serializeProject` — _pending_
+- `packages/engine/src/save/scan-manifest.ts` — `scanMetaManifest` (rebuild manifest from `.meta`) — **landed**
+- `packages/engine/src/save/meta.ts` — `.meta` carries `kind` (identity source of truth) — **landed**
+- `packages/engine/src/save/serialize-project.ts` — drops the committed manifest + `project.json`; returns `scenes`/`manifest` — **landed**
+- `project.retroengine` TOML descriptor + `editor/settings/*.toml` (the human-authored descriptor; owned by `create-project`/studio, not `serializeProject`) — _pending_
 - `.reprefab` prefab asset kind/importer — _pending_

@@ -42,6 +42,7 @@ import {
   ProjectSaveSink,
   Query,
   ResMut,
+  scanMetaManifest,
   Scenes,
   serializeProject,
   serializeScene,
@@ -139,12 +140,14 @@ export const saveShowcasePlugin: Plugin = (app) => {
       server.registerLoader('rmesh', meshes, createMeshImporter());
       server.registerLoader('rescene', scenes, createSceneImporter());
 
-      await server.loadManifest('assets.manifest.json');
+      // Rebuild the manifest from the saved `.meta` sidecars (no committed manifest);
+      // bytes are fetched from /saved/ through the source as each GUID loads.
+      server.setManifest(scanMetaManifest(project.files.map((f) => [f.location, f.bytes] as const)));
       for (const entry of project.manifest.entries) server.loadByGuid(entry.guid);
       await server.settle();
       applyCompletedLoads(server);
 
-      const reloadedScene = scenes.get(scenes.handleByGuid(project.projectDoc.scenes[0]!)!)!;
+      const reloadedScene = scenes.get(scenes.handleByGuid(project.scenes[0]!.guid)!)!;
       const reloadedMesh = meshes.get(meshes.handleByGuid(cube.guid!)!)!;
 
       log.info('reloaded from disk — round-trip confirmed:');

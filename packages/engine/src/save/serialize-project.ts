@@ -1,5 +1,5 @@
 import type { AssetGuid, AssetManifestEntry, AssetManifestFile, Handle } from '@retro-engine/assets';
-import { bakeManifest, generateAssetGuid, serializeAssetManifest } from '@retro-engine/assets';
+import { bakeManifest, generateAssetGuid } from '@retro-engine/assets';
 import { stringify as stringifyYaml } from 'yaml';
 
 import { AssetSerializers } from '../asset/asset-serializers';
@@ -10,16 +10,8 @@ import type { SceneData } from '../scene/scene-data';
 import { bakeMeta, serializeMeta } from './meta';
 import { promoteAsset } from './promote';
 
-/** Current `.retro-project` document wire-format version. */
-export const PROJECT_FORMAT_VERSION = 1;
-
 /** The manifest `kind` tag used for scene documents. */
 export const SCENE_ASSET_KIND = 'Scene';
-
-/** Default location of the manifest within a project. */
-const DEFAULT_MANIFEST_LOCATION = 'assets.manifest.json';
-/** Default location of the project document within a project. */
-const DEFAULT_PROJECT_DOC_LOCATION = 'project.json';
 
 /** One file to write, by location, through an `AssetSink`. */
 export interface SavedFile {
@@ -27,15 +19,10 @@ export interface SavedFile {
   readonly bytes: Uint8Array;
 }
 
-/**
- * The `.retro-project` index document: the format version, where the manifest
- * lives, and the GUIDs of the project's scenes (its entry points). A loader
- * reads this, loads the manifest, then `loadByGuid`s each scene.
- */
-export interface ProjectDocFile {
-  readonly version: number;
-  readonly manifestLocation: string;
-  readonly scenes: readonly AssetGuid[];
+/** A scene's persistent identity within a saved project: its file location and GUID. */
+export interface SavedScene {
+  readonly location: string;
+  readonly guid: AssetGuid;
 }
 
 /** A scene to write into the project: where its file goes, its identity, and its data. */
@@ -64,29 +51,31 @@ export interface SerializeProjectOptions {
   readonly scenes: readonly ScenePromotion[];
   /** Referenced assets to promote alongside the scenes. */
   readonly promotions?: readonly AssetPromotion[];
-  /** Manifest location within the project. Defaults to `'assets.manifest.json'`. */
-  readonly manifestLocation?: string;
-  /** Project-document location within the project. Defaults to `'project.json'`. */
-  readonly projectDocLocation?: string;
 }
 
 /** The pure-data artifacts of a saved project — written file-by-file through an `AssetSink`. */
 export interface SavedProject {
-  /** Every file to write, by location. The project doc and manifest come first for diagnosability. */
+  /** Every file to write, by location: scene/asset bytes and their `.meta` sidecars. */
   readonly files: readonly SavedFile[];
-  /** The baked manifest, for tooling/tests (also serialized into `files`). */
+  /** The scenes written, with their persistent GUIDs (the project's entry points). */
+  readonly scenes: readonly SavedScene[];
+  /**
+   * The manifest derived from the written assets, for tooling/tests. It is **not**
+   * written to disk — a project ships `.meta` sidecars, and the manifest is
+   * rebuilt from them on load (`scanMetaManifest`).
+   */
   readonly manifest: AssetManifestFile;
-  /** The project index document (also serialized into `files`). */
-  readonly projectDoc: ProjectDocFile;
 }
 
 const encodeText = (text: string): Uint8Array => new TextEncoder().encode(text);
 
 /**
- * Serialize an App into the pure-data artifacts of a `.retro-project`: a manifest
- * (the exact shape `parseAssetManifest` reads), the scene documents (each a
- * GUID-addressable asset, carrying its resources from `serializeScene`), the
- * promoted referenced assets' bytes, `.meta` sidecars, and the project index.
+ * Serialize an App into the pure-data artifacts of a project: the scene documents
+ * (each a GUID-addressable asset, carrying its resources from `serializeScene`),
+ * the promoted referenced assets' bytes, and a `.meta` sidecar per asset pinning
+ * its GUID + kind. No committed manifest and no project index are written — the
+ * `.meta` sidecars are the identity source of truth, and a loader rebuilds the
+ * manifest from them with `scanMetaManifest`.
  *
  * Performs **no I/O** — it returns `files` for a caller to write through an
  * `AssetSink`, then read back through an `AssetSource` against the same project
@@ -100,12 +89,10 @@ const encodeText = (text: string): Uint8Array => new TextEncoder().encode(text);
  *   promotions: [{ handle: meshHandle, kind: ASSET_TYPE.mesh, extension: 'rmesh' }],
  * });
  * for (const file of project.files) await sink.write(file.location, file.bytes);
+ * // load: server.setManifest(scanMetaManifest(writtenFiles)); server.loadByGuid(...)
  * ```
  */
 export const serializeProject = (app: App, opts: SerializeProjectOptions): SavedProject => {
-  const manifestLocation = opts.manifestLocation ?? DEFAULT_MANIFEST_LOCATION;
-  const projectDocLocation = opts.projectDocLocation ?? DEFAULT_PROJECT_DOC_LOCATION;
-
   const files: SavedFile[] = [];
   const entries: AssetManifestEntry[] = [];
 
@@ -145,34 +132,23 @@ export const serializeProject = (app: App, opts: SerializeProjectOptions): Saved
   }
 
   // Scenes: the YAML document IS the bytes; each is a GUID-addressable asset
-  // loaded by extension on reload (`.rescene` → the scene importer).
-  const sceneGuids: AssetGuid[] = [];
+  // loaded by extension on reload (`.rescene` → the scene importer). A `.meta`
+  // sidecar pins the GUID + kind so the manifest can be rebuilt from disk.
+  const scenes: SavedScene[] = [];
   for (const scene of opts.scenes) {
     const guid = scene.guid ?? generateAssetGuid();
-    sceneGuids.push(guid);
+    scenes.push({ location: scene.location, guid });
     entries.push({ guid, location: scene.location, kind: SCENE_ASSET_KIND });
     files.push({ location: scene.location, bytes: encodeText(stringifyYaml(scene.data)) });
     files.push({
       location: `${scene.location}.meta`,
-      bytes: encodeText(serializeMeta(bakeMeta(guid))),
+      bytes: encodeText(serializeMeta(bakeMeta(guid, SCENE_ASSET_KIND))),
     });
   }
 
-  const manifest = bakeManifest(entries);
-  const projectDoc: ProjectDocFile = {
-    version: PROJECT_FORMAT_VERSION,
-    manifestLocation,
-    scenes: sceneGuids,
-  };
-
-  // Project doc + manifest first, so a partial write is diagnosable.
   return {
-    files: [
-      { location: projectDocLocation, bytes: encodeText(JSON.stringify(projectDoc, null, 2)) },
-      { location: manifestLocation, bytes: encodeText(serializeAssetManifest(manifest)) },
-      ...files,
-    ],
-    manifest,
-    projectDoc,
+    files,
+    scenes,
+    manifest: bakeManifest(entries),
   };
 };
