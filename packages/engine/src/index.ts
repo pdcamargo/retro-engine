@@ -150,6 +150,7 @@ export { Scene, Scenes } from './scene/scene-asset';
 export { createSceneImporter, createSceneSerializer } from './scene/scene-importer';
 export { SceneInstance, SceneRoot } from './scene/scene-root';
 export { addSceneInstantiation } from './scene/scene-reactor';
+export { collectSceneHandleRefs, unloadUnusedAssets } from './scene/scene-streaming';
 export { ScenePlugin } from './scene/scene-plugin';
 export { SceneStateRoots } from './scene/scene-state';
 export type { AddSceneOptions } from './scene/scene-state';

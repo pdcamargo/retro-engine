@@ -126,13 +126,28 @@ export const spawnScene = (
   const idToEntity = new Map<number, Entity>();
   for (const entity of scene.entities) idToEntity.set(entity.id, cmd.spawn().id);
 
-  // No injected resolver → resolve handles by GUID against the App's registered
-  // asset stores. An injected resolver always wins; with neither, decoding a
-  // handle field throws (buildDecodeEnv's fallback).
+  // No injected resolver → resolve a scene's asset handles by GUID. Prefer
+  // load-on-demand through the AssetServer (reserves the handle immediately and
+  // streams the value in) so only the assets a scene references load, not the
+  // whole manifest; fall back to the App's already-populated stores for assets
+  // added directly with no manifest entry (in-memory/tests). An injected
+  // resolver always wins; with neither, decoding a handle field throws.
   const stores = app.getResource(AssetStores);
+  const server = app.getResource(AssetServer);
   const decodeOpts: SpawnSceneOptions =
-    opts.resolveHandle === undefined && stores !== undefined
-      ? { ...opts, resolveHandle: (assetType, guid) => stores.handleFor(assetType, guid) }
+    opts.resolveHandle === undefined && (server !== undefined || stores !== undefined)
+      ? {
+          ...opts,
+          resolveHandle: (assetType, guid) => {
+            if (server !== undefined && server.hasGuid(guid as AssetGuid)) {
+              return server.loadByGuid(guid as AssetGuid);
+            }
+            if (stores !== undefined) return stores.handleFor(assetType, guid);
+            throw new Error(
+              `scene load: cannot resolve asset '${guid}' (type '${assetType}') — not in the manifest and no store holds it`,
+            );
+          },
+        }
       : opts;
 
   const env = buildDecodeEnv(registry, idToEntity, decodeOpts);

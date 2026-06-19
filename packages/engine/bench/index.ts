@@ -39,6 +39,7 @@ import './motion-blur.bench';
 import './taa.bench';
 import './ao.bench';
 import './gizmo-buffer.bench';
+import './scene-streaming.bench';
 
 interface NormalizedBench {
   readonly key: string;

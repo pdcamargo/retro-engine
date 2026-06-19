@@ -241,6 +241,30 @@ export class AssetServer {
     return handle as Handle<T>;
   }
 
+  /**
+   * Whether this server can resolve `guid` — it is already loading/loaded, or the
+   * current manifest maps it to a location. Lets the scene loader prefer
+   * load-on-demand for manifest-backed GUIDs and fall back to in-store resolution
+   * for assets added directly (no manifest).
+   */
+  hasGuid(guid: AssetGuid): boolean {
+    return this.guidToHandle.has(guid) || (this.manifest?.entries.has(guid) ?? false);
+  }
+
+  /**
+   * Drop the asset behind `guid` from its store and forget its handle, so a later
+   * {@link AssetServer.loadByGuid} re-reads it. Removing the value queues the
+   * store's `removed` event, releasing any prepared GPU resources. No-op if the
+   * GUID was never loaded. Used by scene swapping to release assets the outgoing
+   * scene held that the incoming one does not reference.
+   */
+  unloadByGuid(guid: AssetGuid): void {
+    const cached = this.guidToHandle.get(guid);
+    if (cached === undefined) return;
+    cached.store.remove(cached.handle);
+    this.guidToHandle.delete(guid);
+  }
+
   /** Take and clear the completed-load queue. Called by the drain each frame. */
   drainCompleted(): CompletedLoad[] {
     const out = this.completed;

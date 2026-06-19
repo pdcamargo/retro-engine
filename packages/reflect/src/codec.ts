@@ -283,6 +283,138 @@ export const decodeValue = (ft: FieldType<unknown>, json: unknown, env: DecodeEn
   }
 };
 
+/** A reference to an asset by its store name and persistent GUID, as found in serialized data. */
+export interface HandleRef {
+  /** The asset store the handle targets (e.g. `'Image'`, `'Mesh'`). */
+  readonly assetType: string;
+  /** The referenced asset's persistent GUID. */
+  readonly guid: string;
+}
+
+/**
+ * Enumerate every asset reference reachable in `json` under `ft`, appending each
+ * to `out` — without decoding. Mirrors {@link decodeValue}'s structural recursion
+ * but emits a {@link HandleRef} for each `handle` field instead of resolving it,
+ * so a scene's dependencies can be discovered before any resolver exists.
+ */
+const collectValueRefs = (
+  ft: FieldType<unknown>,
+  json: unknown,
+  registry: TypeRegistry,
+  out: HandleRef[],
+): void => {
+  if (json === null || json === undefined) return;
+  switch (ft.kind) {
+    case 'number':
+    case 'string':
+    case 'boolean':
+    case 'enum':
+    case 'vec2':
+    case 'vec3':
+    case 'vec4':
+    case 'quat':
+    case 'mat4':
+    case 'color':
+    case 'entity':
+      return;
+    case 'array': {
+      const element = ft.element;
+      if (element === undefined) throw new Error("reflect: 'array' field is missing its element type");
+      for (const item of json as unknown[]) collectValueRefs(element, item, registry, out);
+      return;
+    }
+    case 'tuple': {
+      const elements = ft.elements;
+      if (elements === undefined) throw new Error("reflect: 'tuple' field is missing its element types");
+      (json as unknown[]).forEach((item, i) => {
+        const el = elements[i];
+        if (el !== undefined) collectValueRefs(el, item, registry, out);
+      });
+      return;
+    }
+    case 'struct': {
+      const fields = ft.fields;
+      if (fields === undefined) throw new Error("reflect: 'struct' field is missing its fields");
+      collectHandleRefs(fields, json as Record<string, unknown>, registry, out);
+      return;
+    }
+    case 'handle': {
+      const assetType = ft.assetType;
+      if (assetType === undefined) throw new Error("reflect: 'handle' field is missing its asset type");
+      // The encoder writes the GUID string for a handle with identity, and omits it
+      // otherwise — so a string here is exactly a resolvable reference.
+      if (typeof json === 'string') out.push({ assetType, guid: json });
+      return;
+    }
+    case 'type': {
+      const ctor = ft.nestedCtor;
+      if (ctor === undefined) throw new Error("reflect: 'type' field is missing its constructor");
+      const reg = registry.getByCtor(ctor);
+      // An unregistered nested type contributes no refs (and can't, with no schema).
+      if (reg === undefined) return;
+      const nested = json as { data?: Record<string, unknown> };
+      if (nested.data !== undefined) collectHandleRefs(reg.schema, nested.data, registry, out);
+      return;
+    }
+    case 'variant': {
+      const { variantTag: tag, variants } = ft;
+      if (tag === undefined || variants === undefined) {
+        throw new Error("reflect: 'variant' field is missing its tag or arms");
+      }
+      if (typeof json === 'string') return; // a payload-less arm carries no refs
+      const data = json as Record<string, unknown>;
+      const disc = data[tag];
+      if (typeof disc === 'string') {
+        const arm = variants[disc];
+        if (arm !== undefined) collectHandleRefs(arm, data, registry, out);
+        return;
+      }
+      if (ft.variantStringArms) {
+        const untagged = untaggedArm(variants);
+        if (untagged !== undefined) collectHandleRefs(untagged, data, registry, out);
+      }
+      return;
+    }
+    default:
+      assertNever(ft.kind);
+  }
+};
+
+/**
+ * Enumerate every asset reference reachable in `jsonData` under `fields`,
+ * appending each {@link HandleRef} to `out`. The resolver-free counterpart to
+ * {@link applyFields}: it discovers what a serialized value depends on so those
+ * assets can be loaded before it is decoded.
+ */
+export const collectHandleRefs = (
+  fields: Readonly<Record<string, FieldType<unknown>>>,
+  jsonData: Record<string, unknown>,
+  registry: TypeRegistry,
+  out: HandleRef[],
+): void => {
+  for (const [key, ft] of Object.entries(fields)) {
+    if (ft.isSkipped) continue;
+    const raw = jsonData[key];
+    if (raw === undefined) continue;
+    collectValueRefs(ft, raw, registry, out);
+  }
+};
+
+/**
+ * Enumerate the asset references a serialized component depends on, appending
+ * each to `out`. Walks the current schema over the raw data (no migration, since
+ * nothing is reconstructed) — refs a migration would add are discovered lazily on
+ * first decode instead.
+ */
+export const collectComponentHandleRefs = (
+  reg: RegisteredType,
+  serialized: { readonly data: Record<string, unknown> },
+  registry: TypeRegistry,
+  out: HandleRef[],
+): void => {
+  collectHandleRefs(reg.schema, serialized.data, registry, out);
+};
+
 /** Encode a component (or nested registered value) into a {@link SerializedValue}. */
 export const encodeComponent = (reg: RegisteredType, instance: object, env: EncodeEnv): SerializedValue => ({
   type: reg.name,
