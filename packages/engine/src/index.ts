@@ -253,6 +253,7 @@ export {
   MaterialPlugin,
   Materials,
   MaterialSchema,
+  materialTypeName,
   MaterialTypes,
   MESH_INSTANCE_BYTE_SIZE,
   MESH_INSTANCE_FLOAT_COUNT,

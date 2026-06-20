@@ -10,20 +10,36 @@ import {
   AssetPlugin,
   AssetServer,
   applyCompletedLoads,
+  Camera3d,
   createMaterialSerializer,
+  createMeshImporter,
+  createMeshSerializer,
+  DirectionalLight3d,
   type Image,
   Light3dPlugin,
   MaterialPlugin,
   materialReflectionSchema,
+  Mesh,
+  MeshAttribute,
+  Meshes,
   registerMaterialLoaders,
   SCENE_FORMAT_VERSION,
   type SceneData,
   StandardMaterial,
   StandardMaterialPlugin,
+  Transform,
+  u16Indices,
 } from '../index';
+import { vec3 } from '@retro-engine/math';
 import { MemoryAssetSource } from '../asset/memory-sink';
 import { spawnScene } from '../scene/spawn';
 import { makeCapturingRenderer, makeStubCanvas } from '../test-utils';
+
+const buildCube = (): Mesh =>
+  new Mesh({ label: 'cube' })
+    .insertAttribute(MeshAttribute.POSITION, new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0]))
+    .insertAttribute(MeshAttribute.NORMAL, new Float32Array([0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1]))
+    .setIndices(u16Indices([0, 1, 2, 1, 3, 2]));
 
 const buildApp = (source?: MemoryAssetSource) => {
   const { renderer } = makeCapturingRenderer();
@@ -157,5 +173,66 @@ describe('kind-routed material loading', () => {
     }
     expect(component).toBeDefined();
     expect(app.getResource(pbr.Materials)!.get(component!.handle)?.roughness).toBeCloseTo(0.3, 5);
+  });
+
+  it('draws a scene-loaded material mesh (prepare → queue → draw)', async () => {
+    const { renderer, log } = makeCapturingRenderer();
+    const app = new App({ renderer, canvas: makeStubCanvas() });
+    app.addPlugin(new StandardMaterialPlugin());
+    const pbr = new MaterialPlugin(StandardMaterial);
+    app.addPlugin(pbr);
+    app.addPlugin(new Light3dPlugin());
+    const files = new Map<string, Uint8Array>();
+    app.addPlugin(new AssetPlugin({ source: new MemoryAssetSource(files) }));
+
+    files.set('mesh.rmesh', createMeshSerializer().serialize(buildCube()));
+    files.set(
+      'mat.remat',
+      createMaterialSerializer<StandardMaterial>(app, StandardMaterial).serialize(
+        new StandardMaterial({ metallic: 0.2, roughness: 0.5 }),
+      ),
+    );
+
+    const meshGuid = generateAssetGuid();
+    const matGuid = generateAssetGuid();
+    const server = app.getResource(AssetServer)!;
+    server.setManifest({
+      entries: new Map([
+        [meshGuid, { guid: meshGuid, location: 'mesh.rmesh', kind: 'Mesh' }],
+        [matGuid, { guid: matGuid, location: 'mat.remat', kind: 'StandardMaterial' }],
+      ]),
+    });
+    server.registerLoader('rmesh', app.getResource(Meshes)!, createMeshImporter());
+    registerMaterialLoaders(app);
+
+    const camT = new Transform();
+    camT.translation = vec3.create(0.5, 0.5, 3);
+    app.world.spawn(...Camera3d({ transform: camT }));
+    app.world.spawn(new DirectionalLight3d({ color: vec3.create(1, 1, 1), intensity: 3 }), new Transform());
+    spawnScene(app, {
+      version: SCENE_FORMAT_VERSION,
+      entities: [
+        {
+          id: 0,
+          components: [
+            { type: 'Transform', version: 1, data: { translation: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] } },
+            { type: 'Visibility', version: 1, data: { mode: 'Visible' } },
+            { type: 'Mesh3d', version: 1, data: { handle: meshGuid } },
+            { type: 'MeshMaterial3d<StandardMaterial>', version: 1, data: { handle: matGuid } },
+          ],
+        },
+      ],
+    });
+
+    await app.run();
+    await server.settle();
+    // A few frames for the async loads to drain, the mesh + material to prepare,
+    // and the queue to draw — the entity references both assets only by GUID.
+    for (let i = 0; i < 6; i++) app.advanceFrame(16 * (i + 1));
+
+    const drew = log.passes
+      .filter((p) => p.label?.endsWith('.opaque3d'))
+      .some((p) => p.drawCalls.some((c) => c.kind === 'drawIndexed' || c.kind === 'draw'));
+    expect(drew).toBe(true);
   });
 });

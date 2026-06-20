@@ -74,6 +74,10 @@ import { PBR_WGSL } from './pbr.wgsl';
  * replaced by precomputed irradiance + a prefiltered env map.
  */
 export class StandardMaterial implements Material {
+  /** Stable serialized name — independent of the bundler-renamed `ctor.name`, so
+   * a saved `.remat` / scene reference round-trips across builds. */
+  static readonly typeName = 'StandardMaterial';
+
   baseColor: Vec4 = vec4.create(1, 1, 1, 1);
   emissive: Vec4 = vec4.create(0, 0, 0, 0);
   metallic = 0;

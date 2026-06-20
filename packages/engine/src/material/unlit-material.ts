@@ -31,6 +31,9 @@ import { UNLIT_WGSL } from './unlit.wgsl';
  * color })` produces a usable tint-only material with no plumbing.
  */
 export class UnlitMaterial implements Material {
+  /** Stable serialized name — independent of the bundler-renamed `ctor.name`. */
+  static readonly typeName = 'UnlitMaterial';
+
   color: Vec4 = vec4.create(1, 1, 1, 1);
   colorTexture: Handle<Image> | undefined;
   alphaMode_: AlphaMode = 'opaque';

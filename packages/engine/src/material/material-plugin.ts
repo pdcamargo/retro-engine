@@ -82,6 +82,15 @@ import { RenderMaterials } from './render-materials';
 export interface MaterialCtor<M extends Material> {
   new (...args: never[]): M;
   readonly name: string;
+  /**
+   * Stable serialized name for this material type, independent of the
+   * bundler-renamed `ctor.name` (a build can suffix it, e.g. `StandardMaterial2`).
+   * Drives the `Materials<…>` store key, the `MeshMaterial3d<…>` component name,
+   * the reflectable type name, and the `.remat` kind — so a saved material asset
+   * round-trips across builds. Defaults to `ctor.name`; declare it on any
+   * material whose assets are persisted.
+   */
+  readonly typeName?: string;
   readonly bindGroup: BindGroupSchema<M>;
   /**
    * When `true`, the material is lit: {@link MaterialPlugin} appends the
@@ -114,6 +123,18 @@ export interface MaterialCtor<M extends Material> {
    */
   readonly serializedExtras?: Readonly<Record<string, FieldType<unknown>>>;
 }
+
+/**
+ * A material type's stable name for registration + serialization: its static
+ * `typeName` when declared, else the class name. Used everywhere a material's
+ * identity is persisted or keyed, so a bundler that renames `ctor.name` (a
+ * suffix added at build time) can't break a saved `.remat`'s kind or a scene's
+ * `MeshMaterial3d<…>` component name.
+ */
+export const materialTypeName = (ctor: {
+  readonly typeName?: string;
+  readonly name: string;
+}): string => ctor.typeName ?? ctor.name;
 
 /** Optional configuration for {@link MaterialPlugin}. */
 export interface MaterialPluginOptions {
@@ -170,18 +191,19 @@ export class MaterialPlugin<M extends Material> implements PluginObject {
   constructor(materialClass: MaterialCtor<M>, options?: MaterialPluginOptions) {
     this.materialClass = materialClass;
     this.retained = options?.retained ?? false;
+    const name = materialTypeName(materialClass);
 
     const MaterialsBase = Materials as unknown as new () => Materials<M>;
     const MaterialsSubclass = class extends MaterialsBase {};
     Object.defineProperty(MaterialsSubclass, 'name', {
-      value: `Materials<${materialClass.name}>`,
+      value: `Materials<${name}>`,
     });
     this.Materials = MaterialsSubclass as unknown as new () => Materials<M>;
 
     const RenderMaterialsBase = RenderMaterials as unknown as new () => RenderMaterials<M>;
     const RenderMaterialsSubclass = class extends RenderMaterialsBase {};
     Object.defineProperty(RenderMaterialsSubclass, 'name', {
-      value: `RenderMaterials<${materialClass.name}>`,
+      value: `RenderMaterials<${name}>`,
     });
     this.RenderMaterials = RenderMaterialsSubclass as unknown as new () => RenderMaterials<M>;
 
@@ -190,7 +212,7 @@ export class MaterialPlugin<M extends Material> implements PluginObject {
     ) => MeshMaterial3d<M>;
     const MeshMaterialSubclass = class extends MeshMaterialBase {};
     Object.defineProperty(MeshMaterialSubclass, 'name', {
-      value: `MeshMaterial3d<${materialClass.name}>`,
+      value: `MeshMaterial3d<${name}>`,
     });
     this.MeshMaterial3d = MeshMaterialSubclass as unknown as new (
       h: Handle<M>,
@@ -222,11 +244,13 @@ export class MaterialPlugin<M extends Material> implements PluginObject {
       app.insertResource(new ViewPhases3d());
     }
 
-    // The handle's asset type is qualified by the material class so two material
-    // types never resolve to each other's store; it backs both the `t.handle`
-    // schema and the store registration, the single source of truth for this
-    // material's GUID resolution.
-    const materialsKey = `Materials<${this.materialClass.name}>`;
+    // The handle's asset type is qualified by the material's stable name so two
+    // material types never resolve to each other's store; it backs both the
+    // `t.handle` schema and the store registration, the single source of truth
+    // for this material's GUID resolution. Stable (not `ctor.name`) so a saved
+    // scene / `.remat` resolves across builds that rename the class.
+    const name = materialTypeName(this.materialClass);
+    const materialsKey = `Materials<${name}>`;
     registerAssetStore(app, materialsKey, materials);
 
     // Register the synthesised per-type subclass — not the base — so the scene
@@ -238,7 +262,7 @@ export class MaterialPlugin<M extends Material> implements PluginObject {
       this.MeshMaterial3d,
       { handle: t.handle<M>(materialsKey) },
       {
-        name: `MeshMaterial3d<${this.materialClass.name}>`,
+        name: `MeshMaterial3d<${name}>`,
         make: () => new this.MeshMaterial3d(makeHandle(asAssetIndex(0))),
       },
     );
@@ -252,17 +276,17 @@ export class MaterialPlugin<M extends Material> implements PluginObject {
     const reflect = app.registerType(
       this.materialClass as unknown as ComponentType<M>,
       materialReflectionSchema(this.materialClass),
-      { name: this.materialClass.name, make: () => new this.materialClass() },
+      { name, make: () => new this.materialClass() },
     );
     const serializer = createMaterialSerializer<M>(app, this.materialClass as unknown as ComponentType<object>);
-    registerAssetSerializer(app, this.materialClass.name, serializer);
+    registerAssetSerializer(app, name, serializer);
     let materialTypes = app.getResource(MaterialTypes);
     if (materialTypes === undefined) {
       materialTypes = new MaterialTypes();
       app.insertResource(materialTypes);
     }
     materialTypes.register({
-      kind: this.materialClass.name,
+      kind: name,
       store: materials as unknown as Materials<Material>,
       reflect,
       importer: createMaterialImporter<M>(app, this.materialClass as unknown as ComponentType<object>) as never,

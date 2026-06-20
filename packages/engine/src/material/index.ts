@@ -39,7 +39,7 @@ export {
 export { MeshMaterial3d } from './mesh-material-3d';
 
 export type { MaterialCtor, MaterialPluginOptions } from './material-plugin';
-export { MaterialPlugin } from './material-plugin';
+export { MaterialPlugin, materialTypeName } from './material-plugin';
 
 export type { MaterialReflectSource } from './material-reflect';
 export { materialReflectionSchema } from './material-reflect';
