@@ -1,9 +1,53 @@
+import type { AssetGuid } from '@retro-engine/assets';
 import type { Entity } from '@retro-engine/ecs';
 import type { App, RunCondition, SceneData } from '@retro-engine/engine';
-import { serializeScene, spawnScene } from '@retro-engine/engine';
+import { applyCompletedLoads, AssetServer, Scenes, serializeScene, spawnScene } from '@retro-engine/engine';
 
 import { applyProject, buildProjectModule } from './load-project';
 import type { ProjectBuilder } from './project-builder';
+
+/** Despawn every entity the predicate does NOT mark as editor infra (the user scene). */
+const despawnUserScene = (app: App, isEditorEntity: (entity: Entity) => boolean): void => {
+  // Snapshot before iterating — despawn mutates the world's entity set.
+  // eslint-disable-next-line unicorn/no-useless-spread
+  for (const entity of [...app.world.entities()]) {
+    if (!isEditorEntity(entity) && app.world.hasEntity(entity)) app.world.despawn(entity);
+  }
+};
+
+/**
+ * Re-read a scene from disk and respawn it into the live world — the reaction to
+ * a scene file changing outside the studio. Drops the cached scene asset so the
+ * server re-reads the edited file, tears down the current user scene (editor infra
+ * preserved), and respawns from the fresh data; referenced assets resolve on
+ * demand as before. Returns false if the scene isn't resolvable (no AssetServer,
+ * or the GUID isn't loaded). Note: this replaces the in-world scene, so unsaved
+ * in-studio edits to it are lost — a prompt-before-clobber is a follow-up.
+ */
+export const reloadProjectScene = async (deps: {
+  readonly app: App;
+  readonly sceneGuid: string;
+  readonly isEditorEntity: (entity: Entity) => boolean;
+}): Promise<boolean> => {
+  const { app } = deps;
+  const server = app.getResource(AssetServer);
+  const scenes = app.getResource(Scenes);
+  if (server === undefined || scenes === undefined) return false;
+
+  const guid = deps.sceneGuid as AssetGuid;
+  server.unloadByGuid(guid);
+  server.loadByGuid(guid);
+  await server.settle();
+  applyCompletedLoads(server);
+
+  const handle = scenes.handleByGuid(guid);
+  const scene = handle !== undefined ? scenes.get(handle) : undefined;
+  if (scene === undefined) return false;
+
+  despawnUserScene(app, deps.isEditorEntity);
+  spawnScene(app, scene.data);
+  return true;
+};
 
 /** What `reloadProjectCode` needs to swap a rebuilt project into the running App. */
 export interface HotReloadDeps {
@@ -51,11 +95,7 @@ export const reloadProjectCode = async (deps: HotReloadDeps): Promise<HotReloadR
       ? { version: full.version, entities: full.entities, resources: userResources }
       : { version: full.version, entities: full.entities };
 
-  // Snapshot before iterating — despawn mutates the world's entity set.
-  // eslint-disable-next-line unicorn/no-useless-spread
-  for (const entity of [...app.world.entities()]) {
-    if (!deps.isEditorEntity(entity) && app.world.hasEntity(entity)) app.world.despawn(entity);
-  }
+  despawnUserScene(app, deps.isEditorEntity);
 
   app.removeUserPlugins(deps.baseline);
   applyProject(app, project, deps.playGate, { hot: true });

@@ -32,7 +32,7 @@ import { loadProjectScene, scanProjectManifest } from './project/project-scene';
 import { setNativeProjectRoot } from './project/tauri-project-io';
 import { watchProject } from './project/project-watcher';
 import { buildBrowserAssets } from './project/project-browser';
-import { reloadProjectCode } from './project/hot-reload';
+import { reloadProjectCode, reloadProjectScene } from './project/hot-reload';
 import { ThumbnailService } from './thumbnails/thumbnail-service';
 
 // Mirror webview console to the native terminal (dev observability under Tauri).
@@ -409,9 +409,39 @@ void (async (): Promise<void> => {
         })();
       }, 200);
     };
+    let sceneReloadTimer: ReturnType<typeof setTimeout> | undefined;
+    let sceneReloading = false;
+    const triggerSceneReload = (path: string): void => {
+      const guid = descriptor?.startupScene;
+      if (guid === undefined || guid === null || guid.length === 0) return; // no open scene to reload
+      if (sceneReloadTimer !== undefined) clearTimeout(sceneReloadTimer);
+      sceneReloadTimer = setTimeout(() => {
+        if (sceneReloading) return;
+        sceneReloading = true;
+        void (async (): Promise<void> => {
+          log('info', `Scene changed on disk — reloading: ${path}`);
+          try {
+            const ok = await reloadProjectScene({
+              app,
+              sceneGuid: guid,
+              isEditorEntity: (e) => app.world.has(e, EditorOnly),
+            });
+            if (ok) {
+              state.selectedEntity = null; // ids changed on respawn
+              log('cmd', 'Scene reloaded from disk');
+            } else {
+              log('warn', 'Scene reload skipped — scene not resolvable');
+            }
+          } catch (err) {
+            log('err', 'Scene reload failed', err instanceof Error ? err.message : String(err));
+          }
+          sceneReloading = false;
+        })();
+      }, 150);
+    };
     void watchProject(projectDir, {
       onRebuild: triggerReload,
-      onReloadScene: (path) => log('warn', `Scene changed on disk: ${path}`),
+      onReloadScene: triggerSceneReload,
       onReindex: () => log('info', 'Assets changed on disk — reindex (later phase)'),
     }).catch((err: unknown) => console.error('[studio] project watch failed', err));
   }
