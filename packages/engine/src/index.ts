@@ -1038,9 +1038,12 @@ export class App {
     }
 
     const atr = this.getResource(AppTypeRegistry)!;
+    // Snapshot before iterating — the loop body unregisters, mutating the source.
+    // eslint-disable-next-line unicorn/no-useless-spread
     for (const reg of [...atr.registry.components()]) {
       if (!baseline.components.has(reg.name)) atr.registry.unregister(reg.ctor);
     }
+    // eslint-disable-next-line unicorn/no-useless-spread
     for (const [ctor, reg] of [...atr.resources]) {
       if (!baseline.resources.has(reg.name)) {
         atr.resources.delete(ctor);

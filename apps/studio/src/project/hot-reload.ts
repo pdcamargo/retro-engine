@@ -51,6 +51,8 @@ export const reloadProjectCode = async (deps: HotReloadDeps): Promise<HotReloadR
       ? { version: full.version, entities: full.entities, resources: userResources }
       : { version: full.version, entities: full.entities };
 
+  // Snapshot before iterating — despawn mutates the world's entity set.
+  // eslint-disable-next-line unicorn/no-useless-spread
   for (const entity of [...app.world.entities()]) {
     if (!deps.isEditorEntity(entity) && app.world.hasEntity(entity)) app.world.despawn(entity);
   }
