@@ -52,10 +52,18 @@ export const buildProjectModule = async (
  * every system the project registers is gated behind it — so user gameplay runs only
  * in Play, not while editing — except one-shot `startup` and engine `render` systems.
  */
-export const applyProject = (app: App, project: ProjectDefinition, playGate?: RunCondition): void => {
+export const applyProject = (
+  app: App,
+  project: ProjectDefinition,
+  playGate?: RunCondition,
+  opts: { readonly hot?: boolean } = {},
+): void => {
   const plugins = project.plugins.map(asUserPlugin);
+  // On a hot reload the App is already running, so plugins go in through
+  // addPluginsHot (which bypasses addPlugin's Building-only guard, ADR-0102).
+  const add = opts.hot === true ? (p: PluginObject[]) => app.addPluginsHot(p) : (p: PluginObject[]) => app.addPlugins(p);
   if (playGate === undefined) {
-    app.addPlugins(plugins);
+    add(plugins);
     return;
   }
 
@@ -75,7 +83,7 @@ export const applyProject = (app: App, project: ProjectDefinition, playGate?: Ru
     return original(stage, params, fn, { ...options, runIf });
   };
   try {
-    app.addPlugins(plugins);
+    add(plugins);
   } finally {
     delete (app as unknown as { addSystem?: unknown }).addSystem;
   }

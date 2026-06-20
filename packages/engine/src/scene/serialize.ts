@@ -64,6 +64,12 @@ export interface SerializeOptions {
    * has no persistent identity and is dropped.
    */
   handleRef?(assetType: string, handle: Handle<unknown>): string | undefined;
+  /**
+   * Keep only the entities for which this returns true. Defaults to all live
+   * entities. Used to capture just a subset of a mixed world — e.g. the hot-reload
+   * snapshot keeps the user scene and drops the editor's own infra entities.
+   */
+  filter?(entity: Entity): boolean;
 }
 
 const guidRef = (_assetType: string, handle: Handle<unknown>): string | undefined => handle.guid;
@@ -84,7 +90,8 @@ export const buildEncodeEnv = (
   registry: TypeRegistry,
   opts: SerializeOptions,
 ): { env: EncodeEnv; idOf: ReadonlyMap<Entity, number>; live: readonly Entity[] } => {
-  const live = [...world.entities()];
+  const all = [...world.entities()];
+  const live = opts.filter !== undefined ? all.filter(opts.filter) : all;
   const idOf = new Map<Entity, number>();
   live.forEach((entity, i) => idOf.set(entity, i));
 

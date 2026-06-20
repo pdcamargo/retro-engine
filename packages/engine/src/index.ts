@@ -1009,6 +1009,95 @@ export class App {
   }
 
   /**
+   * Remove the contributions of the user project's plugins from a **running** App
+   * — the teardown half of a code hot reload (ADR-0102). Drops every `'user'`-origin
+   * system from every stage (purging its per-system buffers), unregisters the
+   * components and resources the project registered beyond `baseline` (the
+   * engine + editor set captured before the project first loaded), and removes the
+   * project's plugins (`category() === 'user'`) from the registry so their rebuilt
+   * versions can re-register under the same names.
+   *
+   * Does not touch engine/editor systems, types, or the world's entities — the
+   * caller serializes the user scene first and respawns it after re-adding the
+   * rebuilt plugins. Observer/hook removal is a tracked follow-up; a project that
+   * registers global observers or component hooks should not yet rely on hot reload.
+   */
+  removeUserPlugins(baseline: {
+    readonly components: ReadonlySet<string>;
+    readonly resources: ReadonlySet<string>;
+  }): void {
+    const removedIds: SystemId[] = [];
+    for (const key of Object.keys(this.stages) as Stage[]) {
+      for (const sys of this.stages[key].remove((s) => s.origin === 'user')) removedIds.push(sys.id);
+    }
+    for (const id of removedIds) {
+      this.disabledSystems.delete(id);
+      this.commandsBuffers.delete(id);
+      this.lastSeenTickMap.delete(id);
+      this.lastSeenFrameMap.delete(id);
+    }
+
+    const atr = this.getResource(AppTypeRegistry)!;
+    for (const reg of [...atr.registry.components()]) {
+      if (!baseline.components.has(reg.name)) atr.registry.unregister(reg.ctor);
+    }
+    for (const [ctor, reg] of [...atr.resources]) {
+      if (!baseline.resources.has(reg.name)) {
+        atr.resources.delete(ctor);
+        atr.registry.unregister(ctor);
+        this.removeResource(ctor as unknown as new () => object);
+      }
+    }
+
+    const keep: PluginObject[] = [];
+    const keepFlags: boolean[] = [];
+    for (let i = 0; i < this.pluginRegistry.length; i += 1) {
+      const plugin = this.pluginRegistry[i]!;
+      if (plugin.category?.() === 'user') this.pluginNameIndex.delete(plugin.name());
+      else {
+        keep.push(plugin);
+        keepFlags.push(this.pluginsReadyFlags[i]!);
+      }
+    }
+    this.pluginRegistry.length = 0;
+    this.pluginRegistry.push(...keep);
+    this.pluginsReadyFlags.length = 0;
+    this.pluginsReadyFlags.push(...keepFlags);
+  }
+
+  /**
+   * Add plugins to a **running** App, bypassing the `'Building'`-only guard of
+   * {@link App.addPlugin} — the rebuild half of a code hot reload (ADR-0102). Each
+   * plugin's `build()` runs immediately (attributed to it, so its systems bucket
+   * correctly), then its `ready`/`finish`/`cleanup` fire once since the App is
+   * already past those lifecycle phases. The only legal entry point for adding
+   * plugins after the first frame; pair with {@link App.removeUserPlugins}.
+   */
+  addPluginsHot(plugins: ReadonlyArray<PluginObject>): this {
+    for (const plugin of plugins) {
+      const wrapped = wrapFunctionPlugin(plugin);
+      const name = wrapped.name();
+      const unique = wrapped.isUnique?.() ?? true;
+      if (unique && this.pluginNameIndex.has(name)) {
+        throw new Error(`App.addPluginsHot: plugin '${name}' is unique and already registered`);
+      }
+      this.pluginRegistry.push(wrapped);
+      this.pluginsReadyFlags.push(true);
+      this.pluginNameIndex.set(name, wrapped);
+      this.pluginBuildStack.push(wrapped);
+      try {
+        wrapped.build(this);
+      } finally {
+        this.pluginBuildStack.pop();
+      }
+      wrapped.ready?.(this);
+      wrapped.finish?.(this);
+      wrapped.cleanup?.(this);
+    }
+    return this;
+  }
+
+  /**
    * Drive the plugin lifecycle one tick: while `_pluginsState === 'Building'`,
    * poll `ready()` for each not-yet-ready plugin; when every plugin reports
    * true, run `finish()` and `cleanup()` in registration order and advance

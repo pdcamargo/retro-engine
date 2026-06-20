@@ -32,6 +32,7 @@ import { loadProjectScene, scanProjectManifest } from './project/project-scene';
 import { setNativeProjectRoot } from './project/tauri-project-io';
 import { watchProject } from './project/project-watcher';
 import { buildBrowserAssets } from './project/project-browser';
+import { reloadProjectCode } from './project/hot-reload';
 import { ThumbnailService } from './thumbnails/thumbnail-service';
 
 // Mirror webview console to the native terminal (dev observability under Tauri).
@@ -365,15 +366,53 @@ void (async (): Promise<void> => {
     installShowcaseScene(app, { material: stdMat, scene: initialScene });
   }
 
-  // React to external edits (native only; no-op in a plain browser). The full
-  // reactions land in later phases — code rebuild/hot-swap and asset reindex —
-  // so for now each leg surfaces the change. Wiring it here proves the native
-  // fs watch fires against the opened project.
+  // React to external edits (native only; no-op in a plain browser). A code edit
+  // hot-reloads the project into the running App without a page reload (ADR-0102);
+  // asset/scene reactions surface in the Console for now.
   if (projectDir !== null && platform.kind === 'tauri') {
+    const log = (lvl: 'cmd' | 'info' | 'warn' | 'err', text: string, meta?: string): void => {
+      state.scene.console.push({
+        time: new Date().toLocaleTimeString('en-US', { hour12: false }),
+        lvl,
+        text,
+        ...(meta !== undefined ? { meta } : {}),
+      });
+    };
+    let reloadTimer: ReturnType<typeof setTimeout> | undefined;
+    let reloading = false;
+    const triggerReload = (): void => {
+      if (reloadTimer !== undefined) clearTimeout(reloadTimer);
+      // Debounce: editors emit a burst of write events per save.
+      reloadTimer = setTimeout(() => {
+        if (reloading) return;
+        reloading = true;
+        void (async (): Promise<void> => {
+          log('info', 'Rebuilding project…');
+          const result = await reloadProjectCode({
+            app,
+            builder: createProjectBuilder(),
+            projectDir,
+            baseline,
+            playGate: inState(SimState.Play),
+            isEditorEntity: (e) => app.world.has(e, EditorOnly),
+          });
+          if (result.ok) {
+            state.selectedEntity = null; // ids changed on respawn
+            projectCodeIndex = buildCodeIndex(app, editor.inspector, baseline);
+            log('cmd', `Reloaded: ${result.plugins.join(', ')}`);
+            console.log(`[studio] hot-reloaded ${projectDir}: ${result.plugins.join(', ')}`);
+          } else {
+            log('err', 'Build failed — session unchanged', result.error.split('\n')[0]);
+            console.error('[studio] hot reload build failed', result.error);
+          }
+          reloading = false;
+        })();
+      }, 200);
+    };
     void watchProject(projectDir, {
-      onRebuild: () => console.log('[studio] code change detected (hot-reload lands in a later phase)'),
-      onReloadScene: (path) => console.log(`[studio] scene changed on disk: ${path}`),
-      onReindex: () => console.log('[studio] assets changed on disk — reindex (lands in a later phase)'),
+      onRebuild: triggerReload,
+      onReloadScene: (path) => log('warn', `Scene changed on disk: ${path}`),
+      onReindex: () => log('info', 'Assets changed on disk — reindex (later phase)'),
     }).catch((err: unknown) => console.error('[studio] project watch failed', err));
   }
 

@@ -80,6 +80,21 @@ export class StageSystems {
     return this.cache;
   }
 
+  /**
+   * Remove every system matching `pred` and return them. Invalidates the topo
+   * cache so the next `ordered()` rebuilds without the removed systems. Used by
+   * the live plugin swap (hot reload) to drop a reloaded plugin's systems from a
+   * running schedule.
+   */
+  remove(pred: (sys: RegisteredSystem) => boolean): RegisteredSystem[] {
+    const removed: RegisteredSystem[] = [];
+    for (let i = this.systems.length - 1; i >= 0; i -= 1) {
+      if (pred(this.systems[i]!)) removed.push(...this.systems.splice(i, 1));
+    }
+    if (removed.length > 0) this.cache = null;
+    return removed;
+  }
+
   /** Force re-sort on next access. Called when a label referenced elsewhere is registered. */
   invalidate(): void {
     this.cache = null;

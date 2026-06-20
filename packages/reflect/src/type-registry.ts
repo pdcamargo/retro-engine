@@ -117,6 +117,19 @@ export class TypeRegistry {
     return entry;
   }
 
+  /**
+   * Remove a registered type by its constructor. Returns whether it was present.
+   * Used by hot reload to drop a reloaded plugin's types before its rebuilt
+   * versions re-register under the same names. No-op if `ctor` is not registered.
+   */
+  unregister(ctor: ComponentType<object>): boolean {
+    const entry = this.byCtor.get(ctor);
+    if (entry === undefined) return false;
+    this.byCtor.delete(ctor);
+    this.byName.delete(entry.name);
+    return true;
+  }
+
   /** Look up a registered type by its stable name. */
   get(name: string): RegisteredType | undefined {
     return this.byName.get(name);

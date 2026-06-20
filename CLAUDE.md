@@ -191,3 +191,5 @@ Reflection is how the engine round-trips world state into scenes and back ([ADR-
 - Registration is **per owning plugin** (the `AppTypeRegistry` resource accumulates them), never one central dump. The stable `name` defaults to `ctor.name` (ADR-0088); pass an explicit `{ name }` only to namespace a type or to keep its serialized name fixed across a class rename. Component-producing builds keep identifier minification off so `ctor.name` survives (see ADR-0088 for the build recipe).
 
 The registry is populated slice by slice as systems are touched; components not yet decided are a tracked gap, not a silent one — the end state is every component classified.
+
+Hot reload raises the stakes ([ADR-0102](docs/adr/ADR-0102-hot-code-reload-via-live-plugin-swap.md)): an authored component without a schema isn't just un-saveable, it is **dropped on every code reload** — the swap serializes the user scene and respawns it, so a schemaless component doesn't survive. One more reason the default is persistence.
