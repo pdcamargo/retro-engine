@@ -26,6 +26,10 @@ swap, so they leak or go stale across reloads.
   inspector registry on a code change.
 - **RemovedComponents flood**: tearing down the user scene on swap may surface a burst of
   removals to editor systems reading `RemovedComponents` next frame; scope/drain it.
+- **Prompt before clobbering on scene reload**: a scene file changing on disk now reloads the
+  open scene immediately (`reloadProjectScene`), replacing any unsaved in-studio edits to it.
+  ADR-0096's intended non-destructive behavior is a prompt ("reload / keep mine") when the
+  in-studio scene has unsaved changes.
 
 ## Acceptance
 
