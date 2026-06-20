@@ -41,6 +41,12 @@ export { MeshMaterial3d } from './mesh-material-3d';
 export type { MaterialCtor, MaterialPluginOptions } from './material-plugin';
 export { MaterialPlugin } from './material-plugin';
 
+export type { MaterialReflectSource } from './material-reflect';
+export { materialReflectionSchema } from './material-reflect';
+export { createMaterialImporter, createMaterialSerializer, MATERIAL_FORMAT_VERSION } from './material-importer';
+export type { MaterialTypeDescriptor } from './material-types';
+export { MATERIAL_ASSET_EXTENSION, MaterialTypes, registerMaterialLoaders } from './material-types';
+
 export { UnlitMaterial, UnlitMaterialPlugin } from './unlit-material';
 export { UNLIT_WGSL } from './unlit.wgsl';
 

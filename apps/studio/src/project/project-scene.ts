@@ -10,6 +10,7 @@ import {
   Images,
   Meshes,
   registerAssetStore,
+  registerMaterialLoaders,
   scanMetaManifest,
   ScenePlugin,
   Scenes,
@@ -62,6 +63,11 @@ export const loadProjectScene = async (
   if (images !== undefined) {
     server.registerLoader('hdr', images, createHdrImporter());
   }
+
+  // Kind-routed `.remat` loaders for every registered material type, so a scene
+  // entity's `MeshMaterial3d<M>` reference resolves into the right per-type store
+  // on demand. Re-run if a project registers its own material types.
+  registerMaterialLoaders(app);
 
   server.setManifest(manifest);
   server.loadByGuid(startupSceneGuid as AssetGuid);

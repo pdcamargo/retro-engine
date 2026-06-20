@@ -91,6 +91,13 @@ export class AssetServer {
   private readonly source: AssetSource;
   private readonly logger: Logger;
   private readonly loaders = new Map<string, LoaderEntry>();
+  /**
+   * Loaders keyed by asset `kind` rather than file extension. `loadByGuid`
+   * prefers one of these when the manifest entry's kind matches — the case
+   * where one extension maps to many stores (e.g. every material type shares
+   * `.remat` but loads into its own `Materials<M>` store).
+   */
+  private readonly kindLoaders = new Map<string, LoaderEntry>();
   private readonly pathToHandle = new Map<
     string,
     { readonly handle: Handle<unknown>; readonly store: Assets<unknown> }
@@ -121,6 +128,20 @@ export class AssetServer {
       throw new Error(`AssetServer.registerLoader: a loader is already registered for '.${ext}'.`);
     }
     this.loaders.set(ext, {
+      store: store as Assets<unknown>,
+      importer: importer as AssetImporter<unknown>,
+    });
+  }
+
+  /**
+   * Bind a loader to an asset `kind` (the `.meta` kind tag), for asset types
+   * where one file extension maps to many stores. {@link AssetServer.loadByGuid}
+   * prefers a kind loader over the extension loader when the manifest entry's
+   * kind matches. Idempotent re-registration of the same kind is allowed (the
+   * latest wins) so a hot-reloaded material plugin can re-register cleanly.
+   */
+  registerLoaderByKind<T>(kind: string, store: Assets<T>, importer: AssetImporter<T>): void {
+    this.kindLoaders.set(kind, {
       store: store as Assets<unknown>,
       importer: importer as AssetImporter<unknown>,
     });
@@ -227,11 +248,14 @@ export class AssetServer {
       throw new Error(`AssetServer.loadByGuid: guid '${guid}' is not in the manifest.`);
     }
 
+    // A kind loader wins when the manifest entry's kind has one (the
+    // many-types-one-extension case, e.g. materials); otherwise fall back to the
+    // location's extension loader.
     const ext = extensionOf(entry.location);
-    const loader = this.loaders.get(ext);
+    const loader = this.kindLoaders.get(entry.kind) ?? this.loaders.get(ext);
     if (loader === undefined) {
       throw new Error(
-        `AssetServer.loadByGuid: no loader registered for '.${ext}' (guid '${guid}', location '${entry.location}'). Registered: ${this.registeredExtensions()}.`,
+        `AssetServer.loadByGuid: no loader registered for kind '${entry.kind}' or '.${ext}' (guid '${guid}', location '${entry.location}'). Registered: ${this.registeredExtensions()}.`,
       );
     }
 

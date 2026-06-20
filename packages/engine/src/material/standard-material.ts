@@ -1,6 +1,7 @@
 import type { Handle } from '@retro-engine/assets';
 import type { Vec4 } from '@retro-engine/math';
 import { vec4 } from '@retro-engine/math';
+import { t } from '@retro-engine/reflect';
 
 import type { Image } from '../image/image';
 import type { App } from '../index';
@@ -159,13 +160,13 @@ export class StandardMaterial implements Material {
       binding: 0,
       visibility: 'fragment',
       fields: [
-        { fieldKey: 'baseColor', pack: 'vec4f' },
-        { fieldKey: 'emissive', pack: 'vec4f' },
-        { fieldKey: 'metallic', pack: 'f32' },
-        { fieldKey: 'roughness', pack: 'f32' },
-        { fieldKey: 'occlusionStrength', pack: 'f32' },
-        { fieldKey: 'alphaCutoff', pack: 'f32' },
-        { fieldKey: 'normalScale', pack: 'f32' },
+        { fieldKey: 'baseColor', pack: 'vec4f', semantic: 'color' },
+        { fieldKey: 'emissive', pack: 'vec4f', semantic: 'color' },
+        { fieldKey: 'metallic', pack: 'f32', meta: { range: [0, 1] } },
+        { fieldKey: 'roughness', pack: 'f32', meta: { range: [0, 1] } },
+        { fieldKey: 'occlusionStrength', pack: 'f32', meta: { range: [0, 1] } },
+        { fieldKey: 'alphaCutoff', pack: 'f32', meta: { range: [0, 1] } },
+        { fieldKey: 'normalScale', pack: 'f32', meta: { range: [0, 2] } },
       ],
     },
     {
@@ -251,6 +252,17 @@ export class StandardMaterial implements Material {
   static fragmentShader(): ShaderRef {
     return ShaderRefs.module('retro_engine::pbr');
   }
+
+  /**
+   * Authored fields the bind group doesn't cover, so they persist when the
+   * material is saved as an asset. `alphaMode` is intentionally omitted for now
+   * — its `'opaque' | { kind: 'mask'; cutoff } | 'blend'` shape needs a bespoke
+   * field type — so it keeps its constructor default on load.
+   */
+  static readonly serializedExtras = {
+    depthBias_: t.number,
+    doubleSided_: t.boolean,
+  };
 }
 
 /**

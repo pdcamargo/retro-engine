@@ -265,7 +265,7 @@ These are real ideas; they are not phases on this roadmap.
 ## Open questions
 
 - **Render-world implementation.** Full second `World` instance, or a logically-separate component-storage partition inside one `World`? Two-world has been chosen in principle; the *shape* is open and likely an ADR.
-- **`AsBindGroup` equivalent in TypeScript.** Decorator-driven, registry-driven, or class-static schema? Bevy leans on a derive macro; we have no macros. Almost certainly an ADR.
+- **`AsBindGroup` equivalent in TypeScript.** ✅ Resolved: class-static `bindGroup` schema (ADR-0027/0028). ADR-0107 then **derives a material's serialization schema from that bind group**, so materials are first-class `.remat` assets (no per-type serialization code) — see `docs/roadmap/asset-system.md`.
 - **WGSL → GLSL transpilation.** Ship Tint-WASM or constrain ourselves to a shader dialect we can hand-translate?
 - **HDRI prefiltering (Phase 10.7).** Bake at load time on the GPU each session, or precompute and ship `.ktx2` cubemaps as part of the asset pipeline? GPU prefilter is simpler day-1; precomputed scales better for ship builds.
 - **Storage-buffer dependencies.** Which engine features are willing to be GL2-incompatible? Answered phase by phase as compute/SSBO features land.

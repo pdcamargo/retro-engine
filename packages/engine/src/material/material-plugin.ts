@@ -16,7 +16,9 @@ import { ViewBindGroupCache } from '../camera/extracted';
 import { SortedCameras } from '../camera/sorted-cameras';
 import type { Handle } from '@retro-engine/assets';
 import { asAssetIndex, makeHandle } from '@retro-engine/assets';
-import { t } from '@retro-engine/reflect';
+import { type FieldType, t } from '@retro-engine/reflect';
+
+import { registerAssetSerializer } from '../asset/asset-serializers';
 
 import { Images } from '../image/images';
 import { RenderImages } from '../image/image-plugin';
@@ -52,6 +54,9 @@ import { ViewVisibility } from '../visibility/visibility';
 import type { BindGroupSchema } from './bind-group-schema';
 import type { Material, MaterialPipelineKey, ShaderRef } from './material';
 import { alphaModeKey } from './material';
+import { createMaterialImporter, createMaterialSerializer } from './material-importer';
+import { materialReflectionSchema } from './material-reflect';
+import { MaterialTypes } from './material-types';
 import { Materials } from './materials';
 import { MeshMaterial3d } from './mesh-material-3d';
 import {
@@ -102,6 +107,12 @@ export interface MaterialCtor<M extends Material> {
     vertexLayout: VertexBufferLayout,
     key: MaterialPipelineKey,
   ): void;
+  /**
+   * Extra serialized fields not derivable from {@link bindGroup} (e.g. CPU-only
+   * material knobs), merged into the material's asset reflection schema. Omit if
+   * the bind-group fields are the whole authored state.
+   */
+  readonly serializedExtras?: Readonly<Record<string, FieldType<unknown>>>;
 }
 
 /** Optional configuration for {@link MaterialPlugin}. */
@@ -231,6 +242,33 @@ export class MaterialPlugin<M extends Material> implements PluginObject {
         make: () => new this.MeshMaterial3d(makeHandle(asAssetIndex(0))),
       },
     );
+
+    // Material-as-asset: register the material VALUE type as reflectable
+    // (distinct from the MeshMaterial3d component above) with a schema derived
+    // from its bind group, plus its `.remat` serializer and a MaterialTypes
+    // descriptor. The kind-keyed loader is wired separately by
+    // `registerMaterialLoaders` once an AssetServer exists — it may not at build
+    // time (AssetPlugin is added by the host, often later).
+    const reflect = app.registerType(
+      this.materialClass as unknown as ComponentType<M>,
+      materialReflectionSchema(this.materialClass),
+      { name: this.materialClass.name, make: () => new this.materialClass() },
+    );
+    const serializer = createMaterialSerializer<M>(app, this.materialClass as unknown as ComponentType<object>);
+    registerAssetSerializer(app, this.materialClass.name, serializer);
+    let materialTypes = app.getResource(MaterialTypes);
+    if (materialTypes === undefined) {
+      materialTypes = new MaterialTypes();
+      app.insertResource(materialTypes);
+    }
+    materialTypes.register({
+      kind: this.materialClass.name,
+      store: materials as unknown as Materials<Material>,
+      reflect,
+      importer: createMaterialImporter<M>(app, this.materialClass as unknown as ComponentType<object>) as never,
+      serializer: serializer as never,
+      makeDefault: () => reflect.make(),
+    });
 
     // GPU resource creation is deferred to the first system tick — the
     // renderer's device is undefined until `app.run()` awaits `init()`, which

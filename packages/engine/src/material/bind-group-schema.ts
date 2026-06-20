@@ -1,3 +1,4 @@
+import type { FieldMeta } from '@retro-engine/reflect';
 import type { TextureFormat } from '@retro-engine/renderer-core';
 import { ShaderStage, type ShaderStageFlags } from '@retro-engine/renderer-core';
 
@@ -84,6 +85,18 @@ export const uniformFieldAlignment = (pack: UniformFieldPack): number => {
 export interface UniformField<M> {
   fieldKey: keyof M & string;
   pack: UniformFieldPack;
+  /**
+   * Authored meaning of the field, used only when the material's serialization
+   * schema is derived from this bind group (it does not affect GPU packing).
+   * `'color'` marks a `vec4f`/`vec3f` as a color so the inspector shows a
+   * picker; omit for a plain numeric vector.
+   */
+  semantic?: 'color';
+  /**
+   * Inspector hints (range, label, widget…) carried onto the derived
+   * serialization field. Ignored by GPU packing.
+   */
+  meta?: FieldMeta;
 }
 
 /**

@@ -61,7 +61,7 @@ export class UnlitMaterial implements Material {
       kind: 'uniform',
       binding: 0,
       visibility: 'fragment',
-      fields: [{ fieldKey: 'color', pack: 'vec4f' }],
+      fields: [{ fieldKey: 'color', pack: 'vec4f', semantic: 'color' }],
     },
     {
       kind: 'texture',

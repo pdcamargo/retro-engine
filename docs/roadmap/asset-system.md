@@ -1,8 +1,8 @@
 # Asset System
 
 - **Created:** 2026-05-21
-- **Status:** Runtime core + retrofit shipped (phases 1–3); persistent project save tier shipped browser-first (phases 4–5 write half — ADR-0070); native disk/bundle sources and studio (phase 6) deferred
-- **Decision:** ADR-0055 (seals the id / handle / asset-vs-inline model, including the deferred persistent GUID tier); ADR-0066 (read half); ADR-0070 (write half + write sink)
+- **Status:** Runtime core + retrofit shipped (phases 1–3); persistent project save tier shipped browser-first (phases 4–5 write half — ADR-0070); native disk/bundle sources and studio (phase 6) deferred. Materials are now first-class `.remat` assets (ADR-0107) — serialization schema derived from the bind group, kind-routed loading into per-type stores, scene mesh→material references resolve on demand.
+- **Decision:** ADR-0055 (seals the id / handle / asset-vs-inline model, including the deferred persistent GUID tier); ADR-0066 (read half); ADR-0070 (write half + write sink); ADR-0107 (materials as assets)
 
 ## Goal
 
