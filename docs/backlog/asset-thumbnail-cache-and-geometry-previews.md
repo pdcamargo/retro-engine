@@ -6,16 +6,17 @@
 
 ADR-0101 shipped the asset browser's thumbnail layer: a single 256-px master per asset,
 generated lazily and async, sampled at every zoom — wired for image assets (decode →
-texture → draw). Two parts of the decided end state were deliberately deferred to land
-together, because they share a motivation.
+texture → draw). ADR-0103 then added CPU flat-shaded previews for single-mesh `.rmesh`
+assets. The remaining parts of the decided end state were deferred to land together.
 
 ## Scope when picked up
 
-- **Rendered previews for meshes / scenes / prefabs.** An offscreen GPU pass per asset
-  (a thumbnail camera + a default material + a light, rendered into a small target via the
-  existing `ViewportTarget` pattern), so geometry assets read as their shape rather than a
-  procedural placeholder. Loads the asset (mesh/scene) on demand through the streaming
-  resolver (ADR-0100).
+- **GPU-rendered previews + glTF/scene/prefab.** ADR-0103 covers single-mesh `.rmesh` on the
+  CPU; still deferred: a higher-fidelity GPU pass per asset (a thumbnail camera + default
+  material + light into a small target via the `ViewportTarget` pattern, render-layer-isolated),
+  and previews for glTF meshes (a multi-mesh `Gltf`), scenes, and prefabs — loading the asset on
+  demand through the streaming resolver (ADR-0100). Scenes/prefabs/glTF show procedural
+  placeholders until then.
 - **A git-ignored `.re/thumbnails/<guid>.<hash8>.png` disk cache**, keyed by GUID +
   content hash (invalidated on edit), under an in-memory LRU. The payoff is cold-open speed
   for the *expensive* rendered previews — image decode is cheap enough that in-memory

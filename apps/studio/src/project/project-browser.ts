@@ -4,6 +4,7 @@ import type { AssetType } from '@retro-engine/editor-sdk';
 import type { ThumbnailService } from '../thumbnails/thumbnail-service';
 
 const IMAGE_EXT = /\.(png|jpe?g|webp|ktx2|basis)$/i;
+const MESH_EXT = /\.rmesh$/i;
 
 /** One asset in the project asset browser, derived from the scanned `.meta` manifest. */
 export interface BrowserAsset {
@@ -53,7 +54,8 @@ export const buildBrowserAssets = (manifest: AssetManifest): BrowserAsset[] => {
       guid: entry.guid,
       location: entry.location,
       meta: entry.kind,
-      thumbnailable: type === 'image' || IMAGE_EXT.test(entry.location),
+      // Previewable today: images (decode) and `.rmesh` meshes (CPU flat-shade).
+      thumbnailable: type === 'image' || IMAGE_EXT.test(entry.location) || MESH_EXT.test(entry.location),
     });
   }
   return out.sort((a, b) => a.name.localeCompare(b.name));

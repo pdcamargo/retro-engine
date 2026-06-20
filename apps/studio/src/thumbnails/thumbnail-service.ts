@@ -1,11 +1,16 @@
 import { ImGuiImplWeb, type ImTextureRef } from '@mori2003/jsimgui';
 import type { AssetSource } from '@retro-engine/assets';
+import { createMeshImporter } from '@retro-engine/engine';
 import { type Renderer, type Texture, TextureUsage } from '@retro-engine/renderer-core';
 import { GPU_TEXTURE, type InternalTexture } from '@retro-engine/renderer-webgpu';
+
+import { renderMeshThumbnail } from './mesh-thumbnail';
 
 /** Side of the square master thumbnail; ImGui samples it down for every zoom size. */
 const SIZE = 256;
 const RGBA = 4;
+
+const MESH_EXT = /\.rmesh$/i;
 
 /**
  * Decode an encoded image (`png`/`jpg`/…) into a centered, aspect-preserved
@@ -66,7 +71,12 @@ export class ThumbnailService {
 
   private async generate(guid: string, location: string): Promise<void> {
     try {
-      const pixels = await decodeToSquare(await this.source.read(location));
+      const bytes = await this.source.read(location);
+      // A `.rmesh` renders to a flat-shaded preview; everything else decodes as an
+      // image. Both paths produce a SIZE×SIZE RGBA8 buffer for the shared upload.
+      const pixels = MESH_EXT.test(location)
+        ? renderMeshThumbnail(await createMeshImporter()(bytes, undefined as never), SIZE)
+        : await decodeToSquare(bytes);
       const texture = this.renderer.createTexture({
         width: SIZE,
         height: SIZE,
