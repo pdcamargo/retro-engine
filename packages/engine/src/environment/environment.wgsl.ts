@@ -50,8 +50,10 @@ fn vs_main(@builtin(vertex_index) vertex_index: u32) -> VsOut {
 // faces line up with \`textureSample(cube, dir)\` at shade time. \`t\` flips NDC's
 // up-axis to the texture's down-axis.
 fn face_direction(face: u32, ndc: vec2<f32>) -> vec3<f32> {
+  // ndc.y = +1 rasterizes to the framebuffer top (cube texel row t = 0), where
+  // the cube convention puts dir.y = +1 — so t tracks ndc.y directly.
   let s = ndc.x;
-  let t = -ndc.y;
+  let t = ndc.y;
   var dir: vec3<f32>;
   switch face {
     case 0u: { dir = vec3<f32>( 1.0,    t,  -s); } // +X

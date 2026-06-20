@@ -34,8 +34,11 @@ fn vs_main(@builtin(vertex_index) vertex_index: u32) -> VsOut {
 }
 
 fn face_direction(face: u32, ndc: vec2<f32>) -> vec3<f32> {
+  // The rasterizer already maps ndc.y = +1 to the framebuffer top (cube texel
+  // row t = 0), and the cube convention puts dir.y = +1 at t = 0 — so t tracks
+  // ndc.y directly (a leading negation here double-flips the result).
   let s = ndc.x;
-  let t = -ndc.y;
+  let t = ndc.y;
   var dir: vec3<f32>;
   switch face {
     case 0u: { dir = vec3<f32>( 1.0,    t,  -s); } // +X

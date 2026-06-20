@@ -40,6 +40,7 @@ import {
   Name,
   ResMut,
   Skybox,
+  Sphere,
   SCENE_FORMAT_VERSION,
   Scene,
   ScenePlugin,
@@ -288,6 +289,32 @@ export const installShowcaseScene = (app: App, deps: ShowcaseDeps): void => {
       const model = cmd.spawn(new GltfSceneRoot(gltfHandle), modelT, new Name('Clover Model'));
       const showcaseRoot = idMap.get(0);
       if (showcaseRoot !== undefined) cmd.entity(showcaseRoot).addChild(model.id);
+
+      // A metallic roughness sweep so the Main Camera's EnvironmentMapLight reads
+      // at a glance: smooth chrome (sharp sky reflection) → rough (blurred), plus
+      // a matte sphere for the diffuse irradiance tint. Tweaking the camera's
+      // EnvironmentMapLight intensity / rotation visibly changes these.
+      const sphereMesh = meshes.add(new Sphere({ radius: 0.55 }).mesh().build());
+      const SWEEP = 4;
+      for (let i = 0; i < SWEEP; i++) {
+        const metalMat = materials.add(
+          new StandardMaterial({
+            baseColor: vec4.create(0.95, 0.95, 0.96, 1),
+            metallic: 1,
+            roughness: i / (SWEEP - 1),
+          }),
+        );
+        const st = new Transform();
+        st.translation = vec3.create((i - (SWEEP - 1) / 2) * 1.5, 1.4, -1.5);
+        const sphere = cmd.spawn(
+          new Mesh3d(sphereMesh),
+          new deps.material.MeshMaterial3d(metalMat),
+          st,
+          new Visibility('Visible'),
+          new Name(`Metal r=${(i / (SWEEP - 1)).toFixed(2)}`),
+        );
+        if (showcaseRoot !== undefined) cmd.entity(showcaseRoot).addChild(sphere.id);
+      }
     },
     { label: 'studio-showcase' },
   );

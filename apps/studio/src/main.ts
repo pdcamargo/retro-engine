@@ -154,6 +154,11 @@ const editor = createEditor({
 // quaternion x/y/z/w. Swap to a single 2D angle with `{ widget: 'angle2d' }`, or
 // remove this amendment to edit the raw quaternion components.
 editor.inspector.amend('Transform', [{ kind: 'field', name: 'rotation' }] as const, { widget: 'euler' });
+// Same Euler treatment for the environment rotation knobs.
+editor.inspector.amend('Skybox', [{ kind: 'field', name: 'rotation' }] as const, { widget: 'euler' });
+editor.inspector.amend('EnvironmentMapLight', [{ kind: 'field', name: 'rotation' }] as const, {
+  widget: 'euler',
+});
 
 editor
   .addPanel(hierarchyPanel(state, app))

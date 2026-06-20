@@ -85,34 +85,72 @@ const rgbeToFloat = (
 };
 
 /**
+ * Iterate an HDR's pixels, optionally downsampled so the longest side is capped
+ * to `maxDim`. Reads every source scanline (RLE requires it) but only invokes
+ * `pixel` for the kept rows/columns, with linear-float RGB — so a huge HDRI
+ * never materializes its full float buffer. Returns the output dimensions.
+ *
+ * Downsampling is nearest-sample (pick), which is adequate for skybox / IBL use
+ * where the result is further blurred (prefilter) or only a background.
+ */
+const decodeScaled = (
+  bytes: Uint8Array,
+  maxDim: number,
+  onStart: (outW: number, outH: number) => void,
+  pixel: (ox: number, oy: number, outW: number, r: number, g: number, b: number) => void,
+): { width: number; height: number } => {
+  const { width, height, bodyStart } = parseHeader(bytes);
+  const scale = Math.min(1, maxDim / Math.max(width, height));
+  const outW = Math.max(1, Math.round(width * scale));
+  const outH = Math.max(1, Math.round(height * scale));
+  onStart(outW, outH);
+
+  const cursor: Cursor = { pos: bodyStart };
+  const scanline = new Uint8Array(width * 4);
+  const rgb = new Float32Array(4);
+  let nextOut = 0;
+  for (let y = 0; y < height; y++) {
+    readScanline(bytes, cursor, width, scanline);
+    const targetRow = Math.min(outH - 1, Math.floor((y * outH) / height));
+    if (targetRow < nextOut) continue; // a row between kept rows — read, discard
+    nextOut = targetRow + 1;
+    for (let ox = 0; ox < outW; ox++) {
+      const sx = Math.min(width - 1, Math.floor((ox * width) / outW));
+      rgbeToFloat(scanline[sx * 4]!, scanline[sx * 4 + 1]!, scanline[sx * 4 + 2]!, scanline[sx * 4 + 3]!, rgb, 0);
+      pixel(ox, targetRow, outW, rgb[0]!, rgb[1]!, rgb[2]!);
+    }
+  }
+  return { width: outW, height: outH };
+};
+
+/**
  * Decode a Radiance RGBE (`.hdr`) image into linear float RGBA.
  *
  * Supports the new-style adaptive RLE scanline encoding (the common case for
  * `.hdr` files) and the flat / old-RLE fallback. Returns top-left-origin pixels
- * so the result maps directly onto an equirectangular {@link Image}.
+ * so the result maps directly onto an equirectangular {@link Image}. Pass
+ * `maxDim` to cap the longest side (nearest-downsampled) — e.g. to fit a large
+ * panorama within the GPU's max texture dimension.
  *
  * @throws if the byte stream is not a Radiance file or declares an unsupported
  *         format.
  */
-export const decodeRadianceHdr = (bytes: Uint8Array): DecodedHdr => {
-  const { width, height, bodyStart } = parseHeader(bytes);
-  const cursor: Cursor = { pos: bodyStart };
-  const data = new Float32Array(width * height * 4);
-  const scanline = new Uint8Array(width * 4);
-  for (let y = 0; y < height; y++) {
-    readScanline(bytes, cursor, width, scanline);
-    const rowBase = y * width * 4;
-    for (let x = 0; x < width; x++) {
-      rgbeToFloat(
-        scanline[x * 4]!,
-        scanline[x * 4 + 1]!,
-        scanline[x * 4 + 2]!,
-        scanline[x * 4 + 3]!,
-        data,
-        rowBase + x * 4,
-      );
-    }
-  }
+export const decodeRadianceHdr = (bytes: Uint8Array, maxDim = Infinity): DecodedHdr => {
+  let data = new Float32Array(0);
+  const { width, height } = decodeScaled(
+    bytes,
+    maxDim,
+    (outW, outH) => {
+      data = new Float32Array(outW * outH * 4);
+    },
+    (ox, oy, outW, r, g, b) => {
+      const o = (oy * outW + ox) * 4;
+      data[o] = r;
+      data[o + 1] = g;
+      data[o + 2] = b;
+      data[o + 3] = 1;
+    },
+  );
   return { width, height, data };
 };
 
@@ -132,34 +170,23 @@ export interface HdrPreview {
  * thumbnails and other LDR previews.
  */
 export const decodeRadianceHdrPreview = (bytes: Uint8Array, maxDim = 256): HdrPreview => {
-  const { width, height, bodyStart } = parseHeader(bytes);
-  const scale = Math.min(1, maxDim / Math.max(width, height));
-  const outW = Math.max(1, Math.round(width * scale));
-  const outH = Math.max(1, Math.round(height * scale));
-  const out = new Uint8Array(outW * outH * 4);
-
-  const cursor: Cursor = { pos: bodyStart };
-  const scanline = new Uint8Array(width * 4);
-  const rgba = new Float32Array(4);
-  // Map each output row to a source row; read (and discard) the rows between.
-  let nextOut = 0;
-  for (let y = 0; y < height; y++) {
-    readScanline(bytes, cursor, width, scanline);
-    const targetRow = Math.floor((y * outH) / height);
-    if (targetRow < nextOut) continue;
-    nextOut = targetRow + 1;
-    const rowBase = targetRow * outW * 4;
-    for (let ox = 0; ox < outW; ox++) {
-      const sx = Math.min(width - 1, Math.floor((ox * width) / outW));
-      rgbeToFloat(scanline[sx * 4]!, scanline[sx * 4 + 1]!, scanline[sx * 4 + 2]!, scanline[sx * 4 + 3]!, rgba, 0);
-      const o = rowBase + ox * 4;
-      out[o] = linearToSrgbByte(rgba[0]! / (1 + rgba[0]!));
-      out[o + 1] = linearToSrgbByte(rgba[1]! / (1 + rgba[1]!));
-      out[o + 2] = linearToSrgbByte(rgba[2]! / (1 + rgba[2]!));
+  let out = new Uint8Array(0);
+  const { width, height } = decodeScaled(
+    bytes,
+    maxDim,
+    (outW, outH) => {
+      out = new Uint8Array(outW * outH * 4);
+    },
+    (ox, oy, outW, r, g, b) => {
+      const o = (oy * outW + ox) * 4;
+      // Reinhard tonemap keeps out-of-range values visible, then sRGB encode.
+      out[o] = linearToSrgbByte(r / (1 + r));
+      out[o + 1] = linearToSrgbByte(g / (1 + g));
+      out[o + 2] = linearToSrgbByte(b / (1 + b));
       out[o + 3] = 255;
-    }
-  }
-  return { width: outW, height: outH, data: out };
+    },
+  );
+  return { width, height, data: out };
 };
 
 /** Linear [0,1] → sRGB-encoded byte [0,255]. */
@@ -271,8 +298,16 @@ const packRgba16f = (floats: Float32Array): Uint8Array => {
  * `AssetServer` for the `'hdr'` extension; the resulting 2D image is converted
  * to a cube on demand by the skybox / environment systems.
  */
+/**
+ * Longest-side cap applied when importing an HDRI to a GPU image. Keeps a
+ * large panorama within the WebGPU max 2D texture dimension (8192) with
+ * headroom, and bounds memory — the equirect is converted to a cube for the
+ * skybox / IBL anyway, so multi-thousand-pixel source width buys nothing.
+ */
+const IMPORTER_MAX_DIM = 4096;
+
 export const createHdrImporter = (): AssetImporter<Image> => (bytes: Uint8Array): Image => {
-  const decoded = decodeRadianceHdr(bytes);
+  const decoded = decodeRadianceHdr(bytes, IMPORTER_MAX_DIM);
   return Image.fromBytes({
     data: packRgba16f(decoded.data),
     format: 'rgba16float',

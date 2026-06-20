@@ -56,6 +56,16 @@ describe('decodeRadianceHdr', () => {
     expect(data[2]).toBe(0);
   });
 
+  it('downsamples the float decode when maxDim caps the longest side', () => {
+    // 8-wide RLE scanline; cap to 2 → a 2×1 float image (fits a texture limit).
+    const body = [2, 2, 0, 8, 136, 128, 136, 128, 136, 128, 136, 128];
+    const { width, height, data } = decodeRadianceHdr(hdrBytes('-Y 1 +X 8', body), 2);
+    expect(width).toBe(2);
+    expect(height).toBe(1);
+    expect(data.length).toBe(2 * 4);
+    expect(data[0]).toBeCloseTo(0.5, 5); // still linear floats, just fewer of them
+  });
+
   it('rejects a non-Radiance stream', () => {
     expect(() => decodeRadianceHdr(new Uint8Array(ascii('not an hdr\n')))).toThrow(/not a Radiance/);
   });
