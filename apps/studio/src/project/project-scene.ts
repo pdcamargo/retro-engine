@@ -5,7 +5,9 @@ import {
   ASSET_TYPE,
   AssetPlugin,
   AssetServer,
+  createHdrImporter,
   createMeshImporter,
+  Images,
   Meshes,
   registerAssetStore,
   scanMetaManifest,
@@ -53,6 +55,13 @@ export const loadProjectScene = async (
     registerAssetStore(app, ASSET_TYPE.mesh, meshes);
   }
   server.registerLoader('rmesh', meshes, createMeshImporter());
+
+  // `.hdr` Radiance HDRIs decode to a linear equirect Image; the skybox /
+  // environment systems convert the equirect to a cube on demand.
+  const images = app.getResource(Images);
+  if (images !== undefined) {
+    server.registerLoader('hdr', images, createHdrImporter());
+  }
 
   server.setManifest(manifest);
   server.loadByGuid(startupSceneGuid as AssetGuid);

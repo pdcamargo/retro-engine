@@ -3,7 +3,7 @@ export type WatchReaction = 'rebuild' | 'reload-scene' | 'reindex' | 'ignore';
 
 const CODE = /\.(ts|tsx|js|jsx|mjs)$/i;
 const SCENE = /\.(rescene|reprefab)$/i;
-const ASSET = /\.(png|jpe?g|webp|ktx2|basis|glb|gltf|bin|ogg|mp3|wav|mp4|webm|rmesh)$/i;
+const ASSET = /\.(png|jpe?g|webp|ktx2|basis|hdr|glb|gltf|bin|ogg|mp3|wav|mp4|webm|rmesh)$/i;
 
 /**
  * Classify a changed project file into the studio's reaction:

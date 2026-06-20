@@ -3,7 +3,7 @@ import type { AssetType } from '@retro-engine/editor-sdk';
 
 import type { ThumbnailService } from '../thumbnails/thumbnail-service';
 
-const IMAGE_EXT = /\.(png|jpe?g|webp|ktx2|basis)$/i;
+const IMAGE_EXT = /\.(png|jpe?g|webp|ktx2|basis|hdr)$/i;
 const MESH_EXT = /\.rmesh$/i;
 
 /** One asset in the project asset browser, derived from the scanned `.meta` manifest. */

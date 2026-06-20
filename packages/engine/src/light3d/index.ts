@@ -11,6 +11,8 @@ export { CascadeShadowConfig, MAX_CASCADES } from './cascade-shadow-config';
 export type { CascadeFitParams } from './cascade-shadow';
 export { cascadeLightViewProj, computeCascadeSplits, reserveCasterLayers } from './cascade-shadow';
 export {
+  ENVIRONMENT_PARAMS_BYTE_SIZE,
+  ENVIRONMENT_PARAMS_FLOAT_COUNT,
   forwardFromMatrix,
   GPU_LIGHTS_BYTE_SIZE,
   GPU_LIGHTS_FLOAT_COUNT,

@@ -157,15 +157,15 @@ HAL change. Light direction for directional/spot is derived from
 - **10.4 Shadow maps** — per-light depth render. ✅ (ADR-0045) directional + spot, 2D-array depth atlas, `NotShadowCaster` opt-out. Point-light (cube) shadows + `NotShadowReceiver` are documented follow-ons; the directional frustum was a fixed origin box until cascades (10.5, ADR-0046) added camera fitting.
 - **10.5 Cascaded shadow maps** — for `DirectionalLight` via `CascadeShadowConfig`. ✅ (ADR-0046) camera-fitted cascades over the shared 2D-array atlas (`MAX_SHADOW_CASTERS` 8→12), bounding-sphere + texel-snap stabilization, per-fragment cascade selection by view-space depth in `pbr.wgsl`. Per-light split ranges, multi-camera fitting, per-cascade culling/bias are documented follow-ons.
 - **10.6 PCF / shadow filtering kernels** — `ShadowFilteringMethod`. ✅ (ADR-0047) `Shadow3dSettings.filteringMethod` selects `Hardware2x2` (default, single-tap hardware 2×2 PCF), `Castano13` (9-tap weighted-bilinear Gaussian), or `Pcf5x5` (25-tap uniform); `GpuLights.shadow_flags` carries the ordinal and `retro_engine::shadow3d` dispatches in uniform control flow. Per-camera / per-light / per-cascade overrides and PCSS / temporal PCF are documented follow-ons.
-- **10.7 Environment map & image-based lighting (IBL)** — PBR needs this to look right, but it is **gated on the asset system** (HDRI loading + cubemap baking are not built yet), so it lands after `docs/roadmap/asset-system.md`. ADR-0044's flat ambient term is the placeholder it replaces.
-  - HDRI loading (`.hdr` Radiance, `.exr` OpenEXR) → high-precision float texture.
-  - Equirectangular → cubemap conversion (one-shot bake).
-  - Diffuse irradiance prefiltering (low-frequency cosine-weighted convolution into a small cubemap).
-  - Specular GGX prefiltering (mip chain, split-sum approximation).
-  - BRDF integration LUT (2D, generated once and reused).
-  - `EnvironmentMapLight` component (diffuse cubemap + specular cubemap + intensity + rotation). Per-camera, with optional per-light-probe overrides.
-  - `StandardMaterial` PBR shader samples it as ambient + indirect specular.
-  - The same environment cubemap is the asset the **skybox** (Phase 12.7) renders — one HDRI, two consumers.
+- **10.7 Environment map & image-based lighting (IBL)** — ✅ ADR-0105 shipped runtime-prefiltered IBL from a **cube** `Image` (render-pass prefilter — diffuse irradiance + GGX specular mip chain + BRDF LUT, no compute — an `EnvironmentMapLight` per-camera component, and split-sum sampling folded into the shared `GpuLights` `@group(2)`, replacing ADR-0044's flat ambient). ADR-0106 added `.hdr` Radiance loading + on-demand equirect→cube conversion so an HDRI is a valid source for both IBL and the skybox. Device-verified in `apps/playground` (`?mode=ibl`, `&src=equirect`).
+  - HDRI loading (`.hdr` Radiance) → high-precision float texture. ✅ (ADR-0106) `.exr` (OpenEXR) deferred — heavier decoder, `.hdr` covers the common case.
+  - Equirectangular → cubemap conversion (one-shot GPU bake, cached, shared by skybox + IBL). ✅ (ADR-0106)
+  - Diffuse irradiance prefiltering (low-frequency cosine-weighted convolution into a small cubemap). ✅ (ADR-0105)
+  - Specular GGX prefiltering (mip chain, split-sum approximation). ✅ (ADR-0105)
+  - BRDF integration LUT (2D, generated once and reused). ✅ (ADR-0105)
+  - `EnvironmentMapLight` component (intensity, diffuse/specular intensity, rotation). ✅ (ADR-0105) Per-camera; the GPU env is currently global (first active camera wins) — per-camera / per-light-probe overrides are a documented follow-on.
+  - `StandardMaterial` PBR shader samples it as ambient + indirect specular. ✅ (ADR-0105) Folded into `GpuLights` `@group(2)`, so every lit material gets it (no per-material opt-out).
+  - The same environment cubemap is the asset the **skybox** (Phase 12.7) renders — one HDRI, two consumers. ✅ (cube source; HDRI source lands with the `.hdr` loader).
 - **10.8 Light probes & `IrradianceVolume`** — placed probes for indirect lighting in regions where one global env map isn't enough. Depends on baking infrastructure.
 - **10.9 Lightmap consumer** — baked lighting; the producer is a separate tool.
 
@@ -209,7 +209,7 @@ Each effect is opt-in via a per-camera component that inserts a node into the ca
 - **12.4 `Bloom`**.
 - **12.5 `Fxaa` / `Smaa`**.
 - **12.6 `Taa`** — per-camera temporal anti-aliasing. ✅ (ADR-0053) CPU Halton jitter baked into `view_proj` (motion vectors read a new `unjittered_view_proj` so velocities stay jitter-free), per-camera `rgba16float` history ping-pong, an HDR-space resolve (reproject along the motion target + YCoCg neighborhood variance-clip + Karis tonemap-weighted blend), and a shared per-camera `CurrentHdrView` post-process handoff that `MotionBlur` + `Tonemapping` were refactored onto. Browser-verified in `apps/playground` (`?mode=taa`, press T to toggle).
-- **12.7 `Skybox`** — visually renders the same HDRI cubemap that Phase 10.7's `EnvironmentMapLight` lights from. Single asset, two consumers. Optional per-camera rotation/intensity override.
+- **12.7 `Skybox`** — ✅ (ADR-0105) per-camera `Skybox` component renders the same cube `Image` that `EnvironmentMapLight` lights from (single asset, two consumers), depth-tested between the opaque and transparent passes, with a `brightness` + `rotation` override and an overridable fragment-shader hook for custom/procedural skies. Device-verified in `apps/playground` (`?mode=skybox`). HDRI (`.hdr`) as the source lands with the 10.7 loader.
 - **12.8 Prepass** — `DepthPrepass` + `NormalPrepass` ✅ (ADR-0050), `MotionVectorPrepass` ✅ (ADR-0051). Device-verified during 12.10 bring-up (`apps/playground` `?mode=motion-vectors[&debug=motion]`), which surfaced three device-only defects the test stub could not catch — tracked + fixed in `docs/bugs/`. `DeferredPrepass` still pending.
 - **12.9 `DepthOfField`**.
 - **12.10 `MotionBlur`** — per-camera HDR-space pass consuming the motion-vector prepass. ✅ (ADR-0052). Browser-verified in `apps/playground` (`?mode=motion-vectors&blur=1`, press B to toggle).

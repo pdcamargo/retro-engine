@@ -111,7 +111,7 @@ const stubTexture: Texture = {
   createView: () => stubView,
   destroy: () => undefined,
 };
-const stubRenderImage: RenderImage = { texture: stubTexture, view: stubView, sampler: stubSampler };
+const stubRenderImage: RenderImage = { texture: stubTexture, view: stubView, sampler: stubSampler, dimension: '2d' };
 
 const seed = (): {
   renderer: ReturnType<typeof makeRenderingBenchRenderer>;

@@ -187,6 +187,7 @@ const stubRenderImage: RenderImage = {
   texture: stubTexture,
   view: stubTextureView,
   sampler: stubSampler,
+  dimension: '2d',
 };
 
 const seedRenderImages = (images: Images): RenderImages => {
@@ -388,6 +389,7 @@ describe('prepareBindGroup (handle mode)', () => {
       texture: stubTexture,
       view: customView,
       sampler: customSampler,
+      dimension: '2d',
     });
     const layout = schemaToBindGroupLayout(renderer, HandleMaterial.bindGroup, 'handle');
     const material = new HandleMaterial();
@@ -422,6 +424,7 @@ describe('prepareBindGroup (handle mode)', () => {
       texture: stubTexture,
       view: whiteView,
       sampler: whiteSampler,
+      dimension: '2d',
     });
     renderImages.set(images.NORMAL_FLAT, stubRenderImage);
     const layout = schemaToBindGroupLayout(renderer, HandleMaterial.bindGroup, 'handle');
@@ -453,6 +456,7 @@ describe('prepareBindGroup (handle mode)', () => {
       texture: stubTexture,
       view: normalView,
       sampler: stubSampler,
+      dimension: '2d',
     });
     const layout = schemaToBindGroupLayout(renderer, HandleMaterial.bindGroup, 'handle');
     const material = new HandleMaterial();

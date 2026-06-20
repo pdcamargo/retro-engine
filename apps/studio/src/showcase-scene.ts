@@ -29,6 +29,9 @@ import {
   Cuboid,
   defineTemplate,
   DepthPrepass,
+  EnvironmentMapLight,
+  Image,
+  Images,
   MainCamera,
   MaterialPlugin,
   Mesh3d,
@@ -36,6 +39,7 @@ import {
   MotionVectorPrepass,
   Name,
   ResMut,
+  Skybox,
   SCENE_FORMAT_VERSION,
   Scene,
   ScenePlugin,
@@ -59,6 +63,52 @@ const TEMPLATE_NAME = 'ShowcaseCube';
 const CHILD_SCENE_GUID = 'studio-showcase-pillar';
 const MESH_GUID = 'studio-showcase-mesh';
 const MAT_GUID = 'studio-showcase-mat';
+const ENV_GUID = 'studio-showcase-env';
+
+/**
+ * A simple gradient-sky environment cube (sky blue zenith → warm horizon, dark
+ * ground) so the showcase camera's `Skybox` + `EnvironmentMapLight` have content
+ * to display and light from. Built in code — no asset dependency. sRGB bytes;
+ * the GPU upload decodes them to linear.
+ */
+const makeSkyCube = (): Image => {
+  const N = 64;
+  const sky: readonly [number, number, number] = [135, 180, 235];
+  const horizon: readonly [number, number, number] = [225, 205, 175];
+  const zenith: readonly [number, number, number] = [105, 155, 225];
+  const ground: readonly [number, number, number] = [70, 64, 58];
+  const data = new Uint8Array(6 * N * N * 4);
+  for (let face = 0; face < 6; face++) {
+    for (let y = 0; y < N; y++) {
+      const tt = y / (N - 1); // 0 = top of face, 1 = bottom
+      for (let x = 0; x < N; x++) {
+        const o = (face * N * N + y * N + x) * 4;
+        let c: readonly [number, number, number];
+        if (face === 2) c = zenith; // +Y up
+        else if (face === 3) c = ground; // -Y down
+        else c = [
+          Math.round(sky[0] + (horizon[0] - sky[0]) * tt),
+          Math.round(sky[1] + (horizon[1] - sky[1]) * tt),
+          Math.round(sky[2] + (horizon[2] - sky[2]) * tt),
+        ];
+        data[o] = c[0];
+        data[o + 1] = c[1];
+        data[o + 2] = c[2];
+        data[o + 3] = 255;
+      }
+    }
+  }
+  return Image.fromBytes({
+    data,
+    format: 'rgba8unorm',
+    colorSpace: 'srgb',
+    width: N,
+    height: N,
+    depthOrArrayLayers: 6,
+    dimension: 'cube',
+    label: 'studio-showcase-sky',
+  });
+};
 
 const transform = (translation: readonly [number, number, number]): SerializedComponent => ({
   type: 'Transform',
@@ -144,11 +194,12 @@ export const installShowcaseScene = (app: App, deps: ShowcaseDeps): void => {
 
   app.addSystem(
     'startup',
-    [Commands, ResMut(Meshes), ResMut(deps.material.Materials), ResMut(Scenes)],
-    (cmd, meshes, materials, scenes) => {
+    [Commands, ResMut(Meshes), ResMut(deps.material.Materials), ResMut(Scenes), ResMut(Images)],
+    (cmd, meshes, materials, scenes, images) => {
       const registry = app.getResource(AppTypeRegistry)!.registry;
 
       const cubeMesh = meshes.add(new Cuboid().mesh().build());
+      const envHandle = images.add(makeSkyCube());
       const greenMat = materials.add(new StandardMaterial({ baseColor: vec4.create(0.35, 0.8, 0.45, 1), roughness: 0.6 }));
       const tealMat = materials.add(new StandardMaterial({ baseColor: vec4.create(0.3, 0.7, 0.85, 1), roughness: 0.5 }));
 
@@ -189,6 +240,7 @@ export const installShowcaseScene = (app: App, deps: ShowcaseDeps): void => {
         if (assetType === 'Scene') return scenes.handleByGuid(guid as AssetGuid)!;
         if (guid === MESH_GUID) return cubeMesh;
         if (guid === MAT_GUID) return tealMat;
+        if (guid === ENV_GUID) return envHandle;
         return makeHandle(0 as never);
       };
 
@@ -210,6 +262,11 @@ export const installShowcaseScene = (app: App, deps: ShowcaseDeps): void => {
         new MotionVectorPrepass(),
         new Taa(),
         new MainCamera(),
+        // Skybox + IBL from the gradient sky cube — one environment, two
+        // consumers. The handle carries ENV_GUID so it round-trips through
+        // serialize/spawn (resolved back to the live image above).
+        new Skybox({ image: makeHandle<Image>(envHandle.index, ENV_GUID as AssetGuid) }),
+        new EnvironmentMapLight({ environmentMap: makeHandle<Image>(envHandle.index, ENV_GUID as AssetGuid) }),
         new Name('Main Camera'),
       );
       const serializedCamera = serializeWorld(cameraWorld, registry).entities[0];

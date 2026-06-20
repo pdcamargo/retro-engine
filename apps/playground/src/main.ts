@@ -19,6 +19,8 @@ import { saveShowcasePlugin } from './save-showcase-plugin';
 import { sceneShowcasePlugin } from './scene-showcase-plugin';
 import { serializeShowcasePlugin } from './serialize-showcase-plugin';
 import { shapesShowcasePlugin } from './shapes-showcase-plugin';
+import { environmentShowcasePlugin } from './environment-showcase-plugin';
+import { skyboxShowcasePlugin } from './skybox-showcase-plugin';
 import { sliceShowcasePlugin } from './slice-showcase-plugin';
 import { spriteShowcasePlugin } from './sprite-showcase-plugin';
 import { stressShowcasePlugin } from './stress-showcase-plugin';
@@ -106,7 +108,11 @@ const showcase =
             ? stressShowcasePlugin
             : mode === 'lights'
               ? lightsShowcasePlugin
-              : mode === 'lit'
+              : mode === 'skybox'
+              ? skyboxShowcasePlugin
+            : mode === 'ibl'
+              ? environmentShowcasePlugin
+            : mode === 'lit'
                 ? litShowcasePlugin
                 : mode === 'material'
                 ? materialShowcasePlugin

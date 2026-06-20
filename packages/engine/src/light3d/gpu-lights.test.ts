@@ -254,7 +254,7 @@ describe('shadow metadata packing', () => {
 });
 
 describe('GpuLights @group(2) layout + bind group', () => {
-  it('builds a 3-entry layout but no bind group until the shadow atlas exists', () => {
+  it('builds an 8-entry layout but no bind group until the shadow atlas exists', () => {
     const renderer = makeRenderingRenderer();
     const captured: number[] = [];
     const original = renderer.createBindGroupLayout.bind(renderer);
@@ -265,7 +265,9 @@ describe('GpuLights @group(2) layout + bind group', () => {
 
     const lights = new GpuLights();
     lights.ensureInitialised(renderer);
-    expect(captured).toEqual([3]); // uniform + depth-2d-array texture + comparison sampler
+    // lights uniform + shadow atlas + comparison sampler, then the IBL set:
+    // irradiance cube + specular cube + BRDF LUT + env sampler + env params.
+    expect(captured).toEqual([8]);
     expect(lights.layout).toBeDefined();
     expect(lights.bindGroup).toBeUndefined();
 

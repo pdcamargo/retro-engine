@@ -199,11 +199,16 @@ export type {
   UniformFieldPack,
 } from './material';
 export type {
+  DecodedHdr,
+  HdrPreview,
   ImageDimension,
   RenderImage,
 } from './image';
 export {
   bytesPerTexel,
+  createHdrImporter,
+  decodeRadianceHdr,
+  decodeRadianceHdrPreview,
   ExtractedImageAssetEvents,
   Image,
   ImagePlugin,
@@ -525,6 +530,30 @@ export { GridRenderState, type GridPipelineKey } from './grid/grid-render-state'
 export { GridPass3dLabel } from './grid/grid-pass-node';
 export { GridPlugin } from './grid/grid-plugin';
 
+export { Skybox } from './skybox/skybox';
+export { SKYBOX_WGSL } from './skybox/skybox.wgsl';
+export type { ExtractedSkybox } from './skybox/view-skybox';
+export { ViewSkybox } from './skybox/view-skybox';
+export type { SkyboxPipelineKey } from './skybox/skybox-pipeline';
+export { SkyboxPipeline } from './skybox/skybox-pipeline';
+export { makeSkyboxNode, SkyboxPass3dLabel } from './skybox/skybox-node';
+export { SkyboxPlugin } from './skybox/skybox-plugin';
+
+export { EnvironmentMapLight } from './environment/environment-map-light';
+export { ENVIRONMENT_PREFILTER_WGSL } from './environment/environment.wgsl';
+export { ActiveEnvironment } from './environment/active-environment';
+export type { PrefilteredEnvironment } from './environment/environment-prefilter';
+export { EnvironmentPrefilter, RenderEnvironmentMaps } from './environment/environment-prefilter';
+export { EQUIRECT_TO_CUBE_WGSL } from './environment/equirect-to-cube.wgsl';
+export type { ResolvedEnvironmentCube } from './environment/environment-cube';
+export {
+  EnvironmentCubeConverter,
+  ensureEnvironmentCubeResources,
+  RenderEnvironmentCubes,
+  resolveEnvironmentCubeView,
+} from './environment/environment-cube';
+export { EnvironmentMapPlugin } from './environment/environment-plugin';
+
 export { DEFAULT_MOTION_BLUR, MotionBlur } from './motion-blur/motion-blur';
 export { MOTION_BLUR_WGSL } from './motion-blur/motion-blur.wgsl';
 export type { MotionBlurKey } from './motion-blur/motion-blur-pipeline';
@@ -604,6 +633,8 @@ export {
   computeCascadeSplits,
   directionalLightViewProj,
   DirectionalLight3d,
+  ENVIRONMENT_PARAMS_BYTE_SIZE,
+  ENVIRONMENT_PARAMS_FLOAT_COUNT,
   forwardFromMatrix,
   GPU_LIGHTS_BYTE_SIZE,
   GPU_LIGHTS_FLOAT_COUNT,

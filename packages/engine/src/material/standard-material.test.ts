@@ -101,6 +101,7 @@ const stubRenderImage: RenderImage = {
   texture: stubTexture,
   view: stubTextureView,
   sampler: stubSampler,
+  dimension: '2d',
 };
 
 const seedRenderImages = (images: Images): RenderImages => {

@@ -1,6 +1,6 @@
 import { ImGuiImplWeb, type ImTextureRef } from '@mori2003/jsimgui';
 import type { AssetSource } from '@retro-engine/assets';
-import { createMeshImporter } from '@retro-engine/engine';
+import { createMeshImporter, decodeRadianceHdrPreview } from '@retro-engine/engine';
 import { type Renderer, type Texture, TextureUsage } from '@retro-engine/renderer-core';
 import { GPU_TEXTURE, type InternalTexture } from '@retro-engine/renderer-webgpu';
 
@@ -11,13 +11,10 @@ const SIZE = 256;
 const RGBA = 4;
 
 const MESH_EXT = /\.rmesh$/i;
+const HDR_EXT = /\.hdr$/i;
 
-/**
- * Decode an encoded image (`png`/`jpg`/…) into a centered, aspect-preserved
- * `SIZE×SIZE` RGBA8 buffer via the webview's `createImageBitmap` + `OffscreenCanvas`.
- */
-const decodeToSquare = async (bytes: Uint8Array): Promise<Uint8Array> => {
-  const bitmap = await createImageBitmap(new Blob([bytes as BlobPart]));
+/** Center an `ImageBitmap` into an aspect-preserved `SIZE×SIZE` RGBA8 buffer. */
+const fitToSquare = (bitmap: ImageBitmap): Uint8Array => {
   try {
     const canvas = new OffscreenCanvas(SIZE, SIZE);
     const ctx = canvas.getContext('2d');
@@ -30,6 +27,17 @@ const decodeToSquare = async (bytes: Uint8Array): Promise<Uint8Array> => {
   } finally {
     bitmap.close();
   }
+};
+
+/** A bitmap for the source bytes: encoded images decode natively; `.hdr` is
+ * decoded + Reinhard-tonemapped to an LDR preview first (floats can't go through
+ * `createImageBitmap`). */
+const bitmapFor = async (location: string, bytes: Uint8Array): Promise<ImageBitmap> => {
+  if (HDR_EXT.test(location)) {
+    const p = decodeRadianceHdrPreview(bytes, SIZE);
+    return createImageBitmap(new ImageData(new Uint8ClampedArray(p.data), p.width, p.height));
+  }
+  return createImageBitmap(new Blob([bytes as BlobPart]));
 };
 
 /**
@@ -76,7 +84,7 @@ export class ThumbnailService {
       // image. Both paths produce a SIZE×SIZE RGBA8 buffer for the shared upload.
       const pixels = MESH_EXT.test(location)
         ? renderMeshThumbnail(await createMeshImporter()(bytes, undefined as never), SIZE)
-        : await decodeToSquare(bytes);
+        : fitToSquare(await bitmapFor(location, bytes));
       const texture = this.renderer.createTexture({
         width: SIZE,
         height: SIZE,

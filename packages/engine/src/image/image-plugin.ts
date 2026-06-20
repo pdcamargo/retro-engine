@@ -217,5 +217,5 @@ const uploadImage = (
 
   const sampler = renderer.createSampler(image.sampler);
 
-  renderImages.set(handle, { texture, view, sampler });
+  renderImages.set(handle, { texture, view, sampler, dimension: image.dimension });
 };

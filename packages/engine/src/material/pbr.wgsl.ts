@@ -269,8 +269,15 @@ fn fs_main(in: VsOut, @builtin(front_facing) front_facing: bool) -> @location(0)
   ssao = textureSampleLevel(ao_texture, ao_sampler, ao_uv, 0.0).r;
 #endif
 
-  // Flat scene ambient — replaced by image-based lighting in Phase 10.7.
-  let ambient = lights.ambient.rgb * lights.ambient.a * base_color.rgb * occlusion * ssao;
+  // Indirect light: image-based lighting when an environment map is bound,
+  // otherwise the flat scene ambient. Both are darkened by the material
+  // occlusion texture and the screen-space AO factor.
+  var ambient: vec3<f32>;
+  if (has_environment()) {
+    ambient = evaluate_ibl(n, v, n_dot_v, base_color.rgb, metallic, roughness, f0) * occlusion * ssao;
+  } else {
+    ambient = lights.ambient.rgb * lights.ambient.a * base_color.rgb * occlusion * ssao;
+  }
 
   let final_rgb = ambient + direct + material.emissive.rgb * emissive_sample.rgb;
   return vec4<f32>(final_rgb, base_color.a);

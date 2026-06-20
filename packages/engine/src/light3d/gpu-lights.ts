@@ -5,9 +5,11 @@ import type {
   Buffer,
   Renderer,
   Sampler,
+  Texture,
+  TextureFormat,
   TextureView,
 } from '@retro-engine/renderer-core';
-import { BufferUsage, ShaderStage } from '@retro-engine/renderer-core';
+import { BufferUsage, ShaderStage, TextureUsage } from '@retro-engine/renderer-core';
 
 import type { AmbientLight } from './ambient-light';
 import type { DirectionalLight3d } from './directional-light-3d';
@@ -93,6 +95,17 @@ export const GPU_LIGHTS_BYTE_SIZE =
 
 /** `GPU_LIGHTS_BYTE_SIZE / 4` — number of `f32` slots in the lights buffer (2032). */
 export const GPU_LIGHTS_FLOAT_COUNT = GPU_LIGHTS_BYTE_SIZE / 4;
+
+/**
+ * Byte size of the image-based-lighting environment params uniform bound at
+ * `@group(2) @binding(7)`: a `vec4<f32>` (x = has-environment flag, y = diffuse
+ * intensity, z = specular intensity, w = max specular mip) followed by a
+ * `mat4x4<f32>` lookup rotation — 80 B. Kept separate from {@link GpuLights} so
+ * the analytic-light buffer's std140 layout is unaffected by IBL.
+ */
+export const ENVIRONMENT_PARAMS_BYTE_SIZE = 80 as const;
+/** `ENVIRONMENT_PARAMS_BYTE_SIZE / 4` — `f32` slots in the env params buffer (20). */
+export const ENVIRONMENT_PARAMS_FLOAT_COUNT = ENVIRONMENT_PARAMS_BYTE_SIZE / 4;
 
 /**
  * Extract the normalized world-space forward axis (−Z) from a column-major
@@ -351,15 +364,37 @@ export const packShadowFlags = (u32: Uint32Array, method: ShadowFilteringMethod)
 export class GpuLights {
   /** Backing uniform buffer (`UNIFORM | COPY_DST`). Allocated by {@link ensureInitialised}. */
   buffer: Buffer | undefined;
-  /** `@group(2)` bind-group layout (lights uniform + shadow atlas + comparison sampler). */
+  /**
+   * `@group(2)` bind-group layout. Bindings: lights uniform (0), shadow atlas
+   * (1), comparison sampler (2), then the image-based-lighting set — irradiance
+   * cube (3), specular cube (4), BRDF LUT (5), environment sampler (6), and the
+   * environment params uniform (7).
+   */
   layout: BindGroupLayout | undefined;
   /** `@group(2)` bind group bound by the Core3d phase nodes. Built by {@link buildShadowBindGroup}. */
   bindGroup: BindGroup | undefined;
+  /** IBL environment params buffer bound at `@binding(7)`; written by the environment plugin. */
+  environmentParams: Buffer | undefined;
 
   /** CPU scratch mirroring the buffer; `f32`/`u32` are views over one ArrayBuffer. */
   readonly data = new ArrayBuffer(GPU_LIGHTS_BYTE_SIZE);
   readonly f32 = new Float32Array(this.data);
   readonly u32 = new Uint32Array(this.data);
+
+  // Retained inputs to the @group(2) bind group, so it can be rebuilt whenever
+  // either the shadow atlas or the environment maps change.
+  private shadowAtlasView: TextureView | undefined;
+  private shadowSampler: Sampler | undefined;
+  private envSampler: Sampler | undefined;
+  private envIrradianceView: TextureView | undefined;
+  private envSpecularView: TextureView | undefined;
+  private envBrdfView: TextureView | undefined;
+
+  // 1×1 fallbacks so the bind group is always complete even with no environment.
+  private fallbackCube: Texture | undefined;
+  private fallbackCubeView: TextureView | undefined;
+  private fallbackLut: Texture | undefined;
+  private fallbackLutView: TextureView | undefined;
 
   private initialised = false;
 
@@ -385,8 +420,62 @@ export class GpuLights {
           texture: { sampleType: 'depth', viewDimension: '2d-array' },
         },
         { binding: 2, visibility: ShaderStage.FRAGMENT, sampler: { type: 'comparison' } },
+        { binding: 3, visibility: ShaderStage.FRAGMENT, texture: { sampleType: 'float', viewDimension: 'cube' } },
+        { binding: 4, visibility: ShaderStage.FRAGMENT, texture: { sampleType: 'float', viewDimension: 'cube' } },
+        { binding: 5, visibility: ShaderStage.FRAGMENT, texture: { sampleType: 'float', viewDimension: '2d' } },
+        { binding: 6, visibility: ShaderStage.FRAGMENT, sampler: { type: 'filtering' } },
+        {
+          binding: 7,
+          visibility: ShaderStage.FRAGMENT,
+          buffer: { type: 'uniform', minBindingSize: ENVIRONMENT_PARAMS_BYTE_SIZE },
+        },
       ],
     });
+
+    // Environment params + 1×1 fallbacks so the @group(2) bind group is always
+    // complete; the params default to has-environment = 0 (flat ambient path).
+    this.environmentParams = renderer.createBuffer({
+      label: 'gpu-lights-environment',
+      size: ENVIRONMENT_PARAMS_BYTE_SIZE,
+      usage: BufferUsage.UNIFORM | BufferUsage.COPY_DST,
+    });
+    const identity = new Float32Array(ENVIRONMENT_PARAMS_FLOAT_COUNT);
+    identity[4] = 1; // rotation mat4 identity diagonal
+    identity[9] = 1;
+    identity[14] = 1;
+    identity[19] = 1;
+    renderer.writeBuffer(this.environmentParams, 0, identity as unknown as BufferSource);
+
+    this.envSampler = renderer.createSampler({
+      label: 'gpu-lights-env-sampler',
+      magFilter: 'linear',
+      minFilter: 'linear',
+      mipmapFilter: 'linear',
+      addressModeU: 'clamp-to-edge',
+      addressModeV: 'clamp-to-edge',
+      addressModeW: 'clamp-to-edge',
+    });
+    this.fallbackCube = renderer.createTexture({
+      label: 'gpu-lights-env-fallback-cube',
+      width: 1,
+      height: 1,
+      depthOrArrayLayers: 6,
+      format: 'rgba16float' as TextureFormat,
+      usage: TextureUsage.TEXTURE_BINDING,
+    });
+    this.fallbackCubeView = this.fallbackCube.createView({ dimension: 'cube' });
+    this.fallbackLut = renderer.createTexture({
+      label: 'gpu-lights-env-fallback-lut',
+      width: 1,
+      height: 1,
+      format: 'rg16float' as TextureFormat,
+      usage: TextureUsage.TEXTURE_BINDING,
+    });
+    this.fallbackLutView = this.fallbackLut.createView();
+    this.envIrradianceView = this.fallbackCubeView;
+    this.envSpecularView = this.fallbackCubeView;
+    this.envBrdfView = this.fallbackLutView;
+
     this.initialised = true;
     return true;
   }
@@ -399,14 +488,67 @@ export class GpuLights {
    * {@link ensureInitialised}.
    */
   buildShadowBindGroup(renderer: Renderer, atlasView: TextureView, sampler: Sampler): void {
-    if (this.buffer === undefined || this.layout === undefined) return;
+    this.shadowAtlasView = atlasView;
+    this.shadowSampler = sampler;
+    this.rebuildBindGroup(renderer);
+  }
+
+  /**
+   * Point the `@group(2)` IBL bindings (3/4/5) at a prefiltered environment and
+   * rebuild the bind group. Pass `undefined` for all three to revert to the 1×1
+   * fallbacks (no environment). The accompanying params buffer must carry the
+   * has-environment flag — see {@link writeEnvironmentParams}.
+   */
+  setEnvironmentTextures(
+    renderer: Renderer,
+    irradianceView: TextureView | undefined,
+    specularView: TextureView | undefined,
+    brdfLutView: TextureView | undefined,
+  ): void {
+    this.envIrradianceView = irradianceView ?? this.fallbackCubeView;
+    this.envSpecularView = specularView ?? this.fallbackCubeView;
+    this.envBrdfView = brdfLutView ?? this.fallbackLutView;
+    this.rebuildBindGroup(renderer);
+  }
+
+  /** Write the 20-float IBL environment params (vec4 + mat4) into the params buffer. */
+  writeEnvironmentParams(renderer: Renderer, params: Float32Array): void {
+    if (this.environmentParams === undefined) return;
+    renderer.writeBuffer(this.environmentParams, 0, params as unknown as BufferSource);
+  }
+
+  /**
+   * (Re)build the `@group(2)` bind group from the lights uniform, shadow atlas +
+   * comparison sampler, and the current IBL set (or fallbacks). No-op until both
+   * {@link ensureInitialised} has run and a shadow atlas has been supplied via
+   * {@link buildShadowBindGroup}.
+   */
+  private rebuildBindGroup(renderer: Renderer): void {
+    if (
+      this.buffer === undefined ||
+      this.layout === undefined ||
+      this.shadowAtlasView === undefined ||
+      this.shadowSampler === undefined ||
+      this.envSampler === undefined ||
+      this.environmentParams === undefined ||
+      this.envIrradianceView === undefined ||
+      this.envSpecularView === undefined ||
+      this.envBrdfView === undefined
+    ) {
+      return;
+    }
     this.bindGroup = renderer.createBindGroup({
       label: 'light3d',
       layout: this.layout,
       entries: [
         { binding: 0, resource: { buffer: this.buffer } },
-        { binding: 1, resource: atlasView },
-        { binding: 2, resource: sampler },
+        { binding: 1, resource: this.shadowAtlasView },
+        { binding: 2, resource: this.shadowSampler },
+        { binding: 3, resource: this.envIrradianceView },
+        { binding: 4, resource: this.envSpecularView },
+        { binding: 5, resource: this.envBrdfView },
+        { binding: 6, resource: this.envSampler },
+        { binding: 7, resource: { buffer: this.environmentParams } },
       ],
     });
   }
@@ -421,9 +563,23 @@ export class GpuLights {
   dispose(): void {
     this.buffer?.destroy();
     this.layout?.destroy();
+    this.environmentParams?.destroy();
+    this.fallbackCube?.destroy();
+    this.fallbackLut?.destroy();
     this.buffer = undefined;
     this.layout = undefined;
     this.bindGroup = undefined;
+    this.environmentParams = undefined;
+    this.envSampler = undefined;
+    this.fallbackCube = undefined;
+    this.fallbackCubeView = undefined;
+    this.fallbackLut = undefined;
+    this.fallbackLutView = undefined;
+    this.envIrradianceView = undefined;
+    this.envSpecularView = undefined;
+    this.envBrdfView = undefined;
+    this.shadowAtlasView = undefined;
+    this.shadowSampler = undefined;
     this.initialised = false;
   }
 }

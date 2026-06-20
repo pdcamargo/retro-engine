@@ -68,6 +68,70 @@ struct GpuLights {
 
 @group(2) @binding(0) var<uniform> lights: GpuLights;
 
+// Image-based lighting set (bindings 3-6) + its params (7). Always bound — when
+// no environment is active the textures are 1×1 fallbacks and
+// \`environment.params.x\` (has-environment) is 0, so shading takes the flat
+// ambient path instead.
+@group(2) @binding(3) var irradiance_map: texture_cube<f32>;
+@group(2) @binding(4) var specular_map: texture_cube<f32>;
+@group(2) @binding(5) var brdf_lut: texture_2d<f32>;
+@group(2) @binding(6) var environment_sampler: sampler;
+
+struct EnvironmentParams {
+  // x = has-environment (0/1), y = diffuse intensity, z = specular intensity,
+  // w = max specular mip (shade-time LOD = roughness * w).
+  params: vec4<f32>,
+  // World-space rotation applied to the irradiance / reflection lookup.
+  rotation: mat4x4<f32>,
+};
+
+@group(2) @binding(7) var<uniform> environment: EnvironmentParams;
+
+// True when an environment map is bound this frame.
+fn has_environment() -> bool {
+  return environment.params.x > 0.5;
+}
+
+// Fresnel-Schlick with a roughness-aware ceiling, for the ambient/indirect term.
+fn fresnel_schlick_roughness(cos_theta: f32, f0: vec3<f32>, roughness: f32) -> vec3<f32> {
+  let ceiling = max(vec3<f32>(1.0 - roughness), f0);
+  return f0 + (ceiling - f0) * pow(clamp(1.0 - cos_theta, 0.0, 1.0), 5.0);
+}
+
+// Split-sum image-based lighting: diffuse irradiance + roughness-mipped specular
+// reconstructed from the prefiltered maps and the BRDF LUT. Returns the indirect
+// radiance (before occlusion). Explicit-LOD samples keep this valid under the
+// fragment's non-uniform (post-discard) control flow.
+fn evaluate_ibl(
+  n: vec3<f32>,
+  v: vec3<f32>,
+  n_dot_v: f32,
+  albedo: vec3<f32>,
+  metallic: f32,
+  roughness: f32,
+  f0: vec3<f32>,
+) -> vec3<f32> {
+  let n_env = normalize((environment.rotation * vec4<f32>(n, 0.0)).xyz);
+  let r = reflect(-v, n);
+  let r_env = normalize((environment.rotation * vec4<f32>(r, 0.0)).xyz);
+
+  let f = fresnel_schlick_roughness(n_dot_v, f0, roughness);
+  let k_d = (vec3<f32>(1.0) - f) * (1.0 - metallic);
+
+  let irradiance = textureSampleLevel(irradiance_map, environment_sampler, n_env, 0.0).rgb;
+  let diffuse = irradiance * albedo;
+
+  let prefiltered = textureSampleLevel(
+    specular_map, environment_sampler, r_env, roughness * environment.params.w,
+  ).rgb;
+  let env_brdf = textureSampleLevel(
+    brdf_lut, environment_sampler, vec2<f32>(n_dot_v, roughness), 0.0,
+  ).rg;
+  let specular = prefiltered * (f * env_brdf.x + env_brdf.y);
+
+  return k_d * diffuse * environment.params.y + specular * environment.params.z;
+}
+
 // Direction toward the light plus the radiance arriving along it. The material
 // BRDF multiplies its (diffuse + specular) response by \`radiance\` and \`N·L\`.
 struct LightSample {

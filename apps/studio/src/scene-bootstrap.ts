@@ -7,12 +7,14 @@ import {
   CameraRenderTarget,
   ClearColorConfig,
   Commands,
+  EnvironmentMapPlugin,
   GridPlugin,
   Light3dPlugin,
   MainCamera,
   MaterialPlugin,
   PrepassPlugin,
   Query,
+  SkyboxPlugin,
   StandardMaterial,
   StandardMaterialPlugin,
 } from '@retro-engine/engine';
@@ -43,6 +45,11 @@ export const setupViewportScene = (
     .addPlugin(new StandardMaterialPlugin())
     .addPlugin(stdMat)
     .addPlugin(new Light3dPlugin())
+    // Skybox + image-based lighting from an environment cubemap (a cube image or
+    // an equirectangular `.hdr`, converted on demand). A camera opts in by
+    // carrying a `Skybox` / `EnvironmentMapLight` component.
+    .addPlugin(new SkyboxPlugin())
+    .addPlugin(new EnvironmentMapPlugin())
     // Editor-only ground grid; opt-in (not auto-installed), and gated to the
     // editor camera's render layer so it never shows in the Game tab.
     .addPlugin(new GridPlugin());
