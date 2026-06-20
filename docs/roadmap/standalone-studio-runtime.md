@@ -1,7 +1,12 @@
 # Standalone Studio — runtime integration
 
 - **Created:** 2026-06-19
-- **Status:** Phases 1–3 done (ADR-0099, ADR-0100, ADR-0101) · Phase 4 pending
+- **Status:** ✅ All phases done — ADR-0099 (native hardening), ADR-0100 (streaming),
+  ADR-0101 (thumbnails), ADR-0102 (hot reload). The goal — a native studio that opens
+  `retro-game-sample`, builds + loads its code, streams assets on demand, shows thumbnails,
+  and hot-reloads a code edit — is **proven on a live `tauri dev` shell**.
+  Tracked follow-ups (refinements, not blockers): `docs/backlog/asset-thumbnail-cache-and-geometry-previews.md`,
+  `docs/backlog/hot-reload-observer-hook-removal.md`. This file can be deleted to close the initiative.
 
 ## Goal
 
