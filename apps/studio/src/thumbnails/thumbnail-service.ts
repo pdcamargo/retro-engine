@@ -4,6 +4,7 @@ import { createMeshImporter, decodeRadianceHdrPreview } from '@retro-engine/engi
 import { type Renderer, type Texture, TextureUsage } from '@retro-engine/renderer-core';
 import { GPU_TEXTURE, type InternalTexture } from '@retro-engine/renderer-webgpu';
 
+import { renderMaterialThumbnail } from './material-thumbnail';
 import { renderMeshThumbnail } from './mesh-thumbnail';
 
 /** Side of the square master thumbnail; ImGui samples it down for every zoom size. */
@@ -11,6 +12,7 @@ const SIZE = 256;
 const RGBA = 4;
 
 const MESH_EXT = /\.rmesh$/i;
+const MATERIAL_EXT = /\.remat$/i;
 const HDR_EXT = /\.hdr$/i;
 
 /** Center an `ImageBitmap` into an aspect-preserved `SIZE×SIZE` RGBA8 buffer. */
@@ -80,11 +82,14 @@ export class ThumbnailService {
   private async generate(guid: string, location: string): Promise<void> {
     try {
       const bytes = await this.source.read(location);
-      // A `.rmesh` renders to a flat-shaded preview; everything else decodes as an
-      // image. Both paths produce a SIZE×SIZE RGBA8 buffer for the shared upload.
+      // A `.rmesh` renders a flat-shaded mesh preview, a `.remat` a shaded-sphere
+      // material preview; everything else decodes as an image. All paths produce a
+      // SIZE×SIZE RGBA8 buffer for the shared upload.
       const pixels = MESH_EXT.test(location)
         ? renderMeshThumbnail(await createMeshImporter()(bytes, undefined as never), SIZE)
-        : fitToSquare(await bitmapFor(location, bytes));
+        : MATERIAL_EXT.test(location)
+          ? renderMaterialThumbnail(bytes, SIZE)
+          : fitToSquare(await bitmapFor(location, bytes));
       const texture = this.renderer.createTexture({
         width: SIZE,
         height: SIZE,

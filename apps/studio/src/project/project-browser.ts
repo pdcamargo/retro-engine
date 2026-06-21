@@ -54,8 +54,13 @@ export const buildBrowserAssets = (manifest: AssetManifest): BrowserAsset[] => {
       guid: entry.guid,
       location: entry.location,
       meta: entry.kind,
-      // Previewable today: images (decode) and `.rmesh` meshes (CPU flat-shade).
-      thumbnailable: type === 'image' || IMAGE_EXT.test(entry.location) || MESH_EXT.test(entry.location),
+      // Previewable today: images (decode), `.rmesh` meshes (CPU flat-shade), and
+      // `.remat` materials (CPU shaded sphere).
+      thumbnailable:
+        type === 'image' ||
+        type === 'material' ||
+        IMAGE_EXT.test(entry.location) ||
+        MESH_EXT.test(entry.location),
     });
   }
   return out.sort((a, b) => a.name.localeCompare(b.name));
