@@ -1,5 +1,6 @@
 /// <reference types="@webgpu/types" />
 
+import type { AssetGuid } from '@retro-engine/assets';
 import { App, AppTypeRegistry, Commands, EditorGrid, inState, MaterialPlugin, ResMut, StandardMaterial } from '@retro-engine/engine';
 import {
   buildOutline,
@@ -33,6 +34,9 @@ import { setNativeProjectRoot } from './project/tauri-project-io';
 import { watchProject } from './project/project-watcher';
 import { buildBrowserAssets } from './project/project-browser';
 import { reloadProjectCode, reloadProjectScene } from './project/hot-reload';
+import { saveScene } from './project/save-scene';
+import { createSplash } from './splash/splash';
+import { enabledSystemCount } from './systems-view';
 import { ThumbnailService } from './thumbnails/thumbnail-service';
 
 // Mirror webview console to the native terminal (dev observability under Tauri).
@@ -59,7 +63,7 @@ import { createScene } from './scene-data';
 import { setupViewportScene } from './scene-bootstrap';
 import { inMemorySceneSource } from './scene-source';
 import { SceneOrientationGizmo } from './viewport-gizmo-wiring';
-import { handleHistoryShortcuts } from './shortcuts';
+import { handleHistoryShortcuts, handleSaveShortcut } from './shortcuts';
 import { installShowcaseScene, SHOWCASE_SCENE } from './showcase-scene';
 import { createState } from './state';
 import { ViewportTarget } from './viewport';
@@ -75,6 +79,12 @@ const dpr = window.devicePixelRatio || 1;
 canvas.width = canvas.clientWidth * dpr;
 canvas.height = canvas.clientHeight * dpr;
 
+// Project-loading splash (markup in index.html). Eight milestones stream as the
+// boot reaches them; it dismisses on the first presented editor frame.
+const bootStart = performance.now();
+const splash = createSplash(8);
+splash.step({ glyph: '▸', message: 'initializing runtime', result: 'ok', tone: 'accent' });
+
 const renderer = createWebGPURenderer(canvas);
 // profileSystems: the studio measures per-system frame cost for the Systems panel.
 // defaultSystemOrigin: systems the studio registers directly are editor scaffolding,
@@ -88,6 +98,7 @@ const app = new App({
 });
 // Engine-backed play state (Edit/Play/Paused) the toolbar drives and panels reflect.
 initSimState(app);
+splash.step({ glyph: '▸', message: 'mounting ecs world', result: 'ok', tone: 'accent' });
 
 const scene = createScene();
 const state = createState(scene);
@@ -147,7 +158,7 @@ app.addSystem('postUpdate', [ResMut(EditorGrid)], (grid) => {
 
 const editor = createEditor({
   brand: 'RETRO ENGINE',
-  branch: () => 'main · level_01.scene',
+  branch: () => `main · level_01.scene${state.dirty ? ' ●' : ''}`,
 });
 
 // Author Transform rotations as Euler angles (degrees) — friendlier than raw
@@ -172,9 +183,17 @@ editor
   .addPanel(profilerPanel(app))
   .setToolbar(toolbar(state, editor, app))
   .setStatusBar(statusBar(state, app));
-// Set once the platform host resolves (in the async boot tail); the menu calls through it.
+// Set once the platform host resolves (in the async boot tail); the menu calls through them.
 let openProjectAction: () => void = () => {};
-for (const menu of menus(state, history, { openProject: () => openProjectAction() })) editor.addMenu(menu);
+let saveSceneAction: () => void = () => {};
+let canSaveSceneFn: () => boolean = () => false;
+for (const menu of menus(state, history, {
+  openProject: () => openProjectAction(),
+  saveScene: () => saveSceneAction(),
+  canSaveScene: () => canSaveSceneFn(),
+})) {
+  editor.addMenu(menu);
+}
 
 const fetchFont = async (file: string): Promise<Uint8Array> => {
   const res = await fetch(`/fonts/${file}`);
@@ -255,6 +274,21 @@ void (async (): Promise<void> => {
   probe.platformKind = platform.kind;
   (window as unknown as { __studioPrefs: typeof platform.preferences }).__studioPrefs = platform.preferences;
 
+  // Console push shared by the load, the save action, and the file watcher.
+  const pushConsole = (lvl: 'cmd' | 'info' | 'warn' | 'err', text: string, meta?: string): void => {
+    state.scene.console.push({
+      time: new Date().toLocaleTimeString('en-US', { hour12: false }),
+      lvl,
+      text,
+      ...(meta !== undefined ? { meta } : {}),
+    });
+  };
+  // While this is in the future, the watcher ignores scene-file changes: the
+  // studio's own Save writes the .rescene, which would otherwise trigger a reload
+  // of the world it just serialized (an edit→save→reload loop). A time window
+  // (not path matching) reliably covers the watcher debounce + fs-event latency.
+  let suppressSceneReloadUntil = 0;
+
   // Read the open project's descriptor (best-effort) so its dock layout + window
   // state persist per-project (keyed by project id in the app config), not globally.
   const projectDir = await currentProjectDir(platform);
@@ -268,11 +302,13 @@ void (async (): Promise<void> => {
     }
   }
   let descriptor: ReturnType<typeof parseProjectDescriptor> | null = null;
+  let engineMismatch = false;
   if (projectDir !== null) {
     try {
       const io = createProjectIo(platform, projectDir);
       descriptor = parseProjectDescriptor(new TextDecoder().decode(await io.source.read('project.retroengine')));
       if (engineVersionMismatch(descriptor.engine, STUDIO_ENGINE_VERSION)) {
+        engineMismatch = true;
         console.warn(
           `[studio] project targets engine ${descriptor.engine}, studio provides ${STUDIO_ENGINE_VERSION} — types may not match`,
         );
@@ -342,6 +378,8 @@ void (async (): Promise<void> => {
   // in-memory showcase when no project is open (or its scene can't be resolved).
   // The manifest scan also drives the asset browser + thumbnails (ADR-0101).
   let sceneLoaded = false;
+  let sceneFileName: string | null = null;
+  let startupSceneMissing = false;
   if (projectDir !== null) {
     try {
       const io = createProjectIo(platform, projectDir);
@@ -357,7 +395,41 @@ void (async (): Promise<void> => {
       if (descriptor?.startupScene != null && descriptor.startupScene.length > 0) {
         sceneLoaded = await loadProjectScene(app, io.source, manifest, descriptor.startupScene);
         if (sceneLoaded) console.log(`[studio] loaded startup scene ${descriptor.startupScene}`);
-        else console.warn(`[studio] startup scene ${descriptor.startupScene} not found in project`);
+        else {
+          startupSceneMissing = true;
+          console.warn(`[studio] startup scene ${descriptor.startupScene} not found in project`);
+        }
+      }
+      // Wire File ▸ Save Scene once the scene is loaded: it serializes back to the
+      // scene's own file (its GUID + location stay fixed) and arms the watcher
+      // suppression so the resulting write doesn't bounce back as a reload.
+      const sceneGuid = descriptor?.startupScene ?? null;
+      const sceneLocation =
+        sceneGuid !== null ? manifest.entries.get(sceneGuid as AssetGuid)?.location : undefined;
+      if (sceneLoaded && sceneGuid !== null && sceneLocation !== undefined) {
+        sceneFileName = sceneLocation.split('/').pop() ?? sceneLocation;
+        const projectSink = io.sink;
+        canSaveSceneFn = (): boolean => true;
+        saveSceneAction = (): void => {
+          void (async (): Promise<void> => {
+            const result = await saveScene({
+              app,
+              sink: projectSink,
+              guid: sceneGuid,
+              location: sceneLocation,
+              isEditorEntity: (e) => app.world.has(e, EditorOnly),
+              suppressReload: () => {
+                suppressSceneReloadUntil = Date.now() + 1500;
+              },
+            });
+            if (result.ok) {
+              state.savedHistoryIndex = history.view().currentIndex;
+              pushConsole('cmd', `Saved scene → ${sceneLocation}`, `${result.entities} entities`);
+            } else {
+              pushConsole('err', 'Save failed', result.error.split('\n')[0]);
+            }
+          })();
+        };
       }
     } catch (err) {
       console.error('[studio] failed to load project scene', err);
@@ -371,18 +443,38 @@ void (async (): Promise<void> => {
     installShowcaseScene(app, { material: stdMat, scene: initialScene });
   }
 
+  // Splash: scene → archetypes → systems, with real counts off the live world.
+  const authoredCount = [...app.world.entities()].filter((e) => !app.world.has(e, EditorOnly)).length;
+  const sceneName = sceneFileName ?? (projectDir === null ? 'showcase scene' : 'startup scene');
+  splash.setProject(sceneName);
+  splash.setEyebrow(`Editor · v${STUDIO_ENGINE_VERSION}`);
+  splash.setFooter(`© Retro Engine · ${sceneName} · v${STUDIO_ENGINE_VERSION}`);
+  splash.step({
+    glyph: '▸',
+    message: 'loading scene',
+    target: sceneName,
+    result: `${authoredCount} entities`,
+    tone: 'info',
+  });
+  splash.step({ glyph: '▸', message: 'resolving archetypes', result: 'ok', tone: 'accent' });
+  splash.step({
+    glyph: '▸',
+    message: 'compiling systems',
+    result: `${enabledSystemCount(app)} systems`,
+    tone: 'info',
+  });
+  if (engineMismatch) {
+    splash.note({ glyph: '!', message: 'engine version mismatch', result: 'types may differ', tone: 'warning' });
+  }
+  if (startupSceneMissing) {
+    splash.note({ glyph: '!', message: 'startup scene not found', result: 'empty scene', tone: 'warning' });
+  }
+
   // React to external edits (native only; no-op in a plain browser). A code edit
   // hot-reloads the project into the running App without a page reload (ADR-0102);
   // asset/scene reactions surface in the Console for now.
   if (projectDir !== null && platform.kind === 'tauri') {
-    const log = (lvl: 'cmd' | 'info' | 'warn' | 'err', text: string, meta?: string): void => {
-      state.scene.console.push({
-        time: new Date().toLocaleTimeString('en-US', { hour12: false }),
-        lvl,
-        text,
-        ...(meta !== undefined ? { meta } : {}),
-      });
-    };
+    const log = pushConsole;
     let reloadTimer: ReturnType<typeof setTimeout> | undefined;
     let reloading = false;
     const triggerReload = (): void => {
@@ -419,9 +511,12 @@ void (async (): Promise<void> => {
     const triggerSceneReload = (path: string): void => {
       const guid = descriptor?.startupScene;
       if (guid === undefined || guid === null || guid.length === 0) return; // no open scene to reload
+      // The studio's own Save just wrote this file — skip the self-triggered reload.
+      if (Date.now() < suppressSceneReloadUntil) return;
       if (sceneReloadTimer !== undefined) clearTimeout(sceneReloadTimer);
       sceneReloadTimer = setTimeout(() => {
         if (sceneReloading) return;
+        if (Date.now() < suppressSceneReloadUntil) return;
         sceneReloading = true;
         void (async (): Promise<void> => {
           log('info', `Scene changed on disk — reloading: ${path}`);
@@ -433,6 +528,7 @@ void (async (): Promise<void> => {
             });
             if (ok) {
               state.selectedEntity = null; // ids changed on respawn
+              state.savedHistoryIndex = history.view().currentIndex; // disk state is the clean baseline
               log('cmd', 'Scene reloaded from disk');
             } else {
               log('warn', 'Scene reload skipped — scene not resolvable');
@@ -451,6 +547,18 @@ void (async (): Promise<void> => {
     }).catch((err: unknown) => console.error('[studio] project watch failed', err));
   }
 
+  const watcherArmed = projectDir !== null && platform.kind === 'tauri';
+  splash.step({
+    glyph: '▸',
+    message: 'arming hot-reload watcher',
+    result: watcherArmed ? 'ok' : 'n/a',
+    tone: watcherArmed ? 'accent' : 'info',
+  });
+  splash.step({ glyph: '▸', message: 'linking render graph', result: 'ok', tone: 'accent' });
+
+  // Dismiss the splash on the first presented editor frame — not a timer — so it
+  // never reveals a half-drawn editor. The "ready" line shows the real boot time.
+  let firstFrame = true;
   app.addPlugin(
     uiOverlayPlugin({
       overlay: createImGuiOverlay(renderer, { fontLoader: 'freetype' }),
@@ -482,13 +590,28 @@ void (async (): Promise<void> => {
         const sim = currentSimState(app);
         state.playing = sim === SimState.Play || sim === SimState.Paused;
         state.paused = sim === SimState.Paused;
+        // Unsaved edits = the live history cursor diverging from the last saved mark.
+        state.dirty = history.view().currentIndex !== state.savedHistoryIndex;
         handleHistoryShortcuts(history);
+        handleSaveShortcut(canSaveSceneFn() && state.dirty, saveSceneAction);
         editor.draw();
-        drawDialogs({ ui, widgets }, state, history);
+        drawDialogs({ ui, widgets }, state, history, app);
         probe.dockingEnabled = isDockingEnabled();
         probe.selected = state.selectedEntity;
         probe.playing = state.playing;
         probe.viewMode = state.viewMode;
+        if (firstFrame) {
+          firstFrame = false;
+          splash.ready({
+            glyph: '●',
+            message: 'ready',
+            result: `${Math.round(performance.now() - bootStart)} ms`,
+            tone: 'ready',
+          });
+          // Request dismissal; the splash holds the ready state until its queued
+          // boot-log lines have all been revealed, then fades out.
+          splash.dismiss();
+        }
       },
     }),
   );

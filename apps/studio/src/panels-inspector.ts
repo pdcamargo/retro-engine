@@ -91,6 +91,12 @@ export const inspectorPanel = (
         }
       }
 
+      // Add Component — opens the picker for the selected entity.
+      ui.spacing();
+      if (widgets.button('Add Component', { variant: 'secondary', icon: 'plus', block: true })) {
+        state.addComponentOpen = true;
+      }
+
       // Derived / non-serializable components — recomputed by systems, not
       // authored — revealed only in debug mode.
       if (state.debugMode && derived.length > 0) {

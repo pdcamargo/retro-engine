@@ -15,6 +15,7 @@ import {
   type ToolbarDef,
 } from '@retro-engine/editor-sdk';
 
+import { addComponentPopup } from './add-component-popup';
 import { historyClearDialog } from './history-clear-dialog';
 import { projectSettingsDialog } from './project-settings';
 import { type StudioState, type TransformTool } from './state';
@@ -35,6 +36,10 @@ const vsep = (ui: EditorContext['ui']): void => {
 export interface MenuActions {
   /** Prompt for and open a project, re-launching the studio session into it. */
   openProject(): void;
+  /** Serialize the open scene and write it back to its source file. */
+  saveScene(): void;
+  /** Whether there is an open scene that can be saved (a project with a resolved startup scene). */
+  canSaveScene(): boolean;
 }
 
 /** The menu bar definitions — File / Edit / Entity / Component / Run / Help. */
@@ -48,8 +53,14 @@ export const menus = (state: StudioState, history: History, actions: MenuActions
       { label: 'New Scene', icon: 'plus', shortcut: '⌘N' },
       { label: 'Open Scene…', shortcut: '⌘O' },
       { separator: true },
-      { label: 'Save', icon: 'check', shortcut: '⌘S' },
-      { label: 'Save As…', shortcut: '⇧⌘S' },
+      {
+        label: 'Save Scene',
+        icon: 'check',
+        shortcut: '⌘S',
+        disabled: !actions.canSaveScene() || !state.dirty,
+        onClick: () => actions.saveScene(),
+      },
+      { label: 'Save As…', shortcut: '⇧⌘S', disabled: true },
       { separator: true },
       { label: 'Project Settings…', icon: 'settings', onClick: () => (state.settingsOpen = true) },
     ],
@@ -86,10 +97,12 @@ export const menus = (state: StudioState, history: History, actions: MenuActions
     id: '/component',
     label: 'Component',
     items: () => [
-      { heading: 'Add Component' },
-      { label: 'Transform', icon: 'move-3d' },
-      { label: 'Sprite', icon: 'image' },
-      { label: 'RigidBody', icon: 'circle-dot' },
+      {
+        label: 'Add Component…',
+        icon: 'plus',
+        disabled: state.selectedEntity === null,
+        onClick: () => (state.addComponentOpen = true),
+      },
     ],
   },
   {
@@ -235,7 +248,8 @@ export const statusBar = (state: StudioState, app: App): StatusBarDef => ({
       ui.sameLine();
     };
     const n = state.scene.entities.filter((e) => e.group !== true).length;
-    seg('circle-check', 'Ready', rgba(p.green400));
+    if (state.dirty) seg('circle-dot', 'Unsaved', rgba(p.amber400));
+    else seg('circle-check', 'Ready', rgba(p.green400));
     seg('box', `${n} entities`, muted);
     seg('workflow', `${enabledSystemCount(app)} systems`, muted);
     seg('cpu', `${systemsFrameMs(app).toFixed(1)} ms/frame`, muted);
@@ -255,8 +269,9 @@ export const statusBar = (state: StudioState, app: App): StatusBarDef => ({
   },
 });
 
-/** Draw the studio's modal dialogs (call once per frame after the shell). */
-export const drawDialogs = (ctx: EditorContext, state: StudioState, history: History): void => {
+/** Draw the studio's modal dialogs + popups (call once per frame after the shell). */
+export const drawDialogs = (ctx: EditorContext, state: StudioState, history: History, app: App): void => {
   projectSettingsDialog(ctx, state);
   historyClearDialog(ctx, state, history);
+  addComponentPopup(ctx, state, app, history);
 };

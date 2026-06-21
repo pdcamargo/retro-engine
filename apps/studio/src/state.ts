@@ -38,6 +38,15 @@ export interface StudioState {
   historyLastCurrent: number;
   /** Clear-history confirmation dialog is open. */
   historyClearConfirm: boolean;
+  /**
+   * History cursor (`view().currentIndex`) at the last save / load. The scene is
+   * dirty when the live cursor differs from this — undoing back to it goes clean.
+   */
+  savedHistoryIndex: number;
+  /** Whether the scene has unsaved edits — recomputed each frame from the history cursor vs {@link savedHistoryIndex}. */
+  dirty: boolean;
+  /** The Add Component picker is open (anchored from the Inspector / Component menu). */
+  addComponentOpen: boolean;
   /** Mirror of the engine's {@link SimState}: true in Play or Paused. Synced each frame from the App. */
   playing: boolean;
   /** Mirror of {@link SimState}: true only when play mode is paused. */
@@ -74,6 +83,9 @@ export const createState = (scene: Scene): StudioState => ({
   debugMode: false,
   historyLastCurrent: -1,
   historyClearConfirm: false,
+  savedHistoryIndex: -1,
+  dirty: false,
+  addComponentOpen: false,
   playing: false,
   paused: false,
   viewMode: '3d',

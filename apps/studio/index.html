@@ -5,6 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Retro Engine Studio</title>
     <style>
+      @font-face {
+        font-family: 'JetBrains Mono';
+        font-style: normal;
+        font-weight: 400;
+        font-display: block;
+        src: url('/fonts/JetBrainsMono-Regular.ttf') format('truetype');
+      }
+      @font-face {
+        font-family: 'Silkscreen';
+        font-style: normal;
+        font-weight: 400;
+        font-display: block;
+        src: url('/fonts/Silkscreen-Regular.woff2') format('woff2');
+      }
       html,
       body {
         margin: 0;
@@ -21,10 +35,342 @@
         width: 100%;
         height: 100%;
       }
+
+      /* ----- Project-loading splash (mirrors handoff/editor-splash) ----- */
+      #studio-splash {
+        --gray-1: #0b1110;
+        --gray-2: #11181a;
+        --gray-3: #161f21;
+        --gray-4: #1c2629;
+        --border-default: #2d3c41;
+        --border-subtle: #182326;
+        --accent: #34e07a;
+        --accent-dim: #18a455;
+        --accent-bright: #5cf09a;
+        --accent-glow: rgba(52, 224, 122, 0.35);
+        --info: #38d9f0;
+        --warning: #ffb000;
+        --text-bright: #e6f1ea;
+        --text-default: #c2d0c8;
+        --text-muted: #8a9b94;
+        --text-faint: #586d74;
+        --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+        --font-pixel: 'Silkscreen', ui-monospace, monospace;
+        position: fixed;
+        inset: 0;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: radial-gradient(120% 90% at 50% 38%, rgba(52, 224, 122, 0.07), transparent 60%), var(--gray-1);
+        color: var(--text-default);
+        font-family: var(--font-mono);
+        overflow: hidden;
+        opacity: 1;
+        transition: opacity 0.12s ease-out;
+      }
+      #studio-splash.is-hiding {
+        opacity: 0;
+      }
+      #studio-splash .grid {
+        position: absolute;
+        inset: 0;
+        background-image: radial-gradient(rgba(120, 160, 140, 0.1) 1px, transparent 1px);
+        background-size: 16px 16px;
+        opacity: 0.6;
+      }
+      #studio-splash .scan {
+        position: absolute;
+        inset: 0;
+        background: repeating-linear-gradient(
+          to bottom,
+          rgba(255, 255, 255, 0.028) 0,
+          rgba(255, 255, 255, 0.028) 1px,
+          transparent 1px,
+          transparent 3px
+        );
+        mix-blend-mode: screen;
+        animation: splash-scan 1.2s steps(3) infinite;
+      }
+      #studio-splash .vig {
+        position: absolute;
+        inset: 0;
+        box-shadow: inset 0 0 220px rgba(0, 0, 0, 0.7);
+      }
+      #studio-splash .col {
+        position: relative;
+        width: 560px;
+        max-width: calc(100vw - 48px);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 22px;
+        z-index: 1;
+      }
+      #studio-splash .cube {
+        filter: drop-shadow(0 0 16px rgba(52, 224, 122, 0.5)) drop-shadow(0 0 3px rgba(52, 224, 122, 0.65));
+        animation: splash-pulse 2.4s ease-in-out infinite;
+      }
+      #studio-splash .wordmark {
+        font-family: var(--font-pixel);
+        -webkit-font-smoothing: none;
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+        font-size: 21px;
+        color: var(--text-bright);
+        text-shadow: 0 0 10px rgba(52, 224, 122, 0.25);
+      }
+      #studio-splash .eyebrow {
+        font-family: var(--font-pixel);
+        -webkit-font-smoothing: none;
+        text-transform: uppercase;
+        letter-spacing: 0.2em;
+        font-size: 9px;
+        color: var(--text-faint);
+      }
+      #studio-splash .head {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        margin-top: -2px;
+      }
+      #studio-splash .loadrow {
+        width: 100%;
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        margin-top: 6px;
+        font-size: 12px;
+      }
+      #studio-splash .spin {
+        color: var(--accent);
+        width: 12px;
+        display: inline-block;
+        text-align: center;
+      }
+      #studio-splash .phase {
+        color: var(--text-muted);
+      }
+      #studio-splash .project {
+        flex: 1;
+        min-width: 0;
+        color: var(--text-bright);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      #studio-splash .prog {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+      }
+      #studio-splash .track {
+        flex: 1;
+        height: 10px;
+        border-radius: 2px;
+        background: var(--gray-4);
+        border: 1px solid var(--border-default);
+        box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5);
+        overflow: hidden;
+      }
+      #studio-splash .fill {
+        height: 100%;
+        width: 0%;
+        background: linear-gradient(90deg, var(--accent-dim), var(--accent));
+        box-shadow: 0 0 10px var(--accent-glow);
+        transition: width 0.34s cubic-bezier(0.22, 1, 0.36, 1);
+      }
+      #studio-splash .pctnum {
+        font-family: var(--font-pixel);
+        -webkit-font-smoothing: none;
+        font-size: 20px;
+        min-width: 86px;
+        text-align: right;
+        color: var(--accent);
+        text-shadow: 0 0 8px rgba(52, 224, 122, 0.35);
+      }
+      #studio-splash .console {
+        width: 100%;
+        height: 260px;
+        background: var(--gray-2);
+        border: 1px solid var(--border-default);
+        border-radius: 4px;
+        box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.45);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      #studio-splash .conhead {
+        flex: none;
+        height: 26px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0 10px;
+        background: var(--gray-3);
+        border-bottom: 1px solid var(--border-default);
+      }
+      #studio-splash .conhead .label {
+        font-size: 10px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+      }
+      #studio-splash .conhead .glyph {
+        color: var(--text-faint);
+        font-size: 10px;
+      }
+      #studio-splash .conhead .count {
+        font-size: 10px;
+        color: var(--text-faint);
+      }
+      #studio-splash .conbody {
+        flex: 1;
+        min-height: 0;
+        padding: 8px 12px;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        gap: 3px;
+        font-size: 12px;
+        line-height: 1.5;
+      }
+      #studio-splash .logline {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+      }
+      #studio-splash .logline .lglyph {
+        width: 10px;
+        flex: none;
+        text-align: center;
+      }
+      #studio-splash .logline .msg {
+        color: var(--text-default);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      #studio-splash .logline .target {
+        color: var(--text-bright);
+      }
+      #studio-splash .logline .dots {
+        flex: 1;
+        border-bottom: 1px dotted var(--border-subtle);
+        transform: translateY(-3px);
+        min-width: 12px;
+      }
+      #studio-splash .logline .res {
+        flex: none;
+        white-space: nowrap;
+      }
+      #studio-splash .cursor {
+        width: 8px;
+        height: 14px;
+        background: var(--accent);
+        align-self: flex-start;
+        box-shadow: 0 0 6px var(--accent-glow);
+        animation: splash-blink 1s steps(1) infinite;
+      }
+      #studio-splash .footer {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 16px;
+        text-align: center;
+        font-size: 10px;
+        letter-spacing: 0.04em;
+        color: var(--text-faint);
+        z-index: 1;
+      }
+      @keyframes splash-pulse {
+        0%,
+        100% {
+          filter: drop-shadow(0 0 10px rgba(52, 224, 122, 0.35));
+        }
+        50% {
+          filter: drop-shadow(0 0 22px rgba(52, 224, 122, 0.6));
+        }
+      }
+      @keyframes splash-blink {
+        0%,
+        49% {
+          opacity: 1;
+        }
+        50%,
+        100% {
+          opacity: 0;
+        }
+      }
+      @keyframes splash-scan {
+        from {
+          background-position-y: 0;
+        }
+        to {
+          background-position-y: 3px;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #studio-splash .cube,
+        #studio-splash .scan,
+        #studio-splash .cursor {
+          animation: none;
+        }
+        #studio-splash .fill {
+          transition: none;
+        }
+      }
     </style>
   </head>
   <body>
     <canvas id="studio-canvas"></canvas>
+    <div id="studio-splash" role="status" aria-label="Loading project">
+      <div class="grid"></div>
+      <div class="scan"></div>
+      <div class="vig"></div>
+      <div class="col">
+        <svg class="cube" width="76" height="76" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+          <path d="M32 6 L57 20 L32 34 L7 20 Z" fill="#5cf09a"></path>
+          <path d="M7 20 L32 34 L32 60 L7 46 Z" fill="#18a455"></path>
+          <path d="M57 20 L32 34 L32 60 L57 46 Z" fill="#21c466"></path>
+          <path
+            d="M32 6 L57 20 L32 34 L7 20 Z M7 20 L32 34 L32 60 M57 20 L32 34"
+            stroke="#04140a"
+            stroke-width="1.5"
+            stroke-linejoin="round"
+            fill="none"
+          ></path>
+          <rect x="29.5" y="3.5" width="5" height="5" fill="#aaffcc"></rect>
+        </svg>
+        <div class="head">
+          <div class="wordmark">Retro&nbsp;Engine</div>
+          <div class="eyebrow" id="splash-eyebrow">Editor</div>
+        </div>
+        <div class="loadrow">
+          <span class="spin" id="splash-spin">⠋</span>
+          <span class="phase" id="splash-phase">loading project</span>
+          <span class="project" id="splash-project"></span>
+        </div>
+        <div class="prog">
+          <div class="track"><div class="fill" id="splash-fill"></div></div>
+          <div class="pctnum" id="splash-pct">0%</div>
+        </div>
+        <div class="console">
+          <div class="conhead">
+            <span class="glyph">▸</span>
+            <span class="label">boot log</span>
+            <span style="flex: 1"></span>
+            <span class="count" id="splash-count"></span>
+          </div>
+          <div class="conbody" id="splash-log">
+            <span class="cursor"></span>
+          </div>
+        </div>
+      </div>
+      <div class="footer" id="splash-footer">© Retro Engine</div>
+    </div>
     <script type="module" src="./src/main.ts"></script>
   </body>
 </html>

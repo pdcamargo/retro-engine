@@ -209,6 +209,12 @@ export interface Ui {
   rightAlign(width: number): void;
   /** Set the width of the next item in pixels (negative measures from the right edge). */
   setNextItemWidth(width: number): void;
+  /**
+   * Focus the keyboard on a following widget. `offset` selects which item ahead
+   * to focus (`0` = the next widget, the default) — call right before an
+   * {@link Ui.inputText} to auto-focus it when a popup opens.
+   */
+  setKeyboardFocusHere(offset?: number): void;
 
   /** Whether the last item is hovered. */
   isItemHovered(): boolean;
@@ -508,6 +514,10 @@ export const ui: Ui = {
 
   setNextItemWidth(width: number): void {
     ImGui.SetNextItemWidth(width);
+  },
+
+  setKeyboardFocusHere(offset?: number): void {
+    ImGui.SetKeyboardFocusHere(offset ?? 0);
   },
 
   isItemHovered(): boolean {

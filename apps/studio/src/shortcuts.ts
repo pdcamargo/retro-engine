@@ -99,3 +99,13 @@ export const handleHistoryShortcuts = (history: History): void => {
     if (history.canRedo) history.redo();
   }
 };
+
+/**
+ * Dispatch Save (`Ctrl/⌘+S`) for this frame. Fires only when `canSave` is true (a
+ * saveable scene with unsaved edits), so an idle ⌘S is a no-op. Call once per
+ * frame from the UI draw callback, where key state is live.
+ */
+export const handleSaveShortcut = (canSave: boolean, save: () => void): void => {
+  if (!canSave) return;
+  if (ImGui.IsKeyChordPressed(ImGuiKey.ImGuiMod_Ctrl | ImGuiKey._S)) save();
+};
