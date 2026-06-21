@@ -34,13 +34,21 @@ export { enableDocking, isDockingEnabled } from './docking';
 export { applyEdit, type EditTarget, revertEdit, writeFieldLive } from './edit/apply';
 export { snapshotComponent, snapshotValue, valueEquals } from './edit/clone';
 export type {
+  AddBundleCommand,
   AddComponentCommand,
+  BundleComponentEntry,
   CustomCommand,
   EditCommand,
   RemoveComponentCommand,
   SetFieldCommand,
 } from './edit/command';
-export { createDirectEmitter, type EditEmitter, type ItemEdges, type ScalarEdit } from './edit/emitter';
+export {
+  createDirectEmitter,
+  createInstanceEmitter,
+  type EditEmitter,
+  type ItemEdges,
+  type ScalarEdit,
+} from './edit/emitter';
 export { createHistoryEmitter } from './edit/emitter-history';
 export { type FieldPath, type FieldPathSegment, pathKeyOf, readPath, writePathLeaf } from './edit/field-path';
 export {

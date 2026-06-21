@@ -34,6 +34,7 @@ const KIND_ICON: Record<HistoryEntryKind, IconName> = {
   setField: 'pencil',
   addComponent: 'plus',
   removeComponent: 'trash-2',
+  addBundle: 'package-plus',
   custom: 'box',
   batch: 'layers',
 };

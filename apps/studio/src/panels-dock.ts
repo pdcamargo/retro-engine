@@ -185,6 +185,7 @@ const renderBrowserCard = (
   state: StudioState,
   asset: BrowserAsset,
   tile: number,
+  onActivate?: (asset: BrowserAsset) => void,
 ): void => {
   const thumbnail = asset.thumbnailable ? browser.thumbnails.get(asset.guid, asset.location) : undefined;
   const r = widgets.assetCard({
@@ -196,7 +197,10 @@ const renderBrowserCard = (
     selected: state.selected === asset.guid,
     thumbnail,
   });
-  if (r.clicked) state.selected = asset.guid;
+  if (r.clicked) {
+    state.selected = asset.guid;
+    if (asset.type === 'bundle') onActivate?.(asset);
+  }
 };
 
 // Lay out asset tiles in a wrapping grid (or a single column in list mode).
@@ -222,7 +226,7 @@ const layoutGrid = <T>(
 };
 
 /** The Assets panel — a zoomable, filterable tile grid with sprite-sheet drawers. */
-export const assetsPanel = (state: StudioState): PanelDef => ({
+export const assetsPanel = (state: StudioState, onActivate?: (asset: BrowserAsset) => void): PanelDef => ({
   id: '/assets',
   title: 'Assets',
   icon: 'folder-open',
@@ -276,7 +280,7 @@ export const assetsPanel = (state: StudioState): PanelDef => ({
       const assets = browser.assets.filter((a) => matches(a.name));
       ui.child('assets-grid', { size: [0, 0], border: false, padding: [10, 10] }, () => {
         layoutGrid(ui, state.assetZoom, assets, (asset, tile) =>
-          renderBrowserCard(widgets, browser, state, asset, tile),
+          renderBrowserCard(widgets, browser, state, asset, tile, onActivate),
         );
       });
       return;

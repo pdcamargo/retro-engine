@@ -1,7 +1,8 @@
 import type { Entity } from '@retro-engine/ecs';
 
 import { type EditTarget, writeFieldLive } from './apply';
-import type { FieldPath } from './field-path';
+import { snapshotValue } from './clone';
+import { type FieldPath, writePathLeaf } from './field-path';
 
 /**
  * The immediate-mode item-state edges a renderer reads right after drawing a
@@ -56,6 +57,26 @@ export interface EditEmitter {
 export const createDirectEmitter = (target: EditTarget, entity: Entity, componentName: string): EditEmitter => ({
   scalar<T>(path: FieldPath, current: T): ScalarEdit<T> {
     const write = (next: T): void => writeFieldLive(target, entity, componentName, path, next);
+    return { value: current, preview: write, commit: write, sync: () => {} };
+  },
+  batch(_label: string, body: () => void): void {
+    body();
+  },
+});
+
+/**
+ * An emitter that writes edits straight into a detached component instance (no
+ * world, no entity, no undo history). For editing component values outside the
+ * ECS — e.g. a bundle draft in an asset editor — through the same property
+ * renderers the live inspector uses. `onChange` fires after each write so the
+ * host can mark its draft dirty or regenerate a preview.
+ */
+export const createInstanceEmitter = (instance: object, onChange?: () => void): EditEmitter => ({
+  scalar<T>(path: FieldPath, current: T): ScalarEdit<T> {
+    const write = (next: T): void => {
+      writePathLeaf(instance, path, snapshotValue(next));
+      onChange?.();
+    };
     return { value: current, preview: write, commit: write, sync: () => {} };
   },
   batch(_label: string, body: () => void): void {

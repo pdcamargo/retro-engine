@@ -5,6 +5,7 @@
 import { type Entity } from '@retro-engine/ecs';
 import { defaultViewportGizmoOptions, type ViewportGizmoOptions } from '@retro-engine/editor-sdk';
 
+import { type ComposerState, createComposerState } from './composer/composer-state';
 import { type ViewMode } from './editor-camera';
 import type { ProjectBrowser } from './project/project-browser';
 import { type Scene } from './scene-data';
@@ -45,8 +46,8 @@ export interface StudioState {
   savedHistoryIndex: number;
   /** Whether the scene has unsaved edits — recomputed each frame from the history cursor vs {@link savedHistoryIndex}. */
   dirty: boolean;
-  /** The Add Component picker is open (anchored from the Inspector / Component menu). */
-  addComponentOpen: boolean;
+  /** The Entity Composer modal (create / add / bundle) — its full transient + persisted state. */
+  composer: ComposerState;
   /** Mirror of the engine's {@link SimState}: true in Play or Paused. Synced each frame from the App. */
   playing: boolean;
   /** Mirror of {@link SimState}: true only when play mode is paused. */
@@ -85,7 +86,7 @@ export const createState = (scene: Scene): StudioState => ({
   historyClearConfirm: false,
   savedHistoryIndex: -1,
   dirty: false,
-  addComponentOpen: false,
+  composer: createComposerState(),
   playing: false,
   paused: false,
   viewMode: '3d',

@@ -17,7 +17,13 @@ export interface HistoryEntrySummary {
 }
 
 /** The category of a timeline entry — a history view tints its icon by this. */
-export type HistoryEntryKind = 'setField' | 'addComponent' | 'removeComponent' | 'custom' | 'batch';
+export type HistoryEntryKind =
+  | 'setField'
+  | 'addComponent'
+  | 'removeComponent'
+  | 'addBundle'
+  | 'custom'
+  | 'batch';
 
 /**
  * A read-only view of one timeline entry (whether applied or redoable), carrying
@@ -111,6 +117,7 @@ const toView = (item: HistoryItem): HistoryEntryView => {
       after: c.after,
     };
   }
+  if (c.kind === 'addBundle') return { label: c.label, kind: 'addBundle', entity: c.entity };
   return { label: c.label, kind: c.kind, entity: c.entity, componentName: c.componentName };
 };
 

@@ -53,6 +53,17 @@ export const applyEdit = (command: EditCommand, target: EditTarget): void => {
       target.world.removeComponent(command.entity, registered.ctor);
       return;
     }
+    case 'addBundle': {
+      if (!target.world.hasEntity(command.entity)) return;
+      const instances: object[] = [];
+      for (const entry of command.components) {
+        const registered = target.registry.get(entry.name);
+        if (registered === undefined) continue;
+        instances.push(snapshotComponent(registered, entry.instance));
+      }
+      if (instances.length > 0) target.world.insertBundle(command.entity, instances);
+      return;
+    }
     case 'custom':
       command.apply(target.world);
   }
@@ -75,6 +86,14 @@ export const revertEdit = (command: EditCommand, target: EditTarget): void => {
       const registered = target.registry.get(command.componentName);
       if (registered === undefined) return;
       target.world.insertBundle(command.entity, [snapshotComponent(registered, command.before)]);
+      return;
+    }
+    case 'addBundle': {
+      for (const entry of command.components) {
+        const registered = target.registry.get(entry.name);
+        if (registered === undefined) continue;
+        target.world.removeComponent(command.entity, registered.ctor);
+      }
       return;
     }
     case 'custom':

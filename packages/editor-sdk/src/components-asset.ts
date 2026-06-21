@@ -19,6 +19,7 @@ export type AssetType =
   | 'terrain'
   | 'scene'
   | 'prefab'
+  | 'bundle'
   | 'script'
   | 'audio'
   | 'shader'
@@ -46,6 +47,7 @@ export const ASSET_TYPES: Readonly<Record<AssetType, AssetTypeInfo>> = {
   terrain: { icon: 'mountain', tag: 'TERRAIN', tone: 'success' },
   scene: { icon: 'clapperboard', tag: 'SCENE', tone: 'accent' },
   prefab: { icon: 'component', tag: 'PREFAB', tone: 'accent' },
+  bundle: { icon: 'package', tag: 'BUNDLE', tone: 'accent' },
   script: { icon: 'file-code', tag: 'TS', tone: 'info' },
   audio: { icon: 'audio-lines', tag: 'AUDIO', tone: 'warning' },
   shader: { icon: 'file-code', tag: 'SHADER', tone: 'info' },

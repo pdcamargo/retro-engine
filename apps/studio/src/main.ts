@@ -1,7 +1,7 @@
 /// <reference types="@webgpu/types" />
 
-import type { AssetGuid } from '@retro-engine/assets';
-import { App, AppTypeRegistry, Commands, EditorGrid, inState, MaterialPlugin, ResMut, StandardMaterial } from '@retro-engine/engine';
+import type { AssetGuid, AssetSink } from '@retro-engine/assets';
+import { App, AppBundleRegistry, AppTypeRegistry, BUNDLE_ASSET_KIND, Commands, EditorGrid, inState, MaterialPlugin, ResMut, StandardMaterial } from '@retro-engine/engine';
 import {
   buildOutline,
   createEditor,
@@ -29,11 +29,12 @@ import { createProjectIo } from './project/project-io';
 import { projectStateKey } from './project/project-state';
 import { engineVersionMismatch, STUDIO_ENGINE_VERSION } from './project/engine-version';
 import { listProjectFiles } from './project/list-files';
-import { loadProjectScene, scanProjectManifest } from './project/project-scene';
+import { loadProjectBundles, loadProjectScene, scanProjectManifest } from './project/project-scene';
 import { setNativeProjectRoot } from './project/tauri-project-io';
 import { watchProject } from './project/project-watcher';
 import { buildBrowserAssets } from './project/project-browser';
 import { reloadProjectCode, reloadProjectScene } from './project/hot-reload';
+import { saveBundleAsset } from './project/save-bundle';
 import { saveScene } from './project/save-scene';
 import { createSplash } from './splash/splash';
 import { enabledSystemCount } from './systems-view';
@@ -65,6 +66,9 @@ import { inMemorySceneSource } from './scene-source';
 import { SceneOrientationGizmo } from './viewport-gizmo-wiring';
 import { handleHistoryShortcuts, handleSaveShortcut } from './shortcuts';
 import { installShowcaseScene, SHOWCASE_SCENE } from './showcase-scene';
+import { type ComposerHooks } from './composer/composer-modal';
+import { registerDefaultBundles } from './composer/default-bundles';
+import { loadBundleIntoComposer, loadComposerPrefs, openComposer, saveComposerPrefs } from './composer/composer-state';
 import { createState } from './state';
 import { ViewportTarget } from './viewport';
 
@@ -102,6 +106,53 @@ splash.step({ glyph: '▸', message: 'mounting ecs world', result: 'ok', tone: '
 
 const scene = createScene();
 const state = createState(scene);
+loadComposerPrefs(state.composer); // localStorage seed; a project rebinds this below
+
+// The project sink for writing assets (set once a project opens); the composer's
+// bundle-save hook writes `.rebundle` files through it.
+let projectSink: AssetSink | null = null;
+// Composer favorites/recents persistence — localStorage until a project opens,
+// then rebound to the project's personal preference store (ADR-0091).
+let persistComposerPrefs = (): void => saveComposerPrefs(state.composer);
+const composerHooks: ComposerHooks = {
+  persistPrefs: () => persistComposerPrefs(),
+  select: (entity) => {
+    state.selectedEntity = entity;
+  },
+  saveBundle: async (def, guid, location) => {
+    if (projectSink === null) {
+      console.warn('[studio] cannot save bundle — no project open');
+      return;
+    }
+    const result = await saveBundleAsset(projectSink, def, guid, location);
+    // Surface a brand-new bundle in the asset browser immediately.
+    if (state.browser !== null && location === null) {
+      state.browser.assets = [
+        ...state.browser.assets,
+        {
+          name: result.location.split('/').pop() ?? result.location,
+          type: 'bundle',
+          guid: result.guid,
+          location: result.location,
+          meta: BUNDLE_ASSET_KIND,
+          thumbnailable: false,
+        },
+      ];
+    }
+  },
+};
+
+// Open a `.rebundle` asset in the composer for editing. The bundle is keyed in
+// the registry by its authored name; the file stem matches for simple names.
+const openBundleForEdit = (asset: { name: string; guid: string; location: string }): void => {
+  const stem = asset.name.replace(/\.rebundle$/, '');
+  const def = app.getResource(AppBundleRegistry)?.get(stem);
+  if (def === undefined) {
+    console.warn(`[studio] bundle '${stem}' not found in registry`);
+    return;
+  }
+  loadBundleIntoComposer(app, state.composer, def, { guid: asset.guid, location: asset.location });
+};
 
 // Editor undo/redo. Binds to the live world + the same reflection registry the
 // plugins populate; inspector edits route through it and are undoable.
@@ -178,7 +229,7 @@ editor
   .addPanel(inspectorPanel(state, app, editor.inspector, history))
   .addPanel(historyPanel(state, app, history))
   .addPanel(consolePanel(state))
-  .addPanel(assetsPanel(state))
+  .addPanel(assetsPanel(state, openBundleForEdit))
   .addPanel(systemsPanel(app))
   .addPanel(profilerPanel(app))
   .setToolbar(toolbar(state, editor, app))
@@ -244,6 +295,16 @@ const probe: StudioProbe = {
 });
 // Dev helper: read the live entity outline + the selected entity's components,
 // so the Playwright fidelity check can assert the tree/inspector without pixels.
+// Test probe: open the Entity Composer in a mode (drives the modal for visual
+// verification, since jsimgui ignores synthetic clicks).
+(window as unknown as { __studioComposer: (mode?: 'create' | 'add' | 'bundle', target?: number) => void }).__studioComposer = (
+  mode,
+  target,
+) => {
+  openComposer(state.composer, mode ?? 'create', {
+    target: (target ?? state.selectedEntity) as never,
+  });
+};
 (window as unknown as { __studioInspect: (sel?: number) => unknown }).__studioInspect = (sel) => {
   const target = typeof sel === 'number' ? sel : state.selectedEntity;
   return {
@@ -321,6 +382,29 @@ void (async (): Promise<void> => {
   const layoutKey = projectId !== null ? projectStateKey(projectId, 'layout') : LAYOUT_KEY;
   const savedLayout = await platform.preferences.get(layoutKey);
 
+  // Composer favorites/recents: per-project personal state (ADR-0091). Load the
+  // saved set and rebind the persist hook to write back to the project's store.
+  if (projectId !== null) {
+    const composerKey = projectStateKey(projectId, 'composer');
+    const saved = await platform.preferences.get(composerKey);
+    if (saved !== null) {
+      try {
+        const parsed = JSON.parse(saved) as { favorites?: string[]; recent?: string[] };
+        state.composer.favorites.clear();
+        for (const k of parsed.favorites ?? []) state.composer.favorites.add(k);
+        state.composer.recent = parsed.recent ?? [];
+      } catch {
+        /* ignore malformed prefs */
+      }
+    }
+    persistComposerPrefs = (): void => {
+      void platform.preferences.set(
+        composerKey,
+        JSON.stringify({ favorites: [...state.composer.favorites], recent: state.composer.recent }),
+      );
+    };
+  }
+
   // Open project / App-rebuild: opening a project re-launches the studio session
   // (a clean App rebuild). When one is set, build + apply its plugins now — the
   // App is still in its Building phase, so the project's components, systems, and
@@ -383,8 +467,13 @@ void (async (): Promise<void> => {
   if (projectDir !== null) {
     try {
       const io = createProjectIo(platform, projectDir);
+      projectSink = io.sink;
       const files = await listProjectFiles(platform);
       const manifest = await scanProjectManifest(io.source, files);
+      // Register the project's authored bundles up front so they show in the
+      // Add-Component palette whether or not a startup scene loads.
+      const bundleCount = await loadProjectBundles(app, io.source, manifest);
+      if (bundleCount > 0) console.log(`[studio] loaded ${bundleCount} bundle(s)`);
       // The asset browser shows the project's real assets with generated previews,
       // generated lazily as the panel draws each visible tile (once the renderer's
       // device is up). Pre-warming + an on-disk cache are a follow-up.
@@ -595,7 +684,7 @@ void (async (): Promise<void> => {
         handleHistoryShortcuts(history);
         handleSaveShortcut(canSaveSceneFn() && state.dirty, saveSceneAction);
         editor.draw();
-        drawDialogs({ ui, widgets }, state, history, app);
+        drawDialogs({ ui, widgets }, state, history, app, { inspector: editor.inspector, hooks: composerHooks });
         probe.dockingEnabled = isDockingEnabled();
         probe.selected = state.selectedEntity;
         probe.playing = state.playing;
@@ -615,6 +704,10 @@ void (async (): Promise<void> => {
       },
     }),
   );
+
+  // Editor-defined convenience bundles (camera, light, mesh), now that every
+  // plugin (engine + project) has built and its components are registered.
+  registerDefaultBundles(app);
 
   await app.run();
 })().catch((err: unknown) => {

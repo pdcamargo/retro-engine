@@ -10,6 +10,9 @@ import type { ComponentType } from '@retro-engine/ecs';
 import type { Handle } from '@retro-engine/assets';
 import type { RegisteredType, RegisterOptions, Schema } from '@retro-engine/reflect';
 
+import { AppBundleRegistry } from './bundle/bundle-registry';
+import type { BundleDefinition, BundleRegisterOptions } from './bundle/bundle-definition';
+import { encodeBundleComponents } from './bundle/bundle-codec';
 import { AppTypeRegistry } from './scene/app-type-registry';
 import type { Scene } from './scene/scene-asset';
 import { registerSceneState } from './scene/scene-state';
@@ -129,6 +132,19 @@ export {
   visibilityPropagateSystem,
 } from './visibility';
 export { Name } from './name';
+export { AppBundleRegistry } from './bundle/bundle-registry';
+export type { BundleDefinition, BundleRegisterOptions } from './bundle/bundle-definition';
+export { instantiateBundle } from './bundle/instantiate';
+export { bundleDecodeEnv, bundleEncodeEnv, encodeBundleComponents } from './bundle/bundle-codec';
+export {
+  BUNDLE_ASSET_EXTENSION,
+  BUNDLE_ASSET_KIND,
+  BUNDLE_FORMAT_VERSION,
+  createBundleSerializer,
+  deserializeBundle,
+  serializeBundle,
+} from './bundle/bundle-asset';
+export { BundlePlugin } from './bundle/bundle-plugin';
 export { AppTypeRegistry } from './scene/app-type-registry';
 export type {
   SceneData,
@@ -966,6 +982,9 @@ export class App {
     // plugins can register their component schemas (via registerComponent) as
     // they wire themselves up. CorePlugin — added below — is the first to do so.
     this.insertResource(new AppTypeRegistry());
+    // Bundles are App-scoped like the type registry, so a plugin can register a
+    // reusable component group (via registerBundle) from its build().
+    this.insertResource(new AppBundleRegistry());
     // Templates are App-scoped like the type registry, so a scene can resolve a
     // prefab by name and `spawnTemplate(app, 'Name', ...)` works after `build()`.
     this.insertResource(new TemplateRegistry());
@@ -1643,6 +1662,42 @@ export class App {
     opts?: RegisterOptions<T>,
   ): RegisteredType<T> {
     return this.getResource(AppTypeRegistry)!.registry.registerType(ctor, schema, opts);
+  }
+
+  /**
+   * Register a named, reusable group of components — a {@link BundleDefinition},
+   * the engine's introspectable equivalent of a Bevy bundle. Pass the components
+   * as live instances carrying the bundle's default values; their authored field
+   * values are captured at registration. Every component's type must already be
+   * registered (via {@link App.registerComponent}), so register a bundle after
+   * the components it includes — typically from the same plugin's `build()`.
+   *
+   * Spawning the bundle (e.g. through tooling) stamps fresh, independent
+   * instances onto an entity; the entity keeps no link to the definition.
+   *
+   * @example
+   * ```ts
+   * app.registerBundle('Player', [
+   *   new Transform(),
+   *   new Sprite({ color: Color.RED }),
+   * ], { category: ['Gameplay'], icon: 'user' });
+   * ```
+   */
+  registerBundle(
+    name: string,
+    components: readonly object[],
+    opts?: BundleRegisterOptions,
+  ): BundleDefinition {
+    const registry = this.getResource(AppTypeRegistry)!.registry;
+    const def: BundleDefinition = {
+      name,
+      components: encodeBundleComponents(registry, components),
+      ...(opts?.icon !== undefined ? { icon: opts.icon } : {}),
+      ...(opts?.category !== undefined ? { category: opts.category } : {}),
+      ...(opts?.description !== undefined ? { description: opts.description } : {}),
+    };
+    this.getResource(AppBundleRegistry)!.register(def);
+    return def;
   }
 
   /**

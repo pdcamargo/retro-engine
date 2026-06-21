@@ -15,6 +15,7 @@ import {
 } from '@retro-engine/editor-sdk';
 import { type App, AppTypeRegistry, Name } from '@retro-engine/engine';
 
+import { openComposer } from './composer/composer-state';
 import { type StudioState } from './state';
 
 /**
@@ -94,7 +95,7 @@ export const inspectorPanel = (
       // Add Component — opens the picker for the selected entity.
       ui.spacing();
       if (widgets.button('Add Component', { variant: 'secondary', icon: 'plus', block: true })) {
-        state.addComponentOpen = true;
+        openComposer(state.composer, 'add', { target: selected });
       }
 
       // Derived / non-serializable components — recomputed by systems, not

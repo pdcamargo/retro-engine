@@ -9,6 +9,7 @@ import {
 } from '@retro-engine/editor-sdk';
 import { type App, AppTypeRegistry } from '@retro-engine/engine';
 
+import { openComposer } from './composer/composer-state';
 import { studioClassifiers } from './entity-classifiers';
 import { EditorOnly } from './editor-markers';
 import { type StudioState } from './state';
@@ -40,8 +41,8 @@ export const hierarchyPanel = (state: StudioState, app: App): PanelDef => ({
         width: avail - 78,
       });
       ui.sameLine(0, 4);
-      if (widgets.iconButton('hier-add', 'plus', { tooltip: 'Add entity', size: 'sm' })) {
-        /* add entity */
+      if (widgets.iconButton('hier-add', 'plus', { tooltip: 'Create entity', size: 'sm' })) {
+        openComposer(state.composer, 'create');
       }
       ui.sameLine(0, 2);
       if (widgets.iconButton('hier-collapse', 'chevrons-down-up', { tooltip: 'Collapse all', size: 'sm' })) {

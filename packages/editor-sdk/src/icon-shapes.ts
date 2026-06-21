@@ -346,6 +346,37 @@ export const drawIcon = (name: string, min: Vec2, size: number, col: number): vo
       line(0.16, 0.52, 0.5, 0.72);
       line(0.5, 0.72, 0.84, 0.52);
       break;
+    case 'star': {
+      // Filled five-point star (favorite). Triangle-fan from the center to each
+      // perimeter point — a star is star-shaped about its center, so the fan fills it.
+      const cx = 0.5;
+      const cy = 0.54;
+      const outer = 0.44;
+      const inner = 0.18;
+      const pts: Vec2[] = [];
+      for (let i = 0; i < 10; i++) {
+        const ang = -Math.PI / 2 + (i * Math.PI) / 5;
+        const r = i % 2 === 0 ? outer : inner;
+        pts.push(p(cx + Math.cos(ang) * r, cy + Math.sin(ang) * r));
+      }
+      const c = p(cx, cy);
+      for (let i = 0; i < 10; i++) dl.triFilled(c, pts[i]!, pts[(i + 1) % 10]!, col);
+      break;
+    }
+    case 'package':
+      rect(0.18, 0.32, 0.82, 0.84, 0.06);
+      line(0.5, 0.16, 0.18, 0.32);
+      line(0.5, 0.16, 0.82, 0.32);
+      line(0.5, 0.16, 0.5, 0.58);
+      line(0.18, 0.45, 0.82, 0.45);
+      break;
+    case 'triangle-alert':
+      line(0.5, 0.14, 0.1, 0.85);
+      line(0.5, 0.14, 0.9, 0.85);
+      line(0.1, 0.85, 0.9, 0.85);
+      line(0.5, 0.4, 0.5, 0.63);
+      dot(0.5, 0.74, 0.045);
+      break;
     default:
       dl.rect(p(0.22, 0.22), p(0.78, 0.78), col, 0.12 * size, t);
       dot(0.5, 0.5, 0.06);

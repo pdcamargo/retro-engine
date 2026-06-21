@@ -47,10 +47,40 @@ export interface CustomCommand extends EditBase {
   revert(world: World): void;
 }
 
+/** One component of an {@link AddBundleCommand}: its stable reflection name and the instance to insert. */
+export interface BundleComponentEntry {
+  /** Stable reflection name; the applier resolves the constructor from this. */
+  readonly name: string;
+  /** Deep-cloned instance to insert (cloned again on each apply so storage never aliases). */
+  readonly instance: object;
+}
+
+/**
+ * Attach a whole bundle's components to an entity in one undoable step; undo
+ * removes them. Unlike a sequence of {@link AddComponentCommand}s, the insert is
+ * a single archetype transition and a single timeline entry.
+ */
+export interface AddBundleCommand {
+  readonly kind: 'addBundle';
+  /** The entity the bundle is stamped onto. Re-validated at apply time. */
+  readonly entity: Entity;
+  /** A short human label for the action, shown in undo history / tooltips. */
+  readonly label: string;
+  /** The bundle's stable name, for display. */
+  readonly bundleName: string;
+  /** The components to insert, in order. */
+  readonly components: readonly BundleComponentEntry[];
+}
+
 /**
  * One undoable editor action, as a plain data descriptor (custom actions aside).
  * A central applier interprets it against the live world, so the
  * world-mutation contract lives in exactly one place and the action stays
  * inspectable and replayable.
  */
-export type EditCommand = SetFieldCommand | AddComponentCommand | RemoveComponentCommand | CustomCommand;
+export type EditCommand =
+  | SetFieldCommand
+  | AddComponentCommand
+  | RemoveComponentCommand
+  | AddBundleCommand
+  | CustomCommand;

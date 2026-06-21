@@ -1,12 +1,16 @@
 import type { AssetGuid, AssetManifest, AssetSource } from '@retro-engine/assets';
 import type { App } from '@retro-engine/engine';
 import {
+  AppBundleRegistry,
   applyCompletedLoads,
   ASSET_TYPE,
   AssetPlugin,
   AssetServer,
+  BUNDLE_ASSET_KIND,
+  BundlePlugin,
   createHdrImporter,
   createMeshImporter,
+  deserializeBundle,
   Images,
   Meshes,
   registerAssetStore,
@@ -28,6 +32,35 @@ export const scanProjectManifest = async (
 };
 
 /**
+ * Read every `.rebundle` asset listed in `manifest` off `source` and register it
+ * in the App's {@link AppBundleRegistry}, so user-authored bundles appear in the
+ * Add-Component palette next to code-defined ones. Bundles are small and all
+ * needed up front (the palette lists them eagerly), so — unlike scene-referenced
+ * assets — they are not streamed on demand. Returns how many were registered.
+ */
+export const loadProjectBundles = async (
+  app: App,
+  source: AssetSource,
+  manifest: AssetManifest,
+): Promise<number> => {
+  const registry = app.getResource(AppBundleRegistry);
+  if (registry === undefined) return 0;
+  let count = 0;
+  for (const entry of manifest.entries.values()) {
+    if (entry.kind !== BUNDLE_ASSET_KIND) continue;
+    try {
+      const bytes = await source.read(entry.location);
+      const fallback = entry.location.split('/').pop()?.replace(/\.rebundle$/, '') ?? entry.location;
+      registry.register(deserializeBundle(bytes, fallback));
+      count += 1;
+    } catch (err) {
+      console.warn(`[studio] failed to load bundle ${entry.location}`, err);
+    }
+  }
+  return count;
+};
+
+/**
  * Load the project's startup scene from disk and spawn it into the world — the
  * host-backed `SceneSource` the studio uses instead of the in-memory showcase
  * when a project is open. Adds the asset + scene plugins over the project source,
@@ -43,6 +76,7 @@ export const loadProjectScene = async (
 ): Promise<boolean> => {
   app.addPlugin(new AssetPlugin({ source }));
   app.addPlugin(new ScenePlugin());
+  app.addPlugin(new BundlePlugin());
 
   const server = app.getResource(AssetServer)!;
   // Project file loaders the engine has no default for: a `.rmesh` decodes to a

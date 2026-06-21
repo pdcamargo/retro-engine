@@ -19,7 +19,8 @@ export interface BrowserAsset {
 
 /** The live asset browser for an open project: its assets + the thumbnail generator. */
 export interface ProjectBrowser {
-  readonly assets: readonly BrowserAsset[];
+  /** The browsable assets; reassigned when a new asset (e.g. an authored bundle) is created in-session. */
+  assets: readonly BrowserAsset[];
   readonly thumbnails: ThumbnailService;
 }
 
@@ -35,6 +36,8 @@ const typeFor = (kind: string, location: string): AssetType => {
       return 'scene';
     case 'Prefab':
       return 'prefab';
+    case 'Bundle':
+      return 'bundle';
     default:
       break;
   }

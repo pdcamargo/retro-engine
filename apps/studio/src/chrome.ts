@@ -6,6 +6,7 @@ import {
   type Editor,
   getActivePalette,
   type History,
+  type InspectorRegistry,
   type MenuDef,
   requestSimState,
   type Rgba,
@@ -15,7 +16,8 @@ import {
   type ToolbarDef,
 } from '@retro-engine/editor-sdk';
 
-import { addComponentPopup } from './add-component-popup';
+import { type ComposerHooks, entityComposerModal } from './composer/composer-modal';
+import { openComposer } from './composer/composer-state';
 import { historyClearDialog } from './history-clear-dialog';
 import { projectSettingsDialog } from './project-settings';
 import { type StudioState, type TransformTool } from './state';
@@ -101,7 +103,12 @@ export const menus = (state: StudioState, history: History, actions: MenuActions
         label: 'Add Component…',
         icon: 'plus',
         disabled: state.selectedEntity === null,
-        onClick: () => (state.addComponentOpen = true),
+        onClick: () => openComposer(state.composer, 'add', { target: state.selectedEntity }),
+      },
+      {
+        label: 'New Bundle…',
+        icon: 'package',
+        onClick: () => openComposer(state.composer, 'bundle'),
       },
     ],
   },
@@ -270,8 +277,14 @@ export const statusBar = (state: StudioState, app: App): StatusBarDef => ({
 });
 
 /** Draw the studio's modal dialogs + popups (call once per frame after the shell). */
-export const drawDialogs = (ctx: EditorContext, state: StudioState, history: History, app: App): void => {
+export const drawDialogs = (
+  ctx: EditorContext,
+  state: StudioState,
+  history: History,
+  app: App,
+  composer: { readonly inspector: InspectorRegistry; readonly hooks: ComposerHooks },
+): void => {
   projectSettingsDialog(ctx, state);
   historyClearDialog(ctx, state, history);
-  addComponentPopup(ctx, state, app, history);
+  entityComposerModal(ctx, state.composer, app, history, composer.inspector, composer.hooks);
 };
