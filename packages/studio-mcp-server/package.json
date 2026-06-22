@@ -1,0 +1,35 @@
+{
+  "name": "@retro-engine/studio-mcp-server",
+  "version": "0.0.0",
+  "description": "MCP relay for the Retro Engine studio: a localhost WebSocket bridge + stdio MCP server an AI client launches to drive the live editor. Run via `npx @retro-engine/studio-mcp-server`.",
+  "type": "module",
+  "bin": {
+    "retro-studio-mcp": "./dist/cli.js"
+  },
+  "main": "./dist/server.js",
+  "types": "./dist/server.d.ts",
+  "publishConfig": {
+    "access": "restricted",
+    "registry": "https://npm.pkg.github.com"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "lint": "oxlint .",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "start": "bun run src/cli.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@retro-engine/mcp-protocol": "workspace:*",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/ws": "^8.5.0"
+  }
+}

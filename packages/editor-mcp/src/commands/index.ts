@@ -1,0 +1,34 @@
+import type { CommandDef } from '../registry';
+import { CommandRegistry } from '../registry';
+
+import { componentCommands } from './component';
+import { composerCommands } from './composer';
+import { entityCommands } from './entity';
+import { hierarchyCommands } from './hierarchy';
+import { historyCommands } from './history';
+import { logCommands } from './logs';
+import { panelCommands } from './panels';
+import { rendererCommands } from './renderer';
+import { sceneCommands } from './scene';
+import { screenshotCommands } from './screenshot';
+import { selectionCommands } from './selection';
+import { studioCommands } from './studio';
+
+/** The built-in command set, in domain order. */
+export const defaultCommands: readonly CommandDef[] = [
+  ...studioCommands,
+  ...selectionCommands,
+  ...hierarchyCommands,
+  ...entityCommands,
+  ...componentCommands,
+  ...sceneCommands,
+  ...historyCommands,
+  ...rendererCommands,
+  ...logCommands,
+  ...panelCommands,
+  ...composerCommands,
+  ...screenshotCommands,
+];
+
+/** A registry pre-loaded with every built-in command. Add plugin commands before connecting. */
+export const createDefaultRegistry = (): CommandRegistry => new CommandRegistry().addAll(defaultCommands);

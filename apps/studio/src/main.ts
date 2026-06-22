@@ -71,6 +71,12 @@ import { registerDefaultBundles } from './composer/default-bundles';
 import { loadBundleIntoComposer, loadComposerPrefs, openComposer, saveComposerPrefs } from './composer/composer-state';
 import { createState } from './state';
 import { ViewportTarget } from './viewport';
+import { createTeeLogger, LogRing, StudioMcp } from './mcp';
+import { mcpPanel } from './panels-mcp';
+import { createCaptureService, type PanelRect, recordPanelRect } from './screenshot';
+import type { ComposerControl, SaveSceneResult } from '@retro-engine/editor-mcp';
+import type { PanelDef } from '@retro-engine/editor-sdk';
+import type { ProjectIo } from './project/project-io';
 
 const LAYOUT_KEY = 'retro.studio.layout';
 
@@ -89,6 +95,10 @@ const bootStart = performance.now();
 const splash = createSplash(8);
 splash.step({ glyph: '▸', message: 'initializing runtime', result: 'ok', tone: 'accent' });
 
+// Shared log buffer the MCP `logs.recent` command reads; the App logger tees
+// engine output into it (and the studio's own console pushes into it too).
+const mcpLogs = new LogRing();
+
 const renderer = createWebGPURenderer(canvas);
 // profileSystems: the studio measures per-system frame cost for the Systems panel.
 // defaultSystemOrigin: systems the studio registers directly are editor scaffolding,
@@ -99,6 +109,7 @@ const app = new App({
   clearColor: { r: 0.027, g: 0.043, b: 0.039, a: 1 },
   profileSystems: true,
   defaultSystemOrigin: 'editor',
+  logger: createTeeLogger(mcpLogs),
 });
 // Engine-backed play state (Edit/Play/Paused) the toolbar drives and panels reflect.
 initSimState(app);
@@ -161,6 +172,14 @@ const history = new History(
   { capacity: 200 },
 );
 
+// MCP runtime: lets an AI client drive the live editor through the studio-mcp-server
+// relay. Created here so the MCP panel can reference it; wired to the platform host
+// + project in the async boot tail via studioMcp.attach(...).
+const studioMcp = new StudioMcp(mcpLogs);
+(window as unknown as { __studioMcp: StudioMcp }).__studioMcp = studioMcp;
+// Set in the boot tail once pushConsole exists; the MCP panel surfaces actions here.
+let pushConsoleForPanels: (text: string, meta?: string) => void = () => {};
+
 // Offscreen render targets for the Scene (editor) and Game viewports, plus the
 // 3D scene and cameras that render into them.
 const editorView = new ViewportTarget();
@@ -222,18 +241,35 @@ editor.inspector.amend('EnvironmentMapLight', [{ kind: 'field', name: 'rotation'
   widget: 'euler',
 });
 
+// Each panel records its window rect every frame so the MCP `screenshot.panel`
+// command can crop the canvas to it.
+const panelRects = new Map<string, PanelRect>();
+const cap = (def: PanelDef): PanelDef => recordPanelRect(def, panelRects, canvas);
+
 editor
-  .addPanel(hierarchyPanel(state, app))
-  .addPanel(scenePanel(state, editorView, sceneGizmos, sceneCamera, scenePicker, orientationGizmo))
-  .addPanel(gamePanel(state, gameView))
-  .addPanel(inspectorPanel(state, app, editor.inspector, history))
-  .addPanel(historyPanel(state, app, history))
-  .addPanel(consolePanel(state))
-  .addPanel(assetsPanel(state, openBundleForEdit))
-  .addPanel(systemsPanel(app))
-  .addPanel(profilerPanel(app))
+  .addPanel(cap(hierarchyPanel(state, app)))
+  .addPanel(cap(scenePanel(state, editorView, sceneGizmos, sceneCamera, scenePicker, orientationGizmo)))
+  .addPanel(cap(gamePanel(state, gameView)))
+  .addPanel(cap(inspectorPanel(state, app, editor.inspector, history)))
+  .addPanel(cap(historyPanel(state, app, history)))
+  .addPanel(cap(consolePanel(state)))
+  .addPanel(cap(assetsPanel(state, openBundleForEdit)))
+  .addPanel(cap(systemsPanel(app)))
+  .addPanel(cap(profilerPanel(app)))
+  .addPanel(cap(mcpPanel(studioMcp, (text, meta) => pushConsoleForPanels(text, meta))))
   .setToolbar(toolbar(state, editor, app))
   .setStatusBar(statusBar(state, app));
+const captureService = createCaptureService(canvas, panelRects, editor, app);
+
+// The Entity Composer modal, exposed to MCP as composer.* (typed commands, not eval).
+const composerControl: ComposerControl = {
+  open: (mode, target) => openComposer(state.composer, mode, { target: (target ?? state.selectedEntity) as never }),
+  close: () => {
+    state.composer.open = false;
+  },
+  isOpen: () => state.composer.open,
+  mode: () => state.composer.mode,
+};
 // Set once the platform host resolves (in the async boot tail); the menu calls through them.
 let openProjectAction: () => void = () => {};
 let saveSceneAction: () => void = () => {};
@@ -343,7 +379,13 @@ void (async (): Promise<void> => {
       text,
       ...(meta !== undefined ? { meta } : {}),
     });
+    mcpLogs.push(lvl === 'cmd' ? 'info' : lvl, text, meta);
   };
+  // Route the MCP panel's action notices into the studio console now that it exists.
+  pushConsoleForPanels = (text, meta): void => pushConsole('cmd', text, meta);
+  // Lifted so the MCP runtime can read the project IO + save the scene.
+  let mcpProjectIo: ProjectIo | null = null;
+  let mcpSaveScene: (() => Promise<SaveSceneResult>) | undefined;
   // While this is in the future, the watcher ignores scene-file changes: the
   // studio's own Save writes the .rescene, which would otherwise trigger a reload
   // of the world it just serialized (an edit→save→reload loop). A time window
@@ -468,6 +510,7 @@ void (async (): Promise<void> => {
     try {
       const io = createProjectIo(platform, projectDir);
       projectSink = io.sink;
+      mcpProjectIo = io;
       const files = await listProjectFiles(platform);
       const manifest = await scanProjectManifest(io.source, files);
       // Register the project's authored bundles up front so they show in the
@@ -518,6 +561,25 @@ void (async (): Promise<void> => {
               pushConsole('err', 'Save failed', result.error.split('\n')[0]);
             }
           })();
+        };
+        // Same save, surfaced to MCP as a result rather than a fire-and-forget action.
+        mcpSaveScene = async (): Promise<SaveSceneResult> => {
+          const result = await saveScene({
+            app,
+            sink: projectSink,
+            guid: sceneGuid,
+            location: sceneLocation,
+            isEditorEntity: (e) => app.world.has(e, EditorOnly),
+            suppressReload: () => {
+              suppressSceneReloadUntil = Date.now() + 1500;
+            },
+          });
+          if (result.ok) {
+            state.savedHistoryIndex = history.view().currentIndex;
+            pushConsole('cmd', `Saved scene → ${sceneLocation}`, `${result.entities} entities`);
+            return { entities: result.entities };
+          }
+          return { error: result.error };
         };
       }
     } catch (err) {
@@ -708,6 +770,30 @@ void (async (): Promise<void> => {
   // Editor-defined convenience bundles (camera, light, mesh), now that every
   // plugin (engine + project) has built and its components are registered.
   registerDefaultBundles(app);
+
+  // Wire the MCP runtime now that the platform host + project are resolved, and
+  // start the bridge if enabled (default-on in dev). Non-fatal if it can't.
+  void studioMcp
+    .attach({
+      app,
+      editor,
+      history,
+      state,
+      prefs: platform.preferences,
+      projectIo: mcpProjectIo,
+      capture: captureService,
+      composer: composerControl,
+      classifiers: studioClassifiers,
+      isEditorEntity: (e) => app.world.has(e, EditorOnly),
+      studio: {
+        name: 'retro-studio',
+        version: STUDIO_ENGINE_VERSION,
+        platform: platform.kind,
+        projectDir,
+      },
+      ...(mcpSaveScene !== undefined ? { saveScene: mcpSaveScene } : {}),
+    })
+    .catch((err: unknown) => console.error('[studio] MCP attach failed', err));
 
   await app.run();
 })().catch((err: unknown) => {

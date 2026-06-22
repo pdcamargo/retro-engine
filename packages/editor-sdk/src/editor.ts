@@ -123,6 +123,7 @@ export class Editor {
   private readonly menus: MenuDef[] = [];
   private toolbar: ToolbarDef | undefined;
   private statusBar: StatusBarDef | undefined;
+  private pendingFocus: string | null = null;
   private readonly options: EditorOptions;
 
   /**
@@ -172,6 +173,23 @@ export class Editor {
   /** Whether a panel is currently shown. */
   isPanelOpen(id: string): boolean {
     return this.panelState.get(id)?.open ?? false;
+  }
+
+  /**
+   * Bring a panel to the front on the next frame — for a docked, tabbed panel this
+   * selects its tab. Used by tooling (e.g. screenshotting a specific tab).
+   */
+  focusPanel(id: string): void {
+    this.pendingFocus = id;
+  }
+
+  /** Every registered panel with its title and current visibility, in registration order. */
+  listPanels(): { id: string; title: string; open: boolean }[] {
+    return this.panelOrder.map((id) => ({
+      id,
+      title: this.panels.get(id)?.title ?? id,
+      open: this.panelState.get(id)?.open ?? false,
+    }));
   }
 
   /** The default dock-layout `ini` for the registered panels' slots. */
@@ -334,6 +352,11 @@ export class Editor {
       const name = `${def.title.toUpperCase()}${countText}###${id}`;
       const dock = nodeForSlot(def.slot ?? 'float');
       if (dock !== undefined) ImGui.SetNextWindowDockID(dock, ImGuiCond.FirstUseEver);
+      // Honour a pending focus request: selects this panel's dock tab this frame.
+      if (this.pendingFocus === id) {
+        ImGui.SetNextWindowFocus();
+        this.pendingFocus = null;
+      }
       ui.window(
         {
           title: name,

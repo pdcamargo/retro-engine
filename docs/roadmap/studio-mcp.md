@@ -1,7 +1,7 @@
 # Studio — AI MCP Server
 
 - **Created:** 2026-05-21
-- **Status:** Planning
+- **Status:** In progress (transport + registry + first command surface landed; see [ADR-0109](../adr/ADR-0109-studio-mcp-transport-and-architecture.md))
 
 ## Goal
 
@@ -11,14 +11,22 @@ When this lands, `CLAUDE.md` gets an "Editor tooling (MCP)" section governing wh
 
 ## Phases
 
-1. **Transport choice.** stdio vs HTTP+SSE vs WebSocket. Lands as an ADR. Tauri can host either; stdio is the MCP default but a Tauri-hosted server typically wants a network transport so external agents can connect to the running studio. Lean: WebSocket on localhost with a token printed to the studio console.
-2. **Server host.** Two viable shapes: (a) MCP server in the Tauri Rust side, calling into the JS layer via Tauri commands; (b) MCP server in JS, run as a side process the studio launches. (a) is tighter integration; (b) keeps engine and editor code in TypeScript. Lean: (b), with the Rust side exposing only auth + lifecycle.
-3. **Tool surface — read.** Non-destructive tools first: `world.query`, `world.get_entity`, `scene.list`, `scene.read`, `assets.list`, `assets.read`, `studio.screenshot`, `studio.get_logs`, `studio.get_state`.
-4. **Tool surface — write.** Destructive tools, gated on confirmation: `world.spawn`, `world.add_component`, `world.despawn`, `scene.save`, `scene.create`, `assets.import`, `assets.delete`, `studio.run_tests`, `studio.eval` (run TS in the studio's JS context — high power, needs strong guardrails).
-5. **Resources.** The project's scenes, assets, recent logs, and current selection as MCP resources so agents can read them without ad-hoc tool calls.
-6. **Auth + permissions.** Per-connection token, scoped capability list (read-only vs read-write), confirmation-required actions surface a Tauri modal before executing. CLAUDE.md needs a rule covering when to ask the user before destructive MCP calls.
-7. **Plugin surface integration.** `editor-sdk` plugins can register custom MCP tools — same registry pattern as windows/dialogs. Lets third parties extend agent capabilities without forking the studio.
-8. **Build-time guard.** Production studio builds strip or hard-disable the MCP server (or gate behind a dev flag). MCP is a development-time tool, not a runtime dependency — same posture as platformer-builder's Unity MCP rule.
+1. ✅ **Transport choice.** Landed (ADR-0109): localhost WebSocket; the AI client launches the relay, the studio is a reconnecting client. No token yet (localhost-only, dev tool).
+2. ✅ **Server host.** Landed: JS relay (`@retro-engine/studio-mcp-server`), no Rust. The studio attaches over WebSocket.
+3. ✅ **Tool surface — read.** Landed: `selection.*`, `hierarchy.tree`, `entity.get`, `component.types`, `scene.get`/`scene.dirty`, `history.list`, `renderer.capabilities`/`renderer.stats`, `logs.recent`, `studio.state`/`studio.audit`/`studio.connected`. Remaining: `assets.*`, `screenshot.*`.
+4. ✅ **Tool surface — write.** Landed (no-friction, undoable + audited): `entity.spawn`/`despawn`/`rename`, `component.add`/`remove`/`set`, `hierarchy.reparent`, `history.undo`/`redo`/`jumpTo`, `scene.save`, `studio.play`/`pause`/`stop`, and `studio.eval` (panel-gated). Remaining: `assets.import`/`delete`, bundle/template authoring, `studio.run_tests`.
+5. **Resources.** Not started — current surface uses tools; MCP resources for scenes/assets/logs/selection are a follow-on.
+6. ✅ **Auth + permissions (revised).** No per-action modals: writes are undoable + audited (panel + `studio.audit`); `studio.eval` is gated by the panel's "Allow eval" toggle. A per-connection token for the localhost socket is a possible hardening follow-on.
+7. **Plugin surface integration.** Not started — the `CommandRegistry` is ready for it; expose registration to `editor-sdk` plugins next.
+8. **Shippable, opt-in feature (revised — was "build-time guard").** The bridge is **not** stripped from prod; it ships as an opt-in the user enables in the studio **MCP panel** (default on in dev, off in prod via `mcp.enabled`; eval extra-gated via `mcp.eval`). The relay is **not published** (won't be for a long while) — it runs from source via `bun`, registered with `bun run packages/studio-mcp-server/src/cli.ts install` (writes `~/.claude.json` at user scope) plus a committed engine-repo `.mcp.json`. Client setup lives in the CLI, not the panel, because the studio webview can't write `~/.claude.json`.
+
+## Remaining
+
+- ✅ Screenshots landed: `screenshot.editor` / `screenshot.panel` / `screenshot.panels` via `canvas.toDataURL` + per-panel ImGui rect crop; returned inline as an MCP image and saved to the engine repo's `screenshots/`.
+- `assets.*` and bundle/template authoring commands; MCP resources (Phase 5).
+- `editor-sdk` plugin command registration (Phase 7).
+- Multi-session broker (studio- or Rust-hosted) if more than one agent must connect at once.
+- A robust dev/prod default signal for `mcp.enabled` (currently `globalThis.__studioMcpDefaultEnabled`, default on).
 
 ## Open questions
 

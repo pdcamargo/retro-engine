@@ -48,3 +48,7 @@ apps/playground/saved/
 # Playwright MCP scratch output (screenshots, snapshots, console logs)
 .playwright-mcp/
 save-showcase.png
+
+# MCP editor screenshots (scratch — delete before commit)
+screenshots/
+.screenshots/

@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "retro-studio": {
+      "command": "bun",
+      "args": ["run", "packages/studio-mcp-server/src/cli.ts"]
+    }
+  }
+}
