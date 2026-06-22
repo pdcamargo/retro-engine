@@ -48,6 +48,7 @@ publishHost();
 // editor-only behavior; a standalone runtime leaves it unset.
 (globalThis as unknown as { __retroEditorHint?: boolean }).__retroEditorHint = true;
 
+import { makeAssetFieldRenderer } from './inspector/asset-field-renderer';
 import { drawDialogs, menus, statusBar, toolbar } from './chrome';
 import { SceneCameraController } from './editor-camera';
 import { EditorOnly } from './editor-markers';
@@ -240,6 +241,10 @@ editor.inspector.amend('Skybox', [{ kind: 'field', name: 'rotation' }] as const,
 editor.inspector.amend('EnvironmentMapLight', [{ kind: 'field', name: 'rotation' }] as const, {
   widget: 'euler',
 });
+
+// Asset handle fields render as an input-like slot that opens the asset picker,
+// scoped to the slot's expected store type. Covers every `t.handle(...)` field.
+editor.inspector.registerKindRenderer('handle', makeAssetFieldRenderer({ state, app }));
 
 // Each panel records its window rect every frame so the MCP `screenshot.panel`
 // command can crop the canvas to it.

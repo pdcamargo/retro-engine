@@ -5,6 +5,7 @@
 import { type Entity } from '@retro-engine/ecs';
 import { defaultViewportGizmoOptions, type ViewportGizmoOptions } from '@retro-engine/editor-sdk';
 
+import { type AssetPickerState, createAssetPickerState } from './asset-picker/asset-picker-state';
 import { type ComposerState, createComposerState } from './composer/composer-state';
 import { type ViewMode } from './editor-camera';
 import type { ProjectBrowser } from './project/project-browser';
@@ -48,6 +49,8 @@ export interface StudioState {
   dirty: boolean;
   /** The Entity Composer modal (create / add / bundle) — its full transient + persisted state. */
   composer: ComposerState;
+  /** The asset picker modal — the slot being assigned plus its transient browse state. */
+  assetPicker: AssetPickerState;
   /** Mirror of the engine's {@link SimState}: true in Play or Paused. Synced each frame from the App. */
   playing: boolean;
   /** Mirror of {@link SimState}: true only when play mode is paused. */
@@ -87,6 +90,7 @@ export const createState = (scene: Scene): StudioState => ({
   savedHistoryIndex: -1,
   dirty: false,
   composer: createComposerState(),
+  assetPicker: createAssetPickerState(),
   playing: false,
   paused: false,
   viewMode: '3d',

@@ -14,6 +14,7 @@ import {
 } from '@mori2003/jsimgui';
 
 import { assetCard, assetGroup, type AssetCardOptions, type AssetGroupOptions } from './components-asset';
+import { assetField, type AssetFieldOptions } from './components-asset-field';
 import { dataTable, type DataTableOptions } from './components-table';
 import { Draw } from './draw';
 import { drawIcon } from './icon-shapes';
@@ -228,6 +229,8 @@ export interface Widgets {
 
   /** A sortable, zebra, scrollable data grid. */
   dataTable<Row>(options: DataTableOptions<Row>): void;
+  /** An input-like asset slot (à la Unity's object field). Returns whether clicked. */
+  assetField(id: string, options: AssetFieldOptions): { clicked: boolean };
   /** An asset-browser tile. Returns interaction flags. */
   assetCard(options: AssetCardOptions): { clicked: boolean; expandToggled: boolean };
   /** A full-width drawer for a texture's sprite sub-assets. */
@@ -664,6 +667,10 @@ export const widgets: Widgets = {
 
   dataTable<Row>(options: DataTableOptions<Row>): void {
     dataTable(options);
+  },
+
+  assetField(id: string, options: AssetFieldOptions): { clicked: boolean } {
+    return assetField(id, options);
   },
 
   assetCard(options: AssetCardOptions): { clicked: boolean; expandToggled: boolean } {

@@ -54,8 +54,10 @@ export const renderPropertyField = (req: PropertyFieldRequest): void => {
 
   // A nullish value (an unset optional/nullable field) has nothing to feed a
   // typed widget — render it read-only rather than crash a numeric widget on
-  // `undefined`. Setting an unset value needs an explicit affordance (later).
-  if (req.value === undefined || req.value === null) {
+  // `undefined`. Reference kinds are exempt: an asset handle renderer owns its
+  // own empty state (an unset slot still needs an "assign" affordance, not a
+  // dead `(unset)` row), so it is dispatched even when nullish.
+  if ((req.value === undefined || req.value === null) && req.type.kind !== 'handle') {
     labeledRow(req.ui, meta.label, req.labelWidth, () => req.ui.textDisabled(req.value === null ? '(null)' : '(unset)'));
     return;
   }
@@ -72,6 +74,7 @@ export const renderPropertyField = (req: PropertyFieldRequest): void => {
     ui: req.ui,
     widgets: req.widgets,
     reflect: req.reflect,
+    componentName: req.componentName,
     type: req.type,
     value: req.value,
     path: req.path,

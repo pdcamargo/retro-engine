@@ -34,6 +34,8 @@ export interface PropertyContext {
   readonly widgets: Widgets;
   /** Reflection registry, for resolving the schema of a nested registered type. */
   readonly reflect: TypeRegistry;
+  /** Stable reflection name of the component this field belongs to. */
+  readonly componentName: string;
   /** The field's typed descriptor. */
   readonly type: FieldType<unknown>;
   /** The field's current value. */

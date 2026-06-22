@@ -59,6 +59,9 @@ export class ThumbnailService {
   private readonly inflight = new Set<string>();
   // Hold the GPU textures so their handles stay valid for the registered refs.
   private readonly textures: Texture[] = [];
+  // Decoded source pixel dimensions, recorded for image assets as a side effect
+  // of generation (the asset picker shows them; the browser does not need them).
+  private readonly dims = new Map<string, { w: number; h: number }>();
 
   constructor(
     private readonly renderer: Renderer,
@@ -79,17 +82,27 @@ export class ThumbnailService {
     return undefined;
   }
 
+  /** Decoded source pixel size for an image asset, once generated; `undefined` otherwise. */
+  dimensionsOf(guid: string): { w: number; h: number } | undefined {
+    return this.dims.get(guid);
+  }
+
   private async generate(guid: string, location: string): Promise<void> {
     try {
       const bytes = await this.source.read(location);
       // A `.rmesh` renders a flat-shaded mesh preview, a `.remat` a shaded-sphere
       // material preview; everything else decodes as an image. All paths produce a
       // SIZE×SIZE RGBA8 buffer for the shared upload.
-      const pixels = MESH_EXT.test(location)
-        ? renderMeshThumbnail(await createMeshImporter()(bytes, undefined as never), SIZE)
-        : MATERIAL_EXT.test(location)
-          ? renderMaterialThumbnail(bytes, SIZE)
-          : fitToSquare(await bitmapFor(location, bytes));
+      let pixels: Uint8Array;
+      if (MESH_EXT.test(location)) {
+        pixels = renderMeshThumbnail(await createMeshImporter()(bytes, undefined as never), SIZE);
+      } else if (MATERIAL_EXT.test(location)) {
+        pixels = renderMaterialThumbnail(bytes, SIZE);
+      } else {
+        const bitmap = await bitmapFor(location, bytes);
+        this.dims.set(guid, { w: bitmap.width, h: bitmap.height });
+        pixels = fitToSquare(bitmap);
+      }
       const texture = this.renderer.createTexture({
         width: SIZE,
         height: SIZE,

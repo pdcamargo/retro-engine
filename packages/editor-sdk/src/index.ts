@@ -6,6 +6,7 @@ export {
   type AssetType,
   type AssetTypeInfo,
 } from './components-asset';
+export { type AssetFieldOptions } from './components-asset-field';
 export {
   type DataColumn,
   type DataTableOptions,
@@ -75,6 +76,7 @@ export { renderComponentBody, type RenderComponentBodyRequest } from './inspecto
 export { type PropertyFieldRequest, renderPropertyField } from './inspector/property-field';
 export { type ChildRequest, type PropertyContext, type PropertyRenderer } from './inspector/property-types';
 export { colorToHex, defaultValueFor, hexToColor } from './inspector/renderers-bridge';
+export { labelColumnWidth, labeledRow, propertyRow } from './inspector/renderers-support';
 export { Draw } from './draw';
 export {
   type AxisPick,

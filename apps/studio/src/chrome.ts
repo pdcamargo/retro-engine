@@ -16,6 +16,7 @@ import {
   type ToolbarDef,
 } from '@retro-engine/editor-sdk';
 
+import { assetPickerModal } from './asset-picker/asset-picker-modal';
 import { type ComposerHooks, entityComposerModal } from './composer/composer-modal';
 import { openComposer } from './composer/composer-state';
 import { historyClearDialog } from './history-clear-dialog';
@@ -287,4 +288,5 @@ export const drawDialogs = (
   projectSettingsDialog(ctx, state);
   historyClearDialog(ctx, state, history);
   entityComposerModal(ctx, state.composer, app, history, composer.inspector, composer.hooks);
+  assetPickerModal(ctx, state, app);
 };
