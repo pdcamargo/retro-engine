@@ -59,6 +59,9 @@ const bitmapFor = async (location: string, bytes: Uint8Array): Promise<ImageBitm
 export class ThumbnailService {
   private readonly cache = new Map<string, ImTextureRef>();
   private readonly inflight = new Set<string>();
+  // Guids whose generation threw — kept so a broken asset isn't re-attempted on
+  // every frame (the panel calls get() per visible tile each frame).
+  private readonly failed = new Set<string>();
   // Hold the GPU textures so their handles stay valid for the registered refs.
   private readonly textures: Texture[] = [];
   // Decoded source pixel dimensions, recorded for image assets as a side effect
@@ -77,7 +80,7 @@ export class ThumbnailService {
   get(guid: string, location: string): ImTextureRef | undefined {
     const hit = this.cache.get(guid);
     if (hit !== undefined) return hit;
-    if (!this.inflight.has(guid)) {
+    if (!this.inflight.has(guid) && !this.failed.has(guid)) {
       this.inflight.add(guid);
       void this.generate(guid, location);
     }
@@ -99,7 +102,14 @@ export class ThumbnailService {
       if (MESH_EXT.test(location)) {
         pixels = renderMeshThumbnail(await createMeshImporter()(bytes, undefined as never), SIZE);
       } else if (GLTF_EXT.test(location)) {
-        pixels = await renderGltfThumbnail(location, bytes, SIZE, (loc) => this.source.read(loc));
+        const rendered = await renderGltfThumbnail(location, bytes, SIZE, (loc) => this.source.read(loc));
+        // null = a mesh-less glTF (e.g. an animation clip); nothing to preview, so
+        // record it as no-preview (the card shows the model icon) without retrying.
+        if (rendered === null) {
+          this.failed.add(guid);
+          return;
+        }
+        pixels = rendered;
       } else if (MATERIAL_EXT.test(location)) {
         pixels = renderMaterialThumbnail(bytes, SIZE);
       } else {
@@ -124,6 +134,8 @@ export class ThumbnailService {
       this.cache.set(guid, ImGuiImplWeb.RegisterTexture((texture as InternalTexture)[GPU_TEXTURE]));
       console.log(`[studio] thumbnail ready: ${location}`);
     } catch (err) {
+      // Mark failed so the per-frame get() doesn't retry (and re-log) endlessly.
+      this.failed.add(guid);
       console.warn(`[studio] thumbnail generation failed for ${location}`, err);
     } finally {
       this.inflight.delete(guid);

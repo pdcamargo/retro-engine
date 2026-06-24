@@ -52,59 +52,89 @@ const nodeMatrix = (node: {
  * into world space (so multi-node models read correctly), and the merged geometry
  * is drawn through the shared {@link renderMeshThumbnail} CPU rasteriser. Materials
  * and textures are ignored — this is a shape preview, matching the `.rmesh` path.
+ *
+ * Returns `null` when the document carries no mesh primitives at all — a valid,
+ * common case (an animation-clip glTF is skeleton + animation with no geometry),
+ * so there is simply nothing to preview. Throws only when primitives exist but
+ * none yield decodable triangle geometry (a malformed/unsupported mesh).
  */
 export const renderGltfThumbnail = async (
   location: string,
   bytes: Uint8Array,
   size: number,
   read: (location: string) => Promise<Uint8Array>,
-): Promise<Uint8Array> => {
+): Promise<Uint8Array | null> => {
   const { document, bin } = parseGltf(bytes);
   const buffers = await resolveBuffers(document, bin, makeSiblingReader(location, read));
 
   const nodes = document.nodes ?? [];
   const meshes = document.meshes ?? [];
-  // World-space triangle soup (non-indexed): every 9 floats are one triangle, the
-  // shape renderMeshThumbnail consumes when a mesh carries no index buffer.
-  const positions: number[] = [];
+  const identity = mat4.identity();
 
+  // Resolve each mesh's world matrix from the scene graph (for correct placement
+  // of multi-node models). A mesh not reached by the walk renders at identity, so
+  // geometry still previews when the document's scene/node wiring is unusual.
+  const meshWorld = new Map<number, Mat4>();
   const visited = new Set<number>();
   const walk = (nodeIndex: number, parent: Mat4): void => {
     const node = nodes[nodeIndex];
     if (node === undefined || visited.has(nodeIndex)) return;
     visited.add(nodeIndex);
     const world = mat4.multiply(parent, nodeMatrix(node));
+    if (node.mesh !== undefined && !meshWorld.has(node.mesh)) meshWorld.set(node.mesh, world);
+    for (const child of node.children ?? []) walk(child, world);
+  };
+  const roots = document.scenes?.[document.scene ?? 0]?.nodes ?? nodes.map((_, i) => i);
+  for (const root of roots) walk(root, identity);
 
-    if (node.mesh !== undefined) {
-      for (const primitive of meshes[node.mesh]?.primitives ?? []) {
-        const mesh = mapPrimitiveToMesh(document, buffers, primitive);
-        const pos = mesh.getAttribute(MeshAttribute.POSITION)?.data;
-        if (!(pos instanceof Float32Array)) continue;
-        const index = mesh.indices?.data;
-        const triCount = index !== undefined ? Math.floor(index.length / 3) : Math.floor(pos.length / 9);
-        for (let t = 0; t < triCount; t += 1) {
-          for (let k = 0; k < 3; k += 1) {
-            const vi = index !== undefined ? index[t * 3 + k]! : t * 3 + k;
-            const x = pos[vi * 3]!;
-            const y = pos[vi * 3 + 1]!;
-            const z = pos[vi * 3 + 2]!;
-            positions.push(
-              world[0]! * x + world[4]! * y + world[8]! * z + world[12]!,
-              world[1]! * x + world[5]! * y + world[9]! * z + world[13]!,
-              world[2]! * x + world[6]! * y + world[10]! * z + world[14]!,
-            );
-          }
+  // World-space triangle soup (non-indexed): every 9 floats are one triangle, the
+  // shape renderMeshThumbnail consumes when a mesh carries no index buffer. Iterate
+  // every mesh in the document directly rather than only scene-reachable nodes.
+  const positions: number[] = [];
+  let primitiveCount = 0;
+  let withPosition = 0;
+  for (let mi = 0; mi < meshes.length; mi += 1) {
+    const world = meshWorld.get(mi) ?? identity;
+    for (const primitive of meshes[mi]?.primitives ?? []) {
+      primitiveCount += 1;
+      // A primitive whose mode/attributes the importer can't map (points, lines,
+      // …) is skipped rather than failing the whole preview.
+      let mesh: Mesh;
+      try {
+        mesh = mapPrimitiveToMesh(document, buffers, primitive);
+      } catch {
+        continue;
+      }
+      const pos = mesh.getAttribute(MeshAttribute.POSITION)?.data;
+      if (!(pos instanceof Float32Array)) continue;
+      withPosition += 1;
+      const index = mesh.indices?.data;
+      const triCount = index !== undefined ? Math.floor(index.length / 3) : Math.floor(pos.length / 9);
+      for (let t = 0; t < triCount; t += 1) {
+        for (let k = 0; k < 3; k += 1) {
+          const vi = index !== undefined ? index[t * 3 + k]! : t * 3 + k;
+          const x = pos[vi * 3]!;
+          const y = pos[vi * 3 + 1]!;
+          const z = pos[vi * 3 + 2]!;
+          positions.push(
+            world[0]! * x + world[4]! * y + world[8]! * z + world[12]!,
+            world[1]! * x + world[5]! * y + world[9]! * z + world[13]!,
+            world[2]! * x + world[6]! * y + world[10]! * z + world[14]!,
+          );
         }
       }
     }
-    for (const child of node.children ?? []) walk(child, world);
-  };
+  }
 
-  const roots = document.scenes?.[document.scene ?? 0]?.nodes ?? nodes.map((_, i) => i);
-  const identity = mat4.identity();
-  for (const root of roots) walk(root, identity);
-
-  if (positions.length === 0) throw new Error('glTF has no triangle geometry to preview');
+  // No primitives anywhere → a mesh-less document (e.g. an animation clip). Not an
+  // error: there is nothing to preview, the browser shows the model icon.
+  if (primitiveCount === 0) return null;
+  if (positions.length === 0) {
+    const ext = document.extensionsRequired ?? [];
+    throw new Error(
+      `glTF primitives decoded no triangle geometry (meshes=${meshes.length}, primitives=${primitiveCount}, withPosition=${withPosition}, requiredExtensions=${ext.length > 0 ? ext.join(',') : 'none'})`,
+    );
+  }
 
   const merged = new Mesh();
   merged.insertAttribute(MeshAttribute.POSITION, new Float32Array(positions));
