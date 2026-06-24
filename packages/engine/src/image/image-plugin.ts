@@ -2,6 +2,7 @@ import type { AssetEvent, AssetIndex, Handle } from '@retro-engine/assets';
 import type { Renderer, TextureFormat, TextureView } from '@retro-engine/renderer-core';
 import { srgbVariantOf, TextureUsage } from '@retro-engine/renderer-core';
 
+import { registerAssetKind } from '../asset/asset-kinds';
 import { ASSET_TYPE, registerAssetStore } from '../asset/asset-stores';
 import type { App } from '../index';
 import type { PluginObject } from '../plugin';
@@ -89,6 +90,15 @@ export class ImagePlugin implements PluginObject {
   build(app: App): void {
     if (app.getResource(Images) === undefined) app.insertResource(new Images());
     registerAssetStore(app, ASSET_TYPE.image, app.getResource(Images)!);
+    // Images are source assets a user drops in, so a loose one with no sidecar is
+    // discovered and gets one minted. `.hdr` decodes into the same Images store.
+    registerAssetKind(app, {
+      kind: ASSET_TYPE.image,
+      extensions: ['png', 'jpg', 'jpeg', 'webp', 'ktx2', 'basis', 'hdr'],
+      discoverable: true,
+      largeBinary: true,
+      category: 'image',
+    });
     if (app.getResource(ExtractedImageAssetEvents) === undefined) {
       app.insertResource(new ExtractedImageAssetEvents());
     }

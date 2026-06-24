@@ -67,3 +67,5 @@ export { addGltfInstantiation } from './gltf-instantiate';
 
 export { GltfPlugin } from './gltf-plugin';
 export type { GltfPluginOptions } from './gltf-plugin';
+
+export { GLTF_ASSET_KIND, gltfAssetKindDescriptor } from './gltf-asset-kind';

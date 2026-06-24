@@ -4,6 +4,7 @@ import { createMeshImporter, decodeRadianceHdrPreview } from '@retro-engine/engi
 import { type Renderer, type Texture, TextureUsage } from '@retro-engine/renderer-core';
 import { GPU_TEXTURE, type InternalTexture } from '@retro-engine/renderer-webgpu';
 
+import { renderGltfThumbnail } from './gltf-thumbnail';
 import { renderMaterialThumbnail } from './material-thumbnail';
 import { renderMeshThumbnail } from './mesh-thumbnail';
 
@@ -14,6 +15,7 @@ const RGBA = 4;
 const MESH_EXT = /\.rmesh$/i;
 const MATERIAL_EXT = /\.remat$/i;
 const HDR_EXT = /\.hdr$/i;
+const GLTF_EXT = /\.(glb|gltf)$/i;
 
 /** Center an `ImageBitmap` into an aspect-preserved `SIZE×SIZE` RGBA8 buffer. */
 const fitToSquare = (bitmap: ImageBitmap): Uint8Array => {
@@ -96,6 +98,8 @@ export class ThumbnailService {
       let pixels: Uint8Array;
       if (MESH_EXT.test(location)) {
         pixels = renderMeshThumbnail(await createMeshImporter()(bytes, undefined as never), SIZE);
+      } else if (GLTF_EXT.test(location)) {
+        pixels = await renderGltfThumbnail(location, bytes, SIZE, (loc) => this.source.read(loc));
       } else if (MATERIAL_EXT.test(location)) {
         pixels = renderMaterialThumbnail(bytes, SIZE);
       } else {

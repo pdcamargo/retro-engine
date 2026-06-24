@@ -1,6 +1,7 @@
 import type { App, MaterialPlugin, PluginObject, StandardMaterial } from '@retro-engine/engine';
-import { AssetServer, Images, Meshes } from '@retro-engine/engine';
+import { AssetServer, Images, Meshes, registerAssetKind } from '@retro-engine/engine';
 
+import { gltfAssetKindDescriptor } from './gltf-asset-kind';
 import { addGltfInstantiation } from './gltf-instantiate';
 import { createGltfImporter } from './gltf-importer';
 import { Gltfs } from './gltf-root';
@@ -77,6 +78,7 @@ export class GltfPlugin implements PluginObject {
     const importer = createGltfImporter({ meshes, materials, images }, this.decoder);
     server.registerLoader('gltf', gltfs, importer);
     server.registerLoader('glb', gltfs, importer);
+    registerAssetKind(app, gltfAssetKindDescriptor);
 
     addGltfInstantiation(app, this.material.MeshMaterial3d);
   }

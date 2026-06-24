@@ -1,6 +1,8 @@
+import { registerAssetKind } from '../asset/asset-kinds';
 import { AssetServer } from '../asset/asset-server';
 import type { App } from '../index';
 import type { PluginObject } from '../plugin';
+import { SCENE_ASSET_KIND } from '../save/serialize-project';
 
 import { Scenes } from './scene-asset';
 import { createSceneImporter } from './scene-importer';
@@ -40,6 +42,14 @@ export class ScenePlugin implements PluginObject {
     }
 
     server.registerLoader('rescene', scenes, createSceneImporter());
+    // `.rescene` files are authored through save (always with a sidecar), so they
+    // are catalogued but not discovered as loose assets.
+    registerAssetKind(app, {
+      kind: SCENE_ASSET_KIND,
+      extensions: ['rescene'],
+      discoverable: false,
+      category: 'scene',
+    });
     addSceneInstantiation(app);
   }
 }

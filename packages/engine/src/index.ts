@@ -249,6 +249,8 @@ export { AssetPlugin } from './asset/asset-plugin';
 export { AssetServer } from './asset/asset-server';
 export type { AssetLoadFailure, CompletedLoad } from './asset/asset-server';
 export { AssetSerializers, registerAssetSerializer } from './asset/asset-serializers';
+export { AssetKinds, registerAssetKind } from './asset/asset-kinds';
+export type { AssetKindDescriptor } from './asset/asset-kinds';
 export { ASSET_TYPE, AssetStores, registerAssetStore } from './asset/asset-stores';
 export { FetchAssetSource } from './asset/fetch-source';
 export { HttpPostAssetSink } from './asset/post-sink';

@@ -1,3 +1,4 @@
+import { registerAssetKind } from '../asset/asset-kinds';
 import { registerAssetSerializer } from '../asset/asset-serializers';
 import type { App } from '../index';
 import type { PluginObject } from '../plugin';
@@ -28,5 +29,13 @@ export class BundlePlugin implements PluginObject {
       app.insertResource(new AppBundleRegistry());
     }
     registerAssetSerializer(app, BUNDLE_ASSET_KIND, createBundleSerializer());
+    // `.rebundle` files are authored through save (always with a sidecar), so they
+    // are catalogued but not discovered as loose assets.
+    registerAssetKind(app, {
+      kind: BUNDLE_ASSET_KIND,
+      extensions: ['rebundle'],
+      discoverable: false,
+      category: 'bundle',
+    });
   }
 }

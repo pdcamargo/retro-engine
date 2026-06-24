@@ -9,6 +9,7 @@ import type {
   VertexBufferLayout,
 } from '@retro-engine/renderer-core';
 
+import { registerAssetKind } from '../asset/asset-kinds';
 import { registerAssetStore } from '../asset/asset-stores';
 import { AoBindGroupCache } from '../ao/ao-bind-group-cache';
 import { ViewAoTargets } from '../ao/view-ao-targets';
@@ -56,7 +57,7 @@ import type { Material, MaterialPipelineKey, ShaderRef } from './material';
 import { alphaModeKey } from './material';
 import { createMaterialImporter, createMaterialSerializer } from './material-importer';
 import { materialReflectionSchema } from './material-reflect';
-import { MaterialTypes } from './material-types';
+import { MATERIAL_ASSET_EXTENSION, MaterialTypes } from './material-types';
 import { Materials } from './materials';
 import { MeshMaterial3d } from './mesh-material-3d';
 import {
@@ -292,6 +293,16 @@ export class MaterialPlugin<M extends Material> implements PluginObject {
       importer: createMaterialImporter<M>(app, this.materialClass as unknown as ComponentType<object>) as never,
       serializer: serializer as never,
       makeDefault: () => reflect.make(),
+    });
+
+    // Catalogue this material type as an asset kind so the browser maps its kind
+    // (the class name) to the `material` category. Material kinds share `.remat`
+    // and are never discovered loose — a `.remat` is always saved with a sidecar.
+    registerAssetKind(app, {
+      kind: name,
+      extensions: [MATERIAL_ASSET_EXTENSION],
+      discoverable: false,
+      category: 'material',
     });
 
     // GPU resource creation is deferred to the first system tick — the

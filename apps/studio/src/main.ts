@@ -1,7 +1,8 @@
 /// <reference types="@webgpu/types" />
 
 import type { AssetGuid, AssetSink } from '@retro-engine/assets';
-import { App, AppBundleRegistry, AppTypeRegistry, BUNDLE_ASSET_KIND, Commands, EditorGrid, inState, MaterialPlugin, ResMut, StandardMaterial } from '@retro-engine/engine';
+import { App, AppBundleRegistry, AppTypeRegistry, AssetKinds, BUNDLE_ASSET_KIND, Commands, EditorGrid, generateMissingSidecars, inState, MaterialPlugin, registerAssetKind, ResMut, StandardMaterial } from '@retro-engine/engine';
+import { gltfAssetKindDescriptor } from '@retro-engine/gltf';
 import {
   buildOutline,
   createEditor,
@@ -374,6 +375,14 @@ const probe: StudioProbe = {
 void (async (): Promise<void> => {
   const platform = await createPlatformHost();
   probe.platformKind = platform.kind;
+  // glTF is a studio-supported asset kind even though the full GltfPlugin runtime
+  // isn't in the editor's base plugin set — register its descriptor so loose
+  // `.glb`/`.gltf` files are discovered (a sidecar minted) and shown as models.
+  // Registered here in the async boot (not at module top level): under the dev
+  // server's HMR bundle the engine barrel's re-export bindings aren't wired yet
+  // during synchronous module init in JavaScriptCore (the macOS WebView), so a
+  // top-level call would see `registerAssetKind` as undefined.
+  registerAssetKind(app, gltfAssetKindDescriptor);
   (window as unknown as { __studioPrefs: typeof platform.preferences }).__studioPrefs = platform.preferences;
 
   // Console push shared by the load, the save action, and the file watcher.
@@ -396,6 +405,10 @@ void (async (): Promise<void> => {
   // of the world it just serialized (an edit→save→reload loop). A time window
   // (not path matching) reliably covers the watcher debounce + fs-event latency.
   let suppressSceneReloadUntil = 0;
+  // Set once a project is open: re-scan the project manifest (minting sidecars for
+  // newly added loose assets) and refresh the asset browser. Called on a file-watch
+  // reindex. Null with no project open.
+  let reindexProjectAssets: (() => Promise<void>) | null = null;
 
   // Read the open project's descriptor (best-effort) so its dock layout + window
   // state persist per-project (keyed by project id in the app config), not globally.
@@ -516,8 +529,21 @@ void (async (): Promise<void> => {
       const io = createProjectIo(platform, projectDir);
       projectSink = io.sink;
       mcpProjectIo = io;
-      const files = await listProjectFiles(platform);
-      const manifest = await scanProjectManifest(io.source, files);
+      const kinds = app.getResource(AssetKinds);
+      // Mint a `.meta` sidecar for any loose discoverable asset (a dropped `.glb`,
+      // an image) so it gains a stable GUID and enters the manifest. Returns the
+      // up-to-date file list (re-listed when sidecars were written).
+      const ensureSidecars = async (): Promise<readonly string[]> => {
+        let files = await listProjectFiles(platform);
+        if (kinds === undefined) return files;
+        const { writes } = generateMissingSidecars(files, kinds);
+        if (writes.length === 0) return files;
+        for (const w of writes) await io.sink.write(w.location, w.bytes);
+        console.log(`[studio] minted ${writes.length} sidecar(s) for loose assets`);
+        files = await listProjectFiles(platform);
+        return files;
+      };
+      const manifest = await scanProjectManifest(io.source, await ensureSidecars());
       // Register the project's authored bundles up front so they show in the
       // Add-Component palette whether or not a startup scene loads.
       const bundleCount = await loadProjectBundles(app, io.source, manifest);
@@ -526,8 +552,16 @@ void (async (): Promise<void> => {
       // generated lazily as the panel draws each visible tile (once the renderer's
       // device is up). Pre-warming + an on-disk cache are a follow-up.
       state.browser = {
-        assets: buildBrowserAssets(manifest),
+        assets: buildBrowserAssets(manifest, kinds),
         thumbnails: new ThumbnailService(renderer, io.source),
+      };
+      // Re-scan on a file-watch reindex: mint sidecars for newly added assets and
+      // refresh the browser list in place (preserving the live thumbnail cache).
+      reindexProjectAssets = async (): Promise<void> => {
+        const rescanned = await scanProjectManifest(io.source, await ensureSidecars());
+        if (state.browser !== null) {
+          state.browser.assets = buildBrowserAssets(rescanned, kinds);
+        }
       };
       if (descriptor?.startupScene != null && descriptor.startupScene.length > 0) {
         sceneLoaded = await loadProjectScene(app, io.source, manifest, descriptor.startupScene);
@@ -696,10 +730,31 @@ void (async (): Promise<void> => {
         })();
       }, 150);
     };
+    // Asset added/removed on disk: mint sidecars for new loose assets and refresh
+    // the browser. Debounced (editors emit bursts) and guarded against re-entry.
+    // Writing a sidecar re-fires the watcher, but generation is idempotent — the
+    // next pass finds nothing new and writes nothing, so it settles in one round.
+    let reindexTimer: ReturnType<typeof setTimeout> | undefined;
+    let reindexing = false;
+    const triggerReindex = (): void => {
+      if (reindexProjectAssets === null) return;
+      if (reindexTimer !== undefined) clearTimeout(reindexTimer);
+      reindexTimer = setTimeout(() => {
+        if (reindexing || reindexProjectAssets === null) return;
+        reindexing = true;
+        void reindexProjectAssets()
+          .catch((err: unknown) =>
+            log('err', 'Asset reindex failed', err instanceof Error ? err.message : String(err)),
+          )
+          .finally(() => {
+            reindexing = false;
+          });
+      }, 200);
+    };
     void watchProject(projectDir, {
       onRebuild: triggerReload,
       onReloadScene: triggerSceneReload,
-      onReindex: () => log('info', 'Assets changed on disk — reindex (later phase)'),
+      onReindex: triggerReindex,
     }).catch((err: unknown) => console.error('[studio] project watch failed', err));
   }
 

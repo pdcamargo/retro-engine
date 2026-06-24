@@ -3,6 +3,7 @@ import { asAssetIndex, makeHandle } from '@retro-engine/assets';
 import { t } from '@retro-engine/reflect';
 import { vertexFormatByteSize } from '@retro-engine/renderer-core';
 
+import { registerAssetKind } from '../asset/asset-kinds';
 import { registerAssetSerializer } from '../asset/asset-serializers';
 import { ASSET_TYPE, registerAssetStore } from '../asset/asset-stores';
 import type { App } from '../index';
@@ -101,6 +102,14 @@ export class MeshPlugin implements PluginObject {
     // Make meshes persistable: the write-side serializer pairs with the `.rmesh`
     // importer the AssetServer registers for reading.
     registerAssetSerializer(app, ASSET_TYPE.mesh, createMeshSerializer());
+    // `.rmesh` files are only ever produced by a save (with a sidecar), so they
+    // are catalogued but not discovered as loose assets.
+    registerAssetKind(app, {
+      kind: ASSET_TYPE.mesh,
+      extensions: ['rmesh'],
+      discoverable: false,
+      category: 'mesh',
+    });
     if (app.getResource(MeshAllocatorSettings) === undefined) {
       app.insertResource(new MeshAllocatorSettings());
     }

@@ -3,6 +3,7 @@ import { asAssetIndex, makeHandle } from '@retro-engine/assets';
 import { t } from '@retro-engine/reflect';
 import type { RenderPassEncoder } from '@retro-engine/renderer-core';
 
+import { registerAssetKind } from '../asset/asset-kinds';
 import { ASSET_TYPE, registerAssetStore } from '../asset/asset-stores';
 import { SortedCameras } from '../camera/sorted-cameras';
 import type { Image } from '../image/image';
@@ -125,6 +126,14 @@ export class SpritePlugin implements PluginObject {
       app.insertResource(new TextureAtlasLayouts());
     }
     registerAssetStore(app, ASSET_TYPE.textureAtlasLayout, app.getResource(TextureAtlasLayouts)!);
+    // Atlas layouts have no standalone file extension (they live in scene/sprite
+    // data); catalogued for completeness, never discovered as a loose asset.
+    registerAssetKind(app, {
+      kind: ASSET_TYPE.textureAtlasLayout,
+      extensions: [],
+      discoverable: false,
+      category: 'sprite',
+    });
 
     // Reflection schemas. Texture handles, tint, footprint, anchor, and the
     // 9-slice descriptor are authored; AtlasAnimation.elapsedSec is recomputed by
