@@ -23,7 +23,14 @@ export const assetTypeSpec = (storeType: string | null): AssetTypeSpec => {
     case 'Image':
       return { types: ['image'], noun: 'Texture' };
     case 'Mesh':
-      return { types: ['mesh', 'model'], noun: 'Mesh' };
+      // A `Handle<Mesh>` slot takes a `Mesh` asset (a `.rmesh`). A glTF `model`
+      // is a whole scene graph with no single-mesh resolution, so it is not
+      // offered here — it is instantiated as a hierarchy, not assigned.
+      return { types: ['mesh'], noun: 'Mesh' };
+    case 'Gltf':
+      // A `GltfSceneRoot.handle` slot takes a whole glTF model; assigning it
+      // instantiates the model's node graph under the entity.
+      return { types: ['model'], noun: 'Model' };
     case 'TextureAtlasLayout':
       return { types: [], noun: 'Atlas Layout' };
     default:

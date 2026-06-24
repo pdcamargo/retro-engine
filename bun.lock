@@ -126,6 +126,7 @@
         "@retro-engine/ecs": "workspace:*",
         "@retro-engine/engine": "workspace:*",
         "@retro-engine/math": "workspace:*",
+        "@retro-engine/reflect": "workspace:*",
         "@retro-engine/renderer-core": "workspace:*",
       },
       "devDependencies": {

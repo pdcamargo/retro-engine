@@ -564,7 +564,7 @@ void (async (): Promise<void> => {
         }
       };
       if (descriptor?.startupScene != null && descriptor.startupScene.length > 0) {
-        sceneLoaded = await loadProjectScene(app, io.source, manifest, descriptor.startupScene);
+        sceneLoaded = await loadProjectScene(app, io.source, manifest, descriptor.startupScene, stdMat);
         if (sceneLoaded) console.log(`[studio] loaded startup scene ${descriptor.startupScene}`);
         else {
           startupSceneMissing = true;

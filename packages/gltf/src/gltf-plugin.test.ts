@@ -3,14 +3,18 @@ import { describe, expect, it } from 'bun:test';
 import type { AssetSource } from '@retro-engine/assets';
 import {
   App,
+  AppTypeRegistry,
   AssetPlugin,
   AssetServer,
+  AssetStores,
   MaterialPlugin,
   StandardMaterial,
   StandardMaterialPlugin,
 } from '@retro-engine/engine';
 
 import { makeStubRenderer } from './app-test-support';
+import { GLTF_ASSET_KIND } from './gltf-asset-kind';
+import { GltfSceneRoot } from './gltf-components';
 import { GltfPlugin } from './gltf-plugin';
 import { Gltfs } from './gltf-root';
 
@@ -35,6 +39,21 @@ describe('GltfPlugin', () => {
     // A registered loader means `load` returns a handle instead of throwing.
     expect(() => server.load('model.gltf')).not.toThrow();
     expect(() => server.load('model.glb')).not.toThrow();
+  });
+
+  it('registers GltfSceneRoot as a serializable component bound to the Gltf store', () => {
+    const app = new App({ renderer: makeStubRenderer() });
+    app.addPlugin(new AssetPlugin({ source: nullSource }));
+    const pbr = withMaterial(app);
+    app.addPlugin(new GltfPlugin({ material: pbr }));
+
+    // The component has a reflection schema (so it serializes + appears in the
+    // editor's Add-Component palette).
+    const registry = app.getResource(AppTypeRegistry)!.registry;
+    expect(registry.getByCtor(GltfSceneRoot)).toBeDefined();
+
+    // Its handle store is bound, so a scene's GltfSceneRoot reference resolves.
+    expect(app.getResource(AssetStores)!.storeFor(GLTF_ASSET_KIND)).toBeInstanceOf(Gltfs);
   });
 
   it('throws a clear error when no AssetServer is present', () => {

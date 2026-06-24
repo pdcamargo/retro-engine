@@ -1,9 +1,20 @@
 import type { App, MaterialPlugin, PluginObject, StandardMaterial } from '@retro-engine/engine';
-import { AssetServer, Images, Meshes, registerAssetKind } from '@retro-engine/engine';
+import {
+  asAssetIndex,
+  AssetServer,
+  Images,
+  makeHandle,
+  Meshes,
+  registerAssetKind,
+  registerAssetStore,
+} from '@retro-engine/engine';
+import { t } from '@retro-engine/reflect';
 
-import { gltfAssetKindDescriptor } from './gltf-asset-kind';
+import { GLTF_ASSET_KIND, gltfAssetKindDescriptor } from './gltf-asset-kind';
+import { GltfSceneRoot } from './gltf-components';
 import { addGltfInstantiation } from './gltf-instantiate';
 import { createGltfImporter } from './gltf-importer';
+import type { Gltf } from './gltf-root';
 import { Gltfs } from './gltf-root';
 import { createImageBitmapDecoder } from './image-decoder';
 import type { ImageDecoder } from './image-decoder';
@@ -79,6 +90,21 @@ export class GltfPlugin implements PluginObject {
     server.registerLoader('gltf', gltfs, importer);
     server.registerLoader('glb', gltfs, importer);
     registerAssetKind(app, gltfAssetKindDescriptor);
+
+    // Bind the `Gltf` handle store so a scene that references a glTF by GUID
+    // resolves its `GltfSceneRoot.handle` against this store on load.
+    registerAssetStore(app, GLTF_ASSET_KIND, gltfs);
+
+    // `GltfSceneRoot` is authored state — the entity says "instantiate this glTF
+    // here". It serializes (handle + chosen scene); the instantiated subtree it
+    // expands into is derived and rebuilt on load, so consumers exclude those
+    // entities from a scene save. The placeholder handle the explicit make
+    // supplies is overwritten as soon as a real glTF is assigned or decoded.
+    app.registerComponent(
+      GltfSceneRoot,
+      { handle: t.handle<Gltf>(GLTF_ASSET_KIND), scene: t.number.optional() },
+      { name: 'GltfSceneRoot', make: () => new GltfSceneRoot(makeHandle(asAssetIndex(0))) },
+    );
 
     addGltfInstantiation(app, this.material.MeshMaterial3d);
   }

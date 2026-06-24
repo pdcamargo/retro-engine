@@ -1,5 +1,5 @@
 import type { AssetGuid, AssetManifest, AssetSource } from '@retro-engine/assets';
-import type { App } from '@retro-engine/engine';
+import type { App, MaterialPlugin, StandardMaterial } from '@retro-engine/engine';
 import {
   AppBundleRegistry,
   applyCompletedLoads,
@@ -20,6 +20,7 @@ import {
   Scenes,
   spawnScene,
 } from '@retro-engine/engine';
+import { GltfPlugin, Gltfs } from '@retro-engine/gltf';
 
 /** Rebuild the project's asset manifest by reading its `.meta` sidecars off the source. */
 export const scanProjectManifest = async (
@@ -73,6 +74,7 @@ export const loadProjectScene = async (
   source: AssetSource,
   manifest: AssetManifest,
   startupSceneGuid: string,
+  material?: MaterialPlugin<StandardMaterial>,
 ): Promise<boolean> => {
   app.addPlugin(new AssetPlugin({ source }));
   app.addPlugin(new ScenePlugin());
@@ -102,6 +104,16 @@ export const loadProjectScene = async (
   // entity's `MeshMaterial3d<M>` reference resolves into the right per-type store
   // on demand. Re-run if a project registers its own material types.
   registerMaterialLoaders(app);
+
+  // glTF loading + instantiation: registers `.glb`/`.gltf` loaders, the `Gltf`
+  // handle store, and the `GltfSceneRoot` component + reactor, so a model can be
+  // assigned and spawned in the editor and a scene that references one streams
+  // and re-instantiates it on load. Needs a `StandardMaterial` plugin to map
+  // glTF materials into; skipped without one. Guarded so a project that adds
+  // GltfPlugin itself is not double-registered.
+  if (material !== undefined && app.getResource(Gltfs) === undefined) {
+    app.addPlugin(new GltfPlugin({ material }));
+  }
 
   server.setManifest(manifest);
   server.loadByGuid(startupSceneGuid as AssetGuid);

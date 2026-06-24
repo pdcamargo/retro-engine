@@ -27,7 +27,7 @@ const POOL: BrowserAsset[] = [
 describe('assetTypeSpec', () => {
   it('maps known store names to assignable browser types and a noun', () => {
     expect(assetTypeSpec('Image')).toEqual({ types: ['image'], noun: 'Texture' });
-    expect(assetTypeSpec('Mesh')).toEqual({ types: ['mesh', 'model'], noun: 'Mesh' });
+    expect(assetTypeSpec('Mesh')).toEqual({ types: ['mesh'], noun: 'Mesh' });
     expect(assetTypeSpec('TextureAtlasLayout').types).toEqual([]);
   });
 
