@@ -1,4 +1,4 @@
-import { ImGui, ImGuiCol, ImGuiCond, ImGuiStyleVar, ImGuiWindowFlags, ImVec2 } from '@mori2003/jsimgui';
+import { ImGui, ImGuiCol, ImGuiCond, ImGuiHoveredFlags, ImGuiKey, ImGuiStyleVar, ImGuiWindowFlags, ImVec2 } from '@mori2003/jsimgui';
 import type { AssetGuid } from '@retro-engine/assets';
 import {
   ASSET_TYPES,
@@ -100,6 +100,15 @@ export const assetPickerModal = (ctx: EditorContext, state: StudioState, app: Ap
     return;
   }
 
+  // Escape and a click on the dimmed backdrop dismiss the picker. ImGui modals
+  // don't close on an outside click on their own, and the in-modal close paths
+  // only flip our state — the actual ImGui dismissal happens via the
+  // CloseCurrentPopup below, once `picker.open` has gone false.
+  if (ImGui.IsKeyPressed(ImGuiKey._Escape, false)) closeAssetPicker(picker);
+  if (ImGui.IsMouseClicked(0, false) && !ImGui.IsWindowHovered(ImGuiHoveredFlags.RootAndChildWindows)) {
+    closeAssetPicker(picker);
+  }
+
   const browser = state.browser;
   const spec = assetTypeSpec(picker.allowedStoreType);
   const shown =
@@ -135,6 +144,11 @@ export const assetPickerModal = (ctx: EditorContext, state: StudioState, app: Ap
 
   renderFooter(ctx, state, app, spec, shown.length);
   ImGui.PopStyleVar(1);
+
+  // Any close path (title X, footer Cancel/None, Assign, Escape, backdrop) flips
+  // `picker.open`; this is the single point that tells ImGui to drop the popup,
+  // otherwise BeginPopupModal keeps returning open and the modal never goes away.
+  if (!picker.open) ImGui.CloseCurrentPopup();
 
   ImGui.EndPopup();
 };
@@ -664,8 +678,10 @@ const assign = (app: App, picker: AssetPickerState): void => {
   try {
     picker.commit(server.loadByGuid(guid as AssetGuid));
     pushRecent(picker, guid);
+    closeAssetPicker(picker);
   } catch (err) {
+    // Leave the picker open so a failed assignment is visible rather than
+    // looking like a silent no-op that closed the modal.
     console.warn(`[studio] asset picker: could not resolve asset ${guid}`, err);
   }
-  closeAssetPicker(picker);
 };
