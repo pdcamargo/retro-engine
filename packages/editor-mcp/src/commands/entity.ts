@@ -1,5 +1,5 @@
 import { type CustomCommand, snapshotComponent } from '@retro-engine/editor-sdk';
-import { Name } from '@retro-engine/engine';
+import { CompositionRegistry, Name } from '@retro-engine/engine';
 
 import { asRecord, optString, reqEntity } from '../args';
 import { type CommandDef, defineCommand } from '../registry';
@@ -160,6 +160,33 @@ export const entityCommands: readonly CommandDef[] = [
         name: nameInst?.value ?? null,
         components: encodeEntityComponents(ctx, entity),
       };
+    },
+  }),
+  defineCommand({
+    name: 'entity.anchor',
+    title: 'Get composition anchor',
+    description:
+      'The stable composition anchor of an entity that lives inside a derived subtree — e.g. a glTF node, returning { mount, kind, anchor: { node, path } } — or null if the entity is not inside one. This is what an attachment parented under the entity records to survive a save/reload.',
+    domain: 'entity',
+    mutating: false,
+    inputSchema: {
+      type: 'object',
+      properties: { entity: { type: 'integer' } },
+      required: ['entity'],
+    },
+    handler: (ctx, args) => {
+      const entity = reqEntity(asRecord(args));
+      if (!ctx.world.hasEntity(entity)) throw new Error(`mcp: entity ${String(entity)} does not exist`);
+      const composition = ctx.app.getResource(CompositionRegistry);
+      if (composition !== undefined) {
+        for (const provider of composition.providers) {
+          const anchor = provider.anchorFor(ctx.world, entity);
+          if (anchor !== undefined) {
+            return { entity, mount: anchor.mount, kind: anchor.kind, anchor: anchor.anchor };
+          }
+        }
+      }
+      return { entity, mount: null, kind: null, anchor: null };
     },
   }),
 ];

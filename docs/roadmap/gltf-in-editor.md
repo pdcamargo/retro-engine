@@ -17,21 +17,20 @@ Implemented across `packages/gltf` (`GltfPlugin`, `GltfSceneRoot` schema, `Gltf`
 - `GltfPlugin` is wired inside `loadProjectScene`, so it only comes up when a project has a startup scene that loads. A project with no startup scene gets no glTF support until that path is hoisted. (Pre-existing shape of the asset/manifest wiring, not introduced by Phase 1.)
 - Re-assigning a different glTF to a `GltfSceneRoot` that has already instantiated does not re-instantiate (the reactor is one-shot, gated on `GltfInstanceNodes` absence). Changing models means despawn + re-add today.
 
-## Phase 2 — Stable node addressing
+## Phase 2 — Stable node addressing (DONE)
 
-To attach to "the `hand.R` bone" and have it survive a reload, an authored entity needs to reference a glTF node by something **stable across re-instantiation**, not by the entity id the reactor happens to mint this run.
+An authored entity references a glTF node by something **stable across re-instantiation**, not by the entity id the reactor mints this run.
 
-- Define an asset-relative node anchor: glTF node **index** (canonical) plus **name path** (human-facing, survives node reordering within reason). `GltfInstanceNodes` already exposes `nodeEntities` (by index) and `findByName` / `findAllByName`.
-- A resolver: given a `GltfSceneRoot` entity + an anchor, return the live instantiated node entity (after instantiation completes).
-- Editor affordance: selecting a node in the instantiated subtree exposes its anchor (so "parent under this" can record it).
+- `GltfNodeAnchor` — glTF node **index** (canonical) plus **name path** (preferred at resolve time; survives node reordering on re-import).
+- `resolveGltfNodeAnchor(world, mount, instance, anchor)` returns the live node entity; `gltfAnchorForEntity(world, entity)` computes the anchor of a node, resolving to the **nearest** mount (so nested glTF anchors to its own model).
+- Editor affordance: the inspector surfaces a selected node's anchor; the `entity.anchor` MCP command returns it (generic over the composition registry).
 
-## Phase 3 — Attach + round-trip (ADR)
+## Phase 3 — Attach + round-trip (DONE, [ADR-0112](../adr/ADR-0112-plugin-extensible-scene-composition.md))
 
-The hard part, and where the real serialization design lives.
+- An authored entity parented into the subtree serializes its parent as an `attach` record (`{ to: mount, kind, anchor }`), not a raw entity id (which dangles).
+- On load the entity gains a transient `PendingAttachment`; the glTF rebind system re-parents it onto the resolved node once `GltfInstanceNodes` exists (the ordering dependency).
+- The engine serializer's composition-exclusion is now a **plugin-extensible seam** (`CompositionRegistry` + `CompositionProvider`); `gltf` registers its exclusion + anchor re-emission without `engine` importing `gltf`. The built-in `SceneRoot` case stays inline for the bare-world `serializeWorld` path.
+- Re-instantiation: swapping the `GltfSceneRoot` handle re-instantiates and re-binds surviving attachments (detach-before-despawn so the cascade does not eat them).
+- `GltfPlugin` is hoisted (`installProjectRuntime`) so glTF works in a project with no startup scene.
 
-- An authored entity parented into the instantiated subtree serializes with its parent expressed as a **node anchor on the owning `GltfSceneRoot`**, not a raw entity id (which dangles, since the bone is excluded/derived).
-- On load: spawn authored entities, instantiate the glTF, then **rebind** each anchored attachment to the resolved node entity (an ordering dependency — attachments wait for `GltfInstanceNodes`).
-- The engine serializer's composition-exclusion (`collectComposition`, today hardcoded to `SceneRoot`/`SceneInstance`) likely needs a **plugin-extensible seam** so `gltf` registers its exclusion + anchor re-emission without `engine` importing `gltf`. This is the ADR-worthy decision (mirrors the nested-`SceneRoot` round-trip, generalized).
-- Decide teardown / re-instantiation semantics: changing the `GltfSceneRoot` handle should re-instantiate and re-bind surviving attachments.
-
-Until Phase 3 lands, treat the instantiated subtree as view-only: assign a model, see it, position the whole thing via the root's `Transform` — but don't author into the subtree expecting it to persist.
+The roadmap's north star is met. (Per [CLAUDE.md §3](../../CLAUDE.md), this file is deleted only after explicit user confirmation that the work is done.)

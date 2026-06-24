@@ -30,7 +30,12 @@ import { createProjectIo } from './project/project-io';
 import { projectStateKey } from './project/project-state';
 import { engineVersionMismatch, STUDIO_ENGINE_VERSION } from './project/engine-version';
 import { listProjectFiles } from './project/list-files';
-import { loadProjectBundles, loadProjectScene, scanProjectManifest } from './project/project-scene';
+import {
+  installProjectRuntime,
+  loadProjectBundles,
+  loadProjectScene,
+  scanProjectManifest,
+} from './project/project-scene';
 import { setNativeProjectRoot } from './project/tauri-project-io';
 import { watchProject } from './project/project-watcher';
 import { buildBrowserAssets } from './project/project-browser';
@@ -544,6 +549,10 @@ void (async (): Promise<void> => {
         return files;
       };
       const manifest = await scanProjectManifest(io.source, await ensureSidecars());
+      // Install the project runtime (asset/scene/bundle plugins + glTF) as soon as
+      // a project is open, independent of a startup scene — so glTF models can be
+      // assigned and round-trip even in a project that has no scene yet.
+      installProjectRuntime(app, io.source, stdMat);
       // Register the project's authored bundles up front so they show in the
       // Add-Component palette whether or not a startup scene loads.
       const bundleCount = await loadProjectBundles(app, io.source, manifest);

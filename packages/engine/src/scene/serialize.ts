@@ -4,7 +4,10 @@ import type { EncodeEnv, SerializedValue, TypeRegistry } from '@retro-engine/ref
 import { encodeComponent } from '@retro-engine/reflect';
 
 import type { App } from '../index';
+import { Parent } from '../hierarchy';
 import { AppTypeRegistry } from './app-type-registry';
+import { CompositionRegistry } from './composition';
+import type { CompositionAnchor } from './composition';
 import {
   SCENE_FORMAT_VERSION,
   type SceneData,
@@ -31,17 +34,26 @@ interface Composition {
    * its instance entities are still excluded, but no ref is emitted.
    */
   readonly sceneRefOf: ReadonlyMap<Entity, string>;
+  /**
+   * Plugin-contributed providers consulted to re-express an authored entity's
+   * parent edge into an excluded subtree as a stable anchor. Empty for the
+   * bare-world path (no App, no registry).
+   */
+  readonly registry?: CompositionRegistry;
 }
 
 /**
  * Scan the world for composition mount entities and derive what serialization
  * must do for each: exclude the child's instantiated entities, and re-emit the
- * mount as a `scene` ref. A non-composed world yields empty sets, so it
- * serializes byte-identically to before.
+ * mount as a `scene` ref. The built-in nested-scene case (`SceneRoot` +
+ * `SceneInstance`) is handled inline so it works on the bare-world path; a
+ * {@link CompositionRegistry} (present only on the App path) extends exclusion
+ * with each plugin's derived subtree. A non-composed world yields empty sets, so
+ * it serializes byte-identically to before.
  *
  * @internal Shared by {@link serializeWorld} and {@link serializeScene}.
  */
-const collectComposition = (world: World): Composition => {
+const collectComposition = (world: World, registry?: CompositionRegistry): Composition => {
   const excluded = new Set<Entity>();
   const sceneRefOf = new Map<Entity, string>();
   for (const entity of world.entities()) {
@@ -53,7 +65,30 @@ const collectComposition = (world: World): Composition => {
     const guid = root.handle.guid;
     if (guid !== undefined) sceneRefOf.set(entity, guid);
   }
-  return { excluded, sceneRefOf };
+  if (registry !== undefined) {
+    for (const provider of registry.providers) {
+      for (const entity of provider.excluded(world)) excluded.add(entity);
+    }
+  }
+  return { excluded, sceneRefOf, ...(registry !== undefined ? { registry } : {}) };
+};
+
+/**
+ * Ask the registered providers how to re-express a parent edge into an excluded
+ * subtree as a stable anchor, returning the first match (providers own disjoint
+ * subtrees). `undefined` when no provider claims the target.
+ */
+const anchorForParent = (
+  composition: Composition,
+  world: World,
+  parent: Entity,
+): CompositionAnchor | undefined => {
+  if (composition.registry === undefined) return undefined;
+  for (const provider of composition.registry.providers) {
+    const anchor = provider.anchorFor(world, parent);
+    if (anchor !== undefined) return anchor;
+  }
+  return undefined;
 };
 
 /** Options for {@link serializeWorld}. */
@@ -115,20 +150,40 @@ const serializeEntities = (
   const out: SerializedEntity[] = [];
   for (const entity of live) {
     if (composition.excluded.has(entity)) continue;
+
+    // A parent edge into an excluded (derived) subtree can't serialize as a raw
+    // entity id — the target is omitted from the save and would dangle. Ask the
+    // composition providers for a stable anchor; if one claims it, re-emit the
+    // edge as `attach` and skip the `Parent` component below.
+    const parent = world.getComponent(entity, Parent);
+    let attach: SerializedEntity['attach'];
+    if (parent !== undefined && composition.excluded.has(parent.entity)) {
+      const anchor = anchorForParent(composition, world, parent.entity);
+      const mountId = anchor !== undefined ? idOf.get(anchor.mount) : undefined;
+      if (anchor !== undefined && mountId !== undefined) {
+        attach = { to: mountId, kind: anchor.kind, anchor: anchor.anchor };
+      }
+    }
+
     const components: SerializedComponent[] = [];
     for (const ctor of world.componentTypesOf(entity)) {
       const reg = registry.getByCtor(ctor);
       if (reg === undefined) continue;
+      // The anchored parent edge is carried by `attach`, not a `Parent` component.
+      if (attach !== undefined && ctor === Parent) continue;
       const value = world.getComponent(entity, ctor);
       if (value === undefined) continue;
       components.push(encodeComponent(reg, value, env));
     }
+
     const guid = composition.sceneRefOf.get(entity);
-    out.push(
-      guid !== undefined
-        ? { id: idOf.get(entity)!, components, scene: { guid } }
-        : { id: idOf.get(entity)!, components },
-    );
+    const id = idOf.get(entity)!;
+    out.push({
+      id,
+      components,
+      ...(guid !== undefined ? { scene: { guid } } : {}),
+      ...(attach !== undefined ? { attach } : {}),
+    });
   }
   return out;
 };
@@ -193,7 +248,7 @@ export const serializeScene = (app: App, opts: SerializeOptions = {}): SceneData
     env,
     idOf,
     live,
-    collectComposition(app.world),
+    collectComposition(app.world, app.getResource(CompositionRegistry)),
   );
   const resources = serializeResources(app, env);
   return resources.length > 0

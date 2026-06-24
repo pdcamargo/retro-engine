@@ -8,9 +8,21 @@ import type {
   MeshMaterial3d,
   StandardMaterial,
 } from '@retro-engine/engine';
-import { Commands, Mesh3d, Name, Query, Res, Transform } from '@retro-engine/engine';
+import {
+  Children,
+  Commands,
+  Mesh3d,
+  Name,
+  Parent,
+  PendingAttachment,
+  Query,
+  Res,
+  Transform,
+} from '@retro-engine/engine';
 import { quat, vec3 } from '@retro-engine/math';
 
+import { GLTF_NODE_ANCHOR_KIND } from './gltf-attach';
+import { gltfAnchorForEntity } from './gltf-anchor';
 import { GltfInstanceNodes, GltfSceneRoot } from './gltf-components';
 import type { Gltf } from './gltf-root';
 import { Gltfs } from './gltf-root';
@@ -103,8 +115,9 @@ const instantiateRoot = (
     });
   }
   // Recorded even for an empty/absent scene, so the root drops out of the
-  // pending query and is not re-polled every frame.
-  ec.insert(new GltfInstanceNodes(nodeEntities, byName));
+  // pending query and is not re-polled every frame. The source handle index +
+  // scene let the re-instantiation system detect a later model swap.
+  ec.insert(new GltfInstanceNodes(nodeEntities, byName, root.handle.index as number, root.scene));
 };
 
 /**
@@ -129,5 +142,71 @@ export const addGltfInstantiation = (app: App, meshMaterialCtor: MeshMaterialCto
       }
     },
     { label: 'gltf-instantiate' },
+  );
+};
+
+/**
+ * Register the re-instantiation reactor: when a {@link GltfSceneRoot}'s handle or
+ * scene changes after it has already instantiated, tear down the old node graph
+ * and let {@link addGltfInstantiation} rebuild it from the new model — while
+ * preserving authored entities attached into the subtree.
+ *
+ * Each surviving attachment is converted back into a {@link PendingAttachment}
+ * (recording the bone anchor it was on) and detached *before* the old subtree is
+ * despawned, so the despawn cascade does not consume it; the rebind system
+ * re-parents it onto the new model's matching node once that instantiates.
+ */
+export const addGltfReinstantiation = (app: App): void => {
+  app.addSystem(
+    'update',
+    [Commands, Query([GltfSceneRoot, GltfInstanceNodes], { changed: [GltfSceneRoot] })],
+    (cmd, roots) => {
+      for (const [mount, root, instance] of roots.entries()) {
+        // The `changed` filter also fires on the first frame the root exists;
+        // the source comparison is the real gate — a matching handle/scene means
+        // nothing to do.
+        if (
+          (root.handle.index as number) === instance.sourceIndex &&
+          root.scene === instance.sourceScene
+        ) {
+          continue;
+        }
+
+        const derived = new Set<Entity>();
+        for (const node of instance.nodeEntities) if (node !== undefined) derived.add(node);
+
+        // 1. Detach authored attachments first (order is load-bearing: a despawn
+        //    cascade through the bone's Children would otherwise eat them).
+        for (const bone of derived) {
+          const children = app.world.getComponent(bone, Children);
+          if (children === undefined) continue;
+          const boneAnchor = gltfAnchorForEntity(app.world, bone);
+          if (boneAnchor === undefined) continue;
+          // `removeChild` enqueues a command applied at flush, so `entities` is
+          // stable across this loop — no snapshot copy needed.
+          for (const child of children.entities) {
+            if (derived.has(child)) continue; // part of the model — despawned below
+            cmd
+              .entity(child)
+              .insert(new PendingAttachment(mount, GLTF_NODE_ANCHOR_KIND, boneAnchor.anchor));
+            cmd.entity(bone).removeChild(child);
+          }
+        }
+
+        // 2. Despawn the old subtree (top-level nodes cascade through Children).
+        for (const bone of derived) {
+          if (app.world.getComponent(bone, GltfInstanceNodes) !== undefined) continue;
+          const parent = app.world.getComponent(bone, Parent);
+          if (parent !== undefined && parent.entity === mount) {
+            cmd.entity(bone).despawnRecursive();
+          }
+        }
+
+        // 3. Drop the record so the one-shot instantiate reactor rebuilds from the
+        //    new handle; the rebind system then reattaches the survivors.
+        cmd.entity(mount).remove(GltfInstanceNodes);
+      }
+    },
+    { label: 'gltf-reinstantiate' },
   );
 };

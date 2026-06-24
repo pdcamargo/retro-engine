@@ -60,6 +60,25 @@ export interface SerializedSceneRef {
   readonly guid: string;
 }
 
+/**
+ * A parent edge that crosses into a derived (instantiated) subtree, persisted as
+ * a stable anchor instead of a raw entity id. An authored entity parented onto a
+ * node that another entity rebuilds on load — e.g. a sword on a glTF model's
+ * `hand.R` bone — cannot reference that node by id (it is excluded from the save
+ * and would dangle). Instead the save records the mount it attaches into (`to`)
+ * and a `kind`-tagged, opaque `anchor`; on load the entity gains a transient
+ * `PendingAttachment`, and the matching `kind` system parents it under the
+ * resolved node once the mount's subtree exists.
+ */
+export interface SerializedAttachment {
+  /** In-scene id of the mount entity (e.g. the model root) this attaches into. */
+  readonly to: number;
+  /** Tag selecting the loader that resolves {@link anchor} (e.g. `'gltf-node'`). */
+  readonly kind: string;
+  /** Loader-defined locator for the parent within the mount's instantiated subtree. */
+  readonly anchor: unknown;
+}
+
 /** One entity in a {@link SceneData}: its compact in-scene id and serialized components. */
 export interface SerializedEntity {
   /** Stable id within the scene; entity-typed fields reference entities by this id. */
@@ -86,6 +105,14 @@ export interface SerializedEntity {
    * GUID through the App's `AssetServer` (or a caller-injected resolver).
    */
   readonly scene?: SerializedSceneRef;
+  /**
+   * A parent edge into another entity's derived subtree, recorded as a stable
+   * anchor rather than a raw `Parent` id (which would dangle, since the target
+   * node is excluded from the save). Present instead of a `Parent` component when
+   * the entity is parented onto an instantiated node; on load it becomes a
+   * `PendingAttachment` that the owning subtree's `kind` system resolves.
+   */
+  readonly attach?: SerializedAttachment;
 }
 
 /**

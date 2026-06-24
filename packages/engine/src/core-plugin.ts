@@ -6,6 +6,7 @@ import { CameraPlugin } from './camera/camera-plugin';
 import { RemovedComponents } from './change-detection';
 import { GizmoPlugin } from './gizmos/gizmo-plugin';
 import { Children, Parent, propagateTransformsGated } from './hierarchy';
+import { CompositionRegistry } from './scene/composition';
 import { ImagePlugin } from './image/image-plugin';
 import type { App } from './index';
 import { MeshPlugin } from './mesh/mesh-plugin';
@@ -60,6 +61,10 @@ export class CorePlugin implements PluginObject {
 
   build(app: App): void {
     app.insertResource(new Time());
+    // The seam plugins extend scene serialization through (extra excluded
+    // entities, cross-boundary anchor re-emission). Always present so a plugin's
+    // build can register against it; empty until a plugin does.
+    app.insertResource(new CompositionRegistry());
     app.addSystem('first', [ResMut(Time)], (time) => {
       time.tick(app.currentFrameTimestamp());
     }, { name: 'time-tick' });

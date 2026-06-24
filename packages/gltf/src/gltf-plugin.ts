@@ -10,9 +10,10 @@ import {
 } from '@retro-engine/engine';
 import { t } from '@retro-engine/reflect';
 
+import { addGltfAttach } from './gltf-attach';
 import { GLTF_ASSET_KIND, gltfAssetKindDescriptor } from './gltf-asset-kind';
 import { GltfSceneRoot } from './gltf-components';
-import { addGltfInstantiation } from './gltf-instantiate';
+import { addGltfInstantiation, addGltfReinstantiation } from './gltf-instantiate';
 import { createGltfImporter } from './gltf-importer';
 import type { Gltf } from './gltf-root';
 import { Gltfs } from './gltf-root';
@@ -107,5 +108,10 @@ export class GltfPlugin implements PluginObject {
     );
 
     addGltfInstantiation(app, this.material.MeshMaterial3d);
+    // Re-instantiate the subtree when the model is swapped, preserving authored
+    // attachments; round-trip attachments onto nodes (composition provider +
+    // load-time rebind).
+    addGltfReinstantiation(app);
+    addGltfAttach(app);
   }
 }

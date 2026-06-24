@@ -14,6 +14,7 @@ import { TemplateRegistry } from '../prefab/template-registry';
 import { expandTemplateRefs } from '../prefab/template-scene';
 
 import { AppTypeRegistry } from './app-type-registry';
+import { PendingAttachment } from './composition';
 import { buildDecodeEnv } from './deserialize';
 import type { Scene } from './scene-asset';
 import type { SceneData } from './scene-data';
@@ -210,6 +211,17 @@ export const spawnScene = (
     if (serialized.scene !== undefined) {
       const handle = resolveSceneRef(app, serialized.scene.guid, opts.resolveHandle);
       cmd.entity(entity).insert(new SceneRoot(handle, opts.resolveHandle));
+    }
+
+    // A parent edge into a not-yet-instantiated subtree becomes a transient
+    // PendingAttachment instead of a Parent: the target node does not exist yet.
+    // The owning subtree's `kind` system (registered by the contributing plugin)
+    // resolves the anchor and parents this entity once the subtree is live.
+    if (serialized.attach !== undefined) {
+      const mount = idToEntity.get(serialized.attach.to) ?? (opts.nullEntity ?? (0 as Entity));
+      cmd
+        .entity(entity)
+        .insert(new PendingAttachment(mount, serialized.attach.kind, serialized.attach.anchor));
     }
   }
 

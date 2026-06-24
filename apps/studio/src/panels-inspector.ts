@@ -14,6 +14,7 @@ import {
   toneColors,
 } from '@retro-engine/editor-sdk';
 import { type App, AppTypeRegistry, Name } from '@retro-engine/engine';
+import { gltfAnchorForEntity } from '@retro-engine/gltf';
 
 import { openComposer } from './composer/composer-state';
 import { type StudioState } from './state';
@@ -68,6 +69,16 @@ export const inspectorPanel = (
       }
       ui.spacing();
       ui.spacing();
+
+      // If this entity is an instantiated glTF node, surface its stable anchor —
+      // the address an entity parented under it records to survive a save/reload.
+      const gltfAnchor = gltfAnchorForEntity(app.world, selected);
+      if (gltfAnchor !== undefined) {
+        const { node, path } = gltfAnchor.anchor;
+        const label = path !== undefined && path.length > 0 ? path.join(' / ') : `node #${String(node)}`;
+        ui.textDisabled(`glTF node: ${label} (#${String(node)})`);
+        ui.spacing();
+      }
 
       if (serializable.length === 0) {
         ui.textDisabled('No serializable components on this entity.');

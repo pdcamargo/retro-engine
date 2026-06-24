@@ -2,7 +2,6 @@ import type { AssetGuid, AssetSink } from '@retro-engine/assets';
 import type { Entity } from '@retro-engine/ecs';
 import type { App } from '@retro-engine/engine';
 import { serializeScene } from '@retro-engine/engine';
-import { GltfInstanceNodes } from '@retro-engine/gltf';
 
 import { saveProject } from './save-project';
 
@@ -25,21 +24,6 @@ export interface SaveSceneDeps {
   readonly suppressReload?: () => void;
 }
 
-/**
- * Every entity a live {@link GltfInstanceNodes} records — the derived node graph
- * a `GltfSceneRoot` expanded into. These are excluded from a scene save because
- * the root re-instantiates them on load.
- */
-const collectGltfInstanceEntities = (app: App): ReadonlySet<Entity> => {
-  const derived = new Set<Entity>();
-  for (const entity of app.world.entities()) {
-    const instance = app.world.getComponent(entity, GltfInstanceNodes);
-    if (instance === undefined) continue;
-    for (const node of instance.nodeEntities) if (node !== undefined) derived.add(node);
-  }
-  return derived;
-};
-
 /** The outcome of a save: the number of authored entities written, or the error. */
 export type SaveSceneResult =
   | { readonly ok: true; readonly entities: number }
@@ -54,12 +38,11 @@ export type SaveSceneResult =
 export const saveScene = async (deps: SaveSceneDeps): Promise<SaveSceneResult> => {
   const { app } = deps;
   try {
-    // Entities a `GltfSceneRoot` expanded into are derived: the `GltfSceneRoot`
-    // itself persists and the reactor re-instantiates the subtree on load.
-    // Serializing the subtree too would duplicate it, so exclude it here.
-    const derived = collectGltfInstanceEntities(app);
+    // Derived subtrees (glTF instantiated nodes, nested scene instances) are
+    // excluded by the engine serializer via the composition providers registered
+    // by their plugins; only editor infra needs filtering out here.
     const data = serializeScene(app, {
-      filter: (e) => !deps.isEditorEntity(e) && !derived.has(e),
+      filter: (e) => !deps.isEditorEntity(e),
     });
     deps.suppressReload?.();
     await saveProject(app, deps.sink, {

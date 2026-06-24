@@ -38,13 +38,24 @@ export class GltfInstanceNodes {
   /** Spawned entity per glTF node index; `undefined` for nodes not in the scene. */
   readonly nodeEntities: readonly (Entity | undefined)[];
   private readonly byNameMap: ReadonlyMap<string, readonly Entity[]>;
+  /**
+   * The asset index of the `GltfSceneRoot.handle` this subtree was built from,
+   * and the scene index chosen. The re-instantiation system compares these to
+   * the root's current handle/scene to detect a model swap.
+   */
+  readonly sourceIndex: number;
+  readonly sourceScene?: number;
 
   constructor(
     nodeEntities: readonly (Entity | undefined)[],
     byNameMap: ReadonlyMap<string, readonly Entity[]>,
+    sourceIndex: number,
+    sourceScene?: number,
   ) {
     this.nodeEntities = nodeEntities;
     this.byNameMap = byNameMap;
+    this.sourceIndex = sourceIndex;
+    if (sourceScene !== undefined) this.sourceScene = sourceScene;
   }
 
   /** The first entity (in document order) spawned from a node named `name`. */

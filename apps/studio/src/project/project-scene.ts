@@ -62,20 +62,22 @@ export const loadProjectBundles = async (
 };
 
 /**
- * Load the project's startup scene from disk and spawn it into the world — the
- * host-backed `SceneSource` the studio uses instead of the in-memory showcase
- * when a project is open. Adds the asset + scene plugins over the project source,
- * adopts the scanned manifest, loads the scene by GUID, settles, and spawns — the
- * scene's referenced assets then stream in on demand (ADR-0100), not as a bulk
- * preload. Returns false (so the caller can fall back) if the scene isn't found.
+ * Install the project's runtime over its asset source: the asset + scene + bundle
+ * plugins and the project file loaders (`.rmesh`, `.hdr`, kind-routed `.remat`,
+ * and glTF). Idempotent — guarded on the {@link AssetServer}, so it runs once per
+ * App regardless of how many entry points call it.
+ *
+ * Called on project open (independent of whether a startup scene exists) so a
+ * project without a startup scene still has scene loading, bundles, and glTF
+ * support — assigning a model in the editor works before any scene is saved.
  */
-export const loadProjectScene = async (
+export const installProjectRuntime = (
   app: App,
   source: AssetSource,
-  manifest: AssetManifest,
-  startupSceneGuid: string,
   material?: MaterialPlugin<StandardMaterial>,
-): Promise<boolean> => {
+): void => {
+  if (app.getResource(AssetServer) !== undefined) return;
+
   app.addPlugin(new AssetPlugin({ source }));
   app.addPlugin(new ScenePlugin());
   app.addPlugin(new BundlePlugin());
@@ -105,16 +107,34 @@ export const loadProjectScene = async (
   // on demand. Re-run if a project registers its own material types.
   registerMaterialLoaders(app);
 
-  // glTF loading + instantiation: registers `.glb`/`.gltf` loaders, the `Gltf`
-  // handle store, and the `GltfSceneRoot` component + reactor, so a model can be
-  // assigned and spawned in the editor and a scene that references one streams
-  // and re-instantiates it on load. Needs a `StandardMaterial` plugin to map
-  // glTF materials into; skipped without one. Guarded so a project that adds
-  // GltfPlugin itself is not double-registered.
+  // glTF loading + instantiation + attachment round-trip: registers `.glb`/
+  // `.gltf` loaders, the `Gltf` handle store, the `GltfSceneRoot` component +
+  // reactor, and the composition provider that round-trips entities attached
+  // into instantiated subtrees. Needs a `StandardMaterial` plugin to map glTF
+  // materials into; skipped without one.
   if (material !== undefined && app.getResource(Gltfs) === undefined) {
     app.addPlugin(new GltfPlugin({ material }));
   }
+};
 
+/**
+ * Load the project's startup scene from disk and spawn it into the world — the
+ * host-backed `SceneSource` the studio uses instead of the in-memory showcase
+ * when a project is open. Ensures the project runtime is installed (idempotent),
+ * adopts the scanned manifest, loads the scene by GUID, settles, and spawns — the
+ * scene's referenced assets then stream in on demand (ADR-0100), not as a bulk
+ * preload. Returns false (so the caller can fall back) if the scene isn't found.
+ */
+export const loadProjectScene = async (
+  app: App,
+  source: AssetSource,
+  manifest: AssetManifest,
+  startupSceneGuid: string,
+  material?: MaterialPlugin<StandardMaterial>,
+): Promise<boolean> => {
+  installProjectRuntime(app, source, material);
+
+  const server = app.getResource(AssetServer)!;
   server.setManifest(manifest);
   server.loadByGuid(startupSceneGuid as AssetGuid);
   await server.settle();

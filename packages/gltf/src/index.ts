@@ -63,7 +63,12 @@ export { createGltfImporter } from './gltf-importer';
 
 export { GltfSceneRoot, GltfInstanceNodes } from './gltf-components';
 
-export { addGltfInstantiation } from './gltf-instantiate';
+export { addGltfInstantiation, addGltfReinstantiation } from './gltf-instantiate';
+
+export type { GltfNodeAnchor } from './gltf-anchor';
+export { resolveGltfNodeAnchor, gltfAnchorForEntity } from './gltf-anchor';
+
+export { addGltfAttach, GLTF_NODE_ANCHOR_KIND } from './gltf-attach';
 
 export { GltfPlugin } from './gltf-plugin';
 export type { GltfPluginOptions } from './gltf-plugin';
