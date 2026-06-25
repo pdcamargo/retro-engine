@@ -37,7 +37,7 @@ class StubMeshMaterial3d {
 }
 
 const nullSource: AssetSource = { read: () => Promise.reject(new Error('unused')) };
-const empty = { meshes: [], materials: [], images: [] };
+const empty = { meshes: [], materials: [], images: [], animationClips: [] };
 
 // A two-node model: a `rig` root with a `hand` child — the bone to attach onto.
 const RIG_HAND: GltfDocument = {

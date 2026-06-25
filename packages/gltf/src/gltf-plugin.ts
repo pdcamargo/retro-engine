@@ -1,5 +1,6 @@
 import type { App, MaterialPlugin, PluginObject, StandardMaterial } from '@retro-engine/engine';
 import {
+  AnimationClips,
   asAssetIndex,
   AssetServer,
   Images,
@@ -79,9 +80,15 @@ export class GltfPlugin implements PluginObject {
     const meshes = app.getResource(Meshes);
     const images = app.getResource(Images);
     const materials = app.getResource(this.material.Materials);
-    if (meshes === undefined || images === undefined || materials === undefined) {
+    const animationClips = app.getResource(AnimationClips);
+    if (
+      meshes === undefined ||
+      images === undefined ||
+      materials === undefined ||
+      animationClips === undefined
+    ) {
       throw new Error(
-        'GltfPlugin: missing Meshes/Images/Materials store — add CorePlugin and the StandardMaterial MaterialPlugin before GltfPlugin.',
+        'GltfPlugin: missing Meshes/Images/Materials/AnimationClips store — add CorePlugin and the StandardMaterial MaterialPlugin before GltfPlugin.',
       );
     }
 
@@ -91,7 +98,10 @@ export class GltfPlugin implements PluginObject {
       app.insertResource(gltfs);
     }
 
-    const importer = createGltfImporter({ meshes, materials, images }, this.decoder);
+    const importer = createGltfImporter(
+      { meshes, materials, images, animationClips },
+      this.decoder,
+    );
     server.registerLoader('gltf', gltfs, importer);
     server.registerLoader('glb', gltfs, importer);
     registerAssetKind(app, gltfAssetKindDescriptor);

@@ -11,7 +11,12 @@ const meshH = (i: number) => makeHandle<Mesh>(asAssetIndex(i));
 const matH = (i: number) => makeHandle<StandardMaterial>(asAssetIndex(i));
 const imgH = (i: number) => makeHandle<ImageType>(asAssetIndex(i));
 
-const emptyMapped: MappedGltfAssets = { meshes: [], materials: [], images: [] };
+const emptyMapped: MappedGltfAssets = {
+  meshes: [],
+  materials: [],
+  images: [],
+  animationClips: [],
+};
 
 describe('buildGltfRoot — scenes and named maps', () => {
   it('assembles scenes, the default scene, and the name maps', () => {
@@ -85,6 +90,7 @@ describe('buildGltfRoot — mapped assets', () => {
       meshes: [{ primitives: [{ mesh: meshH(0), material: matH(0) }, { mesh: meshH(1) }] }],
       materials: [matH(0), matH(1)],
       images: [imgH(0)],
+      animationClips: [],
     };
     const gltf = buildGltfRoot(document, mapped);
 

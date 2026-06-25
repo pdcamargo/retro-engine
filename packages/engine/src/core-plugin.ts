@@ -17,6 +17,7 @@ import type { PluginObject } from './plugin';
 import { RenderGraphPlugin } from './render-graph/render-graph-plugin';
 import { ShaderPlugin } from './shader/shader-plugin';
 import { SkinningPlugin } from './skinning/skinning-plugin';
+import { AnimationPlugin } from './animation/animation-plugin';
 import { Query, ResMut } from './system-param';
 import { TaaPlugin } from './taa/taa-plugin';
 import { Time } from './time';
@@ -131,6 +132,10 @@ export class CorePlugin implements PluginObject {
     app.addPlugin(new ImagePlugin());
     app.addPlugin(new VisibilityPlugin());
     app.addPlugin(new SkinningPlugin());
+    // After SkinningPlugin so the AnimationClips store exists before any glTF
+    // plugin's build pulls it; animation sampling runs before transform
+    // propagation, which the skinning palette compute then consumes.
+    app.addPlugin(new AnimationPlugin());
     app.addPlugin(new RenderGraphPlugin());
     // Before the HDR post chain: AO runs pre-opaque (it feeds the forward
     // ambient term), so it is independent of tonemap / motion-blur / TAA. Its

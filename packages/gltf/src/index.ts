@@ -28,6 +28,7 @@ export { mapMaterialToStandardMaterial } from './material-mapping';
 export { createImageResolver } from './image-mapping';
 export type { ImageResolver, ImageColorSpace } from './image-mapping';
 export { mapGltfAssets } from './asset-mapping';
+export { mapAnimations, gltfNodeTargetId } from './animation-mapping';
 export type {
   GltfAssetStores,
   MappedGltfAssets,
@@ -53,6 +54,11 @@ export type {
   GltfComponentType,
   GltfAccessorType,
   GltfAlphaMode,
+  GltfAnimation,
+  GltfAnimationChannel,
+  GltfAnimationChannelTarget,
+  GltfAnimationSampler,
+  GltfInterpolation,
 } from './schema';
 
 export { Gltfs } from './gltf-root';

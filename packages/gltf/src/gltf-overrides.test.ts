@@ -46,7 +46,7 @@ class Tag {
 }
 
 const nullSource: AssetSource = { read: () => Promise.reject(new Error('unused')) };
-const empty = { meshes: [], materials: [], images: [] };
+const empty = { meshes: [], materials: [], images: [], animationClips: [] };
 
 // A two-node model: a `rig` root with a `hand` child — the node to edit.
 const RIG_HAND: GltfDocument = {
@@ -90,6 +90,7 @@ const twoPrimMapped = {
   meshes: [{ primitives: [{ mesh: makeHandle(asAssetIndex(1)) }, { mesh: makeHandle(asAssetIndex(2)) }] }],
   materials: [],
   images: [],
+  animationClips: [],
 };
 const addBoxModel = (app: App, guid: string) =>
   app.getResource(Gltfs)!.add(buildGltfRoot(BOX_TWO_PRIM, twoPrimMapped as never) as Gltf, guid as never);

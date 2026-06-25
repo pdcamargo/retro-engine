@@ -40,6 +40,7 @@ import './taa.bench';
 import './ao.bench';
 import './gizmo-buffer.bench';
 import './scene-streaming.bench';
+import './animation-sampling.bench';
 
 interface NormalizedBench {
   readonly key: string;

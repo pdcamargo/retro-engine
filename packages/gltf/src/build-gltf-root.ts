@@ -134,5 +134,6 @@ export const buildGltfRoot = (
     nodes,
     namedNodes: byName(nodes, (n) => n.name),
     skins,
+    animationClips: mapped.animationClips,
   };
 };

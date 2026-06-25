@@ -10,6 +10,7 @@ import type {
   StandardMaterial,
 } from '@retro-engine/engine';
 import {
+  AnimationTarget,
   AppTypeRegistry,
   Children,
   Commands,
@@ -27,6 +28,7 @@ import { mat4, quat, vec3 } from '@retro-engine/math';
 import type { EncodeEnv, SerializedValue } from '@retro-engine/reflect';
 import { encodeComponent } from '@retro-engine/reflect';
 
+import { gltfNodeTargetId } from './animation-mapping';
 import { GLTF_NODE_ANCHOR_KIND } from './gltf-attach';
 import { gltfAnchorForEntity } from './gltf-anchor';
 import { GltfInstanceNodes, GltfSceneRoot } from './gltf-components';
@@ -160,6 +162,17 @@ const instantiateRoot = (
     if (!complete) continue;
     const inverseBinds = skin.inverseBindMatrices.map((m) => mat4.clone(m, mat4.create()));
     cmd.entity(entity).insert(new Skeleton(joints, inverseBinds));
+  }
+
+  // Tag each spawned node so an AnimationPlayer on this root can resolve a
+  // clip's tracks (addressed by the node's document-index id) to the entity.
+  // Only when the model carries clips, so a static glTF pays nothing.
+  if (gltf.animationClips.length > 0) {
+    for (let nodeIndex = 0; nodeIndex < nodeEntities.length; nodeIndex++) {
+      const nodeEntity = nodeEntities[nodeIndex];
+      if (nodeEntity === undefined) continue;
+      cmd.entity(nodeEntity).insert(new AnimationTarget(gltfNodeTargetId(nodeIndex), rootEntity));
+    }
   }
   // Recorded even for an empty/absent scene, so the root drops out of the
   // pending query and is not re-polled every frame. The source handle index +

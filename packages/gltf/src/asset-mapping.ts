@@ -1,4 +1,5 @@
 import type {
+  AnimationClip,
   Assets,
   Handle,
   Image as ImageType,
@@ -7,6 +8,7 @@ import type {
   StandardMaterial,
 } from '@retro-engine/engine';
 
+import { mapAnimations } from './animation-mapping';
 import type { ImageDecoder } from './image-decoder';
 import { createImageResolver } from './image-mapping';
 import { mapMaterialToStandardMaterial } from './material-mapping';
@@ -18,6 +20,7 @@ export interface GltfAssetStores {
   readonly meshes: Assets<Mesh>;
   readonly materials: Assets<StandardMaterial>;
   readonly images: Assets<ImageType>;
+  readonly animationClips: Assets<AnimationClip>;
 }
 
 /** One mapped primitive: its engine mesh plus the material it draws with, if any. */
@@ -40,6 +43,7 @@ export interface MappedGltfAssets {
   readonly meshes: readonly MappedMesh[];
   readonly materials: readonly Handle<StandardMaterial>[];
   readonly images: readonly Handle<ImageType>[];
+  readonly animationClips: readonly Handle<AnimationClip>[];
 }
 
 /**
@@ -83,5 +87,7 @@ export const mapGltfAssets = async (
     meshes.push({ primitives });
   }
 
-  return { meshes, materials, images: resolver.handles };
+  const animationClips = mapAnimations(document, buffers, ctx, stores.animationClips);
+
+  return { meshes, materials, images: resolver.handles, animationClips };
 };

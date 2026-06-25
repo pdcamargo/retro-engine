@@ -1,5 +1,12 @@
 import { Assets } from '@retro-engine/engine';
-import type { Handle, Image as ImageType, Mesh, StandardMaterial, Transform } from '@retro-engine/engine';
+import type {
+  AnimationClip,
+  Handle,
+  Image as ImageType,
+  Mesh,
+  StandardMaterial,
+  Transform,
+} from '@retro-engine/engine';
 import type { Mat4 } from '@retro-engine/math';
 
 /**
@@ -67,8 +74,6 @@ export interface GltfScene {
  * Collections are indexed parallel to the source document; the `named*` maps
  * give name-keyed access (glTF names are not unique — the map keeps the first
  * occurrence in document order). `defaultScene` is the document's `scene`, if set.
- *
- * Animations are reserved for a later milestone and are not present in v1 imports.
  */
 export interface Gltf {
   readonly scenes: readonly GltfScene[];
@@ -83,6 +88,12 @@ export interface Gltf {
   readonly namedNodes: ReadonlyMap<string, GltfNode>;
   /** Skins indexed parallel to the source document; empty when the file has none. */
   readonly skins: readonly GltfSkin[];
+  /**
+   * Clips decoded from the document's animations, indexed parallel to them;
+   * empty when the file has none. Each clip's tracks address nodes by their
+   * document-index id, which instantiation tags onto the spawned entities.
+   */
+  readonly animationClips: readonly Handle<AnimationClip>[];
 }
 
 /** The {@link Assets} store holding imported {@link Gltf} root assets. */

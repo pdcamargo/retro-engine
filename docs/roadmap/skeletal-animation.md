@@ -2,7 +2,8 @@
 
 - **Created:** 2026-06-25
 - **Status:** Phase 0 (GPU skinning) **shipped** — confirmed working 2026-06-25 (ADR-0114, ADR-0115).
-  Phases 1–5 planned.
+  Phase 1 (clip playback) **shipped** — confirmed working 2026-06-25 (ADR-0116, ADR-0117).
+  Phases 2–5 planned.
 - **Decisions:** ADRs to be written per phase (see *Open questions*). Builds on ADR-0057 (glTF
   import — reserves skins/animations), ADR-0060/0061 (reflection — every authored component here needs
   a schema), ADR-0102 (hot reload — schemaless authored components are dropped on every code swap).
@@ -81,7 +82,20 @@ WebGL2 backend).
 
 **Unlocks:** dragging a bone in the studio deforms the mesh. Nothing above this is required for that.
 
-### Phase 1 — Clip playback (the general property-animation system)
+### Phase 1 — Clip playback (the general property-animation system) ✅ SHIPPED
+
+**Status: shipped, confirmed working in the editor 2026-06-25.** Decisions sealed in
+[ADR-0116](../adr/ADR-0116-animation-clip-data-model-and-property-path-addressing.md) (clip/track/
+sampler data model, property-path addressing via reflection, LINEAR/STEP/CUBICSPLINE + shortest-path
+quaternion slerp, glTF channel→track mapping with morph-weights deferred) and
+[ADR-0117](../adr/ADR-0117-animation-system-home-and-player-reflection.md) (home in
+`packages/engine/src/animation/`, `AnimationTarget`-id binding, reflection split, sampling in the
+`update` stage so it precedes `postUpdate` propagation). Landed: the `AnimationClip` asset (`.ranim`,
+via the asset-kind flow); the reflect `field-path` module shared with the inspector; glTF animation
+parsing producing TRS-targeting clips + `AnimationTarget` tagging on instantiated nodes; the
+`AnimationPlayer`/`AnimationTarget` components (schemas) + `AnimationPlugin` + the sampling system;
+and a sampling bench. Deferred within Phase 1: morph-weight channels (await morph-target meshes),
+method/event tracks (out of scope for the v1 clip format).
 
 `AnimationClip` + `AnimationPlayer` are **not** skeletal-specific — they are the engine's general
 keyframe system, the equivalent of Godot's `AnimationPlayer` and Unity's Animation window: a clip is a
@@ -163,17 +177,21 @@ mostly `Pose` math layered on the same pipeline.
 - **Joint-palette delivery threshold** — uniform-array (small skeletons) vs storage buffer (WebGPU) vs
   bone-texture (WebGL2 fallback); at what joint count does each path engage, and what's the capability
   gate? (Carried over from `gltf.md`.)
-- **Animation system home** — `packages/engine` vs a new `@retro-engine/animation` package. (Open in
-  `gltf.md` and `renderer.md` too.) Leaning toward a dedicated package once Phase 2 lands.
+- **Animation system home** — *resolved (ADR-0117):* Phase 1 lives in `packages/engine/src/animation/`
+  (it needs engine's asset registration, `Transform`, `Time`, scheduling, and the skinning hook, and
+  `gltf` → `engine` means the clip type must be in `engine`). A dedicated `@retro-engine/animation`
+  package is deferred to Phase 2 when blend trees/state machines justify the boundary.
 - **Pose representation** — per-bone local TRS arrays; SoA vs AoS; how poses interact with ECS change
   detection (poses are transient, recomputed each frame — likely *not* a serialized component).
 - **Retargeting model** — normalized-humanoid vs chain-based vs a rig-mapping abstraction that supports
   both. Decided when Phase 5 is promoted; it shapes the `AvatarMask`/rig assets.
 - **Additive reference pose** — where the reference/bind pose comes from (glTF bind pose vs an authored
   reference clip).
-- **Reflection** — `SkinnedMesh`/`Skeleton`, `AnimationPlayer`, layer/mask config, IK constraints, and
-  rig-mapping assets are authored state and need reflection schemas (CLAUDE.md §13); transient poses
-  and the computed palette are deliberately *not* serialized.
+- **Reflection** — *Phase 1 resolved (ADR-0117):* `AnimationPlayer` (clip/speed/playing/repeat) and
+  `AnimationTarget` (id/player) are authored and registered; the `AnimationPlayer.time` cursor is
+  transient (`.skip()`); `AnimationClip` is an asset (serializer, not a component schema). Still open
+  for later phases: layer/mask config, IK constraints, rig-mapping assets. Transient poses and the
+  computed palette are deliberately *not* serialized.
 
 ## Links
 

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'bun:test';
 import type { AssetSource } from '@retro-engine/assets';
 import type { Entity } from '@retro-engine/ecs';
 import {
+  AnimationClips,
   App,
   AssetPlugin,
   AssetServer,
@@ -44,6 +45,7 @@ const meshMapped = (primCounts: readonly number[]): MappedGltfAssets => ({
   })),
   materials: [matH(0)],
   images: [],
+  animationClips: [],
 });
 
 /** Build a headless app with the reactor installed and a `Gltf` already in its store. */
@@ -67,7 +69,7 @@ describe('gltf instantiation reactor — entity tree', () => {
         { name: 'child', translation: [0, 2, 0] },
       ],
     };
-    const { app, handle } = setup(buildGltfRoot(document, { meshes: [], materials: [], images: [] }));
+    const { app, handle } = setup(buildGltfRoot(document, { meshes: [], materials: [], images: [], animationClips: [] }));
     const anchor = app.world.spawn(new GltfSceneRoot(handle), new Transform());
     app.advanceFrame(0);
 
@@ -96,7 +98,7 @@ describe('gltf instantiation reactor — entity tree', () => {
       scene: 0,
       nodes: [{}],
     };
-    const { app, handle } = setup(buildGltfRoot(document, { meshes: [], materials: [], images: [] }));
+    const { app, handle } = setup(buildGltfRoot(document, { meshes: [], materials: [], images: [], animationClips: [] }));
     const anchor = app.world.spawn(new GltfSceneRoot(handle), new Transform());
     app.advanceFrame(0);
     const node0 = app.world.getComponent(anchor, GltfInstanceNodes)!.nodeEntities[0]!;
@@ -116,7 +118,7 @@ describe('gltf instantiation reactor — name lookup', () => {
         { name: 'leaf' },
       ],
     };
-    const { app, handle } = setup(buildGltfRoot(document, { meshes: [], materials: [], images: [] }));
+    const { app, handle } = setup(buildGltfRoot(document, { meshes: [], materials: [], images: [], animationClips: [] }));
     const anchor = app.world.spawn(new GltfSceneRoot(handle), new Transform());
     app.advanceFrame(0);
 
@@ -212,7 +214,12 @@ describe('gltf instantiation reactor — failed import commits no subgraph', () 
     const meshes = new Assets<Mesh>();
     const materials = new Assets<StandardMaterial>();
     const images = new Assets<ImageType>();
-    server.registerLoader('gltf', gltfs, createGltfImporter({ meshes, materials, images }, stubDecoder));
+    const animationClips = new AnimationClips();
+    server.registerLoader(
+      'gltf',
+      gltfs,
+      createGltfImporter({ meshes, materials, images, animationClips }, stubDecoder),
+    );
     addGltfInstantiation(app, StubMeshMaterial3d);
 
     const handle = server.load<Gltf>('bad.gltf');

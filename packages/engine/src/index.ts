@@ -145,6 +145,28 @@ export {
   packSkinnedInstance,
   SkinningPlugin,
 } from './skinning';
+export {
+  AnimationClip,
+  clipDuration,
+  ANIMATION_CLIP_ASSET_KIND,
+  ANIMATION_CLIP_FORMAT_VERSION,
+  AnimationClips,
+  createAnimationClipImporter,
+  createAnimationClipSerializer,
+  AnimationPlayer,
+  AnimationTarget,
+  sampleInto,
+  addAnimationSampling,
+  advancePlayerTime,
+  AnimationPlugin,
+} from './animation';
+export type {
+  AnimationTrack,
+  Interpolation,
+  KeyframeSampler,
+  TrackTarget,
+  RepeatMode,
+} from './animation';
 export { Name } from './name';
 export { AppBundleRegistry } from './bundle/bundle-registry';
 export type { BundleDefinition, BundleRegisterOptions } from './bundle/bundle-definition';

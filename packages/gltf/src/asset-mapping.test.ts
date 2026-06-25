@@ -1,4 +1,10 @@
-import { Assets, type Image, type Mesh, type StandardMaterial } from '@retro-engine/engine';
+import {
+  AnimationClips,
+  Assets,
+  type Image,
+  type Mesh,
+  type StandardMaterial,
+} from '@retro-engine/engine';
 import { describe, expect, it } from 'bun:test';
 
 import { mapGltfAssets } from './asset-mapping';
@@ -54,6 +60,7 @@ describe('mapGltfAssets', () => {
       meshes: new Assets<Mesh>(),
       materials: new Assets<StandardMaterial>(),
       images: new Assets<Image>(),
+      animationClips: new AnimationClips(),
     };
     const { ctx, labels } = fakeLoadContext({ 'shared.png': PNG, 'normal.png': PNG });
 

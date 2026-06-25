@@ -198,6 +198,48 @@ export interface GltfScene {
   name?: string;
 }
 
+/**
+ * How an {@link GltfAnimationSampler} interpolates between keyframes. Absent
+ * means `LINEAR`. `CUBICSPLINE` stores three values per keyframe (in-tangent,
+ * value, out-tangent) in its output accessor.
+ */
+export type GltfInterpolation = 'LINEAR' | 'STEP' | 'CUBICSPLINE';
+
+/** The animated node property a channel targets. */
+export interface GltfAnimationChannelTarget {
+  /** Index into {@link GltfDocument.nodes}; absent for an undefined target (ignored). */
+  node?: number;
+  /** The property being animated. `weights` drives morph-target weights. */
+  path: 'translation' | 'rotation' | 'scale' | 'weights';
+}
+
+/** Binds an {@link GltfAnimationSampler} to the node property it drives. */
+export interface GltfAnimationChannel {
+  /** Index into the parent animation's `samplers`. */
+  sampler: number;
+  target: GltfAnimationChannelTarget;
+}
+
+/**
+ * Keyframe data for one animated property: an `input` accessor of timestamps and
+ * an `output` accessor of values, blended by `interpolation`.
+ */
+export interface GltfAnimationSampler {
+  /** Accessor index of the keyframe timestamps (SCALAR FLOAT, strictly increasing). */
+  input: number;
+  /** Accessor index of the keyframe values. */
+  output: number;
+  /** Interpolation mode; absent means `LINEAR`. */
+  interpolation?: GltfInterpolation;
+}
+
+/** A named set of channels/samplers animating node properties over time. */
+export interface GltfAnimation {
+  channels: GltfAnimationChannel[];
+  samplers: GltfAnimationSampler[];
+  name?: string;
+}
+
 /** The root glTF JSON document. Every collection is optional per the spec. */
 export interface GltfDocument {
   asset: GltfAsset;
@@ -206,6 +248,7 @@ export interface GltfDocument {
   nodes?: GltfNode[];
   meshes?: GltfMesh[];
   materials?: GltfMaterial[];
+  animations?: GltfAnimation[];
   accessors?: GltfAccessor[];
   skins?: GltfSkin[];
   bufferViews?: GltfBufferView[];

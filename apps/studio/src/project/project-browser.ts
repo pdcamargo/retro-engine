@@ -18,6 +18,7 @@ const CATEGORY_TO_ASSET_TYPE: Readonly<Record<string, AssetType>> = {
   prefab: 'prefab',
   bundle: 'bundle',
   sprite: 'sprite',
+  animation: 'animation',
 };
 
 /** One asset in the project asset browser, derived from the scanned `.meta` manifest. */
