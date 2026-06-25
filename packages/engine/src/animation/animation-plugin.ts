@@ -23,8 +23,20 @@ import {
   createAnimationControllerSerializer,
 } from './animation-controller-asset';
 import { AnimationControllerPlayer } from './animation-controller-player';
+import {
+  AnimationLayerRuntimes,
+  AnimationLayers,
+  ReferencePoses,
+} from './animation-layers';
 import { AnimationPlayer, AnimationTarget } from './animation-player';
 import { addAnimationSampling } from './animation-system';
+import type { AvatarMask } from './avatar-mask';
+import {
+  AVATAR_MASK_ASSET_KIND,
+  AvatarMasks,
+  createAvatarMaskImporter,
+  createAvatarMaskSerializer,
+} from './avatar-mask-asset';
 import { AnimationPoses } from './pose';
 import { AnimationControllerRuntimes } from './state-machine';
 
@@ -58,6 +70,10 @@ export class AnimationPlugin implements PluginObject {
       app.insertResource(new AnimationControllers());
     }
     const controllers = app.getResource(AnimationControllers)!;
+    if (app.getResource(AvatarMasks) === undefined) {
+      app.insertResource(new AvatarMasks());
+    }
+    const masks = app.getResource(AvatarMasks)!;
     // Per-frame transient pose / state-machine buffers consumed by the sampling
     // system; never serialized.
     if (app.getResource(AnimationPoses) === undefined) {
@@ -65,6 +81,12 @@ export class AnimationPlugin implements PluginObject {
     }
     if (app.getResource(AnimationControllerRuntimes) === undefined) {
       app.insertResource(new AnimationControllerRuntimes());
+    }
+    if (app.getResource(AnimationLayerRuntimes) === undefined) {
+      app.insertResource(new AnimationLayerRuntimes());
+    }
+    if (app.getResource(ReferencePoses) === undefined) {
+      app.insertResource(new ReferencePoses());
     }
 
     registerAssetStore(app, ANIMATION_CLIP_ASSET_KIND, clips);
@@ -93,13 +115,24 @@ export class AnimationPlugin implements PluginObject {
       category: 'animation',
     });
 
+    registerAssetStore(app, AVATAR_MASK_ASSET_KIND, masks);
+    registerAssetSerializer(app, AVATAR_MASK_ASSET_KIND, createAvatarMaskSerializer());
+    // `.ramask` files are authored/saved with a sidecar rather than dropped in loose.
+    registerAssetKind(app, {
+      kind: AVATAR_MASK_ASSET_KIND,
+      extensions: ['ramask'],
+      discoverable: false,
+      category: 'animation',
+    });
+
     // Register the read-side importers when an AssetServer is present so a
-    // standalone `.ranim` / `.ranimctrl` loads; glTF-produced clips arrive as
-    // sub-assets and need no loader.
+    // standalone `.ranim` / `.ranimctrl` / `.ramask` loads; glTF-produced clips
+    // arrive as sub-assets and need no loader.
     const server = app.getResource(AssetServer);
     if (server !== undefined) {
       server.registerLoader('ranim', clips, createAnimationClipImporter());
       server.registerLoader('ranimctrl', controllers, createAnimationControllerImporter(clips));
+      server.registerLoader('ramask', masks, createAvatarMaskImporter());
     }
 
     app.registerComponent(
@@ -130,6 +163,33 @@ export class AnimationPlugin implements PluginObject {
         name: 'AnimationControllerPlayer',
         make: () => new AnimationControllerPlayer(makeHandle(asAssetIndex(0))),
       },
+    );
+    app.registerComponent(
+      AnimationLayers,
+      {
+        layers: t.array(
+          t.struct({
+            weight: t.number,
+            blend: t.enum('override', 'additive'),
+            mask: t.handle<AvatarMask>(AVATAR_MASK_ASSET_KIND).optional(),
+            source: t.variant('kind', {
+              clip: {
+                clip: t.handle<AnimationClip>(ANIMATION_CLIP_ASSET_KIND),
+                speed: t.number,
+                playing: t.boolean,
+                repeat: t.enum('loop', 'once'),
+              },
+              controller: {
+                controller: t.handle<AnimationController>(ANIMATION_CONTROLLER_ASSET_KIND),
+                speed: t.number,
+                playing: t.boolean,
+                parameters: t.array(t.struct({ name: t.string, value: t.number })),
+              },
+            }),
+          }),
+        ),
+      },
+      { name: 'AnimationLayers', make: () => new AnimationLayers() },
     );
 
     addAnimationSampling(app);

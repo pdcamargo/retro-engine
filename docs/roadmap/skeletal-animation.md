@@ -4,7 +4,8 @@
 - **Status:** Phase 0 (GPU skinning) **shipped** — confirmed working 2026-06-25 (ADR-0114, ADR-0115).
   Phase 1 (clip playback) **shipped** — confirmed working 2026-06-25 (ADR-0116, ADR-0117).
   Phase 2 (pose pipeline) **shipped** — confirmed working in the editor 2026-06-25 (ADR-0118, ADR-0119).
-  Phases 3–5 planned.
+  Phase 3 (layers + avatar masks) **shipped** — confirmed working in the editor 2026-06-25 (ADR-0120).
+  Phases 4–5 planned.
 - **Decisions:** ADRs to be written per phase (see *Open questions*). Builds on ADR-0057 (glTF
   import — reserves skins/animations), ADR-0060/0061 (reflection — every authored component here needs
   a schema), ADR-0102 (hot reload — schemaless authored components are dropped on every code swap).
@@ -145,7 +146,20 @@ controllers drive via code/MCP for now). The 2D-blend math is full coverage.
 
 Phases 3–5 all hang off this `Pose` abstraction.
 
-### Phase 3 — Animation layers + avatar masks
+### Phase 3 — Animation layers + avatar masks ✅ SHIPPED
+
+**Status: shipped, confirmed working in the editor 2026-06-25** (a base full-body march with an
+upper-body layer masked to the arms — legs stop while arms keep moving). Decisions sealed in
+[ADR-0120](../adr/ADR-0120-animation-layers-avatar-masks-and-additive.md) (AvatarMask asset +
+layer-stack + override/additive composition + the additive-reference-pose decision +
+generic-vs-humanoid mask sequencing). Landed: the `AvatarMask` asset (`.ramask`, via the asset-kind
+flow) — a binary, bone-id-keyed include set; the `AnimationLayers` component (each layer: weight,
+override|additive blend, optional mask, and a clip- or controller-driven source) with transient
+`AnimationLayerRuntimes` + `ReferencePoses` resources; the layered driver in `addAnimationSampling`
+(shared slot layout → per-layer pose eval → masked override/additive composition → single commit);
+`composeLayerOverride`/`composeLayerAdditive` in `layer-blend.ts`; and a `layer-blend` bench. Deferred
+within Phase 3: the studio mask-authoring UI (drive via code/MCP for now) and an authored
+reference-clip override for additive (bind pose is the default; see below).
 
 - **`AvatarMask` asset** — a per-bone boolean set scoping which bones a layer touches.
 - **Layer stack** — each layer has a weight, a blend mode (**override** vs **additive**), and an
@@ -153,6 +167,9 @@ Phases 3–5 all hang off this `Pose` abstraction.
   accumulated pose (e.g. a "wave" upper-body layer masked to spine+arms, over a full-body "run").
 - **Additive poses** — additive = clip pose minus a reference/bind pose; needs a reference pose to
   subtract against.
+
+The Unity humanoid **body-part mask** (head/arms/legs toggle) is deferred to Phase 5 — it needs the
+canonical humanoid avatar retargeting introduces, and then resolves to the same bone-id include set.
 
 Pure `Pose` math — no new GPU work beyond Phase 0.
 
@@ -203,8 +220,12 @@ mostly `Pose` math layered on the same pipeline.
   per-field per-slot so partial coverage is correct without masks.
 - **Retargeting model** — normalized-humanoid vs chain-based vs a rig-mapping abstraction that supports
   both. Decided when Phase 5 is promoted; it shapes the `AvatarMask`/rig assets.
-- **Additive reference pose** — where the reference/bind pose comes from (glTF bind pose vs an authored
-  reference clip).
+- **Additive reference pose** — *resolved ([ADR-0120](../adr/ADR-0120-animation-layers-avatar-masks-and-additive.md)):*
+  the **glTF bind pose** (each bone's local rest TRS), captured lazily the first frame a bone appears
+  in a layered player and held in the transient `ReferencePoses` resource. Chosen over an authored
+  reference clip because it is always present in a rigged glTF (zero authoring), is the natural neutral
+  a breath/lean delta is relative to, and doubles as the rest base for additive bones no lower layer
+  animated. A per-layer authored-reference-clip override is left as a future addition.
 - **Reflection** — *Phase 1 resolved (ADR-0117):* `AnimationPlayer` (clip/speed/playing/repeat) and
   `AnimationTarget` (id/player) are authored and registered; the `AnimationPlayer.time` cursor is
   transient (`.skip()`); `AnimationClip` is an asset (serializer, not a component schema). Still open

@@ -64,6 +64,25 @@ export {
 export { AnimationControllerPlayer } from './animation-controller-player';
 export type { PlayerParameter } from './animation-controller-player';
 
+export { AvatarMask } from './avatar-mask';
+export {
+  AVATAR_MASK_ASSET_KIND,
+  AVATAR_MASK_FORMAT_VERSION,
+  AvatarMasks,
+  createAvatarMaskImporter,
+  createAvatarMaskSerializer,
+} from './avatar-mask-asset';
+
+export {
+  AnimationLayers,
+  AnimationLayerRuntimes,
+  ReferencePoses,
+} from './animation-layers';
+export type { AnimationLayer, LayerBlendMode, LayerRuntime, LayerSource } from './animation-layers';
+
+export { composeLayerAdditive, composeLayerOverride } from './layer-blend';
+export type { LayerMask } from './layer-blend';
+
 export {
   AnimationControllerRuntimes,
   createControllerRuntime,
