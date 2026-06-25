@@ -21,4 +21,14 @@ export interface RendererCapabilities {
    * which case the engine falls back to one vertex buffer per mesh.
    */
   readonly baseVertex: boolean;
+  /**
+   * Whether the backend can bind storage buffers (`var<storage>`) to shaders.
+   *
+   * `true` on WebGPU. `false` on WebGL2, which has no shader storage buffer
+   * objects at all — features that deliver bulk per-draw data through a storage
+   * buffer (e.g. the GPU-skinning joint palette) must check this flag and fall
+   * back to a storage-buffer-free path (a uniform array or a data texture)
+   * where it is unset.
+   */
+  readonly storageBuffers: boolean;
 }

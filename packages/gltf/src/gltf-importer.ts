@@ -25,5 +25,5 @@ export const createGltfImporter =
     const { document, bin } = parseGltf(bytes);
     const buffers = await resolveBuffers(document, bin, ctx.read);
     const mapped = await mapGltfAssets(document, buffers, ctx, stores, decoder);
-    return buildGltfRoot(document, mapped);
+    return buildGltfRoot(document, mapped, buffers);
   };

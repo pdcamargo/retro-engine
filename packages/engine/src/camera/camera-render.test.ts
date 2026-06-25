@@ -90,6 +90,7 @@ const makeCapturingRenderer = (): CapturingRenderer => {
       timestampQueries: false,
       indirectDraw: false,
       bgra8UnormStorage: false,
+      storageBuffers: false,
       baseVertex: true,
     },
     init: () => Promise.resolve(),

@@ -16,6 +16,7 @@ import { Name } from './name';
 import type { PluginObject } from './plugin';
 import { RenderGraphPlugin } from './render-graph/render-graph-plugin';
 import { ShaderPlugin } from './shader/shader-plugin';
+import { SkinningPlugin } from './skinning/skinning-plugin';
 import { Query, ResMut } from './system-param';
 import { TaaPlugin } from './taa/taa-plugin';
 import { Time } from './time';
@@ -129,6 +130,7 @@ export class CorePlugin implements PluginObject {
     app.addPlugin(new MeshPlugin());
     app.addPlugin(new ImagePlugin());
     app.addPlugin(new VisibilityPlugin());
+    app.addPlugin(new SkinningPlugin());
     app.addPlugin(new RenderGraphPlugin());
     // Before the HDR post chain: AO runs pre-opaque (it feeds the forward
     // ambient term), so it is independent of tonemap / motion-blur / TAA. Its

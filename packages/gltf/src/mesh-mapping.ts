@@ -10,24 +10,36 @@ import type { GltfDocument, GltfPrimitive } from './schema';
  *
  * Order matters: the vertex layout assigns each attribute a `shaderLocation`
  * from its slot index, and the engine's shaders expect position at location 0,
- * normal at 1, UV at 2. glTF lists a primitive's attributes in arbitrary key
- * order (a Blender export often puts `COLOR_0` first), so they are inserted in
- * this canonical order rather than the order the file happens to use.
+ * normal at 1, UV at 2, and — on a skinned mesh — joint indices at 3, joint
+ * weights at 4. glTF lists a primitive's attributes in arbitrary key order (a
+ * Blender export often puts `COLOR_0` first), so they are inserted in this
+ * canonical order rather than the order the file happens to use. Joints/weights
+ * sit ahead of `TANGENT`/`COLOR_0` so they keep locations 3/4 regardless of
+ * whether the optional trailing attributes are present.
  *
- * Semantics not listed are recognised as deferred: `TEXCOORD_1` (UV_1),
- * `JOINTS_0`, and `WEIGHTS_0` map to attributes the engine does not yet carry
- * (skinning / second UV set) and are skipped rather than treated as errors.
+ * `TEXCOORD_1` (UV_1) is still deferred — the engine carries no second UV set
+ * yet, so it is skipped rather than treated as an error.
  */
 const ORDERED_ATTRIBUTES: readonly (readonly [string, MeshVertexAttribute])[] = [
   ['POSITION', MeshAttribute.POSITION],
   ['NORMAL', MeshAttribute.NORMAL],
   ['TEXCOORD_0', MeshAttribute.UV_0],
+  ['JOINTS_0', MeshAttribute.JOINT_INDEX],
+  ['WEIGHTS_0', MeshAttribute.JOINT_WEIGHT],
   ['TANGENT', MeshAttribute.TANGENT],
   ['COLOR_0', MeshAttribute.COLOR],
 ];
 
 const toFloat32 = (array: DecodedAccessorArray): Float32Array =>
   array instanceof Float32Array ? array : new Float32Array(array);
+
+/**
+ * Widen decoded joint indices to `Uint16Array` to match the `uint16x4`
+ * {@link MeshAttribute.JOINT_INDEX} format. glTF stores `JOINTS_0` as
+ * `UNSIGNED_BYTE` or `UNSIGNED_SHORT`; either decodes losslessly into 16 bits.
+ */
+const toUint16 = (array: DecodedAccessorArray): Uint16Array =>
+  array instanceof Uint16Array ? array : new Uint16Array(array);
 
 /** Expand a VEC3 color stream to VEC4 by appending an opaque alpha of 1. */
 const expandColorToVec4 = (rgb: Float32Array, count: number): Float32Array => {
@@ -66,10 +78,14 @@ export const mapPrimitiveToMesh = (
     const accessorIndex = primitive.attributes[semantic];
     if (accessorIndex === undefined) continue;
     const decoded = decodeAccessor(document, buffers, accessorIndex);
-    const data =
-      semantic === 'COLOR_0' && decoded.componentCount === 3
-        ? expandColorToVec4(toFloat32(decoded.array), decoded.count)
-        : toFloat32(decoded.array);
+    let data: Float32Array | Uint16Array;
+    if (semantic === 'JOINTS_0') {
+      data = toUint16(decoded.array);
+    } else if (semantic === 'COLOR_0' && decoded.componentCount === 3) {
+      data = expandColorToVec4(toFloat32(decoded.array), decoded.count);
+    } else {
+      data = toFloat32(decoded.array);
+    }
     mesh.insertAttribute(attribute, data);
   }
 

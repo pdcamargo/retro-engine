@@ -50,13 +50,15 @@ export const meshVertexAttribute = (name: string, id: number, format: VertexForm
  *
  * Ids match Bevy's well-known slot ids so a future glTF importer can map
  * primitive attributes through without a remap table:
- * `POSITION = 0`, `NORMAL = 1`, `UV_0 = 2`, `TANGENT = 4`, `COLOR = 5`. Id `3`
- * is intentionally skipped — Bevy reserves it for a second UV channel which we
- * will add when a consumer requires it.
+ * `POSITION = 0`, `NORMAL = 1`, `UV_0 = 2`, `TANGENT = 4`, `COLOR = 5`,
+ * `JOINT_WEIGHT = 6`, `JOINT_INDEX = 7`. Id `3` is intentionally skipped —
+ * Bevy reserves it for a second UV channel which we will add when a consumer
+ * requires it.
  *
- * Skinning attributes (`JOINT_INDEX`, `JOINT_WEIGHT`) ship with the skinning
- * milestone; they're absent here so consumers can't write code that assumes
- * skinning is available before it lands.
+ * `JOINT_INDEX` carries four joint indices per vertex as `uint16x4` (read in
+ * the shader as `vec4<u32>`); `JOINT_WEIGHT` the four matching blend weights as
+ * `float32x4`. They appear on a mesh only when it was imported with skinning
+ * data — a non-skinned mesh simply omits them.
  */
 export const MeshAttribute = {
   POSITION: meshVertexAttribute('Vertex_Position', 0, 'float32x3'),
@@ -64,4 +66,6 @@ export const MeshAttribute = {
   UV_0: meshVertexAttribute('Vertex_Uv_0', 2, 'float32x2'),
   TANGENT: meshVertexAttribute('Vertex_Tangent', 4, 'float32x4'),
   COLOR: meshVertexAttribute('Vertex_Color', 5, 'float32x4'),
+  JOINT_WEIGHT: meshVertexAttribute('Vertex_Joint_Weight', 6, 'float32x4'),
+  JOINT_INDEX: meshVertexAttribute('Vertex_Joint_Index', 7, 'uint16x4'),
 } as const;

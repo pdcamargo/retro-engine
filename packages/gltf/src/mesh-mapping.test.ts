@@ -135,13 +135,59 @@ describe('mapPrimitiveToMesh — attributes', () => {
     const { document, buffers } = buildDoc([
       { componentType: 5126, type: 'VEC3', count: 1, data: new Float32Array([0, 0, 0]) },
     ]);
-    // The deferred semantics point at non-existent accessors; if they were decoded
-    // instead of skipped, mapPrimitiveToMesh would throw.
+    // TEXCOORD_1 is still deferred; it points at a non-existent accessor, so if it
+    // were decoded instead of skipped, mapPrimitiveToMesh would throw.
     const mesh = mapPrimitiveToMesh(document, buffers, {
-      attributes: { POSITION: 0, TEXCOORD_1: 9, JOINTS_0: 9, WEIGHTS_0: 9 },
+      attributes: { POSITION: 0, TEXCOORD_1: 9 },
     });
     expect(mesh.attributeCount).toBe(1);
     expect(mesh.hasAttribute(MeshAttribute.POSITION)).toBe(true);
+  });
+
+  it('maps JOINTS_0 / WEIGHTS_0 to skinning attributes, widening byte joints to u16', () => {
+    const { document, buffers } = buildDoc([
+      { componentType: 5126, type: 'VEC3', count: 2, data: new Float32Array([0, 0, 0, 1, 1, 1]) },
+      // JOINTS_0 as UNSIGNED_BYTE VEC4 — must widen to Uint16Array, values preserved.
+      { componentType: 5121, type: 'VEC4', count: 2, data: new Uint8Array([0, 1, 2, 3, 4, 0, 0, 0]) },
+      {
+        componentType: 5126,
+        type: 'VEC4',
+        count: 2,
+        data: new Float32Array([0.5, 0.5, 0, 0, 1, 0, 0, 0]),
+      },
+    ]);
+    const mesh = mapPrimitiveToMesh(document, buffers, {
+      attributes: { POSITION: 0, JOINTS_0: 1, WEIGHTS_0: 2 },
+    });
+    expect(mesh.hasAttribute(MeshAttribute.JOINT_INDEX)).toBe(true);
+    expect(mesh.hasAttribute(MeshAttribute.JOINT_WEIGHT)).toBe(true);
+    const joints = mesh.getAttribute(MeshAttribute.JOINT_INDEX)!.data;
+    expect(joints).toBeInstanceOf(Uint16Array);
+    expect(Array.from(joints)).toEqual([0, 1, 2, 3, 4, 0, 0, 0]);
+    const weights = mesh.getAttribute(MeshAttribute.JOINT_WEIGHT)!.data;
+    expect(weights).toBeInstanceOf(Float32Array);
+    expect(Array.from(weights)).toEqual([0.5, 0.5, 0, 0, 1, 0, 0, 0]);
+  });
+
+  it('keeps joint indices at shader locations 3/4 ahead of TANGENT', () => {
+    const { document, buffers } = buildDoc([
+      { componentType: 5126, type: 'VEC3', count: 1, data: new Float32Array([0, 0, 0]) },
+      { componentType: 5126, type: 'VEC3', count: 1, data: new Float32Array([0, 1, 0]) },
+      { componentType: 5126, type: 'VEC2', count: 1, data: new Float32Array([0, 0]) },
+      { componentType: 5123, type: 'VEC4', count: 1, data: new Uint16Array([0, 0, 0, 0]) },
+      { componentType: 5126, type: 'VEC4', count: 1, data: new Float32Array([1, 0, 0, 0]) },
+      { componentType: 5126, type: 'VEC4', count: 1, data: new Float32Array([1, 0, 0, 1]) },
+    ]);
+    const mesh = mapPrimitiveToMesh(document, buffers, {
+      attributes: { COLOR_0: 5, TANGENT: 5, WEIGHTS_0: 4, JOINTS_0: 3, NORMAL: 1, POSITION: 0, TEXCOORD_0: 2 },
+    });
+    const order = [...mesh.iterAttributes()].map((a) => a.attribute);
+    expect(order[0]).toBe(MeshAttribute.POSITION);
+    expect(order[1]).toBe(MeshAttribute.NORMAL);
+    expect(order[2]).toBe(MeshAttribute.UV_0);
+    expect(order[3]).toBe(MeshAttribute.JOINT_INDEX);
+    expect(order[4]).toBe(MeshAttribute.JOINT_WEIGHT);
+    expect(order[5]).toBe(MeshAttribute.TANGENT);
   });
 });
 

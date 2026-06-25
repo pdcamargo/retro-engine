@@ -1,8 +1,10 @@
 import { Transform } from '@retro-engine/engine';
 import { mat4, quat, vec3 } from '@retro-engine/math';
+import type { Mat4 } from '@retro-engine/math';
 
+import { decodeAccessor } from './accessor';
 import type { MappedGltfAssets } from './asset-mapping';
-import type { Gltf, GltfMesh, GltfNode, GltfScene } from './gltf-root';
+import type { Gltf, GltfMesh, GltfNode, GltfScene, GltfSkin } from './gltf-root';
 import type { GltfDocument, GltfNode as GltfNodeJson } from './schema';
 
 /**
@@ -49,13 +51,37 @@ const nodeTransform = (node: GltfNodeJson): Transform => {
 };
 
 /**
+ * Decode a skin's inverse bind matrices into a list parallel to its joints.
+ * When the source omits the accessor the spec defines every matrix as identity,
+ * so the list is filled with fresh identity matrices to keep it joint-aligned.
+ */
+const skinInverseBinds = (
+  document: GltfDocument,
+  buffers: readonly Uint8Array[],
+  jointCount: number,
+  accessorIndex: number | undefined,
+): Mat4[] => {
+  if (accessorIndex === undefined) {
+    return Array.from({ length: jointCount }, () => mat4.identity());
+  }
+  const decoded = decodeAccessor(document, buffers, accessorIndex);
+  const flat = decoded.array instanceof Float32Array ? decoded.array : new Float32Array(decoded.array);
+  return Array.from({ length: jointCount }, (_unused, i) => flat.slice(i * 16, i * 16 + 16) as Mat4);
+};
+
+/**
  * Assemble a {@link Gltf} root asset from a parsed document and the engine
  * assets its meshes/materials/images already mapped to (see `mapGltfAssets`).
  * Pure and synchronous: it copies the document's scene/node graph into the
- * engine-facing shape (TRS transforms, handle references, name maps) without
- * touching any store or instantiating anything.
+ * engine-facing shape (TRS transforms, handle references, name maps, decoded
+ * skins) without touching any store or instantiating anything. `buffers` are the
+ * already-resolved binary buffers, needed to decode skin inverse bind matrices.
  */
-export const buildGltfRoot = (document: GltfDocument, mapped: MappedGltfAssets): Gltf => {
+export const buildGltfRoot = (
+  document: GltfDocument,
+  mapped: MappedGltfAssets,
+  buffers: readonly Uint8Array[] = [],
+): Gltf => {
   const docMeshes = document.meshes ?? [];
   const meshes: GltfMesh[] = mapped.meshes.map((m, i) => {
     const primitives = m.primitives.map((p) =>
@@ -67,9 +93,18 @@ export const buildGltfRoot = (document: GltfDocument, mapped: MappedGltfAssets):
 
   const docNodes = document.nodes ?? [];
   const nodes: GltfNode[] = docNodes.map((node) => {
-    const base = { transform: nodeTransform(node), children: node.children ?? [] };
+    const base: GltfNode = { transform: nodeTransform(node), children: node.children ?? [] };
     const withMesh = node.mesh !== undefined ? { ...base, mesh: node.mesh } : base;
-    return node.name !== undefined ? { ...withMesh, name: node.name } : withMesh;
+    const withSkin = node.skin !== undefined ? { ...withMesh, skin: node.skin } : withMesh;
+    return node.name !== undefined ? { ...withSkin, name: node.name } : withSkin;
+  });
+
+  const skins: GltfSkin[] = (document.skins ?? []).map((skin) => {
+    const joints = skin.joints ?? [];
+    const inverseBindMatrices = skinInverseBinds(document, buffers, joints.length, skin.inverseBindMatrices);
+    const base: GltfSkin = { joints, inverseBindMatrices };
+    const withSkeleton = skin.skeleton !== undefined ? { ...base, skeleton: skin.skeleton } : base;
+    return skin.name !== undefined ? { ...withSkeleton, name: skin.name } : withSkeleton;
   });
 
   const docScenes = document.scenes ?? [];
@@ -98,5 +133,6 @@ export const buildGltfRoot = (document: GltfDocument, mapped: MappedGltfAssets):
     images: mapped.images,
     nodes,
     namedNodes: byName(nodes, (n) => n.name),
+    skins,
   };
 };

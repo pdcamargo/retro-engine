@@ -14,6 +14,7 @@ import {
   makeHandle,
   Name,
   Parent,
+  Skeleton,
   Transform,
 } from '@retro-engine/engine';
 import type { Handle, Image as ImageType, Mesh, StandardMaterial } from '@retro-engine/engine';
@@ -26,7 +27,7 @@ import { addGltfInstantiation } from './gltf-instantiate';
 import { createGltfImporter } from './gltf-importer';
 import type { Gltf } from './gltf-root';
 import { Gltfs } from './gltf-root';
-import { stubDecoder } from './mapping-test-support';
+import { rawBytes, stubDecoder } from './mapping-test-support';
 import type { GltfDocument } from './schema';
 
 /** Stand-in for the renderer's StandardMaterial-typed `MeshMaterial3d` subclass. */
@@ -224,5 +225,66 @@ describe('gltf instantiation reactor — failed import commits no subgraph', () 
     expect(app.world.getComponent(anchor, Children)).toBeUndefined();
     expect([...meshes.iter()]).toHaveLength(0);
     expect([...materials.iter()]).toHaveLength(0);
+  });
+});
+
+describe('gltf instantiation reactor — skinning', () => {
+  it('attaches a Skeleton resolving skin joints to bone entities with decoded inverse binds', () => {
+    // Two inverse-bind matrices: identity for joint 0, translate(0,-1,0) for
+    // joint 1 (the inverse of a bind at y=1).
+    const ibm = new Float32Array(32);
+    ibm.set(
+      [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1], // joint 0 = identity
+      0,
+    );
+    ibm.set(
+      [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, -1, 0, 1], // joint 1 = translate(0,-1,0)
+      16,
+    );
+    const document: GltfDocument = {
+      asset: { version: '2.0' },
+      scene: 0,
+      scenes: [{ nodes: [0, 1, 2] }],
+      nodes: [
+        { name: 'mesh', mesh: 0, skin: 0 },
+        { name: 'joint0' },
+        { name: 'joint1', translation: [0, 1, 0] },
+      ],
+      skins: [{ joints: [1, 2], inverseBindMatrices: 0 }],
+      accessors: [{ bufferView: 0, componentType: 5126, count: 2, type: 'MAT4' }],
+      bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: ibm.byteLength }],
+    };
+    const gltf = buildGltfRoot(document, meshMapped([1]), [rawBytes(ibm)]);
+    const { app, handle } = setup(gltf);
+    const anchor = app.world.spawn(new GltfSceneRoot(handle), new Transform());
+    app.advanceFrame(0);
+
+    const nodes = app.world.getComponent(anchor, GltfInstanceNodes)!;
+    const meshEntity = nodes.nodeEntities[0]!;
+    const joint0 = nodes.nodeEntities[1]!;
+    const joint1 = nodes.nodeEntities[2]!;
+
+    const skeleton = app.world.getComponent(meshEntity, Skeleton)!;
+    expect(skeleton).toBeDefined();
+    expect(skeleton.joints).toEqual([joint0, joint1]);
+    expect(skeleton.inverseBindMatrices).toHaveLength(2);
+    // Inverse bind for joint 1 carries the y=-1 translation in the last column.
+    expect(skeleton.inverseBindMatrices[1]![13]).toBeCloseTo(-1, 5);
+  });
+
+  it('does not attach a Skeleton to an unskinned mesh node', () => {
+    const document: GltfDocument = {
+      asset: { version: '2.0' },
+      scene: 0,
+      scenes: [{ nodes: [0] }],
+      nodes: [{ name: 'mesh', mesh: 0 }],
+    };
+    const gltf = buildGltfRoot(document, meshMapped([1]), []);
+    const { app, handle } = setup(gltf);
+    const anchor = app.world.spawn(new GltfSceneRoot(handle), new Transform());
+    app.advanceFrame(0);
+
+    const nodes = app.world.getComponent(anchor, GltfInstanceNodes)!;
+    expect(app.world.getComponent(nodes.nodeEntities[0]!, Skeleton)).toBeUndefined();
   });
 });

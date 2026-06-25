@@ -1,7 +1,8 @@
 # Skeletal Animation
 
 - **Created:** 2026-06-25
-- **Status:** Planning
+- **Status:** Phase 0 (GPU skinning) **shipped** — confirmed working 2026-06-25 (ADR-0114, ADR-0115).
+  Phases 1–5 planned.
 - **Decisions:** ADRs to be written per phase (see *Open questions*). Builds on ADR-0057 (glTF
   import — reserves skins/animations), ADR-0060/0061 (reflection — every authored component here needs
   a schema), ADR-0102 (hot reload — schemaless authored components are dropped on every code swap).
@@ -47,9 +48,20 @@ lands first (Phase 4) because it's a self-contained primitive useful on its own 
 character) and is exactly the contact-fix mechanism retargeting then reuses — so Phase 5 leans on an IK
 that already exists. The phase numbers say what to build first, not what runs first.
 
-### Phase 0 — GPU skinning (the floor: "move a bone → mesh deforms")
+### Phase 0 — GPU skinning (the floor: "move a bone → mesh deforms") ✅ SHIPPED
 
 The prerequisite for *everything* below. Nothing in Phases 1–5 is visible without it.
+
+**Status: shipped, confirmed working in the editor 2026-06-25.** Decisions sealed in
+[ADR-0114](../adr/ADR-0114-gpu-skinning-data-model-and-render-path.md) (data model + render-path split)
+and [ADR-0115](../adr/ADR-0115-joint-palette-gpu-delivery.md) (storage-buffer delivery, `storageBuffers`
+capability gate, WebGL2 bone-texture fallback deferred). Landed: `JOINT_INDEX`/`JOINT_WEIGHT` attributes;
+glTF skin extraction (`GltfSkin`, `skins[]`, `node.skin`) + `Skeleton` attach on instantiation; the
+`packages/engine/src/skinning/` module (`Skeleton`, palette compute after propagation, shared palette
+storage buffer, skinned instance layout + batching, `SkinningPlugin`); the `#ifdef SKINNED` PBR variant
+and the skinned render path in `material-plugin.ts`. Deferred within Phase 0: skinned + prepass, skinned
++ SSAO, the small-skeleton uniform-array path, and the WebGL2 bone-texture delivery (gated, awaits the
+WebGL2 backend).
 
 1. **Vertex attributes** — add `JOINT_INDEX` / `JOINT_WEIGHT` to `MeshAttribute` + the vertex buffer
    layout; stop skipping them in `mesh-mapping.ts`.

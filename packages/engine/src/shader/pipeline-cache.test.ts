@@ -43,6 +43,7 @@ const baseCapabilities: RendererCapabilities = {
   timestampQueries: false,
   indirectDraw: false,
   bgra8UnormStorage: false,
+  storageBuffers: false,
   baseVertex: true,
 };
 

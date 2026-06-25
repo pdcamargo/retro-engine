@@ -35,6 +35,7 @@ export const createWebGL2Renderer = (_canvas: HTMLCanvasElement): Renderer => {
     indirectDraw: false,
     bgra8UnormStorage: false,
     baseVertex: false,
+    storageBuffers: false,
   };
 
   return {

@@ -36,6 +36,7 @@ const makeBenchRenderer = (): Renderer => {
     timestampQueries: false,
     indirectDraw: false,
     bgra8UnormStorage: false,
+    storageBuffers: false,
     baseVertex: true,
   };
   const inertBuffer = (descriptor: BufferDescriptor): Buffer => ({

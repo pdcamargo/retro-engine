@@ -171,10 +171,24 @@ export interface GltfNode {
   scale?: [number, number, number];
   mesh?: number;
   camera?: number;
-  /** Skin index (reserved; skinning is not consumed in v1). */
+  /** Index into {@link GltfDocument.skins}; present on a node that draws a skinned mesh. */
   skin?: number;
   /** Per-node morph-target weights (reserved; not consumed in v1). */
   weights?: number[];
+  name?: string;
+}
+
+/**
+ * A skin: the ordered set of joint nodes that deform a skinned mesh, plus the
+ * inverse bind matrices that map mesh-space vertices into each joint's space.
+ */
+export interface GltfSkin {
+  /** Node indices of the joints, in palette order. The i-th joint maps to the i-th inverse bind matrix. */
+  joints: number[];
+  /** Accessor of `count = joints.length` MAT4 inverse bind matrices; absent means all-identity. */
+  inverseBindMatrices?: number;
+  /** Node index of the common root of the joint hierarchy (a hint; not required to skin). */
+  skeleton?: number;
   name?: string;
 }
 
@@ -193,6 +207,7 @@ export interface GltfDocument {
   meshes?: GltfMesh[];
   materials?: GltfMaterial[];
   accessors?: GltfAccessor[];
+  skins?: GltfSkin[];
   bufferViews?: GltfBufferView[];
   buffers?: GltfBuffer[];
   textures?: GltfTexture[];

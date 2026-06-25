@@ -72,6 +72,15 @@ import { makeInstancedDraw, packInstancedBatches } from './instance-batching';
 import { prepareMeshRetained, RetainedMeshBuffer } from './mesh-prepare-retained';
 import type { PreparedMaterial } from './prepare-bind-group';
 import { prepareBindGroup, schemaToBindGroupLayout } from './prepare-bind-group';
+import { Skeleton } from '../skinning/skeleton';
+import { SkinnedPaletteGpu } from '../skinning/skinned-palette-gpu';
+import { SKINNED_INSTANCE_LAYOUT } from '../skinning/skinned-instance-layout';
+import type { SkinnedDrawPayload, SkinnedInstanceEntry } from '../skinning/skinned-batching';
+import {
+  SkinnedInstanceBuffer,
+  makeSkinnedDraw,
+  packSkinnedBatches,
+} from '../skinning/skinned-batching';
 import { RenderMaterials } from './render-materials';
 
 /**
@@ -336,6 +345,42 @@ export class MaterialPlugin<M extends Material> implements PluginObject {
       { set: RenderSet.Prepare, label: 'material-prepare', after: ['image-prepare'] },
     );
 
+    type MmCtor = new (h: Handle<M>) => MeshMaterial3d<M>;
+
+    // Skinned draws are a separate pipeline variant with their own per-instance
+    // layout and joint palette, so they cannot share the rigid batch — they get
+    // their own queue, keyed on the presence of a Skeleton. Registered for both
+    // the retained and non-retained rigid paths.
+    type SkinnedRenderablesQuery = QueryHandle<
+      readonly [typeof Mesh3d, MmCtor, typeof GlobalTransform, typeof ViewVisibility, typeof Skeleton]
+    >;
+    app.addSystem(
+      'render',
+      [
+        Extract(Query([Mesh3d, MeshMaterialCtor, GlobalTransform, ViewVisibility, Skeleton])),
+        Res(SortedCameras),
+        Res(RenderMaterialsCtor),
+        Res(RenderMeshes),
+        Res(MeshAllocator),
+        ResMut(ViewPhases3d),
+        Res(ViewBindGroupCache),
+      ],
+      (skinned, cameras, renderMaterials, renderMeshes, allocator, phases, viewBindGroupCache) => {
+        state.ensureInitialised(app);
+        state.queueSkinnedMaterials(
+          app,
+          skinned as unknown as SkinnedRenderablesQuery,
+          cameras as unknown as SortedCameras,
+          renderMaterials as unknown as RenderMaterials<M>,
+          renderMeshes as unknown as RenderMeshes,
+          allocator as unknown as MeshAllocator,
+          phases,
+          viewBindGroupCache as unknown as ViewBindGroupCache,
+        );
+      },
+      { set: RenderSet.Queue, name: 'material-queue-skinned' },
+    );
+
     if (this.retained) {
       this.registerRetained(app, state, MeshMaterialCtor, RenderMaterialsCtor);
       return;
@@ -344,15 +389,15 @@ export class MaterialPlugin<M extends Material> implements PluginObject {
     // Queue: iterate visible (Mesh3d, MeshMaterial3d<M>, GlobalTransform,
     // ViewVisibility) entities × active cameras; batch by (mesh, material);
     // pack per-instance transforms; specialize the pipeline; push one phase
-    // item per instanced batch.
-    type MmCtor = new (h: Handle<M>) => MeshMaterial3d<M>;
+    // item per instanced batch. Skinned entities are excluded — they draw
+    // through the skinned queue above.
     type RenderablesQuery = QueryHandle<
       readonly [typeof Mesh3d, MmCtor, typeof GlobalTransform, typeof ViewVisibility]
     >;
     app.addSystem(
       'render',
       [
-        Extract(Query([Mesh3d, MeshMaterialCtor, GlobalTransform, ViewVisibility])),
+        Extract(Query([Mesh3d, MeshMaterialCtor, GlobalTransform, ViewVisibility], { without: [Skeleton] })),
         Res(SortedCameras),
         Res(RenderMaterialsCtor),
         Res(Meshes),
@@ -518,8 +563,19 @@ class MaterialPluginState<M extends Material> {
    * it.
    */
   aoFragmentModule: ShaderModule | undefined;
+  /**
+   * Vertex module variant compiled with the `SKINNED` define — declares the
+   * per-vertex joint index/weight and per-instance `joint_offset` inputs and the
+   * `@group(3)` joint-palette storage buffer. Lazily built the first time a
+   * skinned pipeline is requested for this material.
+   */
+  skinnedVertexModule: ShaderModule | undefined;
+  /** Pipeline layout for the skinned variant: view / material / lights / palette(3). */
+  skinnedPipelineLayout: PipelineLayout | undefined;
   specialized!: SpecializedRenderPipelines<SpecializeContext>;
   readonly instanceBuffer = new MeshInstanceBuffer();
+  /** Sibling of {@link instanceBuffer} for skinned draws (wider stride + `joint_offset`). */
+  readonly skinnedInstanceBuffer = new SkinnedInstanceBuffer();
   /**
    * Sibling of {@link instanceBuffer} carrying each entity's previous-frame
    * model matrix for motion-vector prepass reconstruction. Allocated lazily on
@@ -616,7 +672,7 @@ class MaterialPluginState<M extends Material> {
       cache as PipelineCache,
       (ctx) => this.specialize(ctx),
       (ctx) =>
-        `${alphaModeKey(ctx.key.alphaMode)}|hdr=${ctx.key.hdr}|msaa=${ctx.key.msaaSamples}|vl=${ctx.key.vertexLayoutDigest}|cf=${ctx.colorFormat}|df=${ctx.depthFormat ?? 'none'}|db=${ctx.depthBias}|${prepassKeyPart(ctx.key.prepass)}|${prepassReadableKeyPart(ctx.key.prepassReadable)}|${aoKeyPart(ctx.key.aoEnabled)}|ds=${ctx.key.doubleSided === true}`,
+        `${alphaModeKey(ctx.key.alphaMode)}|hdr=${ctx.key.hdr}|msaa=${ctx.key.msaaSamples}|vl=${ctx.key.vertexLayoutDigest}|cf=${ctx.colorFormat}|df=${ctx.depthFormat ?? 'none'}|db=${ctx.depthBias}|${prepassKeyPart(ctx.key.prepass)}|${prepassReadableKeyPart(ctx.key.prepassReadable)}|${aoKeyPart(ctx.key.aoEnabled)}|ds=${ctx.key.doubleSided === true}|sk=${ctx.key.skinned === true}`,
     );
   }
 
@@ -855,6 +911,153 @@ class MaterialPluginState<M extends Material> {
     );
   }
 
+  /**
+   * Queue skinned (Skeleton-bearing) renderables. Mirrors {@link queueMaterials}
+   * but routes each instance to the skinned pipeline variant, packs the wider
+   * skinned instance (model + inverse-transpose + `joint_offset`), and binds the
+   * shared joint palette at `@group(3)`. No-op without storage-buffer support or
+   * before the palette has been uploaded this frame. AO / prepass are skipped
+   * for skinned draws (ADR-0114/0115).
+   */
+  queueSkinnedMaterials(
+    app: App,
+    renderables: QueryHandle<
+      readonly [
+        typeof Mesh3d,
+        new (...a: never[]) => MeshMaterial3d<M>,
+        typeof GlobalTransform,
+        typeof ViewVisibility,
+        typeof Skeleton,
+      ]
+    >,
+    cameras: SortedCameras,
+    renderMaterials: RenderMaterials<M>,
+    renderMeshes: RenderMeshes,
+    allocator: MeshAllocator,
+    phases: ViewPhases3d,
+    viewBindGroupCache: ViewBindGroupCache,
+  ): void {
+    if (viewBindGroupCache.layout === undefined) return;
+    if (cameras.views.length === 0) return;
+    if (!app.renderer.capabilities.storageBuffers) return;
+    const paletteGpu = app.getResource(SkinnedPaletteGpu);
+    if (paletteGpu?.bindGroup === undefined) return;
+    const paletteBindGroup = paletteGpu.bindGroup;
+
+    const mainWorldMaterials = app.getResource(this.plugin.Materials) as Materials<M> | undefined;
+    const aoCache = app.getResource(AoBindGroupCache);
+    const entries: SkinnedInstanceEntry[] = [];
+
+    for (const view of cameras.views) {
+      const cameraEntity = view.sourceEntity;
+      const colorFormat = view.mainColorTarget.format;
+      const depthFormat = view.depth?.format;
+      // SSAO shares @group(3) with the palette; if this view bound one, the
+      // skinned draw restores it afterward so rigid AO draws keep working.
+      const restoreGroup3 = aoCache?.get(view.sourceEntity as Entity);
+      const v = view.viewMatrix as Float32Array;
+      for (const row of renderables.entries()) {
+        const entity = row[0] as Entity;
+        const mesh3d = row[1] as Mesh3d;
+        const meshMat = row[2] as MeshMaterial3d<M>;
+        const gt = row[3] as GlobalTransform;
+        const vis = row[4] as ViewVisibility;
+        if (!vis.visible) continue;
+
+        const jointOffset = paletteGpu.offsets.get(entity);
+        if (jointOffset === undefined) continue;
+
+        const renderMesh = renderMeshes.get(mesh3d.handle);
+        if (renderMesh === undefined) continue;
+        const vertexSlice = allocator.vertexSlice(mesh3d.handle.index);
+        if (vertexSlice === undefined) continue;
+        let indexSlice: AllocatorSlice | undefined;
+        if (renderMesh.bufferInfo.kind === 'indexed') {
+          indexSlice = allocator.indexSlice(mesh3d.handle.index);
+          if (indexSlice === undefined) continue;
+        }
+        const prepared = renderMaterials.get(meshMat.handle);
+        if (prepared === undefined) continue;
+
+        const materialInstance = mainWorldMaterials?.get(meshMat.handle);
+        const alphaMode = materialInstance?.alphaMode?.() ?? 'opaque';
+        const depthBias = materialInstance?.depthBias?.() ?? 0;
+        const doubleSided = materialInstance?.doubleSided?.() ?? false;
+
+        const layout = renderMesh.layout.layout;
+        const key: MaterialPipelineKey = {
+          msaaSamples: 1,
+          hdr: view.hdr,
+          vertexLayoutDigest: vertexLayoutDigestFor(layout),
+          alphaMode,
+          skinned: true,
+          ...(doubleSided ? { doubleSided: true } : {}),
+        };
+        const pipeline = this.specialized.get({ key, colorFormat, depthFormat, depthBias, layout });
+
+        const worldX = gt.matrix[12] as number;
+        const worldY = gt.matrix[13] as number;
+        const worldZ = gt.matrix[14] as number;
+        const sortDepth =
+          (v[2] as number) * worldX +
+          (v[6] as number) * worldY +
+          (v[10] as number) * worldZ +
+          (v[14] as number);
+
+        const bucket: AlphaBucket =
+          alphaMode === 'opaque' ? 'opaque' : alphaMode === 'blend' ? 'blend' : 'mask';
+        const payload: SkinnedDrawPayload = {
+          pipeline,
+          materialBindGroup: prepared.bindGroup,
+          paletteBindGroup,
+          vertexSlice,
+          indexSlice,
+          renderMesh,
+          ...(restoreGroup3 !== undefined ? { restoreGroup3 } : {}),
+        };
+        entries.push({
+          cameraEntity,
+          bucket,
+          groupKey: `${mesh3d.handle.index}/${meshMat.handle.index}`,
+          depth: sortDepth,
+          model: gt.matrix as Mat4,
+          jointOffset,
+          payload,
+        });
+      }
+    }
+    if (entries.length === 0) return;
+
+    this.skinnedInstanceBuffer.ensureCapacity(app.renderer, entries.length);
+    const { batches, cursorSlots } = packSkinnedBatches(
+      entries,
+      MaterialPluginState.depthOrderedBuckets,
+      this.skinnedInstanceBuffer.f32,
+      this.skinnedInstanceBuffer.u32,
+    );
+    this.skinnedInstanceBuffer.count = entries.length;
+    const buffer = this.skinnedInstanceBuffer.buffer!;
+    if (cursorSlots > 0) {
+      app.renderer.writeBuffer(
+        buffer,
+        0,
+        this.skinnedInstanceBuffer.f32.subarray(0, cursorSlots) as unknown as BufferSource,
+      );
+    }
+
+    for (const batch of batches) {
+      const draw = makeSkinnedDraw(batch.payload, buffer, batch.firstInstance, batch.count);
+      const item: PhaseItem3d = { sourceEntity: batch.cameraEntity, sortDepth: batch.sortDepth, draw };
+      if (batch.bucket === 'opaque') {
+        phases.pushOpaque(batch.cameraEntity, item);
+      } else if (batch.bucket === 'blend') {
+        phases.pushTransparent(batch.cameraEntity, item);
+      } else {
+        phases.pushAlphaMask(batch.cameraEntity, item);
+      }
+    }
+  }
+
   private queuePrepassFromEntries(
     _app: App,
     entries: readonly InstanceEntry[],
@@ -1082,11 +1285,25 @@ class MaterialPluginState<M extends Material> {
       return bindGroupLayouts;
     };
 
+    // The skinned variant appends the joint-palette storage buffer at @group(3)
+    // (after view/material/lights) and reads it from the SKINNED vertex module.
+    // Mutually exclusive with AO, which also uses @group(3).
+    const skinned = ctx.key.skinned === true;
     // AO is a lit-only variant: it appends the screen-space AO read binding at
     // @group(3) (after view/material/lights) and shades with the ENABLE_SSAO
     // fragment module. Gated on usesLights so @group(3) always sits at index 3.
-    const aoEnabled = ctx.key.aoEnabled === true && this.materialClass.usesLights === true;
-    if (aoEnabled) {
+    const aoEnabled = !skinned && ctx.key.aoEnabled === true && this.materialClass.usesLights === true;
+    if (skinned) {
+      if (this.skinnedPipelineLayout === undefined) {
+        const paletteLayout = (
+          this.app.getResource(SkinnedPaletteGpu) as SkinnedPaletteGpu
+        ).ensureLayout(renderer);
+        this.skinnedPipelineLayout = renderer.createPipelineLayout({
+          label: `material#${this.materialClass.name}#skinned`,
+          bindGroupLayouts: [...baseLayouts(), paletteLayout],
+        });
+      }
+    } else if (aoEnabled) {
       if (this.aoPipelineLayout === undefined) {
         const aoLayout = this.app.getResource(AoBindGroupCache)?.readLayout;
         if (aoLayout === undefined) {
@@ -1108,12 +1325,12 @@ class MaterialPluginState<M extends Material> {
 
     const isTransparent = ctx.key.alphaMode === 'blend';
     const descriptor: RenderPipelineDescriptor = {
-      label: `material#${this.materialClass.name}#${alphaModeKey(ctx.key.alphaMode)}${aoEnabled ? '#ao' : ''}`,
-      layout: aoEnabled ? this.aoPipelineLayout! : this.pipelineLayout!,
+      label: `material#${this.materialClass.name}#${alphaModeKey(ctx.key.alphaMode)}${aoEnabled ? '#ao' : ''}${skinned ? '#skinned' : ''}`,
+      layout: skinned ? this.skinnedPipelineLayout! : aoEnabled ? this.aoPipelineLayout! : this.pipelineLayout!,
       vertex: {
-        module: this.vertexModule,
+        module: skinned ? this.ensureSkinnedVertexModule() : this.vertexModule,
         entryPoint: this.vertexEntryPoint,
-        buffers: [ctx.layout, INSTANCE_LAYOUT],
+        buffers: [ctx.layout, skinned ? SKINNED_INSTANCE_LAYOUT : INSTANCE_LAYOUT],
       },
       fragment: {
         module: aoEnabled ? this.ensureAoFragmentModule() : this.fragmentModule,
@@ -1322,6 +1539,26 @@ class MaterialPluginState<M extends Material> {
       { ENABLE_SSAO: true },
     );
     return this.aoFragmentModule;
+  }
+
+  /**
+   * Lazily compile the `SKINNED`-defined variant of this material's vertex
+   * module: per-vertex joint indices/weights, the per-instance `joint_offset`,
+   * and the `@group(3)` joint-palette storage buffer the vertex stage blends.
+   * The fragment stage is unchanged, so the base `fragmentModule` is reused.
+   */
+  ensureSkinnedVertexModule(): ShaderModule {
+    if (this.skinnedVertexModule !== undefined) return this.skinnedVertexModule;
+    const cache = this.app.getResource(PipelineCache) as PipelineCache;
+    const registry = this.app.getResource(ShaderRegistry) as ShaderRegistry;
+    this.skinnedVertexModule = compileShaderFromRef(
+      cache,
+      registry,
+      this.vertexShaderRef,
+      `${this.materialClass.name}-vertex+skinned`,
+      { SKINNED: true },
+    );
+    return this.skinnedVertexModule;
   }
 
   private materialSupportsPrepassNormalFragment(): boolean {

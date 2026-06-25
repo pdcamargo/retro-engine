@@ -172,6 +172,16 @@ export interface MaterialPipelineKey {
    * double-sided variants of the same material never share one.
    */
   readonly doubleSided?: boolean;
+  /**
+   * When `true`, this is the **skinned** pipeline variant: the vertex shader is
+   * compiled with the `SKINNED` define (reads per-vertex joint indices/weights
+   * and a per-instance palette offset, blending the shared joint palette at
+   * `@group(3)`), and the per-instance vertex layout carries the model matrix
+   * plus a `joint_offset`. Keys a distinct pipeline so skinned and rigid draws
+   * of the same material never share one. Mutually exclusive with `aoEnabled`
+   * and `prepass` (both reuse `@group(3)` / locations the skinned path needs).
+   */
+  readonly skinned?: boolean;
 }
 
 /**

@@ -29,6 +29,7 @@ const makeFakeRenderer = (overrides?: Partial<RendererCapabilities>): Renderer &
     timestampQueries: false,
     indirectDraw: false,
     bgra8UnormStorage: false,
+    storageBuffers: false,
     baseVertex: true,
     ...overrides,
   };

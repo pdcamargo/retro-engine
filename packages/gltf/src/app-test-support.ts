@@ -26,6 +26,7 @@ const capabilities: RendererCapabilities = {
   indirectDraw: false,
   bgra8UnormStorage: false,
   baseVertex: true,
+  storageBuffers: true,
 };
 
 /**

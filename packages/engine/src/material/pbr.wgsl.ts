@@ -78,6 +78,22 @@ struct StandardMaterialUniform {
 @group(3) @binding(1) var ao_texture: texture_2d<f32>;
 #endif
 
+#ifdef SKINNED
+// The frame-global joint palette: every skinned entity's world-space joint
+// matrices concatenated. Each instance's joint_offset selects its slice. Shares
+// @group(3) with SSAO, so the two are mutually exclusive on the skinned variant.
+@group(3) @binding(0) var<storage, read> joint_matrices: array<mat4x4<f32>>;
+
+// Blend the four influencing joint matrices by their weights into one skinning
+// matrix. joint_offset is the entity's base index into the shared palette.
+fn skin_matrix(joints: vec4<u32>, weights: vec4<f32>, joint_offset: u32) -> mat4x4<f32> {
+  return weights.x * joint_matrices[joint_offset + joints.x]
+       + weights.y * joint_matrices[joint_offset + joints.y]
+       + weights.z * joint_matrices[joint_offset + joints.z]
+       + weights.w * joint_matrices[joint_offset + joints.w];
+}
+#endif
+
 struct VsIn {
   @location(0) position: vec3<f32>,
   @location(1) normal: vec3<f32>,
@@ -90,6 +106,11 @@ struct VsIn {
   @location(13) inv_t_c1: vec4<f32>,
   @location(14) inv_t_c2: vec4<f32>,
   @location(15) inv_t_c3: vec4<f32>,
+#ifdef SKINNED
+  @location(3) joints: vec4<u32>,
+  @location(4) weights: vec4<f32>,
+  @location(7) joint_offset: u32,
+#endif
 #ifdef PREPASS_MOTION_VECTOR
   @location(4) prev_model_c0: vec4<f32>,
   @location(5) prev_model_c1: vec4<f32>,
@@ -110,10 +131,20 @@ fn vs_main(in: VsIn) -> VsOut {
   var out: VsOut;
   let model = mat4x4<f32>(in.model_c0, in.model_c1, in.model_c2, in.model_c3);
   let inverse_transpose_model = mat4x4<f32>(in.inv_t_c0, in.inv_t_c1, in.inv_t_c2, in.inv_t_c3);
-  let world_pos = model * vec4<f32>(in.position, 1.0);
+#ifdef SKINNED
+  // Deform in mesh space first; the palette already folds in inverse(meshGlobal),
+  // so the per-instance model matrix below lands the result in world space.
+  let skin = skin_matrix(in.joints, in.weights, in.joint_offset);
+  let local_pos = skin * vec4<f32>(in.position, 1.0);
+  let local_normal = (skin * vec4<f32>(in.normal, 0.0)).xyz;
+#else
+  let local_pos = vec4<f32>(in.position, 1.0);
+  let local_normal = in.normal;
+#endif
+  let world_pos = model * local_pos;
   out.world_position = world_pos.xyz;
   out.world_normal = normalize(
-    (inverse_transpose_model * vec4<f32>(in.normal, 0.0)).xyz
+    (inverse_transpose_model * vec4<f32>(local_normal, 0.0)).xyz
   );
   out.uv = in.uv;
   out.clip_position = view.view_proj * world_pos;

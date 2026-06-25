@@ -131,6 +131,20 @@ export {
   VisibilityPlugin,
   visibilityPropagateSystem,
 } from './visibility';
+export {
+  Skeleton,
+  SkinnedMeshPalette,
+  computeSkinningPalette,
+  SkinnedPalettes,
+  SkinnedPaletteGpu,
+  SKINNED_PALETTE_GROUP,
+  SKINNED_INSTANCE_BYTE_SIZE,
+  SKINNED_INSTANCE_FLOAT_COUNT,
+  SKINNED_INSTANCE_LAYOUT,
+  SKINNED_JOINT_OFFSET_LOCATION,
+  packSkinnedInstance,
+  SkinningPlugin,
+} from './skinning';
 export { Name } from './name';
 export { AppBundleRegistry } from './bundle/bundle-registry';
 export type { BundleDefinition, BundleRegisterOptions } from './bundle/bundle-definition';

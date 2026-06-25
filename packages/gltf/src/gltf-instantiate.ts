@@ -20,9 +20,10 @@ import {
   PendingAttachment,
   Query,
   Res,
+  Skeleton,
   Transform,
 } from '@retro-engine/engine';
-import { quat, vec3 } from '@retro-engine/math';
+import { mat4, quat, vec3 } from '@retro-engine/math';
 import type { EncodeEnv, SerializedValue } from '@retro-engine/reflect';
 import { encodeComponent } from '@retro-engine/reflect';
 
@@ -51,6 +52,12 @@ const cloneTransform = (t: Transform): Transform =>
  * reserved synchronously by `spawn`, so the index/name maps are complete before
  * the command flush.
  */
+/** A mesh-carrying entity awaiting its {@link Skeleton}, recorded during spawn and resolved once every joint entity exists. */
+interface SkinTarget {
+  readonly skin: number;
+  readonly entity: Entity;
+}
+
 const spawnNode = (
   parent: ChildBuilder,
   nodeIndex: number,
@@ -58,6 +65,7 @@ const spawnNode = (
   nodeEntities: (Entity | undefined)[],
   byName: Map<string, Entity[]>,
   derived: Set<Entity>,
+  skinTargets: SkinTarget[],
   meshMaterialCtor: MeshMaterialCtor,
 ): void => {
   const node = gltf.nodes[nodeIndex];
@@ -82,12 +90,21 @@ const spawnNode = (
     else byName.set(node.name, [entity]);
   }
 
+  // A skin on the node deforms every primitive of its mesh; record the
+  // mesh-carrying entity (this node for a single primitive, each primitive
+  // child otherwise) so a Skeleton can be attached once all joints exist.
+  if (mesh !== undefined && node.skin !== undefined && mesh.primitives.length === 1) {
+    skinTargets.push({ skin: node.skin, entity });
+  }
+
   if (mesh !== undefined && mesh.primitives.length > 1) {
     ec.withChildren((pb) => {
       for (const prim of mesh.primitives) {
         const primComponents: object[] = [new Mesh3d(prim.mesh)];
         if (prim.material !== undefined) primComponents.push(new meshMaterialCtor(prim.material));
-        derived.add(pb.spawn(...primComponents).id);
+        const primEntity = pb.spawn(...primComponents).id;
+        derived.add(primEntity);
+        if (node.skin !== undefined) skinTargets.push({ skin: node.skin, entity: primEntity });
       }
     });
   }
@@ -95,7 +112,7 @@ const spawnNode = (
   if (node.children.length > 0) {
     ec.withChildren((cb) => {
       for (const childIndex of node.children) {
-        spawnNode(cb, childIndex, gltf, nodeEntities, byName, derived, meshMaterialCtor);
+        spawnNode(cb, childIndex, gltf, nodeEntities, byName, derived, skinTargets, meshMaterialCtor);
       }
     });
   }
@@ -113,14 +130,36 @@ const instantiateRoot = (
   const nodeEntities = Array.from<Entity | undefined>({ length: gltf.nodes.length }).fill(undefined);
   const byName = new Map<string, Entity[]>();
   const derived = new Set<Entity>();
+  const skinTargets: SkinTarget[] = [];
 
   const ec: EntityCommands = cmd.entity(rootEntity);
   if (scene !== undefined) {
     ec.withChildren((b) => {
       for (const nodeIndex of scene.nodes) {
-        spawnNode(b, nodeIndex, gltf, nodeEntities, byName, derived, meshMaterialCtor);
+        spawnNode(b, nodeIndex, gltf, nodeEntities, byName, derived, skinTargets, meshMaterialCtor);
       }
     });
+  }
+
+  // Attach skeletons once every joint entity exists (entity ids are reserved
+  // synchronously by spawn). A skin whose joints are not all in the spawned
+  // scene is skipped — the mesh then draws rigid rather than mis-deformed.
+  for (const { skin: skinIndex, entity } of skinTargets) {
+    const skin = gltf.skins[skinIndex];
+    if (skin === undefined) continue;
+    const joints: Entity[] = [];
+    let complete = true;
+    for (const jointNode of skin.joints) {
+      const jointEntity = nodeEntities[jointNode];
+      if (jointEntity === undefined) {
+        complete = false;
+        break;
+      }
+      joints.push(jointEntity);
+    }
+    if (!complete) continue;
+    const inverseBinds = skin.inverseBindMatrices.map((m) => mat4.clone(m, mat4.create()));
+    cmd.entity(entity).insert(new Skeleton(joints, inverseBinds));
   }
   // Recorded even for an empty/absent scene, so the root drops out of the
   // pending query and is not re-polled every frame. The source handle index +
