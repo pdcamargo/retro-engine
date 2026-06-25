@@ -90,3 +90,20 @@ export {
   stepController,
 } from './state-machine';
 export type { ControllerRuntime, ParameterAccess } from './state-machine';
+
+export {
+  TwoBoneIK,
+  IkChain,
+  LookAtConstraint,
+  IkPlugin,
+  addIkSolve,
+  solveTwoBone,
+  solveCcd,
+  solveAim,
+} from './ik';
+export type {
+  TwoBoneSolveInput,
+  TwoBoneSolveOutput,
+  CcdSolveInput,
+  AimSolveInput,
+} from './ik';

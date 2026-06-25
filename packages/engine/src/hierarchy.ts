@@ -170,6 +170,61 @@ export const propagateTransforms = (world: World, logger: Logger): void => {
   }
 };
 
+const tmpSubtreeLocal: Mat4 = mat4.create();
+
+/**
+ * Recompute the world-space `GlobalTransform` of every entity in the subtree
+ * rooted at `root`, parent-before-child, from the entities' current local
+ * `Transform`s. The subtree's parent (the entity referenced by `root`'s
+ * `Parent`, if any) is assumed already up to date and is read, not rewritten.
+ *
+ * This is the targeted counterpart to {@link propagateTransformsGated}: a system
+ * that mutates a few bones' local `Transform`s *after* the frame's gated
+ * propagation has already run (so it will not run again) can refresh just the
+ * affected chains in place rather than waiting a frame. Each recomputed entity
+ * is reported via `world.markChanged(entity, GlobalTransform)`.
+ *
+ * `Children` cycles (which the commands sugar never creates) are guarded so a
+ * malformed list cannot loop forever.
+ *
+ * @internal Engine-private; used by the IK post-pass.
+ */
+export const recomputeWorldSubtree = (world: World, root: Entity): void => {
+  const stack: Entity[] = [root];
+  const visited = new Set<Entity>();
+  while (stack.length > 0) {
+    const entity = stack.pop()!;
+    if (visited.has(entity)) continue;
+    visited.add(entity);
+    const transform = world.getComponent(entity, Transform);
+    const global = world.getComponent(entity, GlobalTransform);
+    if (transform === undefined || global === undefined) continue;
+    const parent = world.getComponent(entity, Parent);
+    const parentGlobal =
+      parent !== undefined && world.hasEntity(parent.entity)
+        ? world.getComponent(parent.entity, GlobalTransform)
+        : undefined;
+    if (parentGlobal !== undefined) {
+      composeTransformInto(
+        tmpSubtreeLocal,
+        transform.translation,
+        transform.rotation,
+        transform.scale,
+      );
+      mat4.multiply(parentGlobal.matrix, tmpSubtreeLocal, global.matrix);
+    } else {
+      composeTransformInto(global.matrix, transform.translation, transform.rotation, transform.scale);
+    }
+    world.markChanged(entity, GlobalTransform);
+    const children = world.getComponent(entity, Children);
+    if (children !== undefined) {
+      for (const c of children.entities) {
+        if (world.hasEntity(c)) stack.push(c);
+      }
+    }
+  }
+};
+
 type ChangedTransformsQuery = QueryHandle<readonly [typeof Transform], { readonly changed: readonly (typeof Transform)[] }>;
 type ChangedParentsQuery = QueryHandle<readonly [typeof Parent], { readonly changed: readonly (typeof Parent)[] }>;
 

@@ -183,6 +183,14 @@ export {
   createControllerRuntime,
   stateWeights,
   stepController,
+  TwoBoneIK,
+  IkChain,
+  LookAtConstraint,
+  IkPlugin,
+  addIkSolve,
+  solveTwoBone,
+  solveCcd,
+  solveAim,
 } from './animation';
 export type {
   AnimationTrack,
@@ -202,6 +210,10 @@ export type {
   PlayerParameter,
   ControllerRuntime,
   ParameterAccess,
+  TwoBoneSolveInput,
+  TwoBoneSolveOutput,
+  CcdSolveInput,
+  AimSolveInput,
 } from './animation';
 export { Name } from './name';
 export { AppBundleRegistry } from './bundle/bundle-registry';

@@ -5,7 +5,9 @@
   Phase 1 (clip playback) **shipped** — confirmed working 2026-06-25 (ADR-0116, ADR-0117).
   Phase 2 (pose pipeline) **shipped** — confirmed working in the editor 2026-06-25 (ADR-0118, ADR-0119).
   Phase 3 (layers + avatar masks) **shipped** — confirmed working in the editor 2026-06-25 (ADR-0120).
-  Phases 4–5 planned.
+  Phase 4 (IK) **landed, awaiting confirmation** 2026-06-25 (ADR-0121) — core solvers in,
+  broader IK/constraint space backlogged (`docs/backlog/ik-and-rig-constraints.md`).
+  Phase 5 planned.
 - **Decisions:** ADRs to be written per phase (see *Open questions*). Builds on ADR-0057 (glTF
   import — reserves skins/animations), ADR-0060/0061 (reflection — every authored component here needs
   a schema), ADR-0102 (hot reload — schemaless authored components are dropped on every code swap).
@@ -173,13 +175,38 @@ canonical humanoid avatar retargeting introduces, and then resolves to the same 
 
 Pure `Pose` math — no new GPU work beyond Phase 0.
 
-### Phase 4 — IK
+### Phase 4 — IK ✅ LANDED (awaiting confirmation)
+
+**Status: landed 2026-06-25, awaiting editor confirmation.** Decisions sealed in
+[ADR-0121](../adr/ADR-0121-inverse-kinematics-constraints-and-post-pass.md) (solver set +
+schedule ordering + constraint-component model + target/pole representation + weight blending).
+Landed: the `packages/engine/src/animation/ik/` module — `TwoBoneIK` (analytic law-of-cosines limb
+solver with pole hint + reach clamping), `IkChain` (CCD N-bone chain), `LookAtConstraint` (aim with
+up/twist reference), each a reflected schema-registered component (§13); the `ik-solve` system slotted
+`{ after: ['transform-propagation'], before: ['skinning-compute-palettes'] }` with per-constraint
+weight blending over the FK pose and affected-chain re-propagation via the new
+`recomputeWorldSubtree` helper in `hierarchy.ts`; `IkPlugin` (added by `CorePlugin` after
+`AnimationPlugin`); and an `ik-solve` bench. The broader IK/constraint space (FABRIK backend,
+Full-Body IK, Spline IK, per-joint limits, foot grounding, the procedural rig-constraint family) is
+backlogged in `docs/backlog/ik-and-rig-constraints.md`.
 
 - Runs as a **post-pass after pose application, before the skinning palette**. Ordering is the delicate
   part: sample+blend → write local TRS → propagate to globals → IK adjusts globals/locals and
   re-propagates affected chains → compute palette.
-- Building blocks: two-bone IK (limbs, foot IK), CCD or FABRIK for longer chains, look-at / aim. Each
+- Building blocks: two-bone IK (limbs, foot IK), CCD for longer chains, look-at / aim. Each
   is an IK-constraint component + a system slotted into that ordering.
+
+**Open questions resolved (see ADR-0121):**
+- *Schedule ordering* — one `postUpdate` system after `transform-propagation`, before
+  `skinning-compute-palettes`; affected chains re-propagated in place via `recomputeWorldSubtree`
+  because the frame's gated propagation has already run.
+- *Solver coverage* — analytic two-bone (limbs/foot/hand) + CCD (N-bone chains) + look-at/aim.
+  CCD over FABRIK because the skeleton is a rotation hierarchy (CCD outputs joint rotations directly);
+  FABRIK deferred.
+- *Target & pole representation* — nullable **entity** references (parentable/animatable); a `null`
+  pole keeps the current FK bend plane. Per-constraint `weight` blends IK over the FK pose;
+  `TwoBoneIK.targetRotationWeight` orients a planted foot/hand. Bones referenced by entity (the
+  `Skeleton` holds joint entities). This is the contact-pinning seam Phase 5 reuses.
 
 ### Phase 5 — Animation retargeting
 

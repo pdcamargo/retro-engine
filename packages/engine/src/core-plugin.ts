@@ -18,6 +18,7 @@ import { RenderGraphPlugin } from './render-graph/render-graph-plugin';
 import { ShaderPlugin } from './shader/shader-plugin';
 import { SkinningPlugin } from './skinning/skinning-plugin';
 import { AnimationPlugin } from './animation/animation-plugin';
+import { IkPlugin } from './animation/ik/ik-plugin';
 import { Query, ResMut } from './system-param';
 import { TaaPlugin } from './taa/taa-plugin';
 import { Time } from './time';
@@ -136,6 +137,10 @@ export class CorePlugin implements PluginObject {
     // plugin's build pulls it; animation sampling runs before transform
     // propagation, which the skinning palette compute then consumes.
     app.addPlugin(new AnimationPlugin());
+    // After AnimationPlugin: IK is a post-pass that corrects the committed FK
+    // pose. Its solve runs in postUpdate after transform propagation and before
+    // the skinning palette compute.
+    app.addPlugin(new IkPlugin());
     app.addPlugin(new RenderGraphPlugin());
     // Before the HDR post chain: AO runs pre-opaque (it feeds the forward
     // ambient term), so it is independent of tonemap / motion-blur / TAA. Its
