@@ -50,10 +50,12 @@ Each item is a `docs/backlog/*.md`, sequenced.
 > item to `docs/backlog/` when its prerequisites land and a real consumer needs it.
 
 - **Skins / GPU skinning** — `GltfSkin`; `JOINTS_0`/`WEIGHTS_0` attributes; joint-palette delivery
-  (uniform vs storage, gated). (renderer 11.5)
+  (uniform vs storage, gated). (renderer 11.5) **Promoted into its own initiative:**
+  `docs/roadmap/skeletal-animation.md` (Phase 0).
 - **Morph targets** — `primitive.targets` + `mesh.weights`; delta delivery (attributes vs storage).
 - **Animation clips** — `AnimationClip` keyed to node indices; the player belongs to a future
-  animation system (likely its own roadmap). (renderer 11.6)
+  animation system (likely its own roadmap). (renderer 11.6) **Promoted into its own initiative:**
+  `docs/roadmap/skeletal-animation.md` (Phase 1+).
 - **Compression** — `KHR_draco_mesh_compression`, `EXT_meshopt_compression`, `KHR_texture_basisu`
   (KTX2/Basis); vendored WASM decoders, capability-gated.
 - **Advanced materials** — `KHR_materials_unlit`, `KHR_texture_transform`, advanced `KHR_materials_*`;
