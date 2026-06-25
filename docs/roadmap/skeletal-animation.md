@@ -5,7 +5,7 @@
   Phase 1 (clip playback) **shipped** — confirmed working 2026-06-25 (ADR-0116, ADR-0117).
   Phase 2 (pose pipeline) **shipped** — confirmed working in the editor 2026-06-25 (ADR-0118, ADR-0119).
   Phase 3 (layers + avatar masks) **shipped** — confirmed working in the editor 2026-06-25 (ADR-0120).
-  Phase 4 (IK) **landed, awaiting confirmation** 2026-06-25 (ADR-0121) — core solvers in,
+  Phase 4 (IK) **shipped** — confirmed working in the editor 2026-06-25 (ADR-0121) — core solvers in,
   broader IK/constraint space backlogged (`docs/backlog/ik-and-rig-constraints.md`).
   Phase 5 planned.
 - **Decisions:** ADRs to be written per phase (see *Open questions*). Builds on ADR-0057 (glTF
@@ -175,9 +175,11 @@ canonical humanoid avatar retargeting introduces, and then resolves to the same 
 
 Pure `Pose` math — no new GPU work beyond Phase 0.
 
-### Phase 4 — IK ✅ LANDED (awaiting confirmation)
+### Phase 4 — IK ✅ SHIPPED
 
-**Status: landed 2026-06-25, awaiting editor confirmation.** Decisions sealed in
+**Status: shipped, confirmed working in the editor 2026-06-25** (two-bone arm/leg IK reaching a
+target with pole-controlled bend and a 0→1 weight blend over the FK pose, a CCD spine chain, and a
+head look-at, all demonstrated live on the Biker rig). Decisions sealed in
 [ADR-0121](../adr/ADR-0121-inverse-kinematics-constraints-and-post-pass.md) (solver set +
 schedule ordering + constraint-component model + target/pole representation + weight blending).
 Landed: the `packages/engine/src/animation/ik/` module — `TwoBoneIK` (analytic law-of-cosines limb
