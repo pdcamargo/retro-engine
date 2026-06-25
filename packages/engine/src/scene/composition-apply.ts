@@ -1,7 +1,7 @@
 import type { Entity } from '@retro-engine/ecs';
 import type { AssetGuid } from '@retro-engine/assets';
 import type { DecodeEnv } from '@retro-engine/reflect';
-import { decodeComponent } from '@retro-engine/reflect';
+import { decodeComponent, schemaHasEntityField } from '@retro-engine/reflect';
 
 import { AssetServer } from '../asset/asset-server';
 import { AssetStores } from '../asset/asset-stores';
@@ -104,6 +104,10 @@ export const addCompositionOverrideApply = (app: App): void => {
             for (const component of ov.add) {
               const reg = registry.get(component.type);
               if (reg === undefined) continue;
+              // Entity-bearing components are rebuilt by the mount's provider; an
+              // override's entity ids cannot be remapped here (no remap context),
+              // so applying one would overwrite valid refs with zeros. Skip it.
+              if (schemaHasEntityField(reg.schema, registry)) continue;
               cmd.entity(target).insert(decodeComponent(reg, component, env));
             }
           }
@@ -119,6 +123,10 @@ export const addCompositionOverrideApply = (app: App): void => {
             for (const patch of ov.set) {
               const reg = registry.get(patch.type);
               if (reg === undefined) continue;
+              // See the `add` note: a persisted patch on an entity-bearing
+              // component (e.g. a Skeleton from a scene saved before this fix)
+              // would zero its joint refs on apply — let the rebuilt one stand.
+              if (schemaHasEntityField(reg.schema, registry)) continue;
               const instance = (app.world.getComponent(target, reg.ctor) ?? reg.make()) as Record<
                 string,
                 unknown

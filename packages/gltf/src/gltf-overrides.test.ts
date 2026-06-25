@@ -45,6 +45,15 @@ class Tag {
   constructor(public value: number = 0) {}
 }
 
+/**
+ * A registered component carrying an entity reference — stands in for `Skeleton`,
+ * whose `joints` are entity refs into the re-instantiated subtree and so must
+ * never round-trip as a derived override.
+ */
+class Bone {
+  constructor(public target: Entity = 0 as Entity) {}
+}
+
 const nullSource: AssetSource = { read: () => Promise.reject(new Error('unused')) };
 const empty = { meshes: [], materials: [], images: [], animationClips: [] };
 
@@ -68,6 +77,7 @@ const makeApp = (): App => {
     { name: 'GltfSceneRoot', make: () => new GltfSceneRoot(makeHandle(asAssetIndex(0))) },
   );
   app.registerComponent(Tag, { value: t.number }, { name: 'Tag' });
+  app.registerComponent(Bone, { target: t.entity() }, { name: 'Bone' });
   addGltfInstantiation(app, StubMeshMaterial3d);
   addGltfBaselineCapture(app);
   addGltfReinstantiation(app);
@@ -240,6 +250,55 @@ describe('gltf derived-entity overrides round-trip', () => {
       );
     expect(fresh.world.getComponent(freshPrims[0]!, Tag)).toBeUndefined();
     expect(fresh.world.getComponent(freshPrims[1]!, Tag)!.value).toBe(9);
+  });
+
+  it('never persists an entity-bearing derived component as an override', () => {
+    // Regression: a component whose schema carries entity refs (here Bone.target,
+    // standing in for Skeleton.joints) is derived state rebuilt on load. Its ids
+    // point into the re-instantiated subtree, so capturing it as an override and
+    // decoding it on load (with no remap) zeroes the refs — the dead-skinning bug.
+    const guid = generateAssetGuid();
+    const app = makeApp();
+    const root = app.world.spawn(new GltfSceneRoot(addGltf(app, RIG_HAND, guid)), new Transform());
+    app.advanceFrame(0); // instantiate
+    const nodes = app.world.getComponent(root, GltfInstanceNodes)!;
+    const hand = nodes.findByName('hand')!;
+    const rig = nodes.findByName('rig')!;
+    app.world.insertBundle(hand, [new Bone(rig)]); // entity ref into the derived subtree
+    app.advanceFrame(16); // baseline capture now includes Bone
+
+    const saved = clone(serializeScene(app));
+    const derived = mountEntry(saved).derived ?? [];
+    const mentionsBone = derived.some(
+      (o) =>
+        (o.set ?? []).some((s) => s.type === 'Bone') ||
+        (o.add ?? []).some((a) => a.type === 'Bone') ||
+        (o.remove ?? []).includes('Bone'),
+    );
+    expect(mentionsBone).toBe(false);
+  });
+
+  it('ignores a stale entity-bearing override on load so the rebuilt component stands', () => {
+    // Simulate a scene saved before the fix: a Bone override with a stale entity id.
+    // On load it must be dropped (not applied as a zeroed ref).
+    const guid = generateAssetGuid();
+    const { app, hand } = instantiated(guid);
+    const saved = clone(serializeScene(app));
+    const entry = mountEntry(saved) as unknown as { derived?: unknown[] };
+    entry.derived = [
+      ...(entry.derived ?? []),
+      {
+        kind: 'gltf-node',
+        anchor: { kind: 'gltf-node', node: 1 }, // the 'hand' node
+        add: [{ type: 'Bone', data: { target: 999 } }],
+      },
+    ];
+    void hand;
+
+    const fresh = roundtrip(saved, guid);
+    const freshHand = findByName(fresh, 'hand')!;
+    // The stale Bone override is skipped entirely — no zeroed entity ref applied.
+    expect(fresh.world.getComponent(freshHand, Bone)).toBeUndefined();
   });
 
   it('persists a deleted derived node as a deleted override', () => {

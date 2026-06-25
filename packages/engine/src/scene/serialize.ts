@@ -1,7 +1,7 @@
 import type { Entity, World } from '@retro-engine/ecs';
 import type { Handle } from '@retro-engine/assets';
 import type { EncodeEnv, SerializedValue, TypeRegistry } from '@retro-engine/reflect';
-import { diffComponent, encodeComponent } from '@retro-engine/reflect';
+import { diffComponent, encodeComponent, schemaHasEntityField } from '@retro-engine/reflect';
 
 import type { App } from '../index';
 import { Parent } from '../hierarchy';
@@ -175,6 +175,15 @@ const deriveOverrides = (
     for (const ctor of world.componentTypesOf(entity)) {
       const reg = registry.getByCtor(ctor);
       if (reg === undefined || reg === parentReg) continue;
+      // Components carrying entity references (e.g. a Skeleton's joint list) are
+      // derived state the mount's provider rebuilds on load — their entity ids
+      // point into the re-instantiated subtree and cannot survive as overrides
+      // (no remap is available when overrides apply). Treat them as present-but-
+      // unchanged so they are neither diffed nor flagged for removal.
+      if (schemaHasEntityField(reg.schema, registry)) {
+        liveTypes.add(reg.name);
+        continue;
+      }
       const value = world.getComponent(entity, ctor);
       if (value === undefined) continue;
       const liveComponent = encodeComponent(reg, value, env);

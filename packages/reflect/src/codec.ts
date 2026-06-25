@@ -415,6 +415,61 @@ export const collectComponentHandleRefs = (
   collectHandleRefs(reg.schema, serialized.data, registry, out);
 };
 
+/**
+ * Whether `ft` carries an entity reference anywhere in its shape (directly, or
+ * nested in an array/tuple/struct/variant/registered type). Recursion into
+ * registered nested types is guarded against cycles via `seen`.
+ */
+export const fieldHasEntityRef = (
+  ft: FieldType<unknown>,
+  registry: TypeRegistry,
+  seen: Set<object> = new Set(),
+): boolean => {
+  switch (ft.kind) {
+    case 'entity':
+      return true;
+    case 'array':
+      return ft.element !== undefined && fieldHasEntityRef(ft.element, registry, seen);
+    case 'tuple':
+      return (ft.elements ?? []).some((el) => fieldHasEntityRef(el, registry, seen));
+    case 'struct':
+      return ft.fields !== undefined && schemaHasEntityField(ft.fields, registry, seen);
+    case 'variant':
+      return (
+        ft.variants !== undefined &&
+        Object.values(ft.variants).some((arm) => schemaHasEntityField(arm, registry, seen))
+      );
+    case 'type': {
+      const ctor = ft.nestedCtor;
+      if (ctor === undefined) return false;
+      const reg = registry.getByCtor(ctor);
+      if (reg === undefined || seen.has(reg.schema)) return false;
+      seen.add(reg.schema);
+      return schemaHasEntityField(reg.schema, registry, seen);
+    }
+    default:
+      return false;
+  }
+};
+
+/**
+ * Whether any non-skipped field in `fields` carries an entity reference. Used to
+ * recognize components whose entity refs cannot survive a derived-subtree
+ * round-trip (the targets are rebuilt with fresh ids on load), so they are kept
+ * out of composition overrides.
+ */
+export const schemaHasEntityField = (
+  fields: Readonly<Record<string, FieldType<unknown>>>,
+  registry: TypeRegistry,
+  seen: Set<object> = new Set(),
+): boolean => {
+  for (const ft of Object.values(fields)) {
+    if (ft.isSkipped) continue;
+    if (fieldHasEntityRef(ft, registry, seen)) return true;
+  }
+  return false;
+};
+
 /** A partial overlay of a component: the subset of fields to patch, by name, with no schema version. */
 export interface FieldOverride {
   /** Stable type name of the component being patched. */

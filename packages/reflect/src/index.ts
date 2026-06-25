@@ -25,4 +25,6 @@ export {
   diffComponent,
   encodeComponent,
   encodeValue,
+  fieldHasEntityRef,
+  schemaHasEntityField,
 } from './codec';
