@@ -1,18 +1,20 @@
 import type { Entity, World } from '@retro-engine/ecs';
 import type { Handle } from '@retro-engine/assets';
 import type { EncodeEnv, SerializedValue, TypeRegistry } from '@retro-engine/reflect';
-import { encodeComponent } from '@retro-engine/reflect';
+import { diffComponent, encodeComponent } from '@retro-engine/reflect';
 
 import type { App } from '../index';
 import { Parent } from '../hierarchy';
 import { AppTypeRegistry } from './app-type-registry';
-import { CompositionRegistry } from './composition';
+import { CompositionBaseline, CompositionRegistry } from './composition';
 import type { CompositionAnchor } from './composition';
 import {
   SCENE_FORMAT_VERSION,
   type SceneData,
   type SerializedComponent,
+  type SerializedDerivedOverride,
   type SerializedEntity,
+  type SerializedOverride,
 } from './scene-data';
 import { SceneInstance, SceneRoot } from './scene-root';
 
@@ -139,6 +141,70 @@ export const buildEncodeEnv = (
   return { env, idOf, live };
 };
 
+/**
+ * Diff each of a mount's derived entities against the {@link CompositionBaseline}
+ * captured at instantiation, returning the per-anchor overrides to persist:
+ * field-level `set` for changed components, `add` for components the source did
+ * not produce, `remove` for deleted ones, and `deleted` for a derived entity the
+ * user removed (its baseline entry's entity is no longer alive). `Parent` is
+ * never diffed — the subtree's structure is rebuilt by re-instantiation, and an
+ * authored child parented onto a node is carried by `attach`, not here. Returns
+ * `undefined` when the mount has no baseline or nothing changed, so an untouched
+ * instance serializes exactly as before.
+ */
+const deriveOverrides = (
+  world: World,
+  registry: TypeRegistry,
+  env: EncodeEnv,
+  mount: Entity,
+): SerializedDerivedOverride[] | undefined => {
+  const baseline = world.getComponent(mount, CompositionBaseline);
+  if (baseline === undefined) return undefined;
+  const parentReg = registry.getByCtor(Parent);
+  const out: SerializedDerivedOverride[] = [];
+
+  for (const [entity, entry] of baseline.entries) {
+    if (!world.hasEntity(entity)) {
+      out.push({ kind: entry.kind, anchor: entry.anchor, deleted: true });
+      continue;
+    }
+
+    const set: SerializedOverride[] = [];
+    const add: SerializedComponent[] = [];
+    const liveTypes = new Set<string>();
+    for (const ctor of world.componentTypesOf(entity)) {
+      const reg = registry.getByCtor(ctor);
+      if (reg === undefined || reg === parentReg) continue;
+      const value = world.getComponent(entity, ctor);
+      if (value === undefined) continue;
+      const liveComponent = encodeComponent(reg, value, env);
+      liveTypes.add(liveComponent.type);
+      const base = entry.components.get(liveComponent.type);
+      if (base === undefined) {
+        add.push(liveComponent);
+        continue;
+      }
+      const delta = diffComponent(base, liveComponent);
+      if (delta !== undefined) set.push(delta);
+    }
+
+    const remove: string[] = [];
+    for (const type of entry.components.keys()) if (!liveTypes.has(type)) remove.push(type);
+
+    if (set.length > 0 || add.length > 0 || remove.length > 0) {
+      out.push({
+        kind: entry.kind,
+        anchor: entry.anchor,
+        ...(set.length > 0 ? { set } : {}),
+        ...(add.length > 0 ? { add } : {}),
+        ...(remove.length > 0 ? { remove } : {}),
+      });
+    }
+  }
+
+  return out.length > 0 ? out : undefined;
+};
+
 const serializeEntities = (
   world: World,
   registry: TypeRegistry,
@@ -178,11 +244,15 @@ const serializeEntities = (
 
     const guid = composition.sceneRefOf.get(entity);
     const id = idOf.get(entity)!;
+    // Edits the user made to this mount's instantiated (derived) subtree, recorded
+    // as anchored deltas. Absent for a plain entity or an untouched instance.
+    const derived = deriveOverrides(world, registry, env, entity);
     out.push({
       id,
       components,
       ...(guid !== undefined ? { scene: { guid } } : {}),
       ...(attach !== undefined ? { attach } : {}),
+      ...(derived !== undefined ? { derived } : {}),
     });
   }
   return out;

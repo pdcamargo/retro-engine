@@ -1,5 +1,11 @@
-import type { App, CompositionProvider } from '@retro-engine/engine';
-import { Commands, CompositionRegistry, PendingAttachment, Query } from '@retro-engine/engine';
+import type { App, CompositionProvider, CompositionResolver } from '@retro-engine/engine';
+import {
+  Commands,
+  CompositionRegistry,
+  CompositionResolverRegistry,
+  PendingAttachment,
+  Query,
+} from '@retro-engine/engine';
 
 import { gltfAnchorForEntity, type GltfNodeAnchor, resolveGltfNodeAnchor } from './gltf-anchor';
 import { GltfInstanceNodes } from './gltf-components';
@@ -23,13 +29,33 @@ const gltfCompositionProvider: CompositionProvider = {
     for (const entity of world.entities()) {
       const instance = world.getComponent(entity, GltfInstanceNodes);
       if (instance === undefined) continue;
-      for (const node of instance.nodeEntities) if (node !== undefined) yield node;
+      // Every entity the model produced — node entities and the per-primitive mesh
+      // children — is rebuilt on load, so none is serialized as a full entity.
+      for (const node of instance.derivedEntities) yield node;
     }
   },
   anchorFor(world, derived) {
     const info = gltfAnchorForEntity(world, derived);
     if (info === undefined) return undefined;
     return { mount: info.mount, kind: GLTF_NODE_ANCHOR_KIND, anchor: info.anchor };
+  },
+};
+
+/**
+ * The load-time resolver for `gltf-node` anchors: a model's subtree is considered
+ * instantiated once its mount carries {@link GltfInstanceNodes}, and an anchor
+ * resolves through {@link resolveGltfNodeAnchor}. Registered on the
+ * {@link CompositionResolverRegistry} so the engine's generic override-apply
+ * system can re-express a loaded scene's edits to instantiated nodes.
+ */
+const gltfNodeResolver: CompositionResolver = {
+  instantiated(world, mount) {
+    return world.getComponent(mount, GltfInstanceNodes) !== undefined;
+  },
+  resolve(world, mount, anchor) {
+    const instance = world.getComponent(mount, GltfInstanceNodes);
+    if (instance === undefined) return undefined;
+    return resolveGltfNodeAnchor(world, mount, instance, anchor as GltfNodeAnchor);
   },
 };
 
@@ -45,6 +71,7 @@ const gltfCompositionProvider: CompositionProvider = {
  */
 export const addGltfAttach = (app: App): void => {
   app.getResource(CompositionRegistry)?.register(gltfCompositionProvider);
+  app.getResource(CompositionResolverRegistry)?.register(GLTF_NODE_ANCHOR_KIND, gltfNodeResolver);
 
   app.addSystem(
     'update',
@@ -72,6 +99,8 @@ export const addGltfAttach = (app: App): void => {
         cmd.entity(entity).remove(PendingAttachment);
       }
     },
-    { label: 'gltf-attach-rebind' },
+    // After override-apply so a node marked deleted is despawned (and its authored
+    // attachments re-homed) before this would parent anything onto it.
+    { label: 'gltf-attach-rebind', after: ['composition-override-apply'] },
   );
 };

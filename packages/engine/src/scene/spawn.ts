@@ -14,7 +14,7 @@ import { TemplateRegistry } from '../prefab/template-registry';
 import { expandTemplateRefs } from '../prefab/template-scene';
 
 import { AppTypeRegistry } from './app-type-registry';
-import { PendingAttachment } from './composition';
+import { PendingAttachment, PendingCompositionOverrides } from './composition';
 import { buildDecodeEnv } from './deserialize';
 import type { Scene } from './scene-asset';
 import type { SceneData } from './scene-data';
@@ -222,6 +222,13 @@ export const spawnScene = (
       cmd
         .entity(entity)
         .insert(new PendingAttachment(mount, serialized.attach.kind, serialized.attach.anchor));
+    }
+
+    // Edits to this entity's derived subtree wait on the mount as a transient
+    // PendingCompositionOverrides; the generic override-apply system resolves each
+    // anchor and applies the deltas once the subtree has re-instantiated.
+    if (serialized.derived !== undefined && serialized.derived.length > 0) {
+      cmd.entity(entity).insert(new PendingCompositionOverrides(serialized.derived));
     }
   }
 

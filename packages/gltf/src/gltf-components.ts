@@ -39,6 +39,14 @@ export class GltfInstanceNodes {
   readonly nodeEntities: readonly (Entity | undefined)[];
   private readonly byNameMap: ReadonlyMap<string, readonly Entity[]>;
   /**
+   * Every entity this instantiation spawned — the node entities **and** the
+   * per-primitive mesh children that multi-primitive nodes own. It is the set of
+   * "what the model produced": serialization excludes exactly these, and override
+   * resolution uses it to tell a derived primitive child apart from an authored
+   * entity attached onto the same node.
+   */
+  readonly derivedEntities: ReadonlySet<Entity>;
+  /**
    * The asset index of the `GltfSceneRoot.handle` this subtree was built from,
    * and the scene index chosen. The re-instantiation system compares these to
    * the root's current handle/scene to detect a model swap.
@@ -49,11 +57,13 @@ export class GltfInstanceNodes {
   constructor(
     nodeEntities: readonly (Entity | undefined)[],
     byNameMap: ReadonlyMap<string, readonly Entity[]>,
+    derivedEntities: ReadonlySet<Entity>,
     sourceIndex: number,
     sourceScene?: number,
   ) {
     this.nodeEntities = nodeEntities;
     this.byNameMap = byNameMap;
+    this.derivedEntities = derivedEntities;
     this.sourceIndex = sourceIndex;
     if (sourceScene !== undefined) this.sourceScene = sourceScene;
   }

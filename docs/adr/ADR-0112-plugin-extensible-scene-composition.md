@@ -1,6 +1,6 @@
 # ADR-0112: Plugin-extensible scene composition and node anchors
 
-- **Status:** Accepted
+- **Status:** Superseded by [ADR-0113](ADR-0113-derived-entity-overrides.md) — the composition seam and node anchors here are kept; ADR-0113 adds persisted overrides for edits to derived entities themselves.
 - **Date:** 2026-06-24
 
 ## Context

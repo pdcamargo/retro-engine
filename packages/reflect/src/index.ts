@@ -13,12 +13,13 @@ export {
   writeField,
 } from './type-registry';
 
-export type { DecodeEnv, EncodeEnv, HandleRef, SerializedValue } from './codec';
+export type { DecodeEnv, EncodeEnv, FieldOverride, HandleRef, SerializedValue } from './codec';
 export {
   collectComponentHandleRefs,
   collectHandleRefs,
   decodeComponent,
   decodeValue,
+  diffComponent,
   encodeComponent,
   encodeValue,
 } from './codec';

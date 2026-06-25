@@ -79,6 +79,35 @@ export interface SerializedAttachment {
   readonly anchor: unknown;
 }
 
+/**
+ * The recorded edits to one *derived* entity — a node another entity rebuilds on
+ * load (e.g. an instantiated glTF node) — addressed by a stable, `kind`-tagged
+ * anchor rather than by id (the entity is excluded from the save and re-created
+ * fresh). On load, after the owning subtree re-instantiates, a matching resolver
+ * finds the live entity and applies these deltas, so a user's edits to an
+ * instanced model survive a save/reload without flattening the instance.
+ *
+ * The four delta kinds mirror a prefab-override model: `set` patches fields of a
+ * component the source already produced (only the changed fields, so untouched
+ * ones keep inheriting from the source); `add` inserts a whole component the
+ * source did not have; `remove` deletes components by type name; `deleted` marks
+ * the derived entity itself as removed.
+ */
+export interface SerializedDerivedOverride {
+  /** Tag selecting the resolver that maps {@link anchor} to a live entity (e.g. `'gltf-node'`). */
+  readonly kind: string;
+  /** Resolver-defined locator for the derived entity within the mount's instantiated subtree. */
+  readonly anchor: unknown;
+  /** Field-level patches to components the source produced; only the changed fields are listed. */
+  readonly set?: readonly SerializedOverride[];
+  /** Whole components the source did not produce, inserted on load (so their required components resolve). */
+  readonly add?: readonly SerializedComponent[];
+  /** Type names of components present on the source node but removed by the user. */
+  readonly remove?: readonly string[];
+  /** The derived entity itself was deleted; on load it is despawned after re-instantiation. */
+  readonly deleted?: boolean;
+}
+
 /** One entity in a {@link SceneData}: its compact in-scene id and serialized components. */
 export interface SerializedEntity {
   /** Stable id within the scene; entity-typed fields reference entities by this id. */
@@ -113,6 +142,15 @@ export interface SerializedEntity {
    * `PendingAttachment` that the owning subtree's `kind` system resolves.
    */
   readonly attach?: SerializedAttachment;
+  /**
+   * Edits to this entity's *derived* subtree (the instantiated nodes another
+   * system rebuilds on load), each addressed by a stable anchor. Present on a
+   * composition mount (e.g. a `GltfSceneRoot`) when the user has changed, added,
+   * removed, or deleted any of its instantiated entities. Excluded derived
+   * entities are still omitted as full entities; this records only the deltas,
+   * re-applied once the subtree re-instantiates.
+   */
+  readonly derived?: readonly SerializedDerivedOverride[];
 }
 
 /**

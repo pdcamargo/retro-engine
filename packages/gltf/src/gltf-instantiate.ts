@@ -3,14 +3,17 @@ import type {
   App,
   ChildBuilder,
   CommandsHandle,
+  CompositionBaselineEntry,
   EntityCommands,
   Handle,
   MeshMaterial3d,
   StandardMaterial,
 } from '@retro-engine/engine';
 import {
+  AppTypeRegistry,
   Children,
   Commands,
+  CompositionBaseline,
   Mesh3d,
   Name,
   Parent,
@@ -20,6 +23,8 @@ import {
   Transform,
 } from '@retro-engine/engine';
 import { quat, vec3 } from '@retro-engine/math';
+import type { EncodeEnv, SerializedValue } from '@retro-engine/reflect';
+import { encodeComponent } from '@retro-engine/reflect';
 
 import { GLTF_NODE_ANCHOR_KIND } from './gltf-attach';
 import { gltfAnchorForEntity } from './gltf-anchor';
@@ -52,6 +57,7 @@ const spawnNode = (
   gltf: Gltf,
   nodeEntities: (Entity | undefined)[],
   byName: Map<string, Entity[]>,
+  derived: Set<Entity>,
   meshMaterialCtor: MeshMaterialCtor,
 ): void => {
   const node = gltf.nodes[nodeIndex];
@@ -69,6 +75,7 @@ const spawnNode = (
   const ec = parent.spawn(...components);
   const entity = ec.id;
   nodeEntities[nodeIndex] = entity;
+  derived.add(entity);
   if (node.name !== undefined) {
     const list = byName.get(node.name);
     if (list !== undefined) list.push(entity);
@@ -80,7 +87,7 @@ const spawnNode = (
       for (const prim of mesh.primitives) {
         const primComponents: object[] = [new Mesh3d(prim.mesh)];
         if (prim.material !== undefined) primComponents.push(new meshMaterialCtor(prim.material));
-        pb.spawn(...primComponents);
+        derived.add(pb.spawn(...primComponents).id);
       }
     });
   }
@@ -88,7 +95,7 @@ const spawnNode = (
   if (node.children.length > 0) {
     ec.withChildren((cb) => {
       for (const childIndex of node.children) {
-        spawnNode(cb, childIndex, gltf, nodeEntities, byName, meshMaterialCtor);
+        spawnNode(cb, childIndex, gltf, nodeEntities, byName, derived, meshMaterialCtor);
       }
     });
   }
@@ -105,19 +112,20 @@ const instantiateRoot = (
   const scene = root.scene !== undefined ? gltf.scenes[root.scene] : gltf.defaultScene;
   const nodeEntities = Array.from<Entity | undefined>({ length: gltf.nodes.length }).fill(undefined);
   const byName = new Map<string, Entity[]>();
+  const derived = new Set<Entity>();
 
   const ec: EntityCommands = cmd.entity(rootEntity);
   if (scene !== undefined) {
     ec.withChildren((b) => {
       for (const nodeIndex of scene.nodes) {
-        spawnNode(b, nodeIndex, gltf, nodeEntities, byName, meshMaterialCtor);
+        spawnNode(b, nodeIndex, gltf, nodeEntities, byName, derived, meshMaterialCtor);
       }
     });
   }
   // Recorded even for an empty/absent scene, so the root drops out of the
   // pending query and is not re-polled every frame. The source handle index +
   // scene let the re-instantiation system detect a later model swap.
-  ec.insert(new GltfInstanceNodes(nodeEntities, byName, root.handle.index as number, root.scene));
+  ec.insert(new GltfInstanceNodes(nodeEntities, byName, derived, root.handle.index as number, root.scene));
 };
 
 /**
@@ -142,6 +150,60 @@ export const addGltfInstantiation = (app: App, meshMaterialCtor: MeshMaterialCto
       }
     },
     { label: 'gltf-instantiate' },
+  );
+};
+
+/**
+ * Register the override-baseline capture reactor. Once a model has instantiated
+ * (and its required components have resolved), it snapshots each derived entity's
+ * components — the *pristine* state the glTF produced — into a
+ * {@link CompositionBaseline} on the mount, keyed by entity with its stable
+ * anchor. The scene serializer diffs the live world against this baseline to
+ * persist only the user's edits; an unedited instance therefore saves nothing
+ * extra. Runs once per instantiation (gated on the baseline's absence) and after
+ * `gltf-instantiate`; the re-instantiation reactor drops the baseline on a model
+ * swap so it is recaptured against the new model.
+ */
+export const addGltfBaselineCapture = (app: App): void => {
+  app.addSystem(
+    'update',
+    [Commands, Query([GltfInstanceNodes], { without: [CompositionBaseline] })],
+    (cmd, instances) => {
+      const registry = app.getResource(AppTypeRegistry)!.registry;
+      const parentReg = registry.getByCtor(Parent);
+      // glTF node components carry no entity fields; handles encode to their GUID,
+      // matching what the save-time env writes, so the diff never sees a phantom change.
+      const env: EncodeEnv = {
+        registry,
+        entityId: () => -1,
+        handleRef: (_assetType, handle) => handle.guid,
+      };
+
+      for (const [mount, instance] of instances.entries()) {
+        const entries = new Map<Entity, CompositionBaselineEntry>();
+        for (const entity of instance.derivedEntities) {
+          const anchored = gltfAnchorForEntity(app.world, entity);
+          if (anchored === undefined) continue;
+          const components = new Map<string, SerializedValue>();
+          for (const ctor of app.world.componentTypesOf(entity)) {
+            const reg = registry.getByCtor(ctor);
+            if (reg === undefined || reg === parentReg) continue;
+            const value = app.world.getComponent(entity, ctor);
+            if (value === undefined) continue;
+            components.set(reg.name, encodeComponent(reg, value, env));
+          }
+          entries.set(entity, { kind: GLTF_NODE_ANCHOR_KIND, anchor: anchored.anchor, components });
+        }
+        cmd.entity(mount).insert(new CompositionBaseline(entries));
+      }
+    },
+    // Before override-apply so a reload captures the *pristine* baseline first;
+    // the loaded edits then layer on top, keeping a re-save's diff stable.
+    {
+      label: 'gltf-baseline-capture',
+      after: ['gltf-instantiate'],
+      before: ['composition-override-apply'],
+    },
   );
 };
 
@@ -172,8 +234,7 @@ export const addGltfReinstantiation = (app: App): void => {
           continue;
         }
 
-        const derived = new Set<Entity>();
-        for (const node of instance.nodeEntities) if (node !== undefined) derived.add(node);
+        const derived = instance.derivedEntities;
 
         // 1. Detach authored attachments first (order is load-bearing: a despawn
         //    cascade through the bone's Children would otherwise eat them).
@@ -202,9 +263,13 @@ export const addGltfReinstantiation = (app: App): void => {
           }
         }
 
-        // 3. Drop the record so the one-shot instantiate reactor rebuilds from the
-        //    new handle; the rebind system then reattaches the survivors.
+        // 3. Drop the record (and the override baseline keyed to the old nodes) so
+        //    the one-shot instantiate reactor rebuilds from the new handle and a
+        //    fresh baseline is captured; the rebind system reattaches survivors.
         cmd.entity(mount).remove(GltfInstanceNodes);
+        if (app.world.getComponent(mount, CompositionBaseline) !== undefined) {
+          cmd.entity(mount).remove(CompositionBaseline);
+        }
       }
     },
     { label: 'gltf-reinstantiate' },

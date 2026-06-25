@@ -146,12 +146,24 @@ export {
 } from './bundle/bundle-asset';
 export { BundlePlugin } from './bundle/bundle-plugin';
 export { AppTypeRegistry } from './scene/app-type-registry';
-export { CompositionRegistry, PendingAttachment } from './scene/composition';
-export type { CompositionAnchor, CompositionProvider } from './scene/composition';
+export {
+  CompositionBaseline,
+  CompositionRegistry,
+  CompositionResolverRegistry,
+  PendingAttachment,
+  PendingCompositionOverrides,
+} from './scene/composition';
+export type {
+  CompositionAnchor,
+  CompositionBaselineEntry,
+  CompositionProvider,
+  CompositionResolver,
+} from './scene/composition';
 export type {
   SceneData,
   SerializedAttachment,
   SerializedComponent,
+  SerializedDerivedOverride,
   SerializedEntity,
   SerializedObserverBinding,
   SerializedOverride,

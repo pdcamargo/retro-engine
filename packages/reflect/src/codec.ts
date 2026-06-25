@@ -415,6 +415,52 @@ export const collectComponentHandleRefs = (
   collectHandleRefs(reg.schema, serialized.data, registry, out);
 };
 
+/** A partial overlay of a component: the subset of fields to patch, by name, with no schema version. */
+export interface FieldOverride {
+  /** Stable type name of the component being patched. */
+  readonly type: string;
+  /** The fields that differ, in encoded form, keyed by field name. */
+  readonly data: Record<string, unknown>;
+}
+
+/** Structural equality of two already-encoded (JSON-ready) values. */
+const encodedEqual = (a: unknown, b: unknown): boolean => {
+  if (a === b) return true;
+  if (a === null || b === null || a === undefined || b === undefined) return false;
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i += 1) if (!encodedEqual(a[i], b[i])) return false;
+    return true;
+  }
+  if (typeof a === 'object' && typeof b === 'object') {
+    const ao = a as Record<string, unknown>;
+    const bo = b as Record<string, unknown>;
+    const keys = new Set([...Object.keys(ao), ...Object.keys(bo)]);
+    for (const key of keys) if (!encodedEqual(ao[key], bo[key])) return false;
+    return true;
+  }
+  return false;
+};
+
+/**
+ * Compare a baseline component against the live one (both already encoded against
+ * comparable environments) and return only the fields that changed as a
+ * {@link FieldOverride}, or `undefined` when nothing differs. This is the
+ * field-level delta a prefab/instance override records: untouched fields are
+ * omitted so they keep inheriting the source's value. Compares exact encoded
+ * forms (no float epsilon) so a saved override matches what serialization writes.
+ */
+export const diffComponent = (
+  baseline: SerializedValue,
+  live: SerializedValue,
+): FieldOverride | undefined => {
+  const data: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(live.data)) {
+    if (!encodedEqual(value, baseline.data[key])) data[key] = value;
+  }
+  return Object.keys(data).length > 0 ? { type: live.type, data } : undefined;
+};
+
 /** Encode a component (or nested registered value) into a {@link SerializedValue}. */
 export const encodeComponent = (reg: RegisteredType, instance: object, env: EncodeEnv): SerializedValue => ({
   type: reg.name,

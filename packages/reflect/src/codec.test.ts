@@ -4,7 +4,13 @@ import type { Entity } from '@retro-engine/ecs';
 import { asAssetIndex, generateAssetGuid, makeHandle, type Handle } from '@retro-engine/assets';
 
 import type { DecodeEnv, EncodeEnv } from './codec';
-import { decodeComponent, decodeValue, encodeComponent, encodeValue } from './codec';
+import {
+  decodeComponent,
+  decodeValue,
+  diffComponent,
+  encodeComponent,
+  encodeValue,
+} from './codec';
 import { t } from './field-type';
 import { defaultRegistry, registerComponent, TypeRegistry } from './type-registry';
 
@@ -329,5 +335,44 @@ describe('default registry helpers', () => {
     registerComponent(Probe, { x: t.number }, { name: 'CodecTestDefaultProbe' });
     expect(defaultRegistry.get('CodecTestDefaultProbe')?.ctor).toBe(Probe);
     expect(defaultRegistry.getByCtor(Probe)?.name).toBe('CodecTestDefaultProbe');
+  });
+});
+
+describe('diffComponent', () => {
+  const reg = new TypeRegistry();
+  const e = encEnv(reg);
+
+  class Spatial {
+    constructor(
+      public coords: number[] = [0, 0, 0],
+      public label = 'a',
+      public flag = false,
+    ) {}
+  }
+  reg.registerComponent(
+    Spatial,
+    { coords: t.array(t.number), label: t.string, flag: t.boolean },
+    { name: 'DiffSpatial' },
+  );
+
+  const encoded = (s: Spatial) => encodeComponent(reg.getByCtor(Spatial)!, s, e);
+
+  it('returns undefined when nothing changed', () => {
+    expect(diffComponent(encoded(new Spatial()), encoded(new Spatial()))).toBeUndefined();
+  });
+
+  it('emits only the fields that differ', () => {
+    const base = encoded(new Spatial());
+    const live = encoded(new Spatial([5, 0, 0], 'b'));
+    expect(diffComponent(base, live)).toEqual({
+      type: 'DiffSpatial',
+      data: { coords: [5, 0, 0], label: 'b' },
+    });
+  });
+
+  it('compares array fields by value, not reference', () => {
+    const base = encoded(new Spatial([1, 2, 3]));
+    const live = encoded(new Spatial([1, 2, 3]));
+    expect(diffComponent(base, live)).toBeUndefined();
   });
 });

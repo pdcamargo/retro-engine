@@ -6,7 +6,8 @@ import { CameraPlugin } from './camera/camera-plugin';
 import { RemovedComponents } from './change-detection';
 import { GizmoPlugin } from './gizmos/gizmo-plugin';
 import { Children, Parent, propagateTransformsGated } from './hierarchy';
-import { CompositionRegistry } from './scene/composition';
+import { CompositionRegistry, CompositionResolverRegistry } from './scene/composition';
+import { addCompositionOverrideApply } from './scene/composition-apply';
 import { ImagePlugin } from './image/image-plugin';
 import type { App } from './index';
 import { MeshPlugin } from './mesh/mesh-plugin';
@@ -65,6 +66,10 @@ export class CorePlugin implements PluginObject {
     // entities, cross-boundary anchor re-emission). Always present so a plugin's
     // build can register against it; empty until a plugin does.
     app.insertResource(new CompositionRegistry());
+    // The load-time counterpart: maps an anchor `kind` to its resolver so the
+    // generic override-apply system can re-express a derived entity's edits after
+    // its subtree re-instantiates. A plugin registers resolvers in its build.
+    app.insertResource(new CompositionResolverRegistry());
     app.addSystem('first', [ResMut(Time)], (time) => {
       time.tick(app.currentFrameTimestamp());
     }, { name: 'time-tick' });
@@ -114,6 +119,10 @@ export class CorePlugin implements PluginObject {
       { entity: t.entity() },
       { name: 'Parent', make: () => new Parent(0 as Entity) },
     );
+
+    // Re-apply a loaded scene's edits to derived (instantiated) subtrees once
+    // their owning plugin has re-instantiated them and registered a resolver.
+    addCompositionOverrideApply(app);
 
     app.addPlugin(new ShaderPlugin());
     app.addPlugin(new CameraPlugin());
