@@ -41,6 +41,7 @@ import './ao.bench';
 import './gizmo-buffer.bench';
 import './scene-streaming.bench';
 import './animation-sampling.bench';
+import './pose-blend.bench';
 
 interface NormalizedBench {
   readonly key: string;

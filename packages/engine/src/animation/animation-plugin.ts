@@ -15,8 +15,18 @@ import {
   createAnimationClipImporter,
   createAnimationClipSerializer,
 } from './animation-clip-asset';
+import type { AnimationController } from './animation-controller';
+import {
+  ANIMATION_CONTROLLER_ASSET_KIND,
+  AnimationControllers,
+  createAnimationControllerImporter,
+  createAnimationControllerSerializer,
+} from './animation-controller-asset';
+import { AnimationControllerPlayer } from './animation-controller-player';
 import { AnimationPlayer, AnimationTarget } from './animation-player';
 import { addAnimationSampling } from './animation-system';
+import { AnimationPoses } from './pose';
+import { AnimationControllerRuntimes } from './state-machine';
 
 /**
  * Engine plugin for keyframe animation playback. Registers the
@@ -44,6 +54,18 @@ export class AnimationPlugin implements PluginObject {
       app.insertResource(new AnimationClips());
     }
     const clips = app.getResource(AnimationClips)!;
+    if (app.getResource(AnimationControllers) === undefined) {
+      app.insertResource(new AnimationControllers());
+    }
+    const controllers = app.getResource(AnimationControllers)!;
+    // Per-frame transient pose / state-machine buffers consumed by the sampling
+    // system; never serialized.
+    if (app.getResource(AnimationPoses) === undefined) {
+      app.insertResource(new AnimationPoses());
+    }
+    if (app.getResource(AnimationControllerRuntimes) === undefined) {
+      app.insertResource(new AnimationControllerRuntimes());
+    }
 
     registerAssetStore(app, ANIMATION_CLIP_ASSET_KIND, clips);
     registerAssetSerializer(app, ANIMATION_CLIP_ASSET_KIND, createAnimationClipSerializer());
@@ -56,12 +78,28 @@ export class AnimationPlugin implements PluginObject {
       category: 'animation',
     });
 
-    // Register the read-side importer when an AssetServer is present so a
-    // standalone `.ranim` loads; glTF-produced clips arrive as sub-assets and
-    // need no loader.
+    registerAssetStore(app, ANIMATION_CONTROLLER_ASSET_KIND, controllers);
+    registerAssetSerializer(
+      app,
+      ANIMATION_CONTROLLER_ASSET_KIND,
+      createAnimationControllerSerializer(clips),
+    );
+    // `.ranimctrl` files reference clips by GUID and, like `.ranim`, are authored/
+    // saved with a sidecar rather than dropped in loose.
+    registerAssetKind(app, {
+      kind: ANIMATION_CONTROLLER_ASSET_KIND,
+      extensions: ['ranimctrl'],
+      discoverable: false,
+      category: 'animation',
+    });
+
+    // Register the read-side importers when an AssetServer is present so a
+    // standalone `.ranim` / `.ranimctrl` loads; glTF-produced clips arrive as
+    // sub-assets and need no loader.
     const server = app.getResource(AssetServer);
     if (server !== undefined) {
       server.registerLoader('ranim', clips, createAnimationClipImporter());
+      server.registerLoader('ranimctrl', controllers, createAnimationControllerImporter(clips));
     }
 
     app.registerComponent(
@@ -79,6 +117,19 @@ export class AnimationPlugin implements PluginObject {
       AnimationTarget,
       { id: t.string, player: t.entity() },
       { name: 'AnimationTarget', make: () => new AnimationTarget('', 0 as Entity) },
+    );
+    app.registerComponent(
+      AnimationControllerPlayer,
+      {
+        controller: t.handle<AnimationController>(ANIMATION_CONTROLLER_ASSET_KIND),
+        speed: t.number,
+        playing: t.boolean,
+        parameters: t.array(t.struct({ name: t.string, value: t.number })),
+      },
+      {
+        name: 'AnimationControllerPlayer',
+        make: () => new AnimationControllerPlayer(makeHandle(asAssetIndex(0))),
+      },
     );
 
     addAnimationSampling(app);

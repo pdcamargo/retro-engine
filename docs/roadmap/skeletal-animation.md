@@ -3,7 +3,8 @@
 - **Created:** 2026-06-25
 - **Status:** Phase 0 (GPU skinning) **shipped** — confirmed working 2026-06-25 (ADR-0114, ADR-0115).
   Phase 1 (clip playback) **shipped** — confirmed working 2026-06-25 (ADR-0116, ADR-0117).
-  Phases 2–5 planned.
+  Phase 2 (pose pipeline) **shipped** — confirmed working in the editor 2026-06-25 (ADR-0118, ADR-0119).
+  Phases 3–5 planned.
 - **Decisions:** ADRs to be written per phase (see *Open questions*). Builds on ADR-0057 (glTF
   import — reserves skins/animations), ADR-0060/0061 (reflection — every authored component here needs
   a schema), ADR-0102 (hot reload — schemaless authored components are dropped on every code swap).
@@ -120,14 +121,27 @@ property-path machinery the inspector already uses.
 Method / event tracks (fire a callback at a keyframe, Godot-style) are a later add — out of scope for
 the v1 clip format.
 
-### Phase 2 — Pose pipeline (the hinge for everything Unity-like)
+### Phase 2 — Pose pipeline (the hinge for everything Unity-like) ✅ SHIPPED
 
 The architectural pivot. Instead of sampling *directly* into `Transform`, sampling produces a
 **`Pose`** (per-bone local TRS); poses are blended; the result is committed to `Transform` once.
+Decisions sealed in [ADR-0118](../adr/ADR-0118-pose-pipeline-representation-blending-and-commit.md)
+(pose representation + sign-aligned nlerp blend + commit-once boundary + package-home revisit) and
+[ADR-0119](../adr/ADR-0119-animation-controller-state-machine-and-blend-trees.md) (Unity-style
+`AnimationController`: state machine, blend trees, transitions).
 
-- Weighted blend of N clips; crossfade / transitions; 1D/2D blend trees.
-- Optional state machine / animation graph (Bevy's `AnimationGraph` + `AnimationPlayer` is the shape
-  reference).
+Landed: the `Pose` SoA abstraction (transient, `AnimationPoses` resource, not serialized) and the
+sample → blend → commit-once path in `update` (both single-clip `AnimationPlayer` and the new
+controller route bone tracks through it; non-bone tracks keep the Phase-1 direct path); weighted
+blend of N poses via sign-aligned accumulated nlerp; the `AnimationController` asset (`.ranimctrl`)
+unifying Bevy's blend-graph with Unity's Animator Controller — parameters, states (clip or blend-tree
+motion), condition/trigger transitions with exit-time, and duration-based crossfade; 1D blend trees
+plus all three Unity 2D modes (`simpleDirectional`, `freeformCartesian`, `freeformDirectional`); the
+`AnimationControllerPlayer` component + `AnimationControllerRuntimes` resource; a pose-blend bench.
+
+Deferred (Phase 3+): transition interruption (mid-crossfade), additive poses + avatar masks, and the
+node-graph **editor UI** for authoring controllers (slated for a future shared node-graph package;
+controllers drive via code/MCP for now). The 2D-blend math is full coverage.
 
 Phases 3–5 all hang off this `Pose` abstraction.
 
@@ -177,12 +191,16 @@ mostly `Pose` math layered on the same pipeline.
 - **Joint-palette delivery threshold** — uniform-array (small skeletons) vs storage buffer (WebGPU) vs
   bone-texture (WebGL2 fallback); at what joint count does each path engage, and what's the capability
   gate? (Carried over from `gltf.md`.)
-- **Animation system home** — *resolved (ADR-0117):* Phase 1 lives in `packages/engine/src/animation/`
-  (it needs engine's asset registration, `Transform`, `Time`, scheduling, and the skinning hook, and
-  `gltf` → `engine` means the clip type must be in `engine`). A dedicated `@retro-engine/animation`
-  package is deferred to Phase 2 when blend trees/state machines justify the boundary.
-- **Pose representation** — per-bone local TRS arrays; SoA vs AoS; how poses interact with ECS change
-  detection (poses are transient, recomputed each frame — likely *not* a serialized component).
+- **Animation system home** — *resolved (ADR-0117, reaffirmed by ADR-0118 §"package home"):* stays in
+  `packages/engine/src/animation/`. Phase 2 revisited extraction and **deferred again** — the layer is
+  inescapably coupled to engine core types and `CorePlugin` owning `AnimationPlugin` (before any `gltf`
+  build) means extracting forces `engine ↛ animation` with no Phase-2 benefit. Revisit when animation
+  gains a non-engine consumer or sheds the engine-core dependency.
+- **Pose representation** — *resolved ([ADR-0118](../adr/ADR-0118-pose-pipeline-representation-blending-and-commit.md)):*
+  per-bone local TRS as **SoA `Float32Array`s** (`t`/`s` ×3, `r` ×4) addressed by slot, held in the
+  transient `AnimationPoses` resource (not a component, not serialized — §13 derived state). Poses touch
+  change detection only at the commit boundary (`markChanged(Transform)`); blend weights are tracked
+  per-field per-slot so partial coverage is correct without masks.
 - **Retargeting model** — normalized-humanoid vs chain-based vs a rig-mapping abstraction that supports
   both. Decided when Phase 5 is promoted; it shapes the `AvatarMask`/rig assets.
 - **Additive reference pose** — where the reference/bind pose comes from (glTF bind pose vs an authored
@@ -191,7 +209,10 @@ mostly `Pose` math layered on the same pipeline.
   `AnimationTarget` (id/player) are authored and registered; the `AnimationPlayer.time` cursor is
   transient (`.skip()`); `AnimationClip` is an asset (serializer, not a component schema). Still open
   for later phases: layer/mask config, IK constraints, rig-mapping assets. Transient poses and the
-  computed palette are deliberately *not* serialized.
+  computed palette are deliberately *not* serialized. *Phase 2 resolved (ADR-0119):*
+  `AnimationControllerPlayer` (controller/speed/playing/parameters) is authored and registered;
+  `AnimationController` is an asset; the state-machine runtime (active state, crossfade, phase) is
+  transient in `AnimationControllerRuntimes`.
 
 ## Links
 
