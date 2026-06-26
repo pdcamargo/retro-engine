@@ -44,6 +44,7 @@ import './animation-sampling.bench';
 import './pose-blend.bench';
 import './layer-blend.bench';
 import './ik-solve.bench';
+import './retarget.bench';
 
 interface NormalizedBench {
   readonly key: string;

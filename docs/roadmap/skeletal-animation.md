@@ -7,7 +7,9 @@
   Phase 3 (layers + avatar masks) **shipped** — confirmed working in the editor 2026-06-25 (ADR-0120).
   Phase 4 (IK) **shipped** — confirmed working in the editor 2026-06-25 (ADR-0121) — core solvers in,
   broader IK/constraint space backlogged (`docs/backlog/ik-and-rig-constraints.md`).
-  Phase 5 planned.
+  Phase 5 (retargeting) **shipped, pending editor confirmation** 2026-06-25 (ADR-0122) — `RetargetRig`
+  rig-description asset + `retargetClip` clip-production transform; lint/typecheck/test/build/bench green.
+  This is the **final** phase.
 - **Decisions:** ADRs to be written per phase (see *Open questions*). Builds on ADR-0057 (glTF
   import — reserves skins/animations), ADR-0060/0061 (reflection — every authored component here needs
   a schema), ADR-0102 (hot reload — schemaless authored components are dropped on every code swap).
@@ -210,7 +212,21 @@ backlogged in `docs/backlog/ik-and-rig-constraints.md`.
   `TwoBoneIK.targetRotationWeight` orients a planted foot/hand. Bones referenced by entity (the
   `Skeleton` holds joint entities). This is the contact-pinning seam Phase 5 reuses.
 
-### Phase 5 — Animation retargeting
+### Phase 5 — Animation retargeting ✅ SHIPPED (pending editor confirmation)
+
+**Status: shipped 2026-06-25, pending editor confirmation.** Decisions sealed in
+[ADR-0122](../adr/ADR-0122-animation-retargeting-rig-mapping-and-contact-pinning.md) (retargeting
+model + clip-production-over-per-frame-component + rig-mapping abstraction + rotation/translation
+transfer + IK contact pinning + humanoid body-part mask resolution). Landed: the
+`packages/engine/src/animation/retarget/` module — the canonical `HumanoidSlot` profile + body-part
+groups + bone-name auto-map; the `RetargetRig` rig-description asset (`.rerig`, Unity-Avatar /
+Unreal-IK-Rig analogue) with `buildHumanoidRetargetRig` auto-map; the pure `retargetClip` transform
+(rest-relative local-space rotation transfer + height-scaled hip translation) producing **native
+clips** that ride the existing animation + IK stack; `humanoidBodyPartMask` (resolving the Phase-3
+humanoid body-part mask deferral); `bindRetargetRig`; `RetargetPlugin` (added by `CorePlugin` after
+`IkPlugin`); and a `retarget` bench (bones × keyframes). Deferred: the cross-orientation world-space
+transfer (current local-space form is exact for same-bind-orientation rigs), Unity-style muscle space,
+a runtime/live-mirror retarget player, and the studio retarget UI (drive via code/MCP for now).
 
 Play a clip authored for skeleton A on differently-proportioned skeleton B. Depends on Phase 2 (poses)
 and Phase 0 (skeleton); **strengthened by Phase 4** — proportion differences make hands/feet drift, so
@@ -247,8 +263,13 @@ mostly `Pose` math layered on the same pipeline.
   transient `AnimationPoses` resource (not a component, not serialized — §13 derived state). Poses touch
   change detection only at the commit boundary (`markChanged(Transform)`); blend weights are tracked
   per-field per-slot so partial coverage is correct without masks.
-- **Retargeting model** — normalized-humanoid vs chain-based vs a rig-mapping abstraction that supports
-  both. Decided when Phase 5 is promoted; it shapes the `AvatarMask`/rig assets.
+- **Retargeting model** — *resolved ([ADR-0122](../adr/ADR-0122-animation-retargeting-rig-mapping-and-contact-pinning.md)):*
+  the **chain-based / rig-mapping abstraction** (canonical `HumanoidSlot`s, a `RetargetRig`
+  rig-description asset = Unity Avatar / Unreal IK Rig), **not** Unity muscle space (deferred,
+  human-only). Crucially, retargeting ships as **clip production** (`retargetClip` → a native
+  `AnimationClip`), not a per-frame component, so retargeted clips compose with the existing
+  controllers / blend trees / layers / IK rather than forming a parallel playback path. The humanoid
+  body-part mask deferred from Phase 3 resolves over the same slots (`humanoidBodyPartMask`).
 - **Additive reference pose** — *resolved ([ADR-0120](../adr/ADR-0120-animation-layers-avatar-masks-and-additive.md)):*
   the **glTF bind pose** (each bone's local rest TRS), captured lazily the first frame a bone appears
   in a layered player and held in the transient `ReferencePoses` resource. Chosen over an authored

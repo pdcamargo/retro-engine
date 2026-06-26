@@ -19,6 +19,7 @@ import { ShaderPlugin } from './shader/shader-plugin';
 import { SkinningPlugin } from './skinning/skinning-plugin';
 import { AnimationPlugin } from './animation/animation-plugin';
 import { IkPlugin } from './animation/ik/ik-plugin';
+import { RetargetPlugin } from './animation/retarget/retarget-plugin';
 import { Query, ResMut } from './system-param';
 import { TaaPlugin } from './taa/taa-plugin';
 import { Time } from './time';
@@ -141,6 +142,11 @@ export class CorePlugin implements PluginObject {
     // pose. Its solve runs in postUpdate after transform propagation and before
     // the skinning palette compute.
     app.addPlugin(new IkPlugin());
+    // After IkPlugin: retargeting is a clip-production step (no per-frame
+    // system), so this only registers the RetargetRig (`.rerig`) asset kind the
+    // transform consumes. The clips it produces ride the animation + IK systems
+    // already installed above.
+    app.addPlugin(new RetargetPlugin());
     app.addPlugin(new RenderGraphPlugin());
     // Before the HDR post chain: AO runs pre-opaque (it feeds the forward
     // ambient term), so it is independent of tonemap / motion-blur / TAA. Its

@@ -107,3 +107,31 @@ export type {
   CcdSolveInput,
   AimSolveInput,
 } from './ik';
+
+export {
+  HUMANOID_BODY_PARTS,
+  HUMANOID_SLOTS,
+  slotForBoneName,
+  buildHumanoidRetargetRig,
+  RetargetRig,
+  RETARGET_RIG_ASSET_KIND,
+  RETARGET_RIG_FORMAT_VERSION,
+  RetargetRigs,
+  createRetargetRigImporter,
+  createRetargetRigSerializer,
+  proportionRatio,
+  scaleRootTranslation,
+  transferRotation,
+  bodyFrameAlignment,
+  retargetClip,
+  humanoidBodyPartMask,
+  bindRetargetRig,
+  RetargetPlugin,
+} from './retarget';
+export type {
+  HumanoidBodyPart,
+  HumanoidSlot,
+  RetargetSlot,
+  RootTranslationMode,
+  RetargetClipOptions,
+} from './retarget';

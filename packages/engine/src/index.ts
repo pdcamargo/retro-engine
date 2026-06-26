@@ -191,6 +191,24 @@ export {
   solveTwoBone,
   solveCcd,
   solveAim,
+  HUMANOID_BODY_PARTS,
+  HUMANOID_SLOTS,
+  slotForBoneName,
+  buildHumanoidRetargetRig,
+  RetargetRig,
+  RETARGET_RIG_ASSET_KIND,
+  RETARGET_RIG_FORMAT_VERSION,
+  RetargetRigs,
+  createRetargetRigImporter,
+  createRetargetRigSerializer,
+  proportionRatio,
+  scaleRootTranslation,
+  transferRotation,
+  bodyFrameAlignment,
+  retargetClip,
+  humanoidBodyPartMask,
+  bindRetargetRig,
+  RetargetPlugin,
 } from './animation';
 export type {
   AnimationTrack,
@@ -214,6 +232,11 @@ export type {
   TwoBoneSolveOutput,
   CcdSolveInput,
   AimSolveInput,
+  HumanoidBodyPart,
+  HumanoidSlot,
+  RetargetSlot,
+  RootTranslationMode,
+  RetargetClipOptions,
 } from './animation';
 export { Name } from './name';
 export { AppBundleRegistry } from './bundle/bundle-registry';
