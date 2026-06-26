@@ -13,7 +13,13 @@ import {
   ImVec2,
 } from '@mori2003/jsimgui';
 
-import { assetCard, assetGroup, type AssetCardOptions, type AssetGroupOptions } from './components-asset';
+import {
+  assetCard,
+  assetGroup,
+  type AssetCardOptions,
+  type AssetCardResult,
+  type AssetGroupOptions,
+} from './components-asset';
 import { assetField, type AssetFieldOptions } from './components-asset-field';
 import { dataTable, type DataTableOptions } from './components-table';
 import { Draw } from './draw';
@@ -232,8 +238,8 @@ export interface Widgets {
   /** An input-like asset slot (à la Unity's object field). Returns whether clicked. */
   assetField(id: string, options: AssetFieldOptions): { clicked: boolean };
   /** An asset-browser tile. Returns interaction flags. */
-  assetCard(options: AssetCardOptions): { clicked: boolean; expandToggled: boolean };
-  /** A full-width drawer for a texture's sprite sub-assets. */
+  assetCard(options: AssetCardOptions): AssetCardResult;
+  /** A full-width drawer holding a source file's derived children. */
   assetGroup(options: AssetGroupOptions): void;
 
   /** Open a right-click context menu anchored to the last item. */
@@ -673,7 +679,7 @@ export const widgets: Widgets = {
     return assetField(id, options);
   },
 
-  assetCard(options: AssetCardOptions): { clicked: boolean; expandToggled: boolean } {
+  assetCard(options: AssetCardOptions): AssetCardResult {
     return assetCard(options);
   },
 

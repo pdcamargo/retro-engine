@@ -47,6 +47,43 @@ export const asAssetIndex = (value: number): AssetIndex => value as AssetIndex;
 export const generateAssetGuid = (): AssetGuid => crypto.randomUUID() as AssetGuid;
 
 /**
+ * Separator between a container asset's GUID and a sub-asset label in a
+ * sub-asset reference. A v4 UUID never contains `#`, so the first `#` cleanly
+ * splits a reference into parent GUID and label.
+ */
+const SUB_ASSET_SEPARATOR = '#';
+
+/**
+ * The persistent identity of a sub-asset extracted from a container file — an
+ * animation clip, mesh, or material decoded out of a model, for example.
+ *
+ * Sub-assets have no `.meta` sidecar of their own, so they cannot carry a random
+ * GUID. Instead their identity is derived deterministically from the container's
+ * GUID and the importer's stable label (`'Animation0'`, `'Mesh0/Primitive1'`),
+ * joined as `"<parent>#<label>"`. The result is a single string, so it
+ * serializes and resolves exactly like a top-level GUID — a saved reference to a
+ * model's clip survives reload as long as the container and its labels are stable.
+ */
+export const subAssetGuid = (parent: AssetGuid, label: string): AssetGuid =>
+  `${parent}${SUB_ASSET_SEPARATOR}${label}` as AssetGuid;
+
+/**
+ * Split a {@link subAssetGuid} back into its container GUID and label, or
+ * `undefined` when `guid` is a plain top-level GUID (no separator). This is the
+ * single place the `"<parent>#<label>"` convention is decoded.
+ */
+export const parseSubAssetGuid = (
+  guid: AssetGuid,
+): { readonly parent: AssetGuid; readonly label: string } | undefined => {
+  const hash = guid.indexOf(SUB_ASSET_SEPARATOR);
+  if (hash <= 0 || hash === guid.length - 1) return undefined;
+  return {
+    parent: guid.slice(0, hash) as AssetGuid,
+    label: guid.slice(hash + 1),
+  };
+};
+
+/**
  * The store key for an {@link AssetId}, regardless of kind. Both a runtime and
  * a GUID-backed id resolve through their {@link AssetIndex}.
  */

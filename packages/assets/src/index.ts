@@ -1,5 +1,11 @@
 export type { AssetId, AssetIndex, AssetGuid } from './asset-id';
-export { asAssetIndex, generateAssetGuid, assetIndexOf } from './asset-id';
+export {
+  asAssetIndex,
+  generateAssetGuid,
+  assetIndexOf,
+  subAssetGuid,
+  parseSubAssetGuid,
+} from './asset-id';
 
 export type { Handle } from './handle';
 export { makeHandle, handleEq } from './handle';

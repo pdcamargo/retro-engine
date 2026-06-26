@@ -60,7 +60,10 @@ import { SceneCameraController } from './editor-camera';
 import { EditorOnly } from './editor-markers';
 import { studioClassifiers } from './entity-classifiers';
 import { SceneGizmos } from './gizmo-wiring';
-import { assetsPanel, consolePanel, profilerPanel, systemsPanel } from './panels-dock';
+import { assetsPanel } from './assets/assets-panel';
+import { loadAssetsPrefs } from './assets/assets-panel-state';
+import { createModelSubAssetService } from './project/model-subassets';
+import { consolePanel, profilerPanel, systemsPanel } from './panels-dock';
 import { historyPanel } from './panels-history';
 import { inspectorPanel } from './panels-inspector';
 import { hierarchyPanel } from './panels-left';
@@ -125,6 +128,8 @@ splash.step({ glyph: '▸', message: 'mounting ecs world', result: 'ok', tone: '
 const scene = createScene();
 const state = createState(scene);
 loadComposerPrefs(state.composer); // localStorage seed; a project rebinds this below
+loadAssetsPrefs(state.assets); // persisted zoom + type filter (best-effort)
+const modelSubAssets = createModelSubAssetService(app);
 
 // The project sink for writing assets (set once a project opens); the composer's
 // bundle-save hook writes `.rebundle` files through it.
@@ -264,7 +269,16 @@ editor
   .addPanel(cap(inspectorPanel(state, app, editor.inspector, history)))
   .addPanel(cap(historyPanel(state, app, history)))
   .addPanel(cap(consolePanel(state)))
-  .addPanel(cap(assetsPanel(state, openBundleForEdit)))
+  .addPanel(
+    cap(
+      assetsPanel(state, {
+        subs: modelSubAssets,
+        onActivate: (asset) => {
+          if (asset.type === 'bundle') openBundleForEdit(asset);
+        },
+      }),
+    ),
+  )
   .addPanel(cap(systemsPanel(app)))
   .addPanel(cap(profilerPanel(app)))
   .addPanel(cap(mcpPanel(studioMcp, (text, meta) => pushConsoleForPanels(text, meta))))

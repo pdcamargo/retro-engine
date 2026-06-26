@@ -30,6 +30,14 @@ export interface BrowserAsset {
   readonly meta?: string;
   /** Whether a real preview can be generated for it today (an image). */
   readonly thumbnailable: boolean;
+  /**
+   * Derived children the importer extracts from this source — a model's meshes,
+   * materials, and animation clips; a texture's sprites. Each child is a full
+   * {@link BrowserAsset} with its own `type`, addressed by a sub-asset GUID so it
+   * can be assigned and survive reload. One level deep; absent for leaf assets.
+   * Populated on demand (see the model sub-asset service), not by the static scan.
+   */
+  readonly subs?: readonly BrowserAsset[];
 }
 
 /** The live asset browser for an open project: its assets + the thumbnail generator. */

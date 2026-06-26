@@ -4,6 +4,7 @@ import { type App, Name } from '@retro-engine/engine';
 
 import { assetTypeSpec } from '../asset-picker/asset-picker-catalog';
 import { openAssetPicker } from '../asset-picker/asset-picker-state';
+import { augmentedAssets } from '../asset-picker/picker-pool';
 import type { BrowserAsset } from '../project/project-browser';
 import type { StudioState } from '../state';
 
@@ -22,12 +23,15 @@ const entityLabel = (state: StudioState, app: App): string => {
 /** What to show in the field for the current handle value. */
 const describeCurrent = (
   state: StudioState,
+  app: App,
   handle: Handle<unknown> | undefined,
 ): { name: string | undefined; asset: BrowserAsset | undefined } => {
   const guid = handle?.guid ?? null;
   if (handle === undefined) return { name: undefined, asset: undefined };
   if (guid === null) return { name: '(default)', asset: undefined };
-  const asset = state.browser?.assets.find((a) => a.guid === guid);
+  // Search the augmented pool so a model's derived clip resolves its name, not
+  // just top-level files.
+  const asset = augmentedAssets(app, state.browser).find((a) => a.guid === guid);
   return { name: asset?.name ?? '(missing)', asset };
 };
 
@@ -43,7 +47,7 @@ export const makeAssetFieldRenderer =
   (ctx: PropertyContext): void => {
     const handle = (ctx.value ?? undefined) as Handle<unknown> | undefined;
     const spec = assetTypeSpec(ctx.type.assetType ?? null);
-    const { name, asset } = describeCurrent(state, handle);
+    const { name, asset } = describeCurrent(state, app, handle);
     const thumbnail =
       asset?.thumbnailable === true ? state.browser?.thumbnails.get(asset.guid, asset.location) : undefined;
 

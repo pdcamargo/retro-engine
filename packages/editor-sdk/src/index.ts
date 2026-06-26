@@ -2,6 +2,7 @@ export { applyTheme } from './apply-theme';
 export {
   ASSET_TYPES,
   type AssetCardOptions,
+  type AssetCardResult,
   type AssetGroupOptions,
   type AssetType,
   type AssetTypeInfo,

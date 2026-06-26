@@ -33,6 +33,10 @@ export const assetTypeSpec = (storeType: string | null): AssetTypeSpec => {
       return { types: ['model'], noun: 'Model' };
     case 'TextureAtlasLayout':
       return { types: [], noun: 'Atlas Layout' };
+    case 'AnimationClip':
+      // A `Handle<AnimationClip>` slot (e.g. `AnimationPlayer.clip`) takes an
+      // animation asset — a standalone `.ranim` or a clip extracted from a model.
+      return { types: ['animation'], noun: 'Clip' };
     default:
       // Each material class owns a store keyed `Materials<…>` / `Materials2d<…>`.
       if (storeType.includes('Material')) return { types: ['material'], noun: 'Material' };

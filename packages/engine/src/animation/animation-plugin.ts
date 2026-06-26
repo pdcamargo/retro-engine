@@ -133,6 +133,9 @@ export class AnimationPlugin implements PluginObject {
       server.registerLoader('ranim', clips, createAnimationClipImporter());
       server.registerLoader('ranimctrl', controllers, createAnimationControllerImporter(clips));
       server.registerLoader('ramask', masks, createAvatarMaskImporter());
+      // glTF labels its extracted clips `Animation0`, `Animation1`, … so a
+      // sub-asset reference `"<modelGuid>#Animation0"` resolves into this store.
+      server.registerSubAssetStore('Animation', clips);
     }
 
     app.registerComponent(

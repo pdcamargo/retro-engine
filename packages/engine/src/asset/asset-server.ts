@@ -7,7 +7,7 @@ import type {
   Handle,
   LoadContext,
 } from '@retro-engine/assets';
-import { parseAssetManifest } from '@retro-engine/assets';
+import { parseAssetManifest, parseSubAssetGuid, subAssetGuid } from '@retro-engine/assets';
 
 import type { Logger } from '../log';
 import { engineLogger } from '../log';
@@ -98,6 +98,14 @@ export class AssetServer {
    * `.remat` but loads into its own `Materials<M>` store).
    */
   private readonly kindLoaders = new Map<string, LoaderEntry>();
+  /**
+   * Stores that hold a container's labeled sub-assets, keyed by the label prefix
+   * the importer emits (e.g. `'Animation'` for `'Animation0'`). A sub-asset
+   * reference (`"<parentGuid>#<label>"`) resolves by matching its label against
+   * these prefixes to find the owning store, then loading the parent so its
+   * {@link LoadContext.addLabeledAsset} fills the reserved slot.
+   */
+  private readonly subAssetStores = new Map<string, Assets<unknown>>();
   private readonly pathToHandle = new Map<
     string,
     { readonly handle: Handle<unknown>; readonly store: Assets<unknown> }
@@ -148,6 +156,29 @@ export class AssetServer {
   }
 
   /**
+   * Bind the store that holds a container's labeled sub-assets to the label
+   * `prefix` the importer emits for them — `'Animation'` for an importer that
+   * labels clips `'Animation0'`, `'Animation1'`, … This lets
+   * {@link AssetServer.loadByGuid} resolve a sub-asset reference
+   * (`"<parentGuid>#<label>"`) to a handle: it matches the label's prefix here to
+   * find the store, reserves the slot, and loads the parent so the parent's
+   * {@link LoadContext.addLabeledAsset} fills that same slot by GUID.
+   *
+   * Idempotent re-registration of the same prefix is allowed (the latest wins).
+   */
+  registerSubAssetStore<T>(prefix: string, store: Assets<T>): void {
+    this.subAssetStores.set(prefix, store as Assets<unknown>);
+  }
+
+  /** The sub-asset store whose registered prefix `label` starts with, if any. */
+  private subStoreForLabel(label: string): Assets<unknown> | undefined {
+    for (const [prefix, store] of this.subAssetStores) {
+      if (label.startsWith(prefix)) return store;
+    }
+    return undefined;
+  }
+
+  /**
    * Start loading the asset at `path` and return its handle immediately. The
    * value is not present yet — `assets.get(handle)` is `undefined` until the
    * `PreUpdate` drain commits the completed load.
@@ -174,7 +205,7 @@ export class AssetServer {
 
     const handle = loader.store.reserveHandle();
     this.pathToHandle.set(path, { handle, store: loader.store });
-    this.kickLoad(path, loader.store, loader.importer, handle);
+    this.kickLoad(path, loader.store, loader.importer, handle, handle.guid);
     return handle as Handle<T>;
   }
 
@@ -196,7 +227,7 @@ export class AssetServer {
       this.logger.devWarn(`AssetServer.reload: no loader for '${path}' anymore; ignoring.`);
       return;
     }
-    this.kickLoad(path, cached.store, loader.importer, cached.handle);
+    this.kickLoad(path, cached.store, loader.importer, cached.handle, cached.handle.guid);
   }
 
   /**
@@ -240,6 +271,9 @@ export class AssetServer {
     const cached = this.guidToHandle.get(guid);
     if (cached !== undefined) return cached.handle as Handle<T>;
 
+    const sub = parseSubAssetGuid(guid);
+    if (sub !== undefined) return this.loadSubAsset<T>(guid, sub.parent, sub.label);
+
     if (this.manifest === undefined) {
       throw new Error(`AssetServer.loadByGuid: no manifest set (guid '${guid}').`);
     }
@@ -261,18 +295,53 @@ export class AssetServer {
 
     const handle = loader.store.reserveHandle(guid);
     this.guidToHandle.set(guid, { handle, store: loader.store });
-    this.kickLoad(entry.location, loader.store, loader.importer, handle);
+    this.kickLoad(entry.location, loader.store, loader.importer, handle, guid);
     return handle as Handle<T>;
   }
 
   /**
-   * Whether this server can resolve `guid` — it is already loading/loaded, or the
-   * current manifest maps it to a location. Lets the scene loader prefer
-   * load-on-demand for manifest-backed GUIDs and fall back to in-store resolution
-   * for assets added directly (no manifest).
+   * Resolve a sub-asset reference (`"<parentGuid>#<label>"`) to a handle. The
+   * sub-asset lives in the store registered for its label prefix
+   * ({@link AssetServer.registerSubAssetStore}). If the parent already loaded,
+   * its sub-asset is in that store by GUID and resolves directly. Otherwise a
+   * slot is reserved with the deterministic sub-GUID and the parent is loaded;
+   * the parent's {@link LoadContext.addLabeledAsset} fills *this* slot, matched
+   * by GUID, when its IO completes and drains.
+   */
+  private loadSubAsset<T>(guid: AssetGuid, parent: AssetGuid, label: string): Handle<T> {
+    const store = this.subStoreForLabel(label);
+    if (store === undefined) {
+      throw new Error(
+        `AssetServer.loadByGuid: no sub-asset store registered for label '${label}' (guid '${guid}'). Register one with registerSubAssetStore.`,
+      );
+    }
+    const existing = store.handleByGuid(guid);
+    if (existing !== undefined) {
+      this.guidToHandle.set(guid, { handle: existing, store });
+      return existing as Handle<T>;
+    }
+    const handle = store.reserveHandle(guid);
+    this.guidToHandle.set(guid, { handle, store });
+    // Idempotent: loads the parent if it is not already loading. Its labeled
+    // sub-assets fill the reserved slots above by GUID on the next drain.
+    this.loadByGuid(parent);
+    return handle as Handle<T>;
+  }
+
+  /**
+   * Whether this server can resolve `guid` — it is already loading/loaded, the
+   * current manifest maps it to a location, or it is a sub-asset reference whose
+   * container is resolvable. Lets the scene loader prefer load-on-demand for
+   * manifest-backed GUIDs and fall back to in-store resolution for assets added
+   * directly (no manifest).
    */
   hasGuid(guid: AssetGuid): boolean {
-    return this.guidToHandle.has(guid) || (this.manifest?.entries.has(guid) ?? false);
+    if (this.guidToHandle.has(guid)) return true;
+    const sub = parseSubAssetGuid(guid);
+    if (sub !== undefined) {
+      return this.guidToHandle.has(sub.parent) || (this.manifest?.entries.has(sub.parent) ?? false);
+    }
+    return this.manifest?.entries.has(guid) ?? false;
   }
 
   /**
@@ -331,8 +400,9 @@ export class AssetServer {
     store: Assets<unknown>,
     importer: AssetImporter<unknown>,
     handle: Handle<unknown>,
+    parentGuid: AssetGuid | undefined,
   ): void {
-    const done = this.runLoad(path, store, importer, handle);
+    const done = this.runLoad(path, store, importer, handle, parentGuid);
     this.inflight.add(done);
     // `runLoad` never rejects (it captures its own errors), so this always runs.
     void done.then(() => {
@@ -345,6 +415,7 @@ export class AssetServer {
     store: Assets<unknown>,
     importer: AssetImporter<unknown>,
     handle: Handle<unknown>,
+    parentGuid: AssetGuid | undefined,
   ): Promise<void> {
     // Sub-assets the importer registers are buffered here, local to this load,
     // so a throwing importer commits nothing: the buffer is dropped and the
@@ -358,7 +429,28 @@ export class AssetServer {
           isDataUri(relativePath)
             ? Promise.resolve(decodeDataUri(relativePath))
             : this.source.read(resolveSiblingPath(path, relativePath)),
-        addLabeledAsset: <U>(_label: string, value: U, subStore: Assets<U>): Handle<U> => {
+        addLabeledAsset: <U>(label: string, value: U, subStore: Assets<U>): Handle<U> => {
+          // With a parent GUID, the sub-asset gets a deterministic, persistent
+          // identity (`"<parent>#<label>"`) so a saved reference resolves on
+          // reload. Reuse a slot already reserved by `loadByGuid` for that
+          // sub-ref (so the handle a caller is holding is the one that gets
+          // filled); otherwise reserve fresh and index it by GUID.
+          if (parentGuid !== undefined) {
+            const subGuid = subAssetGuid(parentGuid, label);
+            const reserved = this.guidToHandle.get(subGuid);
+            const subHandle =
+              reserved !== undefined && reserved.store === (subStore as Assets<unknown>)
+                ? (reserved.handle as Handle<U>)
+                : subStore.reserveHandle(subGuid);
+            if (reserved === undefined) {
+              this.guidToHandle.set(subGuid, {
+                handle: subHandle as Handle<unknown>,
+                store: subStore as Assets<unknown>,
+              });
+            }
+            labeled.push({ store: subStore as Assets<unknown>, handle: subHandle, value });
+            return subHandle;
+          }
           const subHandle = subStore.reserveHandle();
           labeled.push({ store: subStore as Assets<unknown>, handle: subHandle, value });
           return subHandle;

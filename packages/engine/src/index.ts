@@ -360,7 +360,14 @@ export {
   Images,
   RenderImages,
 } from './image';
-export { asAssetIndex, Assets, handleEq, makeHandle } from '@retro-engine/assets';
+export {
+  asAssetIndex,
+  Assets,
+  handleEq,
+  makeHandle,
+  subAssetGuid,
+  parseSubAssetGuid,
+} from '@retro-engine/assets';
 export type {
   AssetEvent,
   AssetImporter,

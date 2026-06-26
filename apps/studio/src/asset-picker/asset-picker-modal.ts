@@ -34,6 +34,7 @@ import {
   closeAssetPicker,
   pushRecent,
 } from './asset-picker-state';
+import { pickerBrowser } from './picker-pool';
 
 const POPUP = 'asset-picker';
 const W = 1000;
@@ -109,7 +110,8 @@ export const assetPickerModal = (ctx: EditorContext, state: StudioState, app: Ap
     closeAssetPicker(picker);
   }
 
-  const browser = state.browser;
+  // The pool includes a model's assignable derived clips, not just top-level files.
+  const browser = pickerBrowser(app, state.browser);
   const spec = assetTypeSpec(picker.allowedStoreType);
   const shown =
     browser === null
@@ -142,7 +144,7 @@ export const assetPickerModal = (ctx: EditorContext, state: StudioState, app: Ap
   ImGui.SameLine(0, 0);
   renderPreview(ctx, picker, browser, spec, [PREVIEW_W, bodyH]);
 
-  renderFooter(ctx, state, app, spec, shown.length);
+  renderFooter(ctx, state, app, browser, spec, shown.length);
   ImGui.PopStyleVar(1);
 
   // Any close path (title X, footer Cancel/None, Assign, Escape, backdrop) flips
@@ -613,7 +615,14 @@ const renderPreviewActions = (ctx: EditorContext, picker: AssetPickerState, asse
 
 // ── Footer (hint · None · Cancel · Assign) ────────────────────────────────────
 
-const renderFooter = (ctx: EditorContext, state: StudioState, app: App, spec: AssetTypeSpec, count: number): void => {
+const renderFooter = (
+  ctx: EditorContext,
+  state: StudioState,
+  app: App,
+  browser: ProjectBrowser | null,
+  spec: AssetTypeSpec,
+  count: number,
+): void => {
   const { ui, widgets } = ctx;
   const p = getActivePalette();
   const dl = Draw.window();
@@ -623,7 +632,7 @@ const renderFooter = (ctx: EditorContext, state: StudioState, app: App, spec: As
   dl.rectFilled([top[0], top[1]], [top[0] + w, top[1] + FOOTER_H], srgbU32(p.gray3));
   dl.line([top[0], top[1]], [top[0] + w, top[1]], srgbU32(p.gray6));
   ui.child('ap-footer', { size: [w, FOOTER_H], border: false, padding: [12, 9], noScrollbar: true }, () => {
-    const selected = compatAsset(state.browser, picker.selectedGuid, spec);
+    const selected = compatAsset(browser, picker.selectedGuid, spec);
     const hint =
       selected !== undefined
         ? `Selected ${selected.name}`

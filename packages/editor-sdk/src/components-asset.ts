@@ -74,9 +74,27 @@ export interface AssetCardOptions {
   readonly selected?: boolean | undefined;
   readonly checked?: boolean | undefined;
   readonly error?: boolean | undefined;
-  /** Sprite-sheet sub-asset count (renders a fold chip). */
+  /** Derived sub-asset count (renders a `▸ N` fold chip). */
   readonly subCount?: number | undefined;
   readonly expanded?: boolean | undefined;
+  /**
+   * Invoked immediately after the tile's hit-target is submitted, while it is the
+   * last item — so a `contextMenu` opened here anchors to the tile. Use it to
+   * attach a right-click menu.
+   */
+  readonly onContextMenu?: (() => void) | undefined;
+}
+
+/** What an {@link assetCard} reported this frame. */
+export interface AssetCardResult {
+  /** The tile body was clicked (select it). */
+  readonly clicked: boolean;
+  /** The fold chip was clicked (toggle the derived-asset drawer). */
+  readonly expandToggled: boolean;
+  /** The multi-select checkbox was clicked (toggle it in the selection set). */
+  readonly checkToggled: boolean;
+  /** The tile was right-clicked (select it, then its context menu opens). */
+  readonly rightClicked: boolean;
 }
 
 const truncate = (name: string, maxW: number): string => {
@@ -94,7 +112,7 @@ const drawPreview = (o: AssetCardOptions, min: Vec2, size: number): void => {
   const cy = (min[1] + max[1]) / 2;
   if (o.error === true) {
     dl.rectFilled(min, max, srgbU32(p.red400, 0.18), 3);
-    drawIcon('image', [cx - 9, cy - 9], 18, srgbU32(p.red400));
+    drawIcon('triangle-alert', [cx - 9, cy - 9], 18, srgbU32(p.red400));
     return;
   }
   // A ready thumbnail wins over the procedural placeholder: checkerboard behind
@@ -112,9 +130,12 @@ const drawPreview = (o: AssetCardOptions, min: Vec2, size: number): void => {
     case 'sprite': {
       dl.checkerboard(min, max, 8, srgbU32(p.gray5), srgbU32(p.gray3));
       const pad = size * 0.18;
-      dl.rectFilled([min[0] + pad, min[1] + pad], [max[0] - pad, max[1] - pad], packU32(0x9a, 0x6b, 0x3f), 2);
       if (o.type === 'sprite') {
-        dl.rect([min[0] + pad, min[1] + pad], [max[0] - pad, max[1] - pad], srgbU32(p.amber400), 0, 1.5);
+        // A sprite is a region of a texture: a dashed cyan crop frame is the
+        // signal it isn't a standalone file.
+        dl.rect([min[0] + pad, min[1] + pad], [max[0] - pad, max[1] - pad], srgbU32(p.cyan400), 0, 1.5);
+      } else {
+        dl.rectFilled([min[0] + pad, min[1] + pad], [max[0] - pad, max[1] - pad], packU32(0x9a, 0x6b, 0x3f), 2);
       }
       break;
     }
@@ -162,17 +183,25 @@ const drawPreview = (o: AssetCardOptions, min: Vec2, size: number): void => {
   }
 };
 
-/** Render an asset-browser tile. Returns whether it was clicked / its fold chip toggled. */
-export const assetCard = (o: AssetCardOptions): { clicked: boolean; expandToggled: boolean } => {
+/** Render an asset-browser tile. Returns its interaction flags this frame. */
+export const assetCard = (o: AssetCardOptions): AssetCardResult => {
   const p = getActivePalette();
   const size = o.tile;
   let expandToggled = false;
+  let checkToggled = false;
   let clicked = false;
+  let rightClicked = false;
   ui.withId(o.id, () => {
     ui.group(() => {
       const min = ui.cursorScreenPos();
       clicked = ui.invisibleButton('tile', [size, size]);
       const hovered = ui.isItemHovered();
+      rightClicked = ui.isItemClicked(1);
+      const leftClicked = ui.isItemClicked(0);
+      const m = ui.mousePos();
+      // Anchor a right-click menu to the tile while its hit-target is the last
+      // item submitted (before the overlays' draw-list calls and the label).
+      o.onContextMenu?.();
       const dl = Draw.window();
       const max: Vec2 = [min[0] + size, min[1] + size];
       dl.rectFilled(min, max, srgbU32(p.gray2), 4);
@@ -189,23 +218,29 @@ export const assetCard = (o: AssetCardOptions): { clicked: boolean; expandToggle
         dl.rectFilled([min[0] + 4, max[1] - ts[1] - 8], [min[0] + ts[0] + 14, max[1] - 4], srgbU32(p.gray0, 0.8), 2);
         dl.text([min[0] + 9, max[1] - ts[1] - 6], tc.fg, info.tag);
       }
-      // Multi-select checkbox on hover / when checked.
+      // Multi-select checkbox on hover / when checked (top-left).
       if (o.checked === true || hovered) {
         const bx = min[0] + 6;
         const by = min[1] + 6;
         dl.rectFilled([bx, by], [bx + 16, by + 16], srgbU32(o.checked === true ? p.green400 : p.gray0, 0.85), 2);
         if (o.checked === true) drawIcon('check', [bx + 1, by + 1], 14, srgbU32(p.gray0));
+        if (leftClicked && m[0] >= bx && m[0] <= bx + 16 && m[1] >= by && m[1] <= by + 16) checkToggled = true;
       }
-      // Sprite-sheet fold chip (bottom-right).
-      if (o.subCount !== undefined) {
+      // Derived-asset fold chip (top-right) — clear of the bottom-left type tag
+      // at every zoom, and clear of the top-left multi-select checkbox.
+      if (o.subCount !== undefined && o.subCount > 0) {
         const num = ` ${o.subCount}`;
         const ts = ui.calcTextSize(num);
-        const cmin: Vec2 = [max[0] - ts[0] - 24, max[1] - ts[1] - 8];
-        dl.rectFilled(cmin, [max[0] - 4, max[1] - 4], srgbU32(p.gray0, 0.85), 2);
-        drawIcon(o.expanded === true ? 'chevron-down' : 'chevron-right', [cmin[0] + 3, cmin[1] + 1], 14, srgbU32(p.textMuted));
-        dl.text([cmin[0] + 16, cmin[1] + 2], srgbU32(p.textMuted), num);
-        const m = ui.mousePos();
-        if (ui.isItemClicked() && m[0] >= cmin[0] && m[1] >= cmin[1]) expandToggled = true;
+        const chipW = ts[0] + 22;
+        const chipH = ts[1] + 6;
+        const cmin: Vec2 = [max[0] - chipW - 4, min[1] + 4];
+        const cmax: Vec2 = [max[0] - 4, min[1] + 4 + chipH];
+        dl.rectFilled(cmin, cmax, srgbU32(p.gray0, 0.85), 2);
+        drawIcon(o.expanded === true ? 'chevron-down' : 'chevron-right', [cmin[0] + 3, cmin[1] + 2], 14, srgbU32(p.textMuted));
+        dl.text([cmin[0] + 16, cmin[1] + 3], srgbU32(p.textMuted), num);
+        if (leftClicked && m[0] >= cmin[0] && m[0] <= cmax[0] && m[1] >= cmin[1] && m[1] <= cmax[1]) {
+          expandToggled = true;
+        }
       }
       // Label + meta.
       const labelW = size - 4;
@@ -218,33 +253,52 @@ export const assetCard = (o: AssetCardOptions): { clicked: boolean; expandToggle
       else ui.dummy([labelW, ui.textLineHeight()]);
     });
   });
-  return { clicked: clicked && !expandToggled, expandToggled };
+  const consumed = expandToggled || checkToggled;
+  return { clicked: clicked && !consumed, expandToggled, checkToggled, rightClicked };
 };
 
 /** Options for {@link Widgets.assetGroup}. */
 export interface AssetGroupOptions {
   readonly id: string;
+  /** The source file's name (the drawer header). */
   readonly name: string;
-  readonly meta?: string | undefined;
-  readonly subCount: number;
+  /** The asset type driving the header icon + tone (the source file's type). */
+  readonly headerType: AssetType;
+  /**
+   * The child summary, e.g. `"4 sprites"` or `"6 meshes · 3 materials ·
+   * 2 animations"`, optionally with the source meta appended by the caller.
+   */
+  readonly summary: string;
   readonly tile: number;
-  /** Render the sprite sub-tiles inside the drawer. */
+  /** Overall drawer height; defaults to a single row of `tile`-sized children. */
+  readonly height?: number | undefined;
+  /** Render the child tiles inside the drawer (each a real `assetCard`). */
   readonly body: () => void;
   readonly onCollapse?: () => void;
 }
 
-/** Render the full-width drawer for a texture's sprite sub-assets. */
+/**
+ * Render the full-width drawer holding a source file's derived children. The
+ * header is the source file (typed icon + name + child summary + Collapse); the
+ * body lays the children out as their own tiles. Children keep their own type's
+ * tone and preview — the drawer contains them, it does not restyle them.
+ */
 export const assetGroup = (o: AssetGroupOptions): void => {
   const p = getActivePalette();
+  const start = ui.cursorScreenPos();
+  const height = o.height ?? o.tile + 78;
   ImGui.PushStyleColor(ImGuiCol.ChildBg, srgbU32(p.gray1, 0.6));
-  ui.child(`grp-${o.id}`, { size: [0, o.tile + 78], border: true, padding: [8, 8] }, () => {
+  ui.child(`grp-${o.id}`, { size: [0, height], border: true, padding: [10, 8] }, () => {
+    const info = ASSET_TYPES[o.headerType];
     ui.group(() => {
-      ui.icon('image', [0.2, 0.78, 0.48, 1]);
-      ui.sameLine();
+      const cs0 = ui.cursorScreenPos();
+      drawIcon(info.icon, [cs0[0], cs0[1] + 3], 16, toneColors(info.tone).fg);
+      ui.dummy([18, 16]);
+      ui.sameLine(0, 4);
       ui.alignTextToFramePadding();
       ui.text(o.name);
       ui.sameLine();
-      ui.textDisabled(`· ${o.subCount} sprites${o.meta !== undefined ? ` · ${o.meta}` : ''}`);
+      ui.textDisabled(`· ${o.summary}`);
       ui.sameLine();
       ui.rightAlign(22);
       const cs = ui.cursorScreenPos();
@@ -255,4 +309,6 @@ export const assetGroup = (o: AssetGroupOptions): void => {
     o.body();
   });
   ImGui.PopStyleColor(1);
+  // Inset accent rail on the left edge — the band's "this is one source file" cue.
+  Draw.window().rectFilled([start[0], start[1]], [start[0] + 2, start[1] + height], srgbU32(p.green400), 0);
 };

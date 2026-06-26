@@ -6,6 +6,7 @@ import { type Entity } from '@retro-engine/ecs';
 import { defaultViewportGizmoOptions, type ViewportGizmoOptions } from '@retro-engine/editor-sdk';
 
 import { type AssetPickerState, createAssetPickerState } from './asset-picker/asset-picker-state';
+import { type AssetsPanelState, createAssetsPanelState } from './assets/assets-panel-state';
 import { type ComposerState, createComposerState } from './composer/composer-state';
 import { type ViewMode } from './editor-camera';
 import type { ProjectBrowser } from './project/project-browser';
@@ -66,9 +67,8 @@ export interface StudioState {
   fps: number;
   /** Live project asset browser (file index + thumbnails), or `null` with no project open. */
   browser: ProjectBrowser | null;
-  /** Asset browser. */
-  assetSearch: string;
-  assetZoom: AssetZoom;
+  /** Asset browser panel state: search, zoom, folder, filters, expansion, multi-select. */
+  assets: AssetsPanelState;
   /** Hierarchy filter. */
   entityFilter: string;
   /** Project Settings dialog. */
@@ -101,8 +101,7 @@ export const createState = (scene: Scene): StudioState => ({
   showProfiler: false,
   fps: 60,
   browser: null,
-  assetSearch: '',
-  assetZoom: 'md',
+  assets: createAssetsPanelState(),
   entityFilter: '',
   settingsOpen: false,
   settings: {
