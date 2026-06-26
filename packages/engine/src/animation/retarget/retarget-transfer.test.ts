@@ -1,12 +1,7 @@
 import { quat, vec3 } from '@retro-engine/math';
 import { describe, expect, it } from 'bun:test';
 
-import {
-  bodyFrameAlignment,
-  proportionRatio,
-  scaleRootTranslation,
-  transferRotation,
-} from './retarget-transfer';
+import { proportionRatio, scaleRootTranslation, transferRotation } from './retarget-transfer';
 
 const I = () => quat.identity();
 const near = (a: ArrayLike<number>, b: readonly number[]): void => {
@@ -14,30 +9,30 @@ const near = (a: ArrayLike<number>, b: readonly number[]): void => {
   for (let i = 0; i < b.length; i++) expect(a[i]!).toBeCloseTo(b[i]!, 5);
 };
 
-describe('transferRotation (world-space)', () => {
-  it('copies the source rotation when both rigs share an identity bind', () => {
+describe('transferRotation (reference-pose)', () => {
+  it('copies the source rotation when both rigs share an identity reference pose', () => {
     const srcAnim = quat.fromEuler(0.3, -0.2, 0.5, 'xyz');
     const out = transferRotation(I(), I(), srcAnim, I(), I(), quat.create());
     near(out, [...srcAnim]);
   });
 
-  it('preserves the world delta-from-bind across rigs with different bind orientations', () => {
-    // Source and target bones rest in different world orientations; a transfer
-    // must keep the bone's world-space rotation *relative to its own bind* equal
-    // on both rigs. Build arbitrary parent/bone bind worlds and a source local.
+  it('preserves the world delta-from-reference across rigs whose reference poses differ', () => {
+    // Source and target bones sit in different reference-pose world orientations;
+    // a transfer must keep the bone's world-space rotation *relative to its own
+    // reference pose* equal on both rigs.
     const srcParent = quat.fromEuler(0.1, 0.2, -0.3, 'xyz');
-    const srcRest = quat.fromEuler(0.4, -0.1, 0.2, 'xyz'); // bone world bind
+    const srcRef = quat.fromEuler(0.4, -0.1, 0.2, 'xyz'); // bone world reference
     const tgtParent = quat.fromEuler(-0.5, 0.3, 0.15, 'xyz');
-    const tgtRest = quat.fromEuler(0.2, 0.6, -0.4, 'xyz');
+    const tgtRef = quat.fromEuler(0.2, 0.6, -0.4, 'xyz');
     const srcLocal = quat.fromEuler(0.25, 0.1, -0.2, 'xyz');
 
-    const tgtLocal = transferRotation(srcParent, srcRest, srcLocal, tgtParent, tgtRest, quat.create());
+    const tgtLocal = transferRotation(srcParent, srcRef, srcLocal, tgtParent, tgtRef, quat.create());
 
-    // Reconstruct world rotations (parent assumed at bind) and compare deltas.
+    // Reconstruct world rotations (parent assumed at reference) and compare deltas.
     const srcWorld = quat.multiply(srcParent, srcLocal, quat.create());
     const tgtWorld = quat.multiply(tgtParent, tgtLocal, quat.create());
-    const srcDelta = quat.multiply(srcWorld, quat.inverse(srcRest, quat.create()), quat.create());
-    const tgtDelta = quat.multiply(tgtWorld, quat.inverse(tgtRest, quat.create()), quat.create());
+    const srcDelta = quat.multiply(srcWorld, quat.inverse(srcRef, quat.create()), quat.create());
+    const tgtDelta = quat.multiply(tgtWorld, quat.inverse(tgtRef, quat.create()), quat.create());
     quat.normalize(srcDelta, srcDelta);
     quat.normalize(tgtDelta, tgtDelta);
     // Quaternions are double-cover; align hemisphere before comparing.
@@ -45,48 +40,19 @@ describe('transferRotation (world-space)', () => {
     near(tgtDelta, [...srcDelta]);
   });
 
-  it('returns the target rest when the source is at its own rest (no motion)', () => {
-    // srcLocal that places the bone at its bind: srcLocal = srcParent⁻¹ · srcRest.
+  it('returns the target reference when the source is at its own reference (no motion)', () => {
+    // srcLocal that places the bone at its reference: srcLocal = srcParent⁻¹ · srcRef.
     const srcParent = quat.fromEuler(0.1, 0.2, -0.3, 'xyz');
-    const srcRest = quat.fromEuler(0.4, -0.1, 0.2, 'xyz');
+    const srcRef = quat.fromEuler(0.4, -0.1, 0.2, 'xyz');
     const tgtParent = quat.fromEuler(-0.5, 0.3, 0.15, 'xyz');
-    const tgtRest = quat.fromEuler(0.2, 0.6, -0.4, 'xyz');
-    const srcLocalRest = quat.multiply(quat.inverse(srcParent, quat.create()), srcRest, quat.create());
+    const tgtRef = quat.fromEuler(0.2, 0.6, -0.4, 'xyz');
+    const srcLocalRef = quat.multiply(quat.inverse(srcParent, quat.create()), srcRef, quat.create());
 
-    const out = transferRotation(srcParent, srcRest, srcLocalRest, tgtParent, tgtRest, quat.create());
-    // target bone at bind: tgtLocalRest = tgtParent⁻¹ · tgtRest
-    const tgtLocalRest = quat.multiply(quat.inverse(tgtParent, quat.create()), tgtRest, quat.create());
-    if (quat.dot(out, tgtLocalRest) < 0) for (let i = 0; i < 4; i++) out[i] = -out[i]!;
-    near(out, [...tgtLocalRest]);
-  });
-});
-
-describe('bodyFrameAlignment', () => {
-  it('is identity when both rigs share a bind orientation', () => {
-    const hip = vec3.create(0, 1, 0), head = vec3.create(0, 2, 0);
-    const legL = vec3.create(0.5, 0, 0), legR = vec3.create(-0.5, 0, 0);
-    const g = bodyFrameAlignment(hip, head, legL, legR, hip, head, legL, legR, quat.create());
-    const aligned = vec3.transformQuat(vec3.create(1, 0, 0), g, vec3.create());
-    near(aligned, [1, 0, 0]);
-  });
-
-  it('recovers the global rotation when the target faces a different way', () => {
-    // Source faces +Z (up +Y, left +X). Target is the source rotated 90° about Y,
-    // so its left axis points -Z. G must map the source side (+X) onto the target's.
-    const hip = vec3.create(0, 1, 0), head = vec3.create(0, 2, 0);
-    const sLegL = vec3.create(0.5, 0, 0), sLegR = vec3.create(-0.5, 0, 0);
-    const tLegL = vec3.create(0, 0, -0.5), tLegR = vec3.create(0, 0, 0.5);
-    const g = bodyFrameAlignment(hip, head, sLegL, sLegR, hip, head, tLegL, tLegR, quat.create());
-    const side = vec3.transformQuat(vec3.create(1, 0, 0), g, vec3.create()); // src side +X
-    near(side, [0, 0, -1]); // → target side -Z
-    const up = vec3.transformQuat(vec3.create(0, 1, 0), g, vec3.create());
-    near(up, [0, 1, 0]); // up preserved
-  });
-
-  it('falls back to identity for degenerate landmarks', () => {
-    const p = vec3.create(0, 0, 0);
-    const g = bodyFrameAlignment(p, p, p, p, p, p, p, p, quat.create());
-    near(g, [0, 0, 0, 1]);
+    const out = transferRotation(srcParent, srcRef, srcLocalRef, tgtParent, tgtRef, quat.create());
+    // target bone at reference: tgtLocalRef = tgtParent⁻¹ · tgtRef
+    const tgtLocalRef = quat.multiply(quat.inverse(tgtParent, quat.create()), tgtRef, quat.create());
+    if (quat.dot(out, tgtLocalRef) < 0) for (let i = 0; i < 4; i++) out[i] = -out[i]!;
+    near(out, [...tgtLocalRef]);
   });
 });
 

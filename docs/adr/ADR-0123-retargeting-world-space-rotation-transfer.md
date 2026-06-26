@@ -1,6 +1,6 @@
 # ADR-0123: Retargeting — world-space rotation transfer for cross-orientation rigs
 
-- **Status:** Accepted
+- **Status:** Superseded by ADR-0125
 - **Date:** 2026-06-25
 
 ## Context

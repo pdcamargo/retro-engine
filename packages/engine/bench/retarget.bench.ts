@@ -30,6 +30,8 @@ const makeRig = (hipHeight: number): RetargetRig => {
     restWorldT: vec3.create(0, slot === 'Hips' ? hipHeight : 0, 0),
     restWorldR: quat.identity(),
     parentRestWorldR: quat.identity(),
+    refWorldR: quat.identity(),
+    parentRefWorldR: quat.identity(),
   }));
   return new RetargetRig(slots);
 };

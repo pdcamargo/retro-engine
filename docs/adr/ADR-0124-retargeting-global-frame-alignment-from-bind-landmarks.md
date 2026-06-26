@@ -1,6 +1,6 @@
 # ADR-0124: Retargeting — global frame alignment from bind-pose body landmarks
 
-- **Status:** Accepted
+- **Status:** Superseded by ADR-0125
 - **Date:** 2026-06-25
 
 ## Context

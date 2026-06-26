@@ -1,4 +1,3 @@
-import type { Quat } from '@retro-engine/math';
 import { quat, vec3 } from '@retro-engine/math';
 
 import type { AnimationTrack } from '../animation-clip';
@@ -8,7 +7,6 @@ import type { RetargetRig, RetargetSlot } from './retarget-rig';
 import type { RootTranslationMode } from './retarget-transfer';
 import {
   applyRetargetFactors,
-  bodyFrameAlignment,
   proportionRatio,
   retargetRotationFactors,
   scaleRootTranslation,
@@ -24,23 +22,19 @@ export interface RetargetClipOptions {
   readonly rootTranslationMode?: RootTranslationMode;
 }
 
-// Re-bake a rotation track onto the target bone. The world-space transfer factors
-// (A, B) are constant per bone, so they are built once and applied to every
-// keyframe value (and any CUBICSPLINE tangent — left-multiply by A and
-// right-multiply by B preserves the spline structure).
+// Re-bake a rotation track onto the target bone. The transfer factors (A, B) are
+// constant per bone, so they are built once from both rigs' shared reference-pose
+// world rotations and applied to every keyframe value (and any CUBICSPLINE
+// tangent — left-multiply by A and right-multiply by B preserves the spline
+// structure).
 const rebakeRotation = (
   track: AnimationTrack,
   src: RetargetSlot,
   tgt: RetargetSlot,
-  align: Quat,
 ): AnimationTrack => {
-  // Re-base the source bone's bind world rotations into the target's frame by the
-  // global alignment, then build the constant transfer factors.
-  const gSrcParent = quat.multiply(align, src.parentRestWorldR, quat.create());
-  const gSrcRest = quat.multiply(align, src.restWorldR, quat.create());
   const a = quat.create();
   const b = quat.create();
-  retargetRotationFactors(gSrcParent, gSrcRest, tgt.parentRestWorldR, tgt.restWorldR, a, b);
+  retargetRotationFactors(src.parentRefWorldR, src.refWorldR, tgt.parentRefWorldR, tgt.refWorldR, a, b);
 
   const input = track.sampler.values;
   const out = new Float32Array(input.length);
@@ -75,13 +69,11 @@ const rebakeRootTranslation = (
   src: RetargetSlot,
   tgt: RetargetSlot,
   ratio: number,
-  align: Quat,
 ): AnimationTrack => {
-  // Frame alignment: source hip-parent orientation (globally aligned) → target's.
-  const gSrcParent = quat.multiply(align, src.parentRestWorldR, quat.create());
+  // Frame alignment: source hip-parent reference orientation → target's.
   const frameRot = quat.create();
-  quat.inverse(tgt.parentRestWorldR, frameRot);
-  quat.multiply(frameRot, gSrcParent, frameRot);
+  quat.inverse(tgt.parentRefWorldR, frameRot);
+  quat.multiply(frameRot, src.parentRefWorldR, frameRot);
 
   const cc = track.sampler.componentCount;
   const input = track.sampler.values;
@@ -139,15 +131,16 @@ const rebakeRootTranslation = (
  * ordinary clip, so it flows through `AnimationPlayer` / `AnimationController` /
  * blend trees / `AnimationLayers` and the IK post-pass with no special handling.
  *
- * Bone rotations transfer through both rigs' rest **world** rotations, so motion
- * crosses skeletons that rest in different bind orientations (the usual case for
- * a downloaded animation pack). Hip/root translation is re-based into the target's
- * frame and scaled by the rigs' height ratio (or dropped, per
- * `rootTranslationMode`); other bones' translation and scale are dropped so the
- * target keeps its own bind-pose bone lengths — residual contact drift is
- * corrected at runtime by foot/hand IK constraints on the target rig. Tracks for
- * bones neither rig maps to a humanoid slot (and non-`Transform` tracks) are
- * dropped.
+ * Bone rotations transfer as a deviation from a **shared reference pose** both
+ * rigs are posed into (a canonical T-pose), so motion crosses skeletons that rest
+ * in different bind orientations — the usual case for a downloaded animation pack,
+ * where the source rests in an A-pose and the target in a T-pose. Hip/root
+ * translation is re-based into the target's frame and scaled by the rigs' height
+ * ratio (or dropped, per `rootTranslationMode`); other bones' translation and
+ * scale are dropped so the target keeps its own bind-pose bone lengths — residual
+ * contact drift is corrected at runtime by foot/hand IK constraints on the target
+ * rig. Tracks for bones neither rig maps to a humanoid slot (and non-`Transform`
+ * tracks) are dropped.
  */
 export const retargetClip = (
   source: AnimationClip,
@@ -160,27 +153,12 @@ export const retargetClip = (
 
   const srcHip = sourceRig.slot('Hips');
   const tgtHip = targetRig.slot('Hips');
+  // Height from the hip's distance from the skeleton root, not its Y alone — the
+  // root-relative bind can carry hip height off the Y axis.
   const ratio =
     srcHip !== undefined && tgtHip !== undefined
-      ? proportionRatio(srcHip.restWorldT[1]!, tgtHip.restWorldT[1]!)
+      ? proportionRatio(vec3.length(srcHip.restWorldT), vec3.length(tgtHip.restWorldT))
       : 1;
-
-  // Global frame alignment between the two rigs' bind poses, from body landmarks.
-  // Identity when the landmarks are missing (rigs assumed already co-oriented).
-  const align = quat.identity();
-  const sHead = sourceRig.slot('Head');
-  const sLegL = sourceRig.slot('LeftUpperLeg');
-  const sLegR = sourceRig.slot('RightUpperLeg');
-  const tHead = targetRig.slot('Head');
-  const tLegL = targetRig.slot('LeftUpperLeg');
-  const tLegR = targetRig.slot('RightUpperLeg');
-  if (srcHip && sHead && sLegL && sLegR && tgtHip && tHead && tLegL && tLegR) {
-    bodyFrameAlignment(
-      srcHip.restWorldT, sHead.restWorldT, sLegL.restWorldT, sLegR.restWorldT,
-      tgtHip.restWorldT, tHead.restWorldT, tLegL.restWorldT, tLegR.restWorldT,
-      align,
-    );
-  }
 
   for (const track of source.tracks) {
     const field = boneTrackField(track);
@@ -192,9 +170,9 @@ export const retargetClip = (
     if (tgtEntry === undefined) continue;
 
     if (field === 'r') {
-      tracks.push(rebakeRotation(track, srcEntry, tgtEntry, align));
+      tracks.push(rebakeRotation(track, srcEntry, tgtEntry));
     } else if (field === 't' && slot === 'Hips' && mode === 'animationScaled') {
-      tracks.push(rebakeRootTranslation(track, srcEntry, tgtEntry, ratio, align));
+      tracks.push(rebakeRootTranslation(track, srcEntry, tgtEntry, ratio));
     }
     // Non-hip translation and all scale tracks are intentionally dropped.
   }

@@ -8,6 +8,19 @@ import { Transform } from '../../transform';
 import { AnimationTarget } from '../animation-player';
 import type { HumanoidSlot } from './humanoid';
 import { slotForBoneName } from './humanoid';
+import type { AuthoredReferencePose, ReferencePoseBone } from './retarget-reference-pose';
+import { computeReferencePose } from './retarget-reference-pose';
+
+/** Options for {@link buildHumanoidRetargetRig}. */
+export interface BuildRetargetRigOptions {
+  /**
+   * Hand-authored reference-pose **world** rotations that override the
+   * auto-derived value per slot — the Unreal "retarget pose" escape hatch for a
+   * rig whose bind pose the direction heuristic reads wrong. Slots left out keep
+   * their derived rotation.
+   */
+  readonly referencePose?: AuthoredReferencePose;
+}
 
 /**
  * One bone of a {@link RetargetRig}: the canonical slot it fills, the id a clip
@@ -28,15 +41,21 @@ export interface RetargetSlot {
   readonly restS: Vec3;
   /** Rest **world** translation — used to derive the proportion (height) ratio. */
   readonly restWorldT: Vec3;
-  /**
-   * Rest **world** rotation of this bone. The world-space transfer re-bases a
-   * source clip's rotation through both rigs' bind world rotations, so motion
-   * crosses skeletons whose bones rest in different orientations (e.g. an
-   * animation pack rigged in a different bind convention than the target).
-   */
+  /** Rest **world** rotation of this bone, in the skeleton-root frame. */
   readonly restWorldR: Quat;
   /** Rest **world** rotation of this bone's parent (identity at the hierarchy root). */
   readonly parentRestWorldR: Quat;
+  /**
+   * This bone's **world** rotation in the shared *reference pose* (a canonical
+   * T-pose both rigs are notionally posed into). The retarget transfers a clip's
+   * motion as a deviation from this shared pose rather than from each rig's own
+   * bind, so a clip authored on an A-pose rig lands correctly on a T-pose target:
+   * at the source's rest the target shows the source's rest shape, not its own
+   * bind. Auto-derived from the bind bone directions, or authored as an override.
+   */
+  readonly refWorldR: Quat;
+  /** This bone's parent's **world** rotation in the reference pose. */
+  readonly parentRefWorldR: Quat;
 }
 
 /**
@@ -90,16 +109,34 @@ export class RetargetRig {
  * different container conventions still compare correctly. It is also independent
  * of whether `GlobalTransform`s have been propagated this frame. Pass the
  * skeleton's **root bone** as `skeletonRoot`.
+ *
+ * Each bone's shared reference-pose rotation is then derived from the bind bone
+ * directions (see {@link computeReferencePose}); pass `opts.referencePose` to
+ * author it by hand for any slot.
  */
 export const buildHumanoidRetargetRig = (
   world: World,
   skeletonRoot: Entity,
   name?: string,
+  opts: BuildRetargetRigOptions = {},
 ): RetargetRig => {
-  const slots: RetargetSlot[] = [];
+  // Bind data captured per mapped bone, plus the nearest mapped ancestor slot,
+  // before the reference pose is derived over the whole set.
+  type BindBone = ReferencePoseBone & {
+    readonly boneId: string;
+    readonly restT: Vec3;
+    readonly restR: Quat;
+    readonly restS: Vec3;
+  };
+  const bones: BindBone[] = [];
   const seen = new Set<HumanoidSlot>();
 
-  const visit = (entity: Entity, parentWorldR: Quat, parentWorldT: Vec3): void => {
+  const visit = (
+    entity: Entity,
+    parentWorldR: Quat,
+    parentWorldT: Vec3,
+    parentSlot: HumanoidSlot | undefined,
+  ): void => {
     const transform = world.getComponent(entity, Transform);
     const worldR = quat.create();
     const worldT = vec3.create();
@@ -114,12 +151,14 @@ export const buildHumanoidRetargetRig = (
 
     const named = world.getComponent(entity, Name);
     const slot = named !== undefined ? slotForBoneName(named.value) : undefined;
+    let childParentSlot = parentSlot;
     if (slot !== undefined && !seen.has(slot) && transform !== undefined) {
       const target = world.getComponent(entity, AnimationTarget);
       const boneId = target?.id ?? named!.value;
-      slots.push({
+      bones.push({
         slot,
         boneId,
+        parentSlot,
         restT: vec3.clone(transform.translation),
         restR: quat.clone(transform.rotation),
         restS: vec3.clone(transform.scale),
@@ -128,14 +167,32 @@ export const buildHumanoidRetargetRig = (
         parentRestWorldR: quat.clone(parentWorldR),
       });
       seen.add(slot);
+      childParentSlot = slot;
     }
 
     const children = world.getComponent(entity, Children);
     if (children !== undefined) {
-      for (const child of children.entities) visit(child, worldR, worldT);
+      for (const child of children.entities) visit(child, worldR, worldT, childParentSlot);
     }
   };
 
-  visit(skeletonRoot, quat.identity(), vec3.create(0, 0, 0));
+  visit(skeletonRoot, quat.identity(), vec3.create(0, 0, 0), undefined);
+
+  const reference = computeReferencePose(bones, opts.referencePose);
+  const slots: RetargetSlot[] = bones.map((b) => {
+    const ref = reference.get(b.slot)!;
+    return {
+      slot: b.slot,
+      boneId: b.boneId,
+      restT: b.restT,
+      restR: b.restR,
+      restS: b.restS,
+      restWorldT: b.restWorldT,
+      restWorldR: b.restWorldR,
+      parentRestWorldR: b.parentRestWorldR,
+      refWorldR: ref.refWorldR,
+      parentRefWorldR: ref.parentRefWorldR,
+    };
+  });
   return new RetargetRig(slots, name);
 };

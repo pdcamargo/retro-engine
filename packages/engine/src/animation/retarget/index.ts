@@ -6,7 +6,14 @@ export {
 export type { HumanoidBodyPart, HumanoidSlot } from './humanoid';
 
 export { buildHumanoidRetargetRig, RetargetRig } from './retarget-rig';
-export type { RetargetSlot } from './retarget-rig';
+export type { BuildRetargetRigOptions, RetargetSlot } from './retarget-rig';
+
+export { computeReferencePose, frameFromAxes } from './retarget-reference-pose';
+export type {
+  AuthoredReferencePose,
+  ReferencePoseBone,
+  ReferencePoseEntry,
+} from './retarget-reference-pose';
 
 export {
   createRetargetRigImporter,
@@ -18,7 +25,6 @@ export {
 
 export {
   applyRetargetFactors,
-  bodyFrameAlignment,
   proportionRatio,
   retargetRotationFactors,
   scaleRootTranslation,

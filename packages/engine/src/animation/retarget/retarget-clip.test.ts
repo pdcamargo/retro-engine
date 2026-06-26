@@ -21,6 +21,8 @@ const slot = (
   restWorldT: vec3.create(0, hipHeight, 0),
   restWorldR: quat.identity(),
   parentRestWorldR: quat.identity(),
+  refWorldR: quat.identity(),
+  parentRefWorldR: quat.identity(),
 });
 
 const rotTrack = (targetId: string, q: ArrayLike<number>): AnimationTrack => ({

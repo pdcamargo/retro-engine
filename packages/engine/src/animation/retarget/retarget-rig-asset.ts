@@ -13,7 +13,7 @@ export class RetargetRigs extends Assets<RetargetRig> {}
 export const RETARGET_RIG_ASSET_KIND = 'RetargetRig';
 
 /** Current `.rerig` wire-format version. Bumped only on a breaking shape change. */
-export const RETARGET_RIG_FORMAT_VERSION = 2;
+export const RETARGET_RIG_FORMAT_VERSION = 3;
 
 interface RetargetSlotFile {
   readonly slot: HumanoidSlot;
@@ -24,6 +24,8 @@ interface RetargetSlotFile {
   readonly restWorldT: readonly [number, number, number];
   readonly restWorldR: readonly [number, number, number, number];
   readonly parentRestWorldR: readonly [number, number, number, number];
+  readonly refWorldR: readonly [number, number, number, number];
+  readonly parentRefWorldR: readonly [number, number, number, number];
 }
 
 interface RetargetRigFile {
@@ -49,6 +51,13 @@ const encodeRig = (rig: RetargetRig): Uint8Array => {
         s.parentRestWorldR[1]!,
         s.parentRestWorldR[2]!,
         s.parentRestWorldR[3]!,
+      ],
+      refWorldR: [s.refWorldR[0]!, s.refWorldR[1]!, s.refWorldR[2]!, s.refWorldR[3]!],
+      parentRefWorldR: [
+        s.parentRefWorldR[0]!,
+        s.parentRefWorldR[1]!,
+        s.parentRefWorldR[2]!,
+        s.parentRefWorldR[3]!,
       ],
     })),
   };
@@ -78,6 +87,13 @@ const decodeRig = (bytes: Uint8Array): RetargetRig => {
       s.parentRestWorldR[1],
       s.parentRestWorldR[2],
       s.parentRestWorldR[3],
+    ),
+    refWorldR: quat.create(s.refWorldR[0], s.refWorldR[1], s.refWorldR[2], s.refWorldR[3]),
+    parentRefWorldR: quat.create(
+      s.parentRefWorldR[0],
+      s.parentRefWorldR[1],
+      s.parentRefWorldR[2],
+      s.parentRefWorldR[3],
     ),
   }));
   return new RetargetRig(slots, raw.name);
