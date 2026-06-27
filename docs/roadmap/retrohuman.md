@@ -97,6 +97,10 @@ The MetaHuman-feel authoring surface. Zero runtime cost, WebGL2-safe. Foundation
   + benched (~36 µs @ 19,158 verts × 40 targets).
 - **3.3 character creator panel** (apps/studio): curated macro + detail sliders driving target weights
   on the live base mesh; recompose + re-upload + recompute normals on edit.
+  - ✅ **3.3a** `ObjMesh` asset kind (`.obj` → `Mesh` via `parseObjBaseMesh`, into the shared `Meshes`
+    store). Verified live: `base.obj` loads (19,158 verts), renders, and `getMut` + sparse compose +
+    `computeSmoothNormals` reshapes it (renderer stays healthy).
+  - **3.3b** the panel UI (sliders) + preview entity, wrapping the verified compose mechanism.
 - **3.4 bake** → final mesh + skeleton + GLB asset through the existing GLB/animation stack.
 - Curate the slider set (start with face: nose/ears/cheek/chin/eyes/mouth/forehead; then macros).
 

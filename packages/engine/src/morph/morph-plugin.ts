@@ -4,9 +4,11 @@ import { registerAssetKind } from '../asset/asset-kinds';
 import { registerAssetStore } from '../asset/asset-stores';
 import { AssetServer } from '../asset/asset-server';
 import type { App } from '../index';
+import { Meshes } from '../mesh/meshes';
 import type { PluginObject } from '../plugin';
 import { MorphGpu } from './morph-gpu';
 import { MorphWeights } from './morph-weights';
+import { OBJ_MESH_ASSET_KIND, createObjMeshImporter } from './obj-base-mesh-asset';
 import {
   SPARSE_MORPH_TARGET_ASSET_KIND,
   SparseMorphTargets,
@@ -57,10 +59,24 @@ export class MorphPlugin implements PluginObject {
       discoverable: true,
       category: 'morph',
     });
-    // Read-side importer once an AssetServer exists; deferred via whenResource so
+    // `.obj` source files load as vertex-order base meshes into the shared Meshes
+    // store (the morph-aligned base loader, ADR-0131 — not a general OBJ import).
+    const meshes = app.getResource(Meshes);
+    if (meshes !== undefined) {
+      registerAssetStore(app, OBJ_MESH_ASSET_KIND, meshes);
+      registerAssetKind(app, {
+        kind: OBJ_MESH_ASSET_KIND,
+        extensions: ['obj'],
+        discoverable: true,
+        category: 'mesh',
+      });
+    }
+
+    // Read-side importers once an AssetServer exists; deferred via whenResource so
     // plugin-add order does not matter.
     app.whenResource(AssetServer, (server) => {
       server.registerLoader('target', targets, createSparseMorphTargetImporter());
+      if (meshes !== undefined) server.registerLoader('obj', meshes, createObjMeshImporter());
     });
   }
 }

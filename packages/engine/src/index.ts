@@ -160,6 +160,8 @@ export {
   SparseMorphTargets,
   createSparseMorphTargetImporter,
   parseObjBaseMesh,
+  OBJ_MESH_ASSET_KIND,
+  createObjMeshImporter,
   composeMorphedPositions,
 } from './morph';
 export type { WeightedMorphTarget } from './morph';
