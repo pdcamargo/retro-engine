@@ -107,15 +107,6 @@ export class GltfPlugin implements PluginObject {
     server.registerLoader('glb', gltfs, importer);
     registerAssetKind(app, gltfAssetKindDescriptor);
 
-    // Resolve a model's animation sub-asset reference (`"<modelGuid>#AnimationN"`)
-    // into the clip store. `AnimationPlugin` also registers this, but only when an
-    // `AssetServer` already exists at its build time; in a host that adds the
-    // server after the core plugins (e.g. the studio), that registration is
-    // skipped, so a saved scene referencing a model clip would fail to load.
-    // GltfPlugin always builds with the server present, so registering here makes
-    // the resolution available before any scene loads (idempotent re-registration).
-    server.registerSubAssetStore('Animation', animationClips);
-
     // Bind the `Gltf` handle store so a scene that references a glTF by GUID
     // resolves its `GltfSceneRoot.handle` against this store on load.
     registerAssetStore(app, GLTF_ASSET_KIND, gltfs);

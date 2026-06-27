@@ -1058,6 +1058,12 @@ export class App {
   private readonly resources = new Map<object, object>();
   private readonly resourceChangeFrames = new Map<object, number>();
   private readonly resourceAddedFrames = new Map<object, number>();
+  /**
+   * Callbacks queued by {@link App.whenResource} for resource types not yet
+   * present, keyed by constructor. Fired (and the list dropped) the first time
+   * `insertResource` registers a matching type.
+   */
+  private readonly resourceWaiters = new Map<object, Array<(value: object) => void>>();
   private readonly commandsBuffers = new Map<SystemId, CommandOp[]>();
   private readonly lastSeenTickMap = new Map<SystemId, number>();
   private readonly lastSeenFrameMap = new Map<SystemId, number>();
@@ -1761,8 +1767,40 @@ export class App {
     this.resources.set(key, value);
     const frame = this.currentFrameNumber();
     this.resourceChangeFrames.set(key, frame);
-    if (!wasPresent) this.resourceAddedFrames.set(key, frame);
+    if (!wasPresent) {
+      this.resourceAddedFrames.set(key, frame);
+      const waiters = this.resourceWaiters.get(key);
+      if (waiters !== undefined) {
+        this.resourceWaiters.delete(key);
+        for (const waiter of waiters) waiter(value);
+      }
+    }
     return this;
+  }
+
+  /**
+   * Run `callback` with a resource of type `ctor` as soon as one is available:
+   * immediately if it is already registered, otherwise once the first
+   * {@link App.insertResource} of that type happens. The callback fires at most
+   * once per registration and is dropped after firing.
+   *
+   * This decouples a registration from the plugin order: a plugin whose setup
+   * depends on a resource another plugin inserts can wire it up via
+   * `whenResource` from its own `build()` without caring whether that other
+   * plugin was added before or after it.
+   */
+  whenResource<T extends object>(ctor: new (...args: any[]) => T, callback: (value: T) => void): void {
+    const existing = this.getResource(ctor);
+    if (existing !== undefined) {
+      callback(existing);
+      return;
+    }
+    let waiters = this.resourceWaiters.get(ctor);
+    if (waiters === undefined) {
+      waiters = [];
+      this.resourceWaiters.set(ctor, waiters);
+    }
+    waiters.push(callback as (value: object) => void);
   }
 
   /**

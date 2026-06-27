@@ -131,18 +131,20 @@ export class AnimationPlugin implements PluginObject {
       category: 'animation',
     });
 
-    // Register the read-side importers when an AssetServer is present so a
-    // standalone `.ranim` / `.ranimctrl` / `.ramask` loads; glTF-produced clips
-    // arrive as sub-assets and need no loader.
-    const server = app.getResource(AssetServer);
-    if (server !== undefined) {
+    // Register the read-side importers once an AssetServer exists so a standalone
+    // `.ranim` / `.ranimctrl` / `.ramask` loads; glTF-produced clips arrive as
+    // sub-assets and need no loader. Deferred via `whenResource` so the order in
+    // which this plugin and the AssetPlugin are added does not matter: the
+    // callback fires immediately if the server is already present, otherwise the
+    // moment it is inserted — in both cases before any scene loads.
+    app.whenResource(AssetServer, (server) => {
       server.registerLoader('ranim', clips, createAnimationClipImporter());
       server.registerLoader('ranimctrl', controllers, createAnimationControllerImporter(clips));
       server.registerLoader('ramask', masks, createAvatarMaskImporter());
       // glTF labels its extracted clips `Animation0`, `Animation1`, … so a
       // sub-asset reference `"<modelGuid>#Animation0"` resolves into this store.
       server.registerSubAssetStore('Animation', clips);
-    }
+    });
 
     app.registerComponent(
       AnimationPlayer,
