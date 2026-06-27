@@ -159,7 +159,10 @@ export {
   SPARSE_MORPH_TARGET_ASSET_KIND,
   SparseMorphTargets,
   createSparseMorphTargetImporter,
+  parseObjBaseMesh,
+  composeMorphedPositions,
 } from './morph';
+export type { WeightedMorphTarget } from './morph';
 export {
   AnimationClip,
   clipDuration,

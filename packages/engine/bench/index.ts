@@ -47,6 +47,7 @@ import './ik-solve.bench';
 import './retarget.bench';
 import './effective-clips.bench';
 import './morph-pack.bench';
+import './morph-compose.bench';
 
 interface NormalizedBench {
   readonly key: string;

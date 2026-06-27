@@ -3,7 +3,8 @@
 - **Created:** 2026-06-27
 - **Status:** In progress — Phases 1–2 complete, Phase 3 next
 - **Decisions:** ADR-0129 (morph-target GPU delivery — storage buffer, gated on `storageBuffers`),
-  ADR-0130 (MakeHuman `.target` ingestion — sparse morph-target assets; vendor data fetch-on-demand)
+  ADR-0130 (MakeHuman `.target` ingestion — sparse morph-target assets; vendor data fetch-on-demand),
+  ADR-0131 (vertex-order base mesh + CPU morph composition; edit-time-bake scope)
 
 ## Goal
 
@@ -87,11 +88,16 @@ assets the creator gathers (Phase 3), not a separate on-disk container.
 
 ### Phase 3 — Character creator panel + bake (edit-time)
 
-The MetaHuman-feel authoring surface. Zero runtime cost, WebGL2-safe.
+The MetaHuman-feel authoring surface. Zero runtime cost, WebGL2-safe. Foundations sealed in ADR-0131
+(vertex-order base mesh + CPU composition; edit-time-bake scope confirmed).
 
-- Studio panel: curated macro + detail sliders driving target weights on the live base mesh
-  (CPU-composed via the morph library).
-- "Bake" → final mesh + skeleton + GLB asset that flows through the existing GLB/animation stack.
+- ✅ **3.1 base mesh loading** — `parseObjBaseMesh` (vertex-order-preserving OBJ→Mesh, quad-triangulated,
+  smooth normals, per-vertex UV) so `.target` indices align. Verified on real `base.obj` (19,158 verts).
+- ✅ **3.2 CPU morph composition** — `composeMorphedPositions` (sparse `base + Σ wᵢ·deltaᵢ`), unit-tested
+  + benched (~36 µs @ 19,158 verts × 40 targets).
+- **3.3 character creator panel** (apps/studio): curated macro + detail sliders driving target weights
+  on the live base mesh; recompose + re-upload + recompute normals on edit.
+- **3.4 bake** → final mesh + skeleton + GLB asset through the existing GLB/animation stack.
 - Curate the slider set (start with face: nose/ears/cheek/chin/eyes/mouth/forehead; then macros).
 
 ### Phase 4 — Proxy fitting (clothes / hair)
@@ -117,8 +123,8 @@ Phase 1 capability flag. Defer for cost/sequencing, not genre (CLAUDE.md §12).
 
 - ✅ **Morph delta delivery threshold** — resolved (ADR-0129): single storage-buffer path, no
   threshold; vertex-attribute path rejected (WebGL2 budget). WebGL2 data-texture path deferred.
-- **Edit-time bake vs runtime-live** — initial scope is edit-time bake. Runtime-live is Phase 5
-  future. Confirm before Phase 3.
+- ✅ **Edit-time bake vs runtime-live** — resolved (ADR-0131): initial scope is edit-time CPU bake;
+  runtime-live customization stays a Phase 5 future (resident deltas, WebGPU-only).
 - ✅ **Vendor vs fetch-on-demand** — resolved (ADR-0130): fetch-on-demand. Asset *type* committed,
   asset *data* not; full 37.7 MB set via `fetch.sh --full`; tests use small inline fixtures.
 - **Skeleton source** — reuse a MakeHuman/MPFB2 rig (`rigs/`) vs the engine's own; how it maps onto

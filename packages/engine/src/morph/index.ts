@@ -2,6 +2,9 @@ export type { MorphTarget } from './morph-targets';
 export { MorphTargets } from './morph-targets';
 export { MorphWeights } from './morph-weights';
 export { SparseMorphTarget, parseSparseMorphTarget } from './sparse-morph-target';
+export { parseObjBaseMesh } from './obj-base-mesh';
+export { composeMorphedPositions } from './morph-compose';
+export type { WeightedMorphTarget } from './morph-compose';
 export {
   SPARSE_MORPH_TARGET_ASSET_KIND,
   SparseMorphTargets,
