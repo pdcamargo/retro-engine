@@ -345,6 +345,16 @@ export class AssetServer {
   }
 
   /**
+   * The store + handle a loaded `guid` resolves to, or `undefined` if it was
+   * never loaded through this server. Lets tooling reach an asset's live value
+   * generically (e.g. to serialize an edited asset) without knowing which typed
+   * store backs the kind — the server already tracks the mapping per load.
+   */
+  storeForGuid(guid: AssetGuid): { readonly handle: Handle<unknown>; readonly store: Assets<unknown> } | undefined {
+    return this.guidToHandle.get(guid);
+  }
+
+  /**
    * Drop the asset behind `guid` from its store and forget its handle, so a later
    * {@link AssetServer.loadByGuid} re-reads it. Removing the value queues the
    * store's `removed` event, releasing any prepared GPU resources. No-op if the

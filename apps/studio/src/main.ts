@@ -1,9 +1,10 @@
 /// <reference types="@webgpu/types" />
 
 import type { AssetGuid, AssetSink } from '@retro-engine/assets';
-import { App, AppBundleRegistry, AppTypeRegistry, AssetKinds, AssetServer, BUNDLE_ASSET_KIND, Commands, EditorGrid, generateMissingSidecars, inState, MaterialPlugin, registerAssetKind, ResMut, StandardMaterial } from '@retro-engine/engine';
+import { App, AppBundleRegistry, AppTypeRegistry, AssetKinds, AssetServer, BUNDLE_ASSET_KIND, Commands, EditorGrid, generateMissingSidecars, inState, MaterialPlugin, registerAssetKind, ResMut, saveAsset, StandardMaterial } from '@retro-engine/engine';
 import { gltfAssetKindDescriptor } from '@retro-engine/gltf';
 import {
+  type AssetEditAccess,
   buildOutline,
   createEditor,
   currentSimState,
@@ -179,10 +180,48 @@ const openBundleForEdit = (asset: { name: string; guid: string; location: string
   loadBundleIntoComposer(app, state.composer, def, { guid: asset.guid, location: asset.location });
 };
 
+// Asset edits (e.g. a material changed in the inspector) route through the same
+// History as entity edits. The port reads the live asset value via the server's
+// guid→store map (so the mutation flags the asset changed and every consumer
+// re-renders), and a debounced flush serializes each dirtied asset back to its
+// project file.
+const dirtyAssets = new Map<string, string>(); // guid → kind
+let assetSaveTimer: ReturnType<typeof setTimeout> | undefined;
+const flushAssetSaves = (): void => {
+  if (projectSink === null || dirtyAssets.size === 0) {
+    dirtyAssets.clear();
+    return;
+  }
+  const pending = [...dirtyAssets];
+  dirtyAssets.clear();
+  void (async (): Promise<void> => {
+    for (const [guid, kind] of pending) {
+      const location = state.browser?.assets.find((a) => a.guid === guid)?.location;
+      if (location === undefined || projectSink === null) continue; // derived asset: no file (see extract-copy)
+      try {
+        await saveAsset(app, guid as AssetGuid, kind, location, projectSink);
+      } catch (err) {
+        console.warn(`[studio] asset save failed for ${guid}:`, err);
+      }
+    }
+  })();
+};
+const assetEditAccess: AssetEditAccess = {
+  getMut(_kind, guid) {
+    const resolved = app.getResource(AssetServer)?.storeForGuid(guid as AssetGuid);
+    return resolved === undefined ? undefined : (resolved.store.getMut(resolved.handle) as object | undefined);
+  },
+  markDirty(kind, guid) {
+    dirtyAssets.set(guid, kind);
+    if (assetSaveTimer !== undefined) clearTimeout(assetSaveTimer);
+    assetSaveTimer = setTimeout(flushAssetSaves, 400);
+  },
+};
+
 // Editor undo/redo. Binds to the live world + the same reflection registry the
 // plugins populate; inspector edits route through it and are undoable.
 const history = new History(
-  { world: app.world, registry: app.getResource(AppTypeRegistry)!.registry },
+  { world: app.world, registry: app.getResource(AppTypeRegistry)!.registry, assets: assetEditAccess },
   { capacity: 200 },
 );
 

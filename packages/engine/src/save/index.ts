@@ -4,6 +4,8 @@ export type { AssetMetaData, AssetMetaFile } from './meta';
 export { promoteAsset } from './promote';
 export type { PromotedAsset, PromoteOptions } from './promote';
 
+export { saveAsset } from './save-asset';
+
 export { generateMissingSidecars } from './generate-sidecars';
 export type { GenerateSidecarsResult, MintedSidecar } from './generate-sidecars';
 
