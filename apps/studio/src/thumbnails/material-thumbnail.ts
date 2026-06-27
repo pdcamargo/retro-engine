@@ -57,7 +57,28 @@ const sky = (y: number): [number, number, number] => {
  * `bytes` is the raw `.remat` file; only `baseColor`/`color`, `metallic`,
  * `roughness`, and `emissive` are read, so it previews any material type.
  */
-export const renderMaterialThumbnail = (bytes: Uint8Array, size: number): Uint8Array => {
+/** A decoded base-color texture to sample onto the preview sphere (sRGB RGBA8). */
+export interface PreviewTexture {
+  readonly data: Uint8Array;
+  readonly width: number;
+  readonly height: number;
+}
+
+/** sRGB byte → linear [0,1], so a sampled texel shades in the same space as the base-color factor. */
+const srgbToLinear = (byte: number): number => {
+  const c = byte / 255;
+  return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+};
+
+const clampIdx = (x: number, max: number): number => (x < 0 ? 0 : x > max ? max : x);
+
+/**
+ * Render a material preview sphere. When `texture` is given (the material's
+ * base-color map), it is sampled per pixel via a spherical UV from the surface
+ * normal and modulates the base color — so a textured material shows a textured
+ * ball, not the flat texture nor a flat-coloured sphere.
+ */
+export const renderMaterialThumbnail = (bytes: Uint8Array, size: number, texture?: PreviewTexture): Uint8Array => {
   const file = JSON.parse(new TextDecoder().decode(bytes)) as {
     material?: { data?: Record<string, unknown> };
   };
@@ -96,6 +117,23 @@ export const renderMaterialThumbnail = (bytes: Uint8Array, size: number): Uint8A
 
       const nz = Math.sqrt(1 - d2);
       // Normal = (u, v, nz), already unit length.
+
+      // Base-color albedo: the base factor, modulated by the texture sampled at a
+      // spherical UV of the surface normal (longitude from x/z, latitude from y).
+      let albedoR = p.baseColor[0];
+      let albedoG = p.baseColor[1];
+      let albedoB = p.baseColor[2];
+      if (texture !== undefined) {
+        const texU = Math.atan2(u, nz) / (2 * Math.PI) + 0.5;
+        const texV = Math.acos(v < -1 ? -1 : v > 1 ? 1 : v) / Math.PI;
+        const tx = clampIdx(Math.floor(texU * texture.width), texture.width - 1);
+        const ty = clampIdx(Math.floor(texV * texture.height), texture.height - 1);
+        const ti = (ty * texture.width + tx) * 4;
+        albedoR *= srgbToLinear(texture.data[ti] ?? 255);
+        albedoG *= srgbToLinear(texture.data[ti + 1] ?? 255);
+        albedoB *= srgbToLinear(texture.data[ti + 2] ?? 255);
+      }
+
       const nDotV = nz; // view dir = (0,0,1)
       const nDotL = Math.max(0, u * LIGHT[0] + v * LIGHT[1] + nz * LIGHT[2]);
 
@@ -126,9 +164,9 @@ export const renderMaterialThumbnail = (bytes: Uint8Array, size: number): Uint8A
         return c ** (1 / 2.2) * 255; // gamma
       };
 
-      out[i] = shade(p.baseColor[0], f0r, p.emissive[0], env[0]);
-      out[i + 1] = shade(p.baseColor[1], f0g, p.emissive[1], env[1]);
-      out[i + 2] = shade(p.baseColor[2], f0b, p.emissive[2], env[2]);
+      out[i] = shade(albedoR, f0r, p.emissive[0], env[0]);
+      out[i + 1] = shade(albedoG, f0g, p.emissive[1], env[1]);
+      out[i + 2] = shade(albedoB, f0b, p.emissive[2], env[2]);
       out[i + 3] = 255;
     }
   }

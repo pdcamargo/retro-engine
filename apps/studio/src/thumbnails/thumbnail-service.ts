@@ -5,7 +5,7 @@ import { type Renderer, type Texture, TextureUsage } from '@retro-engine/rendere
 import { GPU_TEXTURE, type InternalTexture } from '@retro-engine/renderer-webgpu';
 
 import { renderGltfThumbnail } from './gltf-thumbnail';
-import { renderMaterialThumbnail } from './material-thumbnail';
+import { type PreviewTexture, renderMaterialThumbnail } from './material-thumbnail';
 import { renderMeshThumbnail } from './mesh-thumbnail';
 
 /** Side of the square master thumbnail; ImGui samples it down for every zoom size. */
@@ -30,6 +30,33 @@ const fitToSquare = (bitmap: ImageBitmap): Uint8Array => {
     return new Uint8Array(ctx.getImageData(0, 0, SIZE, SIZE).data.buffer);
   } finally {
     bitmap.close();
+  }
+};
+
+/** Decode an `ImageBitmap` to RGBA8 pixels (downscaled, aspect-preserved) for CPU sampling. */
+const bitmapToRgba = (bitmap: ImageBitmap, maxSide = 192): PreviewTexture => {
+  try {
+    const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+    const width = Math.max(1, Math.round(bitmap.width * scale));
+    const height = Math.max(1, Math.round(bitmap.height * scale));
+    const canvas = new OffscreenCanvas(width, height);
+    const ctx = canvas.getContext('2d');
+    if (ctx === null) throw new Error('OffscreenCanvas 2D context unavailable');
+    ctx.drawImage(bitmap, 0, 0, width, height);
+    return { data: new Uint8Array(ctx.getImageData(0, 0, width, height).data.buffer), width, height };
+  } finally {
+    bitmap.close();
+  }
+};
+
+/** The `baseColorTexture` GUID a `.remat` references, or `undefined`. */
+const baseColorTextureGuid = (bytes: Uint8Array): string | undefined => {
+  try {
+    const file = JSON.parse(new TextDecoder().decode(bytes)) as { material?: { data?: Record<string, unknown> } };
+    const g = file.material?.data?.baseColorTexture;
+    return typeof g === 'string' && g.length > 0 ? g : undefined;
+  } catch {
+    return undefined;
   }
 };
 
@@ -71,7 +98,20 @@ export class ThumbnailService {
   constructor(
     private readonly renderer: Renderer,
     private readonly source: AssetSource,
+    /** Resolve an asset GUID to its project location — lets a material thumbnail show its base-color texture. */
+    private readonly resolveLocation?: (guid: string) => string | undefined,
   ) {}
+
+  /**
+   * Drop a cached thumbnail so the next {@link get} regenerates it — call when an
+   * asset's bytes change (e.g. a material edited + saved), so its preview refreshes.
+   */
+  invalidate(guid: string): void {
+    this.cache.delete(guid);
+    this.failed.delete(guid);
+    this.dims.delete(guid);
+    this.inflight.delete(guid);
+  }
 
   /**
    * The cached preview for an asset, or `undefined` while it generates (kicking
@@ -111,7 +151,7 @@ export class ThumbnailService {
         }
         pixels = rendered;
       } else if (MATERIAL_EXT.test(location)) {
-        pixels = renderMaterialThumbnail(bytes, SIZE);
+        pixels = await this.materialPreview(bytes);
       } else {
         const bitmap = await bitmapFor(location, bytes);
         this.dims.set(guid, { w: bitmap.width, h: bitmap.height });
@@ -140,5 +180,24 @@ export class ThumbnailService {
     } finally {
       this.inflight.delete(guid);
     }
+  }
+
+  /**
+   * A `.remat` preview: the analytic material sphere, with its base-color texture
+   * sampled onto the sphere when it has one (so it reads as the same kind of
+   * preview as an untextured material, just textured — not the raw flat image).
+   */
+  private async materialPreview(bytes: Uint8Array): Promise<Uint8Array> {
+    const texGuid = baseColorTextureGuid(bytes);
+    const texLocation = texGuid !== undefined ? this.resolveLocation?.(texGuid) : undefined;
+    let texture: PreviewTexture | undefined;
+    if (texLocation !== undefined) {
+      try {
+        texture = bitmapToRgba(await bitmapFor(texLocation, await this.source.read(texLocation)));
+      } catch {
+        // Texture unreadable/undecodable — render the untextured sphere.
+      }
+    }
+    return renderMaterialThumbnail(bytes, SIZE, texture);
   }
 }

@@ -206,6 +206,8 @@ const flushAssetSaves = (): void => {
       if (location === undefined || projectSink === null) continue; // derived asset: no file (see extract-copy)
       try {
         await saveAsset(app, guid as AssetGuid, kind, location, projectSink);
+        // The asset's bytes changed; refresh its browser thumbnail.
+        state.browser?.thumbnails.invalidate(guid);
       } catch (err) {
         console.warn(`[studio] asset save failed for ${guid}:`, err);
       }
@@ -686,7 +688,9 @@ void (async (): Promise<void> => {
       // device is up). Pre-warming + an on-disk cache are a follow-up.
       state.browser = {
         assets: buildBrowserAssets(manifest, kinds),
-        thumbnails: new ThumbnailService(renderer, io.source),
+        thumbnails: new ThumbnailService(renderer, io.source, (g) =>
+          state.browser?.assets.find((a) => a.guid === g)?.location,
+        ),
       };
       // Re-scan on a file-watch reindex: mint sidecars for newly added assets and
       // refresh the browser list in place (preserving the live thumbnail cache).
