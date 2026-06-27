@@ -1,8 +1,9 @@
 # RetroHuman — parametric humanoid character system
 
 - **Created:** 2026-06-27
-- **Status:** Planning
-- **Decisions:** none sealed yet (see Open questions — several become ADRs)
+- **Status:** In progress — Phase 1
+- **Decisions:** ADR-0129 (morph-target GPU delivery — storage buffer, gated on `storageBuffers`,
+  resolves the delta-delivery open question)
 
 ## Goal
 
@@ -46,15 +47,20 @@ Each phase promotes to one or more `docs/backlog/*.md` when scheduled.
 Promotes the deferred "Morph targets" item in `docs/roadmap/gltf.md` (Phase B). General-purpose,
 independent of MakeHuman.
 
-- glTF loader: parse `primitive.targets` (POSITION/NORMAL/TANGENT deltas) + `mesh.weights`.
-- `MorphWeights` component (authored state → reflection schema per CLAUDE.md §13), addressable by
-  target name; animation channels drive the weights (slots into the existing clip/player system,
-  ADR-0116/0117).
-- Renderer: apply weighted deltas in the vertex shader. **Start with the WebGL2-safe ≤N path**
-  (deltas as extra vertex attributes); reserve the many-targets storage-buffer path behind a
-  `RendererCapabilities` flag (mirrors joint-palette delivery, ADR-0115).
-- Editor: morph-weight sliders in the inspector.
-- Bench: morph apply is per-frame on a hot path → add a bench (CLAUDE.md §11).
+Tracked in `docs/backlog/runtime-morph-targets.md` (slices 1.1–1.4). Delivery: **single storage-buffer
+path at `@group(3)`, gated on `storageBuffers`** (ADR-0129, mirrors ADR-0115); research showed the
+vertex-attribute path is unviable (WebGL2's 16-attribute budget is already saturated), so the
+"≤N vertex-attribute vs storage threshold" open question is resolved as "no threshold". WebGL2
+data-texture path declared + deferred.
+
+- ✅ **1.1 data layer** — glTF parses `primitive.targets` (POSITION/NORMAL deltas) + `mesh.weights` +
+  `mesh.extras.targetNames`; `Mesh.morphTargets` delta store; `MorphWeights` component (reflection
+  schema per §13); instantiation attaches `MorphWeights`. Unit-tested, gate green.
+- **1.2 GPU delivery + WGSL** — per-mesh delta buffer, per-entity weights/params, `#ifdef MORPHED`
+  in `vs_main`/`vs_prepass`; bench for the per-frame upload (CLAUDE.md §11).
+- **1.3 animation + inspector** — glTF weights sampler drives the `weights` array; one slider per name.
+- **1.4 skinned + morphed variant** — `@group(3)` carries palette + deltas + weights; morph-then-skin
+  (needed for RetroHuman facial expressions, Phase 5).
 
 ### Phase 2 — MakeHuman `.target` ingestion
 

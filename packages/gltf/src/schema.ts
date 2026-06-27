@@ -123,16 +123,22 @@ export interface GltfPrimitive {
   material?: number;
   /** GL primitive mode; absent means `4` (triangles). */
   mode?: number;
-  /** Morph-target attribute sets (reserved; not consumed in v1). */
+  /** Morph-target attribute sets: each maps a semantic (`POSITION`/`NORMAL`) to a delta accessor. */
   targets?: Record<string, number>[];
 }
 
 /** A collection of primitives drawn together. */
 export interface GltfMesh {
   primitives: GltfPrimitive[];
-  /** Default morph-target weights (reserved; not consumed in v1). */
+  /** Default morph-target weights, parallel to each primitive's `targets`. */
   weights?: number[];
   name?: string;
+  /**
+   * Exporter/application extras passed through from the source document. Morph
+   * target names live at `extras.targetNames` (the de-facto glTF convention
+   * Blender and other exporters write).
+   */
+  extras?: { targetNames?: string[] } & Record<string, unknown>;
 }
 
 /** An encoded image, referenced by `uri`, embedded `data:` URI, or `bufferView`. */

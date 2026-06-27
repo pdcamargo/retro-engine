@@ -16,6 +16,7 @@ import {
   Commands,
   CompositionBaseline,
   Mesh3d,
+  MorphWeights,
   Name,
   Parent,
   PendingAttachment,
@@ -80,6 +81,9 @@ const spawnNode = (
     const prim = mesh.primitives[0]!;
     components.push(new Mesh3d(prim.mesh));
     if (prim.material !== undefined) components.push(new meshMaterialCtor(prim.material));
+    if (prim.morph !== undefined) {
+      components.push(new MorphWeights([...prim.morph.names], [...prim.morph.defaultWeights]));
+    }
   }
 
   const ec = parent.spawn(...components);
@@ -104,6 +108,9 @@ const spawnNode = (
       for (const prim of mesh.primitives) {
         const primComponents: object[] = [new Mesh3d(prim.mesh)];
         if (prim.material !== undefined) primComponents.push(new meshMaterialCtor(prim.material));
+        if (prim.morph !== undefined) {
+          primComponents.push(new MorphWeights([...prim.morph.names], [...prim.morph.defaultWeights]));
+        }
         const primEntity = pb.spawn(...primComponents).id;
         derived.add(primEntity);
         if (node.skin !== undefined) skinTargets.push({ skin: node.skin, entity: primEntity });

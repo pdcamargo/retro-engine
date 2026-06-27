@@ -84,9 +84,10 @@ export const buildGltfRoot = (
 ): Gltf => {
   const docMeshes = document.meshes ?? [];
   const meshes: GltfMesh[] = mapped.meshes.map((m, i) => {
-    const primitives = m.primitives.map((p) =>
-      p.material !== undefined ? { mesh: p.mesh, material: p.material } : { mesh: p.mesh },
-    );
+    const primitives = m.primitives.map((p) => {
+      const base = p.material !== undefined ? { mesh: p.mesh, material: p.material } : { mesh: p.mesh };
+      return p.morph !== undefined ? { ...base, morph: p.morph } : base;
+    });
     const name = docMeshes[i]?.name;
     return name !== undefined ? { primitives, name } : { primitives };
   });

@@ -1,5 +1,5 @@
-import type { Indices, MeshVertexAttribute } from '@retro-engine/engine';
-import { Mesh, MeshAttribute, u16Indices, u32Indices } from '@retro-engine/engine';
+import type { Indices, MeshVertexAttribute, MorphTarget } from '@retro-engine/engine';
+import { Mesh, MeshAttribute, MorphTargets, u16Indices, u32Indices } from '@retro-engine/engine';
 
 import { decodeAccessor, type DecodedAccessorArray } from './accessor';
 import { mapPrimitiveMode } from './topology';
@@ -65,12 +65,23 @@ const toIndices = (array: DecodedAccessorArray): Indices =>
  * `u8`, or kept as `u16` / `u32`. No coordinate or winding conversion is applied
  * — glTF and the engine share a right-handed, +Y-up, −Z-forward basis.
  *
+ * Morph targets (`primitive.targets`) are decoded into a {@link MorphTargets}
+ * delta store on the mesh: POSITION and NORMAL deltas per target (NORMAL filled
+ * with zeros when absent), named from `morph.targetNames` and seeded with
+ * `morph.defaultWeights`. TANGENT deltas are ignored — this renderer reconstructs
+ * the tangent frame from screen-space derivatives and consumes no per-vertex
+ * tangent.
+ *
  * @throws GltfImportError for an unsupported primitive mode (see {@link mapPrimitiveMode}).
  */
 export const mapPrimitiveToMesh = (
   document: GltfDocument,
   buffers: readonly Uint8Array[],
   primitive: GltfPrimitive,
+  morph?: {
+    targetNames?: readonly string[] | undefined;
+    defaultWeights?: readonly number[] | undefined;
+  },
 ): Mesh => {
   const mesh = new Mesh({ primitiveTopology: mapPrimitiveMode(primitive.mode) });
 
@@ -91,6 +102,24 @@ export const mapPrimitiveToMesh = (
 
   if (primitive.indices !== undefined) {
     mesh.setIndices(toIndices(decodeAccessor(document, buffers, primitive.indices).array));
+  }
+
+  const targets = primitive.targets;
+  if (targets !== undefined && targets.length > 0) {
+    const vertexCount = mesh.vertexCount;
+    const zero = () => new Float32Array(vertexCount * 3);
+    const morphTargets: MorphTarget[] = targets.map((target, i) => {
+      const posIndex = target.POSITION;
+      const nrmIndex = target.NORMAL;
+      return {
+        name: morph?.targetNames?.[i] ?? `Morph${i}`,
+        positionDeltas:
+          posIndex !== undefined ? toFloat32(decodeAccessor(document, buffers, posIndex).array) : zero(),
+        normalDeltas:
+          nrmIndex !== undefined ? toFloat32(decodeAccessor(document, buffers, nrmIndex).array) : zero(),
+      };
+    });
+    mesh.morphTargets = new MorphTargets(morphTargets, vertexCount, morph?.defaultWeights);
   }
 
   return mesh;

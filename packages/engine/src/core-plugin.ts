@@ -17,6 +17,7 @@ import type { PluginObject } from './plugin';
 import { RenderGraphPlugin } from './render-graph/render-graph-plugin';
 import { ShaderPlugin } from './shader/shader-plugin';
 import { SkinningPlugin } from './skinning/skinning-plugin';
+import { MorphPlugin } from './morph/morph-plugin';
 import { AnimationPlugin } from './animation/animation-plugin';
 import { IkPlugin } from './animation/ik/ik-plugin';
 import { RetargetPlugin } from './animation/retarget/retarget-plugin';
@@ -134,6 +135,7 @@ export class CorePlugin implements PluginObject {
     app.addPlugin(new ImagePlugin());
     app.addPlugin(new VisibilityPlugin());
     app.addPlugin(new SkinningPlugin());
+    app.addPlugin(new MorphPlugin());
     // After SkinningPlugin so the AnimationClips store exists before any glTF
     // plugin's build pulls it; animation sampling runs before transform
     // propagation, which the skinning palette compute then consumes.

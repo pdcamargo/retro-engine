@@ -18,6 +18,12 @@ import type { Mat4 } from '@retro-engine/math';
 export interface GltfPrimitive {
   readonly mesh: Handle<Mesh>;
   readonly material?: Handle<StandardMaterial>;
+  /**
+   * Morph-target names and default weights, present when the primitive carries
+   * morph targets. Instantiation uses these to attach a `MorphWeights` component
+   * to the mesh entity; the delta geometry itself lives on the {@link Mesh} asset.
+   */
+  readonly morph?: { readonly names: readonly string[]; readonly defaultWeights: readonly number[] };
 }
 
 /** A glTF mesh — one or more primitives drawn under a single node. */

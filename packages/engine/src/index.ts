@@ -145,6 +145,8 @@ export {
   packSkinnedInstance,
   SkinningPlugin,
 } from './skinning';
+export type { MorphTarget } from './morph';
+export { MorphTargets, MorphWeights, MorphPlugin } from './morph';
 export {
   AnimationClip,
   clipDuration,

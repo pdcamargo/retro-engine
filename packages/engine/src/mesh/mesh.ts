@@ -2,6 +2,7 @@ import { Aabb } from '@retro-engine/math';
 import type { PrimitiveTopology } from '@retro-engine/renderer-core';
 import { vertexFormatByteSize } from '@retro-engine/renderer-core';
 
+import type { MorphTargets } from '../morph/morph-targets';
 import type { Indices } from './indices';
 import type { MeshVertexAttribute, MeshVertexAttributeId } from './vertex-attribute';
 import { MeshAttribute } from './vertex-attribute';
@@ -49,6 +50,13 @@ export class Mesh {
 
   /** Primitive topology to rasterise. Defaults to `'triangle-list'`. */
   primitiveTopology: PrimitiveTopology;
+
+  /**
+   * Morph targets (blend shapes) sharing this mesh's vertex order, when the
+   * source supplied any. The live per-entity weights live on a `MorphWeights`
+   * component; this is the static delta data the GPU morph path uploads.
+   */
+  morphTargets?: MorphTargets;
 
   constructor(options?: { label?: string; primitiveTopology?: PrimitiveTopology }) {
     if (options?.label !== undefined) this.label = options.label;

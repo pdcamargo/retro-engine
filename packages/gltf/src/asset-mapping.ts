@@ -27,6 +27,8 @@ export interface GltfAssetStores {
 export interface MappedPrimitive {
   readonly mesh: Handle<Mesh>;
   readonly material?: Handle<StandardMaterial>;
+  /** Morph-target names + default weights, when the primitive carries morph targets. */
+  readonly morph?: { readonly names: readonly string[]; readonly defaultWeights: readonly number[] };
 }
 
 /** A mapped glTF mesh — N primitives, each its own engine mesh + material. */
@@ -76,13 +78,22 @@ export const mapGltfAssets = async (
   const docMeshes = document.meshes ?? [];
   for (let i = 0; i < docMeshes.length; i++) {
     const primitives: MappedPrimitive[] = [];
-    const prims = docMeshes[i]!.primitives;
+    const docMesh = docMeshes[i]!;
+    const prims = docMesh.primitives;
     for (let j = 0; j < prims.length; j++) {
       const primitive = prims[j]!;
-      const mesh = mapPrimitiveToMesh(document, buffers, primitive);
+      const mesh = mapPrimitiveToMesh(document, buffers, primitive, {
+        targetNames: docMesh.extras?.targetNames,
+        defaultWeights: docMesh.weights,
+      });
       const handle = ctx.addLabeledAsset(`Mesh${i}/Primitive${j}`, mesh, stores.meshes);
       const material = primitive.material !== undefined ? materials[primitive.material] : undefined;
-      primitives.push(material !== undefined ? { mesh: handle, material } : { mesh: handle });
+      const morph =
+        mesh.morphTargets !== undefined
+          ? { names: mesh.morphTargets.names, defaultWeights: [...mesh.morphTargets.defaultWeights] }
+          : undefined;
+      const base = material !== undefined ? { mesh: handle, material } : { mesh: handle };
+      primitives.push(morph !== undefined ? { ...base, morph } : base);
     }
     meshes.push({ primitives });
   }

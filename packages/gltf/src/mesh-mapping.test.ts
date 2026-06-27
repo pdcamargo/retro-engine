@@ -230,3 +230,53 @@ describe('mapPrimitiveToMesh — indices', () => {
     ).toBe('u32');
   });
 });
+
+describe('mapPrimitiveToMesh — morph targets', () => {
+  const pos = (): AccessorEntry => ({
+    componentType: 5126,
+    type: 'VEC3',
+    count: 2,
+    data: new Float32Array([0, 0, 0, 1, 0, 0]),
+  });
+
+  it('decodes position + normal deltas into a MorphTargets store', () => {
+    const { document, buffers } = buildDoc([
+      pos(),
+      { componentType: 5126, type: 'VEC3', count: 2, data: new Float32Array([0.5, 0, 0, 0, 0.5, 0]) },
+      { componentType: 5126, type: 'VEC3', count: 2, data: new Float32Array([0, 0, 1, 0, 0, 1]) },
+    ]);
+    const primitive: GltfPrimitive = {
+      attributes: { POSITION: 0 },
+      targets: [{ POSITION: 1, NORMAL: 2 }],
+    };
+
+    const mesh = mapPrimitiveToMesh(document, buffers, primitive, { targetNames: ['smile'] });
+    const morph = mesh.morphTargets;
+    expect(morph).toBeDefined();
+    expect(morph!.count).toBe(1);
+    expect(morph!.vertexCount).toBe(2);
+    expect(morph!.names).toEqual(['smile']);
+    expect([...morph!.targets[0]!.positionDeltas]).toEqual([0.5, 0, 0, 0, 0.5, 0]);
+    expect([...morph!.targets[0]!.normalDeltas]).toEqual([0, 0, 1, 0, 0, 1]);
+  });
+
+  it('fills zero normal deltas when a target omits NORMAL, and seeds default weights', () => {
+    const { document, buffers } = buildDoc([
+      pos(),
+      { componentType: 5126, type: 'VEC3', count: 2, data: new Float32Array([1, 0, 0, 1, 0, 0]) },
+    ]);
+    const primitive: GltfPrimitive = { attributes: { POSITION: 0 }, targets: [{ POSITION: 1 }] };
+
+    const mesh = mapPrimitiveToMesh(document, buffers, primitive, { defaultWeights: [0.25] });
+    const morph = mesh.morphTargets!;
+    expect(morph.names).toEqual(['Morph0']);
+    expect([...morph.targets[0]!.normalDeltas]).toEqual([0, 0, 0, 0, 0, 0]);
+    expect([...morph.defaultWeights]).toEqual([0.25]);
+  });
+
+  it('leaves morphTargets undefined when the primitive has no targets', () => {
+    const { document, buffers } = buildDoc([pos()]);
+    const mesh = mapPrimitiveToMesh(document, buffers, { attributes: { POSITION: 0 } });
+    expect(mesh.morphTargets).toBeUndefined();
+  });
+});
