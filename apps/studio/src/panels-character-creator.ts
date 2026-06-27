@@ -1,16 +1,26 @@
 import type { EditorContext, PanelDef } from '@retro-engine/editor-sdk';
-import type { App, Handle, MaterialPlugin, Mesh, SparseMorphTarget, WeightedMorphTarget } from '@retro-engine/engine';
+import type {
+  App,
+  Handle,
+  MaterialPlugin,
+  Mesh,
+  ProxyFitting,
+  SparseMorphTarget,
+  WeightedMorphTarget,
+} from '@retro-engine/engine';
 import {
   AssetServer,
   MeshAttribute,
   Mesh3d,
   Meshes,
+  ProxyFittings,
   SparseMorphTargets,
   StandardMaterial,
   Transform,
   Visibility,
   bakeMorphedMesh,
   composeMorphedPositions,
+  fitProxy,
 } from '@retro-engine/engine';
 import type { AssetGuid } from '@retro-engine/assets';
 import { vec3, vec4 } from '@retro-engine/math';
@@ -26,6 +36,20 @@ interface TargetSlot {
   weight: number;
 }
 
+/** One garment: its `.mhclo` fitting + proxy mesh, re-fitted onto the body each edit. */
+interface GarmentSlot {
+  readonly name: string;
+  readonly fittingGuid: string;
+  fittingHandle?: Handle<ProxyFitting>;
+  fitting?: ProxyFitting;
+  /** The proxy geometry mesh (an `ObjMesh`); its positions are overwritten by the fit. */
+  meshGuid?: string;
+  meshHandle?: Handle<Mesh>;
+  scratch?: Float32Array;
+  entity?: number;
+  fitted?: boolean;
+}
+
 interface CreatorState {
   phase: 'idle' | 'loading' | 'ready';
   baseGuid?: string;
@@ -37,6 +61,7 @@ interface CreatorState {
   matHandle?: Handle<StandardMaterial>;
   previewEntity?: number;
   targets: TargetSlot[];
+  garments: GarmentSlot[];
   dirty: boolean;
   bakedCount: number;
 }
@@ -56,7 +81,28 @@ export const characterCreatorPanel = (
   app: App,
   material: MaterialPlugin<StandardMaterial>,
 ): PanelDef => {
-  const cc: CreatorState = { phase: 'idle', targets: [], dirty: false, bakedCount: 0 };
+  const cc: CreatorState = { phase: 'idle', targets: [], garments: [], dirty: false, bakedCount: 0 };
+
+  /** Current body positions: the last composed result, or the neutral base before any edit. */
+  const bodyPositions = (): Float32Array | undefined => cc.scratch ?? cc.basePositions;
+
+  /** Re-fit every ready garment onto the current body shape. */
+  const refitGarments = (): void => {
+    const meshes = app.getResource(Meshes);
+    const body = bodyPositions();
+    if (meshes === undefined || body === undefined) return;
+    for (const g of cc.garments) {
+      if (g.fitting === undefined || g.meshHandle === undefined) continue;
+      if (g.scratch === undefined) g.scratch = new Float32Array(g.fitting.count * 3);
+      fitProxy(body, g.fitting, g.scratch);
+      const mesh = meshes.getMut(g.meshHandle);
+      const pos = mesh?.getAttribute(MeshAttribute.POSITION);
+      if (mesh === undefined || pos === undefined) continue;
+      (pos.data as Float32Array).set(g.scratch);
+      if (mesh.indices !== undefined) mesh.computeSmoothNormals();
+      g.fitted = true;
+    }
+  };
 
   /** Freeze the current weights into a fresh static mesh and spawn it as a standalone character. */
   const bake = (): number | undefined => {
@@ -102,10 +148,15 @@ export const characterCreatorPanel = (
     if (pos === undefined) return;
     (pos.data as Float32Array).set(cc.scratch);
     mesh.computeSmoothNormals();
+    refitGarments();
     cc.dirty = false;
   };
 
-  const beginLoad = (baseGuid: string, targetAssets: readonly { guid: string; name: string }[]): void => {
+  const beginLoad = (
+    baseGuid: string,
+    targetAssets: readonly { guid: string; name: string }[],
+    garmentAssets: readonly { guid: string; name: string }[],
+  ): void => {
     const server = app.getResource(AssetServer);
     if (server === undefined) return;
     cc.phase = 'loading';
@@ -116,6 +167,11 @@ export const characterCreatorPanel = (
       name: a.name.replace(/\.target$/i, ''),
       handle: server.loadByGuid(a.guid as AssetGuid) as Handle<SparseMorphTarget>,
       weight: 0,
+    }));
+    cc.garments = garmentAssets.map((a) => ({
+      name: a.name.replace(/\.mhclo$/i, ''),
+      fittingGuid: a.guid,
+      fittingHandle: server.loadByGuid(a.guid as AssetGuid) as Handle<ProxyFitting>,
     }));
   };
 
@@ -137,7 +193,48 @@ export const characterCreatorPanel = (
         if (t !== undefined) slot.target = t;
       }
     }
-    if (cc.basePositions !== undefined && cc.targets.every((s) => s.target !== undefined)) cc.phase = 'ready';
+
+    const server = app.getResource(AssetServer);
+    const fittingStore = app.getResource(ProxyFittings);
+    const browserAssets = state.browser?.assets ?? [];
+    for (const g of cc.garments) {
+      if (g.fitting === undefined && g.fittingHandle !== undefined) {
+        const f = fittingStore?.get(g.fittingHandle);
+        if (f !== undefined) g.fitting = f;
+      }
+      // Resolve the proxy geometry .obj from the fitting's objFile (by basename).
+      if (g.fitting !== undefined && g.meshHandle === undefined && server !== undefined) {
+        const objName = (g.fitting.objFile ?? '').split(/[\\/]/).pop()?.toLowerCase();
+        const objAsset =
+          objName !== undefined ? browserAssets.find((a) => a.location.toLowerCase().endsWith(objName)) : undefined;
+        if (objAsset !== undefined) {
+          g.meshGuid = objAsset.guid;
+          g.meshHandle = server.loadByGuid(objAsset.guid as AssetGuid) as Handle<Mesh>;
+        }
+      }
+      // Spawn the garment once its proxy mesh is loaded.
+      if (g.entity === undefined && g.meshHandle !== undefined && meshes?.get(g.meshHandle) !== undefined) {
+        const materials = app.getResource(material.Materials);
+        if (materials !== undefined) {
+          const matHandle = materials.add(
+            new StandardMaterial({ baseColor: vec4.create(0.3, 0.4, 0.7, 1), roughness: 0.6 }),
+          );
+          g.entity = app.world.spawn(
+            new Mesh3d(g.meshHandle),
+            new material.MeshMaterial3d(matHandle),
+            new Transform(vec3.create(0, 0, 0), undefined, vec3.create(1, 1, 1)),
+            new Visibility('Visible'),
+          );
+          cc.dirty = true; // fit the garment onto the current body next recompose
+        }
+      }
+    }
+
+    const garmentsReady = cc.garments.every((g) => g.fitting !== undefined && g.entity !== undefined);
+    if (cc.basePositions !== undefined && cc.targets.every((s) => s.target !== undefined) && garmentsReady) {
+      cc.phase = 'ready';
+      if (cc.garments.length > 0) cc.dirty = true; // ensure an initial fit
+    }
   };
 
   const spawnPreview = (): void => {
@@ -172,22 +269,25 @@ export const characterCreatorPanel = (
           ui.textDisabled('Open a project containing a base .obj and morph targets.');
           return;
         }
-        const baseAsset = browser.assets.find((a) => a.location.toLowerCase().endsWith('.obj'));
+        // Prefer a file literally named base.obj; garments now also add `.obj` assets.
+        const objs = browser.assets.filter((a) => a.location.toLowerCase().endsWith('.obj'));
+        const baseAsset = objs.find((a) => a.location.toLowerCase().endsWith('base.obj')) ?? objs[0];
         const targetAssets = browser.assets.filter((a) => a.type === 'morph');
+        const garmentAssets = browser.assets.filter((a) => a.type === 'garment');
         if (baseAsset === undefined) {
           ui.textDisabled('No base mesh found. Add a .obj (e.g. the MakeHuman base) to the project.');
           return;
         }
 
         ui.textMuted(`Base: ${baseAsset.name}`);
-        ui.textMuted(`${targetAssets.length} morph target(s)`);
+        ui.textMuted(`${targetAssets.length} morph target(s) · ${garmentAssets.length} garment(s)`);
         ui.spacing();
 
         // Dev/test seam: drive the panel from studio_eval (jsimgui ignores
         // synthetic clicks, so MCP verification reaches the actions this way).
         (globalThis as Record<string, unknown>).__characterCreator = {
           state: cc,
-          load: (): void => beginLoad(baseAsset.guid, targetAssets),
+          load: (): void => beginLoad(baseAsset.guid, targetAssets, garmentAssets),
           setWeight: (name: string, w: number): void => {
             const slot = cc.targets.find((s) => s.name === name);
             if (slot !== undefined) {
@@ -196,12 +296,13 @@ export const characterCreatorPanel = (
             }
           },
           previewEntity: (): number | undefined => cc.previewEntity,
+          garmentEntities: (): (number | undefined)[] => cc.garments.map((g) => g.entity),
           bake: (): number | undefined => bake(),
         };
 
         if (cc.phase === 'idle') {
           if (widgets.button('Load Character', { variant: 'primary' })) {
-            beginLoad(baseAsset.guid, targetAssets);
+            beginLoad(baseAsset.guid, targetAssets, garmentAssets);
           }
           return;
         }
@@ -227,6 +328,14 @@ export const characterCreatorPanel = (
           if (next !== slot.weight) {
             slot.weight = next;
             cc.dirty = true;
+          }
+        }
+
+        if (cc.garments.length > 0) {
+          ui.spacing();
+          ui.separatorText('Garments');
+          for (const g of cc.garments) {
+            ui.textMuted(`${g.name} — ${g.fitted === true ? 'fitted' : 'loading'}`);
           }
         }
 

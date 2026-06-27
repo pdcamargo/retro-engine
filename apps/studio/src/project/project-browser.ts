@@ -20,6 +20,7 @@ const CATEGORY_TO_ASSET_TYPE: Readonly<Record<string, AssetType>> = {
   sprite: 'sprite',
   animation: 'animation',
   morph: 'morph',
+  garment: 'garment',
 };
 
 /** One asset in the project asset browser, derived from the scanned `.meta` manifest. */

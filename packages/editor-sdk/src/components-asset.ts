@@ -25,6 +25,7 @@ export type AssetType =
   | 'shader'
   | 'animation'
   | 'morph'
+  | 'garment'
   | 'font'
   | 'particle'
   | 'folder';
@@ -54,6 +55,7 @@ export const ASSET_TYPES: Readonly<Record<AssetType, AssetTypeInfo>> = {
   shader: { icon: 'file-code', tag: 'SHADER', tone: 'info' },
   animation: { icon: 'film', tag: 'ANIM', tone: 'warning' },
   morph: { icon: 'scan-face', tag: 'MORPH', tone: 'accent' },
+  garment: { icon: 'shirt', tag: 'CLOTH', tone: 'info' },
   font: { icon: 'type', tag: 'FONT', tone: 'neutral' },
   particle: { icon: 'sparkles', tag: 'VFX', tone: 'accent' },
   folder: { icon: 'folder', tag: '', tone: 'neutral' },

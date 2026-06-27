@@ -167,7 +167,14 @@ export {
 } from './morph';
 export type { WeightedMorphTarget } from './morph';
 export type { ProxyFitting, ProxyAxisScale } from './proxy';
-export { parseMhclo, fitProxy } from './proxy';
+export {
+  parseMhclo,
+  fitProxy,
+  PROXY_FITTING_ASSET_KIND,
+  ProxyFittings,
+  createProxyFittingImporter,
+  ProxyPlugin,
+} from './proxy';
 export {
   AnimationClip,
   clipDuration,

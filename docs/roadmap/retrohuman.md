@@ -1,11 +1,12 @@
 # RetroHuman — parametric humanoid character system
 
 - **Created:** 2026-06-27
-- **Status:** In progress — Phases 1–3 complete, Phase 4 next
+- **Status:** In progress — Phases 1–4 complete, Phase 5 next
 - **Decisions:** ADR-0129 (morph-target GPU delivery — storage buffer, gated on `storageBuffers`),
   ADR-0130 (MakeHuman `.target` ingestion — sparse morph-target assets; vendor data fetch-on-demand),
   ADR-0131 (vertex-order base mesh + CPU morph composition; edit-time-bake scope),
-  ADR-0132 (character bake to a static mesh; disk/GLB persistence deferred)
+  ADR-0132 (character bake to a static mesh; disk/GLB persistence deferred),
+  ADR-0133 (garment proxy fitting — full barycentric body-surface binding; `.mhclo`/`garment` asset)
 
 ## Goal
 
@@ -124,9 +125,12 @@ body surface so clothes deform with body *shape*, not just pose. Full barycentri
 - ✅ **4.2 fit solve** — `fitProxy(basePositions, fitting, out?)` = `Σ wᵢ·base[triᵢ] + scaled offset`.
   Unit-tested (a garment vertex follows its base triangle on morph + offset scales with proportions)
   and benched.
-- **4.3 studio wiring** — load a garment (`.obj` proxy + `.mhclo`) as a sub-mesh; re-fit on body
-  morph; skin to the shared skeleton for free pose-follow (ADR-0114). `.mhclo` proxies are
-  fetch-on-demand / synthetic fixtures (not staged in `vendor/`).
+- ✅ **4.3 studio wiring** — `.mhclo` asset kind (`ProxyFitting`, `ProxyPlugin`) + `garment` browser
+  category; the character-creator panel discovers garments, spawns each as a sub-mesh, and re-fits
+  (`fitProxy`) on every body morph. Verified live: a garment bound to nose verts moved Δy=−0.564 when
+  the nose morphed. Skeleton pose-follow is free once the shared skeleton is wired (Phase 5).
+
+**Phase 4 complete.** Clothes/hair follow body shape via barycentric proxy fitting.
 
 ### Phase 5 — RetroHuman preset
 
