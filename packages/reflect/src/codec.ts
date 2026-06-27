@@ -199,7 +199,15 @@ export const decodeValue = (ft: FieldType<unknown>, json: unknown, env: DecodeEn
   if (json === null) return null;
   if (json === undefined) return undefined;
   switch (ft.kind) {
-    case 'number':
+    case 'number': {
+      // Coerce a numeric string (an editor/MCP field-set may pass "0.15"), and
+      // reject anything non-numeric here — so a bad value fails fast at decode
+      // rather than poisoning a downstream consumer (e.g. a GPU uniform packer).
+      if (typeof json === 'number') return json;
+      const n = typeof json === 'string' && json.trim() !== '' ? Number(json) : NaN;
+      if (Number.isFinite(n)) return n;
+      throw new Error(`reflect: expected a number for a 'number' field, got ${typeof json}`);
+    }
     case 'string':
     case 'boolean':
     case 'enum':

@@ -80,6 +80,13 @@ describe('encodeValue / decodeValue', () => {
     expect(() => decodeValue(t.handle('Image'), 'some-guid', d)).toThrow();
   });
 
+  it('coerces a numeric string to a number and rejects non-numeric', () => {
+    expect(decodeValue(t.number, 0.15, d)).toBe(0.15);
+    expect(decodeValue(t.number, '0.15', d)).toBe(0.15); // editor/MCP may pass a string
+    expect(() => decodeValue(t.number, 'nope', d)).toThrow(/expected a number/);
+    expect(() => decodeValue(t.number, {}, d)).toThrow(/expected a number/);
+  });
+
   it('round-trips a color as { r, g, b, a }', () => {
     const c = { r: 0.1, g: 0.2, b: 0.3, a: 1 };
     const json = encodeValue(t.color, c, e);

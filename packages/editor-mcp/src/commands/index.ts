@@ -1,6 +1,7 @@
 import type { CommandDef } from '../registry';
 import { CommandRegistry } from '../registry';
 
+import { assetCommands } from './asset';
 import { componentCommands } from './component';
 import { composerCommands } from './composer';
 import { entityCommands } from './entity';
@@ -21,6 +22,7 @@ export const defaultCommands: readonly CommandDef[] = [
   ...hierarchyCommands,
   ...entityCommands,
   ...componentCommands,
+  ...assetCommands,
   ...sceneCommands,
   ...historyCommands,
   ...rendererCommands,

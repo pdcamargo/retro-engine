@@ -354,6 +354,11 @@ export class AssetServer {
     return this.guidToHandle.get(guid);
   }
 
+  /** The project-relative file path the current manifest maps `guid` to, or `undefined`. */
+  locationForGuid(guid: AssetGuid): string | undefined {
+    return this.manifest?.entries.get(guid)?.location;
+  }
+
   /**
    * Drop the asset behind `guid` from its store and forget its handle, so a later
    * {@link AssetServer.loadByGuid} re-reads it. Removing the value queues the

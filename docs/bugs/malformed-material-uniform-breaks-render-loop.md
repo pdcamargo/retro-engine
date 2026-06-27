@@ -37,6 +37,16 @@ one bad GPU input takes down all rendering instead of being contained.
   log once per offending handle, and skip it (fall back to a default material)
   so one bad material cannot freeze the frame loop.
 
+## Partially mitigated
+
+The **editor / MCP path** that triggered this is now guarded: `decodeValue`
+(`packages/reflect/src/codec.ts`) coerces a numeric string and throws a clear
+error for a non-numeric value on a `number` field, so a field-set can no longer
+store a string in an `f32` uniform. The underlying fragility — *any* malformed
+material value aborting the whole prepare pass / frame loop — remains: the
+constructor-validation + per-material `try/catch` in the fix sketch are still
+worth doing for non-editor paths (direct code, a hand-edited `.remat`).
+
 ## How it was found
 
 Hit while assigning textures via `studio.eval` during the texturing
