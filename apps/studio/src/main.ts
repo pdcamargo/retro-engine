@@ -1,7 +1,7 @@
 /// <reference types="@webgpu/types" />
 
 import type { AssetGuid, AssetSink } from '@retro-engine/assets';
-import { App, AppBundleRegistry, AppTypeRegistry, AssetKinds, BUNDLE_ASSET_KIND, Commands, EditorGrid, generateMissingSidecars, inState, MaterialPlugin, registerAssetKind, ResMut, StandardMaterial } from '@retro-engine/engine';
+import { App, AppBundleRegistry, AppTypeRegistry, AssetKinds, AssetServer, BUNDLE_ASSET_KIND, Commands, EditorGrid, generateMissingSidecars, inState, MaterialPlugin, registerAssetKind, ResMut, StandardMaterial } from '@retro-engine/engine';
 import { gltfAssetKindDescriptor } from '@retro-engine/gltf';
 import {
   buildOutline,
@@ -590,6 +590,9 @@ void (async (): Promise<void> => {
       // refresh the browser list in place (preserving the live thumbnail cache).
       reindexProjectAssets = async (): Promise<void> => {
         const rescanned = await scanProjectManifest(io.source, await ensureSidecars());
+        // Adopt the rescanned manifest so assets added while the studio is
+        // running are loadable by GUID, not just visible in the browser.
+        app.getResource(AssetServer)?.setManifest(rescanned);
         if (state.browser !== null) {
           state.browser.assets = buildBrowserAssets(rescanned, kinds);
         }
