@@ -175,8 +175,14 @@ export {
   createProxyFittingImporter,
   ProxyPlugin,
 } from './proxy';
-export type { RigBone, MakeHumanRig, SkinWeights } from './rig';
-export { parseMakeHumanRig, parseMakeHumanWeights } from './rig';
+export type { RigBone, MakeHumanRig, SkinWeights, RigPose, SpawnedRig } from './rig';
+export {
+  parseMakeHumanRig,
+  parseMakeHumanWeights,
+  buildRigPose,
+  applySkinWeights,
+  spawnRig,
+} from './rig';
 export {
   AnimationClip,
   clipDuration,
