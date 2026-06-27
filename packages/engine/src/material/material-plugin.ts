@@ -81,6 +81,11 @@ import {
   makeSkinnedDraw,
   packSkinnedBatches,
 } from '../skinning/skinned-batching';
+import { MorphWeights } from '../morph/morph-weights';
+import { MorphGpu } from '../morph/morph-gpu';
+import type { MorphedDrawPayload } from '../morph/morph-batching';
+import { MorphInstanceBuffer, makeMorphedDraw } from '../morph/morph-batching';
+import { packInstanceTransform } from './instance-layout';
 import { RenderMaterials } from './render-materials';
 
 /**
@@ -381,6 +386,59 @@ export class MaterialPlugin<M extends Material> implements PluginObject {
       { set: RenderSet.Queue, name: 'material-queue-skinned' },
     );
 
+    // Morphed draws are their own pipeline variant (blend-shape deltas at
+    // @group(3)) emitted one instance per entity, keyed on a MorphWeights
+    // component. Registered for both rigid paths, like the skinned queue.
+    type MorphedRenderablesQuery = QueryHandle<
+      readonly [
+        typeof Mesh3d,
+        MmCtor,
+        typeof GlobalTransform,
+        typeof ViewVisibility,
+        typeof MorphWeights,
+      ]
+    >;
+    app.addSystem(
+      'render',
+      [
+        Extract(
+          Query([Mesh3d, MeshMaterialCtor, GlobalTransform, ViewVisibility, MorphWeights], {
+            without: [Skeleton],
+          }),
+        ),
+        Res(SortedCameras),
+        Res(RenderMaterialsCtor),
+        Res(Meshes),
+        Res(RenderMeshes),
+        Res(MeshAllocator),
+        ResMut(ViewPhases3d),
+        Res(ViewBindGroupCache),
+      ],
+      (morphed, cameras, renderMaterials, meshes, renderMeshes, allocator, phases, viewBindGroupCache) => {
+        state.ensureInitialised(app);
+        state.queueMorphedMaterials(
+          app,
+          morphed as unknown as MorphedRenderablesQuery,
+          cameras as unknown as SortedCameras,
+          renderMaterials as unknown as RenderMaterials<M>,
+          meshes as unknown as Meshes,
+          renderMeshes as unknown as RenderMeshes,
+          allocator as unknown as MeshAllocator,
+          phases,
+          viewBindGroupCache as unknown as ViewBindGroupCache,
+        );
+      },
+      { set: RenderSet.Queue, name: 'material-queue-morphed' },
+    );
+
+    // Morphed entities draw through the morphed queue when storage buffers back
+    // the morph path; on a backend without it they fall through to the rigid
+    // queue and draw from base geometry. Skinned entities always draw through
+    // the skinned queue.
+    const rigidWithout = app.renderer.capabilities.storageBuffers
+      ? [Skeleton, MorphWeights]
+      : [Skeleton];
+
     if (this.retained) {
       this.registerRetained(app, state, MeshMaterialCtor, RenderMaterialsCtor);
       return;
@@ -397,7 +455,7 @@ export class MaterialPlugin<M extends Material> implements PluginObject {
     app.addSystem(
       'render',
       [
-        Extract(Query([Mesh3d, MeshMaterialCtor, GlobalTransform, ViewVisibility], { without: [Skeleton] })),
+        Extract(Query([Mesh3d, MeshMaterialCtor, GlobalTransform, ViewVisibility], { without: rigidWithout })),
         Res(SortedCameras),
         Res(RenderMaterialsCtor),
         Res(Meshes),
@@ -572,10 +630,16 @@ class MaterialPluginState<M extends Material> {
   skinnedVertexModule: ShaderModule | undefined;
   /** Pipeline layout for the skinned variant: view / material / lights / palette(3). */
   skinnedPipelineLayout: PipelineLayout | undefined;
+  /** Vertex module compiled with `MORPHED` — reads blend-shape deltas at `@group(3)`. */
+  morphedVertexModule: ShaderModule | undefined;
+  /** Pipeline layout for the morphed variant: view / material / lights / morph(3). */
+  morphedPipelineLayout: PipelineLayout | undefined;
   specialized!: SpecializedRenderPipelines<SpecializeContext>;
   readonly instanceBuffer = new MeshInstanceBuffer();
   /** Sibling of {@link instanceBuffer} for skinned draws (wider stride + `joint_offset`). */
   readonly skinnedInstanceBuffer = new SkinnedInstanceBuffer();
+  /** Sibling of {@link instanceBuffer} for morphed draws (one instance per morphed entity). */
+  readonly morphInstanceBuffer = new MorphInstanceBuffer();
   /**
    * Sibling of {@link instanceBuffer} carrying each entity's previous-frame
    * model matrix for motion-vector prepass reconstruction. Allocated lazily on
@@ -672,7 +736,7 @@ class MaterialPluginState<M extends Material> {
       cache as PipelineCache,
       (ctx) => this.specialize(ctx),
       (ctx) =>
-        `${alphaModeKey(ctx.key.alphaMode)}|hdr=${ctx.key.hdr}|msaa=${ctx.key.msaaSamples}|vl=${ctx.key.vertexLayoutDigest}|cf=${ctx.colorFormat}|df=${ctx.depthFormat ?? 'none'}|db=${ctx.depthBias}|${prepassKeyPart(ctx.key.prepass)}|${prepassReadableKeyPart(ctx.key.prepassReadable)}|${aoKeyPart(ctx.key.aoEnabled)}|ds=${ctx.key.doubleSided === true}|sk=${ctx.key.skinned === true}`,
+        `${alphaModeKey(ctx.key.alphaMode)}|hdr=${ctx.key.hdr}|msaa=${ctx.key.msaaSamples}|vl=${ctx.key.vertexLayoutDigest}|cf=${ctx.colorFormat}|df=${ctx.depthFormat ?? 'none'}|db=${ctx.depthBias}|${prepassKeyPart(ctx.key.prepass)}|${prepassReadableKeyPart(ctx.key.prepassReadable)}|${aoKeyPart(ctx.key.aoEnabled)}|ds=${ctx.key.doubleSided === true}|sk=${ctx.key.skinned === true}|mo=${ctx.key.morphed === true}`,
     );
   }
 
@@ -1058,6 +1122,155 @@ class MaterialPluginState<M extends Material> {
     }
   }
 
+  /**
+   * Queue morphed (MorphWeights-bearing) renderables. Each is its own draw — a
+   * single instance with the morphed pipeline variant, binding the entity's
+   * blend-shape deltas + weights + params at `@group(3)`. No-op without storage
+   * buffers. AO / prepass are skipped for morphed draws (ADR-0129); a borrowed
+   * SSAO group(3) is restored after each draw.
+   */
+  queueMorphedMaterials(
+    app: App,
+    renderables: QueryHandle<
+      readonly [
+        typeof Mesh3d,
+        new (...a: never[]) => MeshMaterial3d<M>,
+        typeof GlobalTransform,
+        typeof ViewVisibility,
+        typeof MorphWeights,
+      ]
+    >,
+    cameras: SortedCameras,
+    renderMaterials: RenderMaterials<M>,
+    meshes: Meshes,
+    renderMeshes: RenderMeshes,
+    allocator: MeshAllocator,
+    phases: ViewPhases3d,
+    viewBindGroupCache: ViewBindGroupCache,
+  ): void {
+    if (viewBindGroupCache.layout === undefined) return;
+    if (cameras.views.length === 0) return;
+    if (!app.renderer.capabilities.storageBuffers) return;
+    const morphGpu = app.getResource(MorphGpu);
+    if (morphGpu === undefined) return;
+
+    const renderer = app.renderer;
+    const mainWorldMaterials = app.getResource(this.plugin.Materials) as Materials<M> | undefined;
+    const aoCache = app.getResource(AoBindGroupCache);
+
+    interface PendingMorphedDraw {
+      readonly cameraEntity: number;
+      readonly bucket: AlphaBucket;
+      readonly sortDepth: number;
+      readonly model: Mat4;
+      readonly payload: MorphedDrawPayload;
+    }
+    const pending: PendingMorphedDraw[] = [];
+    const live = new Set<Entity>();
+
+    for (const view of cameras.views) {
+      const cameraEntity = view.sourceEntity;
+      const colorFormat = view.mainColorTarget.format;
+      const depthFormat = view.depth?.format;
+      const restoreGroup3 = aoCache?.get(view.sourceEntity as Entity);
+      const v = view.viewMatrix as Float32Array;
+      for (const row of renderables.entries()) {
+        const entity = row[0] as Entity;
+        const mesh3d = row[1] as Mesh3d;
+        const meshMat = row[2] as MeshMaterial3d<M>;
+        const gt = row[3] as GlobalTransform;
+        const vis = row[4] as ViewVisibility;
+        const morphWeights = row[5] as MorphWeights;
+        if (!vis.visible) continue;
+
+        const mesh = meshes.get(mesh3d.handle);
+        if (mesh?.morphTargets === undefined) continue;
+        const renderMesh = renderMeshes.get(mesh3d.handle);
+        if (renderMesh === undefined) continue;
+        const vertexSlice = allocator.vertexSlice(mesh3d.handle.index);
+        if (vertexSlice === undefined) continue;
+        let indexSlice: AllocatorSlice | undefined;
+        if (renderMesh.bufferInfo.kind === 'indexed') {
+          indexSlice = allocator.indexSlice(mesh3d.handle.index);
+          if (indexSlice === undefined) continue;
+        }
+        const prepared = renderMaterials.get(meshMat.handle);
+        if (prepared === undefined) continue;
+
+        live.add(entity);
+        const delta = morphGpu.ensureDeltas(renderer, mesh3d.handle.index, mesh.morphTargets);
+        const morphBindGroup = morphGpu.prepareEntity(
+          renderer,
+          entity,
+          delta,
+          mesh3d.handle.index,
+          morphWeights.weights,
+          vertexSlice.baseVertex,
+        );
+
+        const materialInstance = mainWorldMaterials?.get(meshMat.handle);
+        const alphaMode = materialInstance?.alphaMode?.() ?? 'opaque';
+        const depthBias = materialInstance?.depthBias?.() ?? 0;
+        const doubleSided = materialInstance?.doubleSided?.() ?? false;
+
+        const layout = renderMesh.layout.layout;
+        const key: MaterialPipelineKey = {
+          msaaSamples: 1,
+          hdr: view.hdr,
+          vertexLayoutDigest: vertexLayoutDigestFor(layout),
+          alphaMode,
+          morphed: true,
+          ...(doubleSided ? { doubleSided: true } : {}),
+        };
+        const pipeline = this.specialized.get({ key, colorFormat, depthFormat, depthBias, layout });
+
+        const worldX = gt.matrix[12] as number;
+        const worldY = gt.matrix[13] as number;
+        const worldZ = gt.matrix[14] as number;
+        const sortDepth =
+          (v[2] as number) * worldX +
+          (v[6] as number) * worldY +
+          (v[10] as number) * worldZ +
+          (v[14] as number);
+        const bucket: AlphaBucket =
+          alphaMode === 'opaque' ? 'opaque' : alphaMode === 'blend' ? 'blend' : 'mask';
+        const payload: MorphedDrawPayload = {
+          pipeline,
+          materialBindGroup: prepared.bindGroup,
+          morphBindGroup,
+          vertexSlice,
+          indexSlice,
+          renderMesh,
+          ...(restoreGroup3 !== undefined ? { restoreGroup3 } : {}),
+        };
+        pending.push({ cameraEntity, bucket, sortDepth, model: gt.matrix as Mat4, payload });
+      }
+    }
+
+    morphGpu.retainEntities(live);
+    if (pending.length === 0) return;
+
+    this.morphInstanceBuffer.ensureCapacity(renderer, pending.length);
+    const f32 = this.morphInstanceBuffer.f32;
+    let cursor = 0;
+    for (const p of pending) cursor += packInstanceTransform(f32, cursor, p.model);
+    const buffer = this.morphInstanceBuffer.buffer!;
+    renderer.writeBuffer(buffer, 0, f32.subarray(0, cursor) as unknown as BufferSource);
+
+    for (let i = 0; i < pending.length; i++) {
+      const p = pending[i]!;
+      const draw = makeMorphedDraw(p.payload, buffer, i);
+      const item: PhaseItem3d = { sourceEntity: p.cameraEntity, sortDepth: p.sortDepth, draw };
+      if (p.bucket === 'opaque') {
+        phases.pushOpaque(p.cameraEntity, item);
+      } else if (p.bucket === 'blend') {
+        phases.pushTransparent(p.cameraEntity, item);
+      } else {
+        phases.pushAlphaMask(p.cameraEntity, item);
+      }
+    }
+  }
+
   private queuePrepassFromEntries(
     _app: App,
     entries: readonly InstanceEntry[],
@@ -1289,10 +1502,15 @@ class MaterialPluginState<M extends Material> {
     // (after view/material/lights) and reads it from the SKINNED vertex module.
     // Mutually exclusive with AO, which also uses @group(3).
     const skinned = ctx.key.skinned === true;
+    // The morphed variant appends the morph delta/weights/params bind group at
+    // @group(3) and reads them from the MORPHED vertex module. Owns @group(3), so
+    // mutually exclusive with AO and skinning on this variant.
+    const morphed = ctx.key.morphed === true;
     // AO is a lit-only variant: it appends the screen-space AO read binding at
     // @group(3) (after view/material/lights) and shades with the ENABLE_SSAO
     // fragment module. Gated on usesLights so @group(3) always sits at index 3.
-    const aoEnabled = !skinned && ctx.key.aoEnabled === true && this.materialClass.usesLights === true;
+    const aoEnabled =
+      !skinned && !morphed && ctx.key.aoEnabled === true && this.materialClass.usesLights === true;
     if (skinned) {
       if (this.skinnedPipelineLayout === undefined) {
         const paletteLayout = (
@@ -1301,6 +1519,14 @@ class MaterialPluginState<M extends Material> {
         this.skinnedPipelineLayout = renderer.createPipelineLayout({
           label: `material#${this.materialClass.name}#skinned`,
           bindGroupLayouts: [...baseLayouts(), paletteLayout],
+        });
+      }
+    } else if (morphed) {
+      if (this.morphedPipelineLayout === undefined) {
+        const morphLayout = (this.app.getResource(MorphGpu) as MorphGpu).ensureLayout(renderer);
+        this.morphedPipelineLayout = renderer.createPipelineLayout({
+          label: `material#${this.materialClass.name}#morphed`,
+          bindGroupLayouts: [...baseLayouts(), morphLayout],
         });
       }
     } else if (aoEnabled) {
@@ -1325,10 +1551,20 @@ class MaterialPluginState<M extends Material> {
 
     const isTransparent = ctx.key.alphaMode === 'blend';
     const descriptor: RenderPipelineDescriptor = {
-      label: `material#${this.materialClass.name}#${alphaModeKey(ctx.key.alphaMode)}${aoEnabled ? '#ao' : ''}${skinned ? '#skinned' : ''}`,
-      layout: skinned ? this.skinnedPipelineLayout! : aoEnabled ? this.aoPipelineLayout! : this.pipelineLayout!,
+      label: `material#${this.materialClass.name}#${alphaModeKey(ctx.key.alphaMode)}${aoEnabled ? '#ao' : ''}${skinned ? '#skinned' : ''}${morphed ? '#morphed' : ''}`,
+      layout: skinned
+        ? this.skinnedPipelineLayout!
+        : morphed
+          ? this.morphedPipelineLayout!
+          : aoEnabled
+            ? this.aoPipelineLayout!
+            : this.pipelineLayout!,
       vertex: {
-        module: skinned ? this.ensureSkinnedVertexModule() : this.vertexModule,
+        module: skinned
+          ? this.ensureSkinnedVertexModule()
+          : morphed
+            ? this.ensureMorphedVertexModule()
+            : this.vertexModule,
         entryPoint: this.vertexEntryPoint,
         buffers: [ctx.layout, skinned ? SKINNED_INSTANCE_LAYOUT : INSTANCE_LAYOUT],
       },
@@ -1559,6 +1795,26 @@ class MaterialPluginState<M extends Material> {
       { SKINNED: true },
     );
     return this.skinnedVertexModule;
+  }
+
+  /**
+   * Lazily compile the `MORPHED`-defined variant of this material's vertex
+   * module: per-mesh blend-shape deltas, the entity's weights, and the morph
+   * params at `@group(3)`, blended into the rest pose before skinning. The
+   * fragment stage is unchanged, so the base `fragmentModule` is reused.
+   */
+  ensureMorphedVertexModule(): ShaderModule {
+    if (this.morphedVertexModule !== undefined) return this.morphedVertexModule;
+    const cache = this.app.getResource(PipelineCache) as PipelineCache;
+    const registry = this.app.getResource(ShaderRegistry) as ShaderRegistry;
+    this.morphedVertexModule = compileShaderFromRef(
+      cache,
+      registry,
+      this.vertexShaderRef,
+      `${this.materialClass.name}-vertex+morphed`,
+      { MORPHED: true },
+    );
+    return this.morphedVertexModule;
   }
 
   private materialSupportsPrepassNormalFragment(): boolean {

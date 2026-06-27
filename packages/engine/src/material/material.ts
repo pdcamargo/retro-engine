@@ -182,6 +182,15 @@ export interface MaterialPipelineKey {
    * and `prepass` (both reuse `@group(3)` / locations the skinned path needs).
    */
   readonly skinned?: boolean;
+  /**
+   * When `true`, this is the **morphed** pipeline variant: the vertex shader is
+   * compiled with the `MORPHED` define (reads per-mesh blend-shape deltas, the
+   * entity's weights, and the morph params at `@group(3)`), deforming the rest
+   * pose before any skinning. Keys a distinct pipeline so morphed and rigid draws
+   * of the same material never share one. Owns `@group(3)`, so mutually exclusive
+   * with `aoEnabled` and `prepass` on this variant.
+   */
+  readonly morphed?: boolean;
 }
 
 /**

@@ -56,8 +56,10 @@ data-texture path declared + deferred.
 - ✅ **1.1 data layer** — glTF parses `primitive.targets` (POSITION/NORMAL deltas) + `mesh.weights` +
   `mesh.extras.targetNames`; `Mesh.morphTargets` delta store; `MorphWeights` component (reflection
   schema per §13); instantiation attaches `MorphWeights`. Unit-tested, gate green.
-- **1.2 GPU delivery + WGSL** — per-mesh delta buffer, per-entity weights/params, `#ifdef MORPHED`
-  in `vs_main`/`vs_prepass`; bench for the per-frame upload (CLAUDE.md §11).
+- ✅ **1.2 GPU delivery + WGSL** — `MorphGpu` (per-mesh delta buffer + per-entity weights/params at
+  `@group(3)`), `material-queue-morphed`, `#ifdef MORPHED` in `pbr.wgsl` (morph before skinning);
+  `packMorphDeltas` bench. Verified in studio: a glTF morph weight driven 0→1 deforms the live mesh.
+  Prepass participation deferred (backlog).
 - **1.3 animation + inspector** — glTF weights sampler drives the `weights` array; one slider per name.
 - **1.4 skinned + morphed variant** — `@group(3)` carries palette + deltas + weights; morph-then-skin
   (needed for RetroHuman facial expressions, Phase 5).

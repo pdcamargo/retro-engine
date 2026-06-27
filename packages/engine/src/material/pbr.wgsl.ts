@@ -78,6 +78,39 @@ struct StandardMaterialUniform {
 @group(3) @binding(1) var ao_texture: texture_2d<f32>;
 #endif
 
+#ifdef MORPHED
+// Runtime morph targets (blend shapes). Deltas are per-mesh and target-major
+// (delta[t * vertex_count + vertex]); weights are per-entity; params carries the
+// mesh's slab base vertex (subtracted from the builtin vertex_index), the live
+// target count, and the mesh vertex count. Owns @group(3) on the morphed
+// variant (mutually exclusive with SSAO / the skinning palette there).
+struct MorphDelta {
+  position: vec3<f32>,
+  normal: vec3<f32>,
+};
+struct MorphParams {
+  vertex_base: u32,
+  target_count: u32,
+  vertex_count: u32,
+  pad: u32,
+};
+@group(3) @binding(0) var<storage, read> morph_deltas: array<MorphDelta>;
+@group(3) @binding(1) var<storage, read> morph_weights: array<f32>;
+@group(3) @binding(2) var<uniform> morph_params: MorphParams;
+
+// Accumulate every target's weighted position + normal delta into the base
+// vertex. vid is the builtin vertex_index, offset by the mesh's slab base.
+fn apply_morph(vid: u32, position: ptr<function, vec3<f32>>, normal: ptr<function, vec3<f32>>) {
+  let local = vid - morph_params.vertex_base;
+  for (var t = 0u; t < morph_params.target_count; t = t + 1u) {
+    let w = morph_weights[t];
+    let d = morph_deltas[t * morph_params.vertex_count + local];
+    *position = *position + w * d.position;
+    *normal = *normal + w * d.normal;
+  }
+}
+#endif
+
 #ifdef SKINNED
 // The frame-global joint palette: every skinned entity's world-space joint
 // matrices concatenated. Each instance's joint_offset selects its slice. Shares
@@ -95,6 +128,7 @@ fn skin_matrix(joints: vec4<u32>, weights: vec4<f32>, joint_offset: u32) -> mat4
 #endif
 
 struct VsIn {
+  @builtin(vertex_index) vertex_index: u32,
   @location(0) position: vec3<f32>,
   @location(1) normal: vec3<f32>,
   @location(2) uv: vec2<f32>,
@@ -131,15 +165,22 @@ fn vs_main(in: VsIn) -> VsOut {
   var out: VsOut;
   let model = mat4x4<f32>(in.model_c0, in.model_c1, in.model_c2, in.model_c3);
   let inverse_transpose_model = mat4x4<f32>(in.inv_t_c0, in.inv_t_c1, in.inv_t_c2, in.inv_t_c3);
+  var base_position = in.position;
+  var base_normal = in.normal;
+#ifdef MORPHED
+  // Morph before skinning (glTF order): blend shapes deform the rest pose, the
+  // skin then poses the morphed surface.
+  apply_morph(in.vertex_index, &base_position, &base_normal);
+#endif
 #ifdef SKINNED
   // Deform in mesh space first; the palette already folds in inverse(meshGlobal),
   // so the per-instance model matrix below lands the result in world space.
   let skin = skin_matrix(in.joints, in.weights, in.joint_offset);
-  let local_pos = skin * vec4<f32>(in.position, 1.0);
-  let local_normal = (skin * vec4<f32>(in.normal, 0.0)).xyz;
+  let local_pos = skin * vec4<f32>(base_position, 1.0);
+  let local_normal = (skin * vec4<f32>(base_normal, 0.0)).xyz;
 #else
-  let local_pos = vec4<f32>(in.position, 1.0);
-  let local_normal = in.normal;
+  let local_pos = vec4<f32>(base_position, 1.0);
+  let local_normal = base_normal;
 #endif
   let world_pos = model * local_pos;
   out.world_position = world_pos.xyz;

@@ -25,5 +25,13 @@ deferred — mirrors ADR-0115 skinning).
 ## Deferred (tracked, not in this item)
 
 - WebGL2 data-texture morph path (ADR-0129).
-- Motion-vector prepass for morphed meshes (ADR-0129).
+- **Prepass participation for morphed meshes.** v1 excludes morphed entities from the rigid queue
+  that feeds the depth/normal/motion-vector prepass, so a morphed mesh is absent from the prepass
+  entirely (it self-depths in the main pass, which is correct). Consequence: SSAO/normal-prepass
+  don't see the morphed surface → minor AO speckling on morphed meshes when a camera runs SSAO; no
+  morph-aware motion vectors. ADR-0129 frames the eventual design (morph applied in the depth/normal
+  prepass); this is the slice that delivers it. Until then, the artifact is cosmetic.
 - Instanced morphing (a crowd sharing one weight set).
+- Robustness: a mesh missing a shader-required attribute (e.g. UV) creates an invalid pipeline that
+  freezes the renderer — see `docs/bugs/mesh-without-uv-freezes-renderer.md` (pre-existing, not
+  morph-specific; surfaced during morph verification).

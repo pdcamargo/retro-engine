@@ -2,6 +2,7 @@ import { t } from '@retro-engine/reflect';
 
 import type { App } from '../index';
 import type { PluginObject } from '../plugin';
+import { MorphGpu } from './morph-gpu';
 import { MorphWeights } from './morph-weights';
 
 /**
@@ -22,6 +23,8 @@ export class MorphPlugin implements PluginObject {
   }
 
   build(app: App): void {
+    if (app.getResource(MorphGpu) === undefined) app.insertResource(new MorphGpu());
+
     app.registerComponent(
       MorphWeights,
       { names: t.array(t.string), weights: t.array(t.number) },
