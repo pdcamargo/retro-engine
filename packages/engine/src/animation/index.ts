@@ -17,6 +17,9 @@ export {
 export { AnimationPlayer, AnimationTarget } from './animation-player';
 export type { RepeatMode } from './animation-player';
 
+export { EffectiveClips, effectiveClip } from './effective-clips';
+export type { EffectiveClipsView } from './effective-clips';
+
 export { sampleInto } from './sampler';
 
 export { addAnimationSampling, advancePlayerTime } from './animation-system';

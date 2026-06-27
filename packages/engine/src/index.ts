@@ -155,6 +155,8 @@ export {
   createAnimationClipSerializer,
   AnimationPlayer,
   AnimationTarget,
+  EffectiveClips,
+  effectiveClip,
   sampleInto,
   addAnimationSampling,
   advancePlayerTime,
@@ -179,6 +181,7 @@ export {
   createAnimationControllerImporter,
   createAnimationControllerSerializer,
   AnimationControllerPlayer,
+  AnimationLayers,
   AnimationControllerRuntimes,
   createControllerRuntime,
   stateWeights,
@@ -242,6 +245,7 @@ export type {
   ReferencePoseEntry,
   RootTranslationMode,
   RetargetClipOptions,
+  EffectiveClipsView,
 } from './animation';
 export { Name } from './name';
 export { AppBundleRegistry } from './bundle/bundle-registry';

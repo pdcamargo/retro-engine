@@ -71,6 +71,9 @@ export { GltfSceneRoot, GltfInstanceNodes } from './gltf-components';
 
 export { addGltfInstantiation, addGltfReinstantiation } from './gltf-instantiate';
 
+export { buildHumanoidRetargetRigFromGltf } from './retarget-rig-from-gltf';
+export { addGltfAutoRetarget } from './gltf-auto-retarget';
+
 export type { GltfNodeAnchor } from './gltf-anchor';
 export { resolveGltfNodeAnchor, gltfAnchorForEntity } from './gltf-anchor';
 

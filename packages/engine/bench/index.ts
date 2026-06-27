@@ -45,6 +45,7 @@ import './pose-blend.bench';
 import './layer-blend.bench';
 import './ik-solve.bench';
 import './retarget.bench';
+import './effective-clips.bench';
 
 interface NormalizedBench {
   readonly key: string;

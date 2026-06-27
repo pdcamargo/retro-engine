@@ -27,6 +27,7 @@ import type { PlayerParameter } from './animation-controller-player';
 import { AnimationControllerPlayer } from './animation-controller-player';
 import { AnimationControllers } from './animation-controller-asset';
 import { AnimationPlayer, AnimationTarget } from './animation-player';
+import { EffectiveClips, effectiveClip, type EffectiveClipsView } from './effective-clips';
 import { AvatarMasks } from './avatar-mask-asset';
 import { composeLayerAdditive, composeLayerOverride } from './layer-blend';
 import { Pose, AnimationPoses } from './pose';
@@ -382,6 +383,20 @@ export const addAnimationSampling = (app: App): void => {
   const refPose = new Pose();
   let maskScratch = new Uint8Array(64);
 
+  // Player-scoped clip resolver: maps an authored handle through EffectiveClips
+  // (so a foreign clip samples its retargeted form), reused across players to
+  // avoid a per-frame allocation. `null` from the indirection means "foreign,
+  // not ready" — surfaced as `undefined` so the existing skip paths drop it.
+  let resolverPlayer: Entity = 0 as Entity;
+  let effectiveClips: EffectiveClipsView | undefined;
+  let rawClips: ClipStore = new AnimationClips();
+  const playerClips: ClipStore = {
+    get: (handle) => {
+      const eff = effectiveClip(effectiveClips, resolverPlayer, handle);
+      return eff === null ? undefined : rawClips.get(eff);
+    },
+  };
+
   app.addSystem(
     'update',
     [
@@ -395,6 +410,8 @@ export const addAnimationSampling = (app: App): void => {
       Query([AnimationTarget]),
     ],
     (time, clips, controllers, masks, players, controllerPlayers, layered, targets) => {
+      effectiveClips = app.getResource(EffectiveClips);
+      rawClips = clips;
       byPlayer.clear();
       for (const [entity, target] of targets.entries()) {
         let ids = byPlayer.get(target.player);
@@ -422,7 +439,8 @@ export const addAnimationSampling = (app: App): void => {
 
       // Single-clip players: one weighted source through the pose pipeline.
       for (const [playerEntity, player] of players.entries()) {
-        const clip = clips.get(player.clip);
+        resolverPlayer = playerEntity;
+        const clip = playerClips.get(player.clip);
         if (clip === undefined) continue;
 
         if (player.playing) {
@@ -454,9 +472,10 @@ export const addAnimationSampling = (app: App): void => {
           runtimes.byPlayer.set(playerEntity, runtime);
         }
 
+        resolverPlayer = playerEntity;
         ensureParameterDefaults(player.parameters, controller);
         const params = makeParameterAccess(player.parameters);
-        const resolveClip = (h: Handle<AnimationClip>): AnimationClip | undefined => clips.get(h);
+        const resolveClip = (h: Handle<AnimationClip>): AnimationClip | undefined => playerClips.get(h);
         const durationOf = (stateIndex: number): number =>
           motionDuration(controller.states[stateIndex]!.motion, resolveClip);
 
@@ -501,6 +520,7 @@ export const addAnimationSampling = (app: App): void => {
       // (override or additive, masked per layer) into one pose, committed once.
       for (const [playerEntity, stack] of layered.entries()) {
         if (stack.layers.length === 0) continue;
+        resolverPlayer = playerEntity;
         const ids = byPlayer.get(playerEntity);
         if (ids === undefined) continue;
 
@@ -516,7 +536,7 @@ export const addAnimationSampling = (app: App): void => {
         slotEntities.length = 0;
         slotTargetIds.length = 0;
         layoutClips.length = 0;
-        for (const layer of stack.layers) collectLayerClips(layer, clips, controllers, layoutClips);
+        for (const layer of stack.layers) collectLayerClips(layer, playerClips, controllers, layoutClips);
         for (const clip of layoutClips) {
           for (const track of clip.tracks) {
             if (boneTrackField(track) === undefined) continue;
@@ -593,7 +613,7 @@ export const addAnimationSampling = (app: App): void => {
         for (let li = 0; li < stack.layers.length; li++) {
           const layer = stack.layers[li]!;
           const rt = layerRts[li]!;
-          weightScratch = evaluateLayerInputs(layer, rt, dt, clips, controllers, inputs, weightScratch);
+          weightScratch = evaluateLayerInputs(layer, rt, dt, playerClips, controllers, inputs, weightScratch);
           if (inputs.length === 0) continue;
 
           if (jointCount > 0) {
@@ -621,7 +641,7 @@ export const addAnimationSampling = (app: App): void => {
         if (jointCount > 0) commitPoseToTransforms(acc, app.world);
       }
     },
-    { name: 'animation-sample' },
+    { name: 'animation-sample', label: 'animation-sample' },
   );
 };
 

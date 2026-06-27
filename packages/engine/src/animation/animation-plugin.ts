@@ -30,6 +30,7 @@ import {
 } from './animation-layers';
 import { AnimationPlayer, AnimationTarget } from './animation-player';
 import { addAnimationSampling } from './animation-system';
+import { EffectiveClips } from './effective-clips';
 import type { AvatarMask } from './avatar-mask';
 import {
   AVATAR_MASK_ASSET_KIND,
@@ -87,6 +88,11 @@ export class AnimationPlugin implements PluginObject {
     }
     if (app.getResource(ReferencePoses) === undefined) {
       app.insertResource(new ReferencePoses());
+    }
+    // Records the retargeted clip a player should sample in place of a foreign
+    // authored clip; populated by the auto-retarget path, empty otherwise.
+    if (app.getResource(EffectiveClips) === undefined) {
+      app.insertResource(new EffectiveClips());
     }
 
     registerAssetStore(app, ANIMATION_CLIP_ASSET_KIND, clips);
