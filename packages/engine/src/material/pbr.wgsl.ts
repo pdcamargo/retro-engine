@@ -279,7 +279,12 @@ fn perturb_normal(
   let dp1perp = cross(geom_n, dp1);
   let t = dp2perp * duv1.x + dp1perp * duv2.x;
   let b = dp2perp * duv1.y + dp1perp * duv2.y;
-  let inv_max = inverseSqrt(max(dot(t, t), dot(b, b)));
+  // Degenerate UV gradients (zero-area UV triangles — common where a low-poly
+  // atlas collapses a region to a single texel) leave the tangent frame
+  // undefined; without the clamp inverseSqrt(0) is +inf and 0 * inf yields a NaN
+  // shading normal. Guarding the normalizer keeps this a true no-op there,
+  // returning the geometric normal.
+  let inv_max = inverseSqrt(max(max(dot(t, t), dot(b, b)), 1e-12));
   return normalize(mat3x3<f32>(t * inv_max, b * inv_max, geom_n) * ts);
 }
 
