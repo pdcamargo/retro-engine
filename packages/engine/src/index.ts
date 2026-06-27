@@ -166,6 +166,8 @@ export {
   bakeMorphedMesh,
 } from './morph';
 export type { WeightedMorphTarget } from './morph';
+export type { ProxyFitting, ProxyAxisScale } from './proxy';
+export { parseMhclo, fitProxy } from './proxy';
 export {
   AnimationClip,
   clipDuration,

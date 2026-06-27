@@ -117,11 +117,16 @@ The MetaHuman-feel authoring surface. Zero runtime cost, WebGL2-safe. Foundation
 ### Phase 4 — Proxy fitting (clothes / hair)
 
 The one genuinely new system. MakeHuman fits garments by pinning each proxy vertex relative to the
-body surface so clothes deform with body *shape*, not just pose.
+body surface so clothes deform with body *shape*, not just pose. Full barycentric fitting (ADR-0133).
 
-- Port MakeHuman's proxy-fitting (algorithm is CC0/open-source — reimplement, don't copy GPL code).
-- Attach garments as sub-meshes skinned to the shared skeleton (pose-follow is "free" via existing
-  skinning, ADR-0114); shape-follow needs the fitting data.
+- ✅ **4.1 `.mhclo` parser + fitting model** — `parseMhclo` → `ProxyFitting` (per proxy vertex: base
+  triangle + barycentric weights + offset; optional `x/y/z_scale`). Unit-tested.
+- ✅ **4.2 fit solve** — `fitProxy(basePositions, fitting, out?)` = `Σ wᵢ·base[triᵢ] + scaled offset`.
+  Unit-tested (a garment vertex follows its base triangle on morph + offset scales with proportions)
+  and benched.
+- **4.3 studio wiring** — load a garment (`.obj` proxy + `.mhclo`) as a sub-mesh; re-fit on body
+  morph; skin to the shared skeleton for free pose-follow (ADR-0114). `.mhclo` proxies are
+  fetch-on-demand / synthetic fixtures (not staged in `vendor/`).
 
 ### Phase 5 — RetroHuman preset
 
@@ -143,7 +148,8 @@ Phase 1 capability flag. Defer for cost/sequencing, not genre (CLAUDE.md §12).
   asset *data* not; full 37.7 MB set via `fetch.sh --full`; tests use small inline fixtures.
 - **Skeleton source** — reuse a MakeHuman/MPFB2 rig (`rigs/`) vs the engine's own; how it maps onto
   the existing retargeting reference pose (ADR-0125).
-- **Proxy-fitting fidelity** — full barycentric body-surface fitting vs a cheaper approximation.
+- ✅ **Proxy-fitting fidelity** — resolved (ADR-0133): full barycentric body-surface fitting (the
+  correct primitive; a cheaper snap/rigid fit tears garments off a re-proportioned body).
 
 ## Links
 
