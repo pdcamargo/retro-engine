@@ -6,6 +6,7 @@ export { parseObjBaseMesh } from './obj-base-mesh';
 export { OBJ_MESH_ASSET_KIND, createObjMeshImporter } from './obj-base-mesh-asset';
 export { composeMorphedPositions } from './morph-compose';
 export type { WeightedMorphTarget } from './morph-compose';
+export { bakeMorphedMesh } from './morph-bake';
 export {
   SPARSE_MORPH_TARGET_ASSET_KIND,
   SparseMorphTargets,

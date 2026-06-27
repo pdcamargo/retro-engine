@@ -9,6 +9,7 @@ import {
   StandardMaterial,
   Transform,
   Visibility,
+  bakeMorphedMesh,
   composeMorphedPositions,
 } from '@retro-engine/engine';
 import type { AssetGuid } from '@retro-engine/assets';
@@ -37,6 +38,7 @@ interface CreatorState {
   previewEntity?: number;
   targets: TargetSlot[];
   dirty: boolean;
+  bakedCount: number;
 }
 
 const SLIDER_RANGE = { min: 0, max: 1 } as const;
@@ -54,7 +56,37 @@ export const characterCreatorPanel = (
   app: App,
   material: MaterialPlugin<StandardMaterial>,
 ): PanelDef => {
-  const cc: CreatorState = { phase: 'idle', targets: [], dirty: false };
+  const cc: CreatorState = { phase: 'idle', targets: [], dirty: false, bakedCount: 0 };
+
+  /** Freeze the current weights into a fresh static mesh and spawn it as a standalone character. */
+  const bake = (): number | undefined => {
+    const meshes = app.getResource(Meshes);
+    const materials = app.getResource(material.Materials);
+    if (meshes === undefined || materials === undefined) return undefined;
+    if (cc.baseHandle === undefined || cc.basePositions === undefined) return undefined;
+    const baseMesh = meshes.get(cc.baseHandle);
+    if (baseMesh === undefined) return undefined;
+    const active: WeightedMorphTarget[] = [];
+    for (const slot of cc.targets) {
+      if (slot.target !== undefined && slot.weight !== 0) active.push({ target: slot.target, weight: slot.weight });
+    }
+    const baked = bakeMorphedMesh(baseMesh, cc.basePositions, active, `baked-character-${cc.bakedCount}`);
+    const handle = meshes.add(baked);
+    if (cc.matHandle === undefined) {
+      cc.matHandle = materials.add(
+        new StandardMaterial({ baseColor: vec4.create(0.82, 0.67, 0.57, 1), roughness: 0.75 }),
+      );
+    }
+    const transform = new Transform(vec3.create(0, 0, 0), undefined, vec3.create(1, 1, 1));
+    const entity = app.world.spawn(
+      new Mesh3d(handle),
+      new material.MeshMaterial3d(cc.matHandle),
+      transform,
+      new Visibility('Visible'),
+    );
+    cc.bakedCount += 1;
+    return entity;
+  };
 
   const recompose = (): void => {
     const meshes = app.getResource(Meshes);
@@ -164,6 +196,7 @@ export const characterCreatorPanel = (
             }
           },
           previewEntity: (): number | undefined => cc.previewEntity,
+          bake: (): number | undefined => bake(),
         };
 
         if (cc.phase === 'idle') {
@@ -183,6 +216,9 @@ export const characterCreatorPanel = (
           for (const slot of cc.targets) slot.weight = 0;
           cc.dirty = true;
         }
+        ui.sameLine();
+        if (widgets.button('Bake', { variant: 'primary', size: 'sm' })) bake();
+        if (cc.bakedCount > 0) ui.textMuted(`${cc.bakedCount} baked`);
         ui.spacing();
         ui.separatorText('Targets');
         for (const slot of cc.targets) {

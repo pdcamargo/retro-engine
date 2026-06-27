@@ -1,10 +1,11 @@
 # RetroHuman — parametric humanoid character system
 
 - **Created:** 2026-06-27
-- **Status:** In progress — Phases 1–2 complete, Phase 3 next
+- **Status:** In progress — Phases 1–3 complete, Phase 4 next
 - **Decisions:** ADR-0129 (morph-target GPU delivery — storage buffer, gated on `storageBuffers`),
   ADR-0130 (MakeHuman `.target` ingestion — sparse morph-target assets; vendor data fetch-on-demand),
-  ADR-0131 (vertex-order base mesh + CPU morph composition; edit-time-bake scope)
+  ADR-0131 (vertex-order base mesh + CPU morph composition; edit-time-bake scope),
+  ADR-0132 (character bake to a static mesh; disk/GLB persistence deferred)
 
 ## Goal
 
@@ -104,8 +105,14 @@ The MetaHuman-feel authoring surface. Zero runtime cost, WebGL2-safe. Foundation
     loads them, spawns a preview, and renders a `[0,1]` slider per target. Slider edits recompose the
     live mesh (`composeMorphedPositions` + `getMut` + `computeSmoothNormals`). Verified live: the
     "nose-base-down" slider reshaped the preview (vertex moved by the exact composed delta).
-- **3.4 bake** → final mesh + skeleton + GLB asset through the existing GLB/animation stack.
+- ✅ **3.4 bake** — `bakeMorphedMesh` freezes current weights into a static `Mesh` (composed positions
+  + copied UV/indices + recomputed normals); panel "Bake" button spawns it as a standalone character.
+  Verified live: a baked 19,158-vertex mesh carries the composed shape and renders. Persist-to-`.rmesh`
+  + GLB export deferred (ADR-0132, `docs/backlog/baked-character-persistence.md`).
 - Curate the slider set (start with face: nose/ears/cheek/chin/eyes/mouth/forehead; then macros).
+
+**Phase 3 complete.** The MetaHuman-feel authoring surface works end-to-end: load base → slider-reshape
+→ bake. Slider-set curation per `target.json` regions and rig-on-bake arrive with Phase 5.
 
 ### Phase 4 — Proxy fitting (clothes / hair)
 

@@ -163,6 +163,7 @@ export {
   OBJ_MESH_ASSET_KIND,
   createObjMeshImporter,
   composeMorphedPositions,
+  bakeMorphedMesh,
 } from './morph';
 export type { WeightedMorphTarget } from './morph';
 export {
