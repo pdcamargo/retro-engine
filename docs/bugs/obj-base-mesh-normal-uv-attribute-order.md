@@ -1,5 +1,10 @@
 # Bug: OBJ base mesh inserts NORMAL after UV → swapped vertex inputs
 
+> **Status: fixed in code, pending confirmation.** `parseObjBaseMesh` +
+> `bakeMorphedMesh` now insert `NORMAL` before `UV_0` (canonical
+> `POSITION, NORMAL, UV`), unit-tested for order. Delete this file once the base
+> mesh is confirmed to light + texture correctly in the studio.
+
 ## Symptom
 
 The MakeHuman base mesh (and any baked character from it) renders with wrong

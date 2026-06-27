@@ -31,6 +31,10 @@ describe('bakeMorphedMesh', () => {
     expect(baked.hasAttribute(MeshAttribute.UV_0)).toBe(true);
     expect(baked.hasAttribute(MeshAttribute.NORMAL)).toBe(true);
     expect([...baked.indices!.data]).toEqual([0, 1, 2, 0, 2, 3]);
+    // Attribute order must be POSITION, NORMAL, UV to match the PBR shader's
+    // @location(0/1/2) — the vertex layout follows insertion order.
+    const names = [...baked.iterAttributes()].map((a) => a.attribute.name);
+    expect(names).toEqual([MeshAttribute.POSITION.name, MeshAttribute.NORMAL.name, MeshAttribute.UV_0.name]);
   });
 
   it('does not alias the base positions (bake from pristine, base untouched)', () => {

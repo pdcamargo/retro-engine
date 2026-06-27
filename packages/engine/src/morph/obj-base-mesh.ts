@@ -89,6 +89,12 @@ export const parseObjBaseMesh = (text: string): Mesh => {
 
   const mesh = new Mesh({ label: 'obj-base-mesh' });
   mesh.insertAttribute(MeshAttribute.POSITION, Float32Array.from(positions));
+  // Attribute order is load-bearing: the PBR shader binds POSITION/NORMAL/UV to
+  // @location(0/1/2), and the vertex layout follows insertion order. Insert a
+  // NORMAL placeholder before UV so the final order is POSITION, NORMAL, UV;
+  // computeSmoothNormals overwrites it in place (insertAttribute preserves a key's
+  // position on replace) rather than appending it after UV.
+  mesh.insertAttribute(MeshAttribute.NORMAL, new Float32Array(positions.length));
   mesh.insertAttribute(MeshAttribute.UV_0, vertexUv);
   mesh.setIndices(u32Indices(Uint32Array.from(indices)));
   // Source carries no normals; smooth them from the triangulated topology.

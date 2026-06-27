@@ -28,7 +28,12 @@ export const bakeMorphedMesh = (
       ? { label, primitiveTopology: baseMesh.primitiveTopology }
       : { primitiveTopology: baseMesh.primitiveTopology },
   );
-  out.insertAttribute(MeshAttribute.POSITION, composeMorphedPositions(basePositions, contributions));
+  const positions = composeMorphedPositions(basePositions, contributions);
+  out.insertAttribute(MeshAttribute.POSITION, positions);
+  // Insert NORMAL before UV so the layout matches the PBR shader's
+  // @location(0/1/2) = POSITION/NORMAL/UV (the vertex layout follows insertion
+  // order). computeSmoothNormals overwrites this placeholder in place.
+  out.insertAttribute(MeshAttribute.NORMAL, new Float32Array(positions.length));
   const uv = baseMesh.getAttribute(MeshAttribute.UV_0);
   if (uv !== undefined) out.insertAttribute(MeshAttribute.UV_0, new Float32Array(uv.data as Float32Array));
   const idx = baseMesh.indices;

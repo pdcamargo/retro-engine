@@ -28,6 +28,11 @@ describe('parseObjBaseMesh', () => {
     expect(mesh.hasAttribute(MeshAttribute.NORMAL)).toBe(true);
   });
 
+  it('inserts attributes in POSITION, NORMAL, UV order (matching the PBR shader @location 0/1/2)', () => {
+    const names = [...parseObjBaseMesh(QUAD).iterAttributes()].map((a) => a.attribute.name);
+    expect(names).toEqual([MeshAttribute.POSITION.name, MeshAttribute.NORMAL.name, MeshAttribute.UV_0.name]);
+  });
+
   it('assigns one UV per position (first occurrence)', () => {
     const mesh = parseObjBaseMesh(QUAD);
     const uv = mesh.getAttribute(MeshAttribute.UV_0)!.data as Float32Array;
