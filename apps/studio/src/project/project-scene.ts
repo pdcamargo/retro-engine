@@ -9,6 +9,7 @@ import {
   BUNDLE_ASSET_KIND,
   BundlePlugin,
   createHdrImporter,
+  createImageImporter,
   createMeshImporter,
   deserializeBundle,
   Images,
@@ -100,6 +101,12 @@ export const installProjectRuntime = (
   const images = app.getResource(Images);
   if (images !== undefined) {
     server.registerLoader('hdr', images, createHdrImporter());
+    // Loose color textures (a dropped-in .png/.jpg/.webp) decode to an sRGB Image
+    // so a material can reference them.
+    const imageImporter = createImageImporter();
+    for (const ext of ['png', 'jpg', 'jpeg', 'webp']) {
+      server.registerLoader(ext, images, imageImporter);
+    }
   }
 
   // Kind-routed `.remat` loaders for every registered material type, so a scene

@@ -387,13 +387,17 @@ export type {
 } from './material';
 export type {
   DecodedHdr,
+  DecodedRgba,
   HdrPreview,
   ImageDimension,
   RenderImage,
+  RgbaImageDecoder,
 } from './image';
 export {
   bytesPerTexel,
   createHdrImporter,
+  createImageBitmapRgbaDecoder,
+  createImageImporter,
   decodeRadianceHdr,
   decodeRadianceHdrPreview,
   ExtractedImageAssetEvents,
