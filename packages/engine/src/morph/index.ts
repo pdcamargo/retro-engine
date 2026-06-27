@@ -1,6 +1,12 @@
 export type { MorphTarget } from './morph-targets';
 export { MorphTargets } from './morph-targets';
 export { MorphWeights } from './morph-weights';
+export { SparseMorphTarget, parseSparseMorphTarget } from './sparse-morph-target';
+export {
+  SPARSE_MORPH_TARGET_ASSET_KIND,
+  SparseMorphTargets,
+  createSparseMorphTargetImporter,
+} from './sparse-morph-target-asset';
 export { MorphGpu, MORPH_GROUP } from './morph-gpu';
 export { MorphInstanceBuffer, makeMorphedDraw } from './morph-batching';
 export type { MorphedDrawPayload } from './morph-batching';

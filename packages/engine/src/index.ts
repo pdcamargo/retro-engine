@@ -154,6 +154,11 @@ export {
   MorphInstanceBuffer,
   makeMorphedDraw,
   MorphPlugin,
+  SparseMorphTarget,
+  parseSparseMorphTarget,
+  SPARSE_MORPH_TARGET_ASSET_KIND,
+  SparseMorphTargets,
+  createSparseMorphTargetImporter,
 } from './morph';
 export {
   AnimationClip,

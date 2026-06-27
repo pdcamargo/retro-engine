@@ -1,9 +1,9 @@
 # RetroHuman — parametric humanoid character system
 
 - **Created:** 2026-06-27
-- **Status:** In progress — Phase 1 complete, Phase 2 next
-- **Decisions:** ADR-0129 (morph-target GPU delivery — storage buffer, gated on `storageBuffers`,
-  resolves the delta-delivery open question)
+- **Status:** In progress — Phases 1–2 complete, Phase 3 next
+- **Decisions:** ADR-0129 (morph-target GPU delivery — storage buffer, gated on `storageBuffers`),
+  ADR-0130 (MakeHuman `.target` ingestion — sparse morph-target assets; vendor data fetch-on-demand)
 
 ## Goal
 
@@ -73,12 +73,17 @@ data-texture path declared + deferred.
 ### Phase 2 — MakeHuman `.target` ingestion
 
 What unlocks nose/ear/body sliders (the customization the GLB path can't carry).
+**Phase 2 complete** (ADR-0130). The "morph library" is realized as the collection of per-`.target`
+assets the creator gathers (Phase 3), not a separate on-disk container.
 
-- A `.target` parser (sparse `index x y z`, gunzip) → an engine "morph library" asset keyed to the
-  base mesh's vertex order.
-- An asset type / `.meta` sidecar via the `add-asset-type` skill path (ADR-0111) so target sets are
-  discovered and identified by GUID.
-- Validate vertex-count/index alignment against `base.obj` (targets are topology-locked).
+- ✅ `.target` parser (`parseSparseMorphTarget`) → `SparseMorphTarget` (sparse `index dx dy dz`,
+  `maxIndex`/`fitsBase`/`toDense`). Plain text, not gzipped. Unit-tested + verified on real vendored
+  targets.
+- ✅ Asset kind `'MorphTarget'` (ext `target`, discoverable, category `morph`) + `.meta` sidecar via
+  the `add-asset-type` path (ADR-0111). Verified live: a vendored `.target` is discovered,
+  sidecar'd, and loads through the AssetServer.
+- ✅ Index/base alignment validated at composition (`fitsBase`/`toDense` reject out-of-range indices
+  against the actual base vertex count) — a `.target` carries no base reference to check at import.
 
 ### Phase 3 — Character creator panel + bake (edit-time)
 
@@ -110,12 +115,12 @@ Phase 1 capability flag. Defer for cost/sequencing, not genre (CLAUDE.md §12).
 
 ## Open questions
 
-- **Morph delta delivery threshold** — at what target count does the vertex-attribute path hand off
-  to a storage buffer (and a capability gate)? Decided in Phase 1. ADR, mirrors ADR-0115.
+- ✅ **Morph delta delivery threshold** — resolved (ADR-0129): single storage-buffer path, no
+  threshold; vertex-attribute path rejected (WebGL2 budget). WebGL2 data-texture path deferred.
 - **Edit-time bake vs runtime-live** — initial scope is edit-time bake. Runtime-live is Phase 5
   future. Confirm before Phase 3.
-- **Vendor vs fetch-on-demand** for the 37.7 MB target set — do we commit the CC0 assets to git, or
-  keep the pinned fetch script and a small committed fixture? Likely an ADR.
+- ✅ **Vendor vs fetch-on-demand** — resolved (ADR-0130): fetch-on-demand. Asset *type* committed,
+  asset *data* not; full 37.7 MB set via `fetch.sh --full`; tests use small inline fixtures.
 - **Skeleton source** — reuse a MakeHuman/MPFB2 rig (`rigs/`) vs the engine's own; how it maps onto
   the existing retargeting reference pose (ADR-0125).
 - **Proxy-fitting fidelity** — full barycentric body-surface fitting vs a cheaper approximation.

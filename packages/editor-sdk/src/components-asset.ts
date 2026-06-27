@@ -24,6 +24,7 @@ export type AssetType =
   | 'audio'
   | 'shader'
   | 'animation'
+  | 'morph'
   | 'font'
   | 'particle'
   | 'folder';
@@ -52,6 +53,7 @@ export const ASSET_TYPES: Readonly<Record<AssetType, AssetTypeInfo>> = {
   audio: { icon: 'audio-lines', tag: 'AUDIO', tone: 'warning' },
   shader: { icon: 'file-code', tag: 'SHADER', tone: 'info' },
   animation: { icon: 'film', tag: 'ANIM', tone: 'warning' },
+  morph: { icon: 'scan-face', tag: 'MORPH', tone: 'accent' },
   font: { icon: 'type', tag: 'FONT', tone: 'neutral' },
   particle: { icon: 'sparkles', tag: 'VFX', tone: 'accent' },
   folder: { icon: 'folder', tag: '', tone: 'neutral' },
