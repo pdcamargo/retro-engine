@@ -100,5 +100,6 @@ export class ScenePicker {
       }
     }
     this.state.selectedEntity = best;
+    if (best !== null) this.state.selectedAsset = null;
   }
 }

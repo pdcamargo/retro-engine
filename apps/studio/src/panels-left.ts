@@ -85,6 +85,7 @@ export const hierarchyPanel = (state: StudioState, app: App): PanelDef => ({
             else state.collapsed.add(node.entity);
           } else if (result.clicked) {
             state.selectedEntity = node.entity;
+            state.selectedAsset = null;
           }
         }
       });

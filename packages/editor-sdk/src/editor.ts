@@ -5,6 +5,7 @@ import { widgets } from './components';
 import { Draw } from './draw';
 import { buildDefaultLayout, type DockSlot, DockNodeId, type LayoutDims, nodeForSlot } from './editor-layout';
 import { drawIcon } from './icon-shapes';
+import { type AssetEditorRegistry, createAssetEditorRegistry } from './asset-editor/registry';
 import { createInspectorRegistry, type InspectorRegistry } from './inspector/inspector-registry';
 import { drawPixelText, pixelTextWidth } from './pixel-font';
 import { type IconName } from './icons';
@@ -133,6 +134,14 @@ export class Editor {
    * fully with no registration.
    */
   readonly inspector: InspectorRegistry = createInspectorRegistry();
+
+  /**
+   * The asset-editor extension surface: register a custom editor per asset type.
+   * Asset types with no registered editor fall back to the default reflection
+   * walk, so a reflected asset (e.g. a material) is editable with no
+   * registration.
+   */
+  readonly assetEditors: AssetEditorRegistry = createAssetEditorRegistry();
 
   constructor(options: EditorOptions = {}) {
     this.options = options;

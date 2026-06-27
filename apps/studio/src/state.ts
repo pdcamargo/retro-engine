@@ -4,7 +4,7 @@
 
 import type { AssetSource } from '@retro-engine/assets';
 import { type Entity } from '@retro-engine/ecs';
-import { defaultViewportGizmoOptions, type ViewportGizmoOptions } from '@retro-engine/editor-sdk';
+import { type AssetSelection, defaultViewportGizmoOptions, type ViewportGizmoOptions } from '@retro-engine/editor-sdk';
 
 import { type AssetPickerState, createAssetPickerState } from './asset-picker/asset-picker-state';
 import { type AssetsPanelState, createAssetsPanelState } from './assets/assets-panel-state';
@@ -34,6 +34,12 @@ export interface StudioState {
   selected: string | null;
   /** Selected entity in the live ECS world, or `null`. Drives the hierarchy + inspector. */
   selectedEntity: Entity | null;
+  /**
+   * Selected asset (material, etc.), or `null`. Mutually exclusive with
+   * {@link selectedEntity}: setting one clears the other. When set, the inspector
+   * shows the asset editor instead of the entity's components.
+   */
+  selectedAsset: AssetSelection | null;
   /** Entities the user has collapsed in the hierarchy (default expanded; rebuilt each frame). */
   collapsed: Set<Entity>;
   /** Reveal derived / non-serializable components in the inspector (a debug view). */
@@ -86,6 +92,7 @@ export const createState = (scene: Scene): StudioState => ({
   scene,
   selected: null,
   selectedEntity: null,
+  selectedAsset: null,
   collapsed: new Set(),
   debugMode: false,
   historyLastCurrent: -1,

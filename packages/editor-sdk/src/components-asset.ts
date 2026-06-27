@@ -30,6 +30,20 @@ export type AssetType =
   | 'particle'
   | 'folder';
 
+/**
+ * An asset selected in the editor — enough for the inspector to load and edit it.
+ * The asset counterpart to selecting an entity; the inspector dispatches on which
+ * one is active.
+ */
+export interface AssetSelection {
+  /** The browser bucket the asset belongs to (drives icon / filtering). */
+  readonly assetType: AssetType;
+  /** The asset's GUID (may be a sub-asset reference `<parent>#label`). */
+  readonly guid: string;
+  /** The reflection / serializer kind tag (e.g. `'StandardMaterial'`) the asset loads + edits under. */
+  readonly assetKind: string;
+}
+
 /** Icon, format tag, and tone for an {@link AssetType}, mirrored from the design system registry. */
 export interface AssetTypeInfo {
   readonly icon: IconName;

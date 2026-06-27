@@ -1,4 +1,7 @@
 import {
+  type AssetEditorRegistry,
+  ASSET_TYPES,
+  createAssetHistoryEmitter,
   createHistoryEmitter,
   Draw,
   drawIcon,
@@ -13,7 +16,8 @@ import {
   type Tone,
   toneColors,
 } from '@retro-engine/editor-sdk';
-import { type App, AppTypeRegistry, Name } from '@retro-engine/engine';
+import type { AssetGuid } from '@retro-engine/assets';
+import { type App, AppTypeRegistry, AssetServer, Name } from '@retro-engine/engine';
 import { gltfAnchorForEntity } from '@retro-engine/gltf';
 
 import { openComposer } from './composer/composer-state';
@@ -30,6 +34,7 @@ export const inspectorPanel = (
   app: App,
   inspector: InspectorRegistry,
   history: History,
+  assetEditors: AssetEditorRegistry,
 ): PanelDef => ({
   id: '/inspector',
   title: 'Inspector',
@@ -48,8 +53,64 @@ export const inspectorPanel = (
     const FOOTER_H = 32;
     const totalH = ui.contentAvail()[1];
 
+    const assetSel = state.selectedAsset;
+
     // Scrolling body; the footer badges stay pinned at the bottom.
     ui.child('insp-body', { size: [0, totalH - FOOTER_H], border: false, padding: [12, 10] }, () => {
+      // Asset editing: a selected asset (material, …) shows its editor instead of
+      // an entity's components. The default editor walks the asset's reflection
+      // schema; a registered custom editor overrides it.
+      if (assetSel !== null) {
+        const server = app.getResource(AssetServer);
+        if (server === undefined) {
+          ui.textDisabled('No asset server.');
+          return;
+        }
+        server.loadByGuid(assetSel.guid as AssetGuid); // idempotent — kicks the load, caches the handle
+        const resolved = server.storeForGuid(assetSel.guid as AssetGuid);
+        const value = resolved?.store.get(resolved.handle) as object | undefined;
+        const reg = registry.get(assetSel.assetKind);
+
+        // Asset header: type icon + name.
+        const assetName =
+          state.browser?.assets.find((a) => a.guid === assetSel.guid)?.name ?? assetSel.assetKind;
+        const ih2 = ui.frameHeight();
+        const top2 = ui.cursorScreenPos();
+        drawIcon(ASSET_TYPES[assetSel.assetType].icon, [top2[0] + 2, top2[1] + (ih2 - 16) / 2], 16, srgbU32(p.green400));
+        ui.dummy([22, ih2]);
+        ui.sameLine(0, 4);
+        ui.textColored([0.88, 0.92, 0.88, 1], assetName);
+        ui.textDisabled(assetSel.assetKind);
+        ui.spacing();
+        ui.spacing();
+
+        if (value === undefined) {
+          ui.textDisabled('Loading asset…');
+          return;
+        }
+        if (reg === undefined) {
+          ui.textDisabled(`No editable schema registered for '${assetSel.assetKind}'.`);
+          return;
+        }
+        const edit = createAssetHistoryEmitter(history, assetSel.assetKind, assetSel.guid);
+        const custom = assetEditors.get(assetSel.assetType);
+        if (custom !== undefined) {
+          custom({ ui, widgets, reflect: registry, inspector, selection: assetSel, value, edit, readonly: state.playing });
+        } else {
+          renderComponentBody({
+            ui,
+            widgets,
+            reflect: registry,
+            inspector,
+            instance: value,
+            registered: reg,
+            readonly: state.playing,
+            edit,
+          });
+        }
+        return;
+      }
+
       if (!alive || selected === null) {
         ui.textDisabled('No entity selected.');
         return;
@@ -137,6 +198,11 @@ export const inspectorPanel = (
         dl.text([x + 7, o[1] + 3], tc.fg, text);
         return w;
       };
+      if (assetSel !== null) {
+        const w1 = badge(o[0], `ASSET · ${ASSET_TYPES[assetSel.assetType].tag}`, 'accent');
+        ui.dummy([w1, ui.textLineHeight() + 6]);
+        return;
+      }
       const w1 = badge(o[0], alive ? `ENTITY #${String(selected)}` : 'NO SELECTION', 'accent');
       const shown = state.debugMode ? entries.length : serializable.length;
       const w2 = badge(o[0] + w1 + 6, `${shown} COMPONENTS`, 'neutral');

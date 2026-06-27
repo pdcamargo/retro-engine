@@ -83,6 +83,9 @@ const renderCard = (
     else st.multiSelect.add(asset.guid);
   } else if (r.clicked) {
     state.selected = asset.guid;
+    // Selecting an asset drives the inspector (asset editor); clear the entity selection.
+    state.selectedAsset = { assetType: asset.type, guid: asset.guid, assetKind: asset.meta ?? asset.type };
+    state.selectedEntity = null;
     actions.onActivate?.(asset);
   } else if (r.rightClicked) {
     state.selected = asset.guid;

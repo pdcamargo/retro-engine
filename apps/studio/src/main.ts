@@ -144,6 +144,7 @@ const composerHooks: ComposerHooks = {
   persistPrefs: () => persistComposerPrefs(),
   select: (entity) => {
     state.selectedEntity = entity;
+    state.selectedAsset = null;
   },
   saveBundle: async (def, guid, location) => {
     if (projectSink === null) {
@@ -311,7 +312,7 @@ editor
   .addPanel(cap(hierarchyPanel(state, app)))
   .addPanel(cap(scenePanel(state, editorView, sceneGizmos, sceneCamera, scenePicker, orientationGizmo)))
   .addPanel(cap(gamePanel(state, gameView)))
-  .addPanel(cap(inspectorPanel(state, app, editor.inspector, history)))
+  .addPanel(cap(inspectorPanel(state, app, editor.inspector, history, editor.assetEditors)))
   .addPanel(cap(historyPanel(state, app, history)))
   .addPanel(cap(consolePanel(state)))
   .addPanel(

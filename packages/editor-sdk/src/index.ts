@@ -4,6 +4,7 @@ export {
   type AssetCardOptions,
   type AssetCardResult,
   type AssetGroupOptions,
+  type AssetSelection,
   type AssetType,
   type AssetTypeInfo,
 } from './components-asset';
@@ -92,6 +93,12 @@ export {
   type InspectorCustomization,
   InspectorRegistry,
 } from './inspector/inspector-registry';
+export {
+  type AssetEditor,
+  type AssetEditorContext,
+  AssetEditorRegistry,
+  createAssetEditorRegistry,
+} from './asset-editor/registry';
 export { renderComponentBody, type RenderComponentBodyRequest } from './inspector/inspector-body';
 export { type PropertyFieldRequest, renderPropertyField } from './inspector/property-field';
 export { type ChildRequest, type PropertyContext, type PropertyRenderer } from './inspector/property-types';
