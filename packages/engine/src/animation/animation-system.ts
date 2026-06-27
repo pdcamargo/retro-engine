@@ -74,6 +74,13 @@ const KINDS_SLERP = 'quat';
 const KINDS_VECTOR = new Set(['vec2', 'vec3', 'vec4']);
 
 /**
+ * Reused destination for number-array leaves (morph-target weights), grown to
+ * the largest target count seen. Kept module-level so the per-frame sample is
+ * allocation-free once warm.
+ */
+let numberArrayScratch = new Float32Array(0);
+
+/**
  * Write one non-bone track's sampled value at `time` into its bound entity's
  * component. Resolves the leaf's reflected `FieldType` to choose interpolation
  * (quaternion → shortest-path slerp; vectors and scalars → linear) and the
@@ -113,6 +120,16 @@ const applyTrack = (
     color.g = scratch[1]!;
     color.b = scratch[2]!;
     color.a = scratch[3]!;
+  } else if (kind === 'array') {
+    // A number array driven element-wise (morph-target weights): the sampler's
+    // componentCount is the array length, one keyframe value per element.
+    if (!Array.isArray(leaf)) return;
+    const dst = leaf as number[];
+    const n = track.sampler.componentCount;
+    if (numberArrayScratch.length < n) numberArrayScratch = new Float32Array(n);
+    sampleInto(track.sampler, time, false, numberArrayScratch);
+    const count = Math.min(n, dst.length);
+    for (let i = 0; i < count; i++) dst[i] = numberArrayScratch[i]!;
   } else {
     return; // Unsupported leaf kind for v1; the track is inert.
   }

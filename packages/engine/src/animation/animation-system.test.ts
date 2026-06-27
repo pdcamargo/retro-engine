@@ -7,6 +7,7 @@ import { AnimationClip } from './animation-clip';
 import { AnimationClips } from './animation-clip-asset';
 import { AnimationPlayer, AnimationTarget } from './animation-player';
 import { advancePlayerTime } from './animation-system';
+import { MorphWeights } from '../morph/morph-weights';
 
 const near = (a: number, b: number, eps = 1e-4): boolean => Math.abs(a - b) <= eps;
 
@@ -67,6 +68,39 @@ describe('animation sampling system', () => {
     const g = app.world.getComponent(target, GlobalTransform)!;
     // Column-major: translation lands in matrix[12].
     expect(near(g.matrix[12]!, 5)).toBe(true);
+  });
+
+  it('drives a MorphWeights array over time', async () => {
+    const app = new App({ renderer: makeHeadlessRenderer() });
+    const clips = app.getResource(AnimationClips)!;
+    // Two targets: target 0 ramps 0→1, target 1 holds 0→0.5, over one second.
+    const clip = new AnimationClip(
+      [
+        {
+          target: { targetId: 'face', component: 'MorphWeights', path: [{ kind: 'field', name: 'weights' }] },
+          sampler: {
+            times: new Float32Array([0, 1]),
+            values: new Float32Array([0, 0, 1, 0.5]),
+            componentCount: 2,
+            interpolation: 'LINEAR',
+          },
+        },
+      ],
+      1,
+    );
+    const handle = clips.add(clip);
+
+    const player = app.world.spawn(new AnimationPlayer(handle, 1, true, 'loop'));
+    const target = app.world.spawn(
+      new MorphWeights(['a', 'b'], [0, 0]),
+      new AnimationTarget('face', player),
+    );
+
+    app.advanceFrame(0);
+    for (let ms = 100; ms <= 500; ms += 100) app.advanceFrame(ms);
+    const mw = app.world.getComponent(target, MorphWeights)!;
+    expect(near(mw.weights[0]!, 0.5)).toBe(true);
+    expect(near(mw.weights[1]!, 0.25)).toBe(true);
   });
 
   it('ignores a stopped player', async () => {

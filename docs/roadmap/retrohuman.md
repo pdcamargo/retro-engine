@@ -60,7 +60,9 @@ data-texture path declared + deferred.
   `@group(3)`), `material-queue-morphed`, `#ifdef MORPHED` in `pbr.wgsl` (morph before skinning);
   `packMorphDeltas` bench. Verified in studio: a glTF morph weight driven 0→1 deforms the live mesh.
   Prepass participation deferred (backlog).
-- **1.3 animation + inspector** — glTF weights sampler drives the `weights` array; one slider per name.
+- ✅ **1.3 animation + inspector** — glTF `weights` channels drive `MorphWeights` (`applyTrack`
+  array-leaf sampling, unit-tested through a full App); studio inspector renders one `[0,1]` slider
+  per target name (verified live: an "inflate" slider replaces the raw arrays).
 - **1.4 skinned + morphed variant** — `@group(3)` carries palette + deltas + weights; morph-then-skin
   (needed for RetroHuman facial expressions, Phase 5).
 

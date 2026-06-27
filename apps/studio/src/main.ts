@@ -55,6 +55,7 @@ publishHost();
 (globalThis as unknown as { __retroEditorHint?: boolean }).__retroEditorHint = true;
 
 import { makeAssetFieldRenderer } from './inspector/asset-field-renderer';
+import { morphWeightsEditor } from './inspector/morph-weights-editor';
 import { drawDialogs, menus, statusBar, toolbar } from './chrome';
 import { SceneCameraController } from './editor-camera';
 import { EditorOnly } from './editor-markers';
@@ -256,6 +257,10 @@ editor.inspector.amend('EnvironmentMapLight', [{ kind: 'field', name: 'rotation'
 // Asset handle fields render as an input-like slot that opens the asset picker,
 // scoped to the slot's expected store type. Covers every `t.handle(...)` field.
 editor.inspector.registerKindRenderer('handle', makeAssetFieldRenderer({ state, app }));
+
+// MorphWeights renders one [0,1] slider per named morph target instead of the
+// raw names / weights arrays.
+editor.inspector.registerComponentEditor('MorphWeights', morphWeightsEditor);
 
 // Each panel records its window rect every frame so the MCP `screenshot.panel`
 // command can crop the canvas to it.

@@ -39,9 +39,11 @@ const asFloat32 = (array: ArrayLike<number>): Float32Array =>
  * targeting the node's `Transform` (translation/rotation/scale); the clip format
  * itself stays general — only this glTF mapping is TRS-shaped.
  *
- * Morph-target (`weights`) channels are skipped: the engine has no morph-target
- * mesh support yet, so there is nothing to drive. They are parsed but produce no
- * track — a tracked gap, not a silent loss of the clip.
+ * Morph-target (`weights`) channels become a track on the node's `MorphWeights`
+ * component, driving the whole weights array (one keyframe value per target).
+ * The output accessor is a flat `SCALAR` stream of `keyframes × targetCount`
+ * (`× 3` for `CUBICSPLINE`), so the per-keyframe component count is derived from
+ * the input/output lengths.
  */
 export const mapAnimations = (
   document: GltfDocument,
@@ -59,8 +61,11 @@ export const mapAnimations = (
     for (const channel of animation.channels) {
       const node = channel.target.node;
       if (node === undefined) continue;
-      const path = transformPathFor(channel.target.path);
-      if (path === undefined) continue; // morph weights — deferred
+      const isWeights = channel.target.path === 'weights';
+      const path = isWeights
+        ? [{ kind: 'field', name: 'weights' } as const]
+        : transformPathFor(channel.target.path);
+      if (path === undefined) continue;
 
       const sampler = animation.samplers[channel.sampler];
       if (sampler === undefined) continue;
@@ -69,17 +74,24 @@ export const mapAnimations = (
       const output = decodeAccessor(document, buffers, sampler.output);
       const interpolation: Interpolation = sampler.interpolation ?? 'LINEAR';
 
+      // For weights the output is one scalar per (keyframe × target); the target
+      // count is the per-keyframe component stride (CUBICSPLINE packs 3× — in
+      // tangent, value, out tangent — per element).
+      const componentCount = isWeights
+        ? Math.max(1, Math.floor(output.count / Math.max(1, input.count) / (interpolation === 'CUBICSPLINE' ? 3 : 1)))
+        : output.componentCount;
+
       const target: TrackTarget = {
         targetId: gltfNodeTargetId(node),
-        component: 'Transform',
-        path,
+        component: isWeights ? 'MorphWeights' : 'Transform',
+        path: path as FieldPath,
       };
       tracks.push({
         target,
         sampler: {
           times: asFloat32(input.array),
           values: asFloat32(output.array),
-          componentCount: output.componentCount,
+          componentCount,
           interpolation,
         },
       });
