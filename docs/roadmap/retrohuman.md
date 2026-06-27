@@ -1,7 +1,7 @@
 # RetroHuman — parametric humanoid character system
 
 - **Created:** 2026-06-27
-- **Status:** In progress — Phase 1
+- **Status:** In progress — Phase 1 complete, Phase 2 next
 - **Decisions:** ADR-0129 (morph-target GPU delivery — storage buffer, gated on `storageBuffers`,
   resolves the delta-delivery open question)
 
@@ -63,8 +63,12 @@ data-texture path declared + deferred.
 - ✅ **1.3 animation + inspector** — glTF `weights` channels drive `MorphWeights` (`applyTrack`
   array-leaf sampling, unit-tested through a full App); studio inspector renders one `[0,1]` slider
   per target name (verified live: an "inflate" slider replaces the raw arrays).
-- **1.4 skinned + morphed variant** — `@group(3)` carries palette + deltas + weights; morph-then-skin
-  (needed for RetroHuman facial expressions, Phase 5).
+- ✅ **1.4 skinned + morphed variant** — combined `@group(3)` (palette binding 0 + morph 1/2/3),
+  `SKINNED`+`MORPHED` vertex module (morph-then-skin), per-entity combined bind group + draw in the
+  skinned queue. Verified live: a skinned cube with an "inflate" target both skins and inflates.
+
+**Phase 1 complete.** Runtime morph targets ship end-to-end. Deferred refinements tracked in
+`docs/backlog/morph-target-followups.md`.
 
 ### Phase 2 — MakeHuman `.target` ingestion
 

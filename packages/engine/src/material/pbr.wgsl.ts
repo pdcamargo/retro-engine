@@ -94,9 +94,21 @@ struct MorphParams {
   vertex_count: u32,
   pad: u32,
 };
-@group(3) @binding(0) var<storage, read> morph_deltas: array<MorphDelta>;
-@group(3) @binding(1) var<storage, read> morph_weights: array<f32>;
-@group(3) @binding(2) var<uniform> morph_params: MorphParams;
+// When the mesh is also skinned, the joint palette owns @group(3) binding 0, so
+// morph data shifts to 1/2/3; otherwise it sits at 0/1/2. The preprocessor only
+// substitutes tokens (no arithmetic), so each binding number is its own define.
+#ifdef SKINNED
+#define MORPH_DELTAS_BINDING 1
+#define MORPH_WEIGHTS_BINDING 2
+#define MORPH_PARAMS_BINDING 3
+#else
+#define MORPH_DELTAS_BINDING 0
+#define MORPH_WEIGHTS_BINDING 1
+#define MORPH_PARAMS_BINDING 2
+#endif
+@group(3) @binding(MORPH_DELTAS_BINDING) var<storage, read> morph_deltas: array<MorphDelta>;
+@group(3) @binding(MORPH_WEIGHTS_BINDING) var<storage, read> morph_weights: array<f32>;
+@group(3) @binding(MORPH_PARAMS_BINDING) var<uniform> morph_params: MorphParams;
 
 // Accumulate every target's weighted position + normal delta into the base
 // vertex. vid is the builtin vertex_index, offset by the mesh's slab base.

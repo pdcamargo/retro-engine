@@ -36,6 +36,8 @@ interface EntityEntry {
   targetCount: number;
   /** The delta buffer the bind group references, to detect a re-upload. */
   deltaBuffer: Buffer;
+  /** The shared joint palette buffer the combined bind group references (skinned+morphed), or `undefined` for the morph-only bind group. */
+  paletteBuffer: Buffer | undefined;
 }
 
 /**
@@ -50,6 +52,7 @@ interface EntityEntry {
  */
 export class MorphGpu {
   private layoutValue?: BindGroupLayout;
+  private combinedLayoutValue?: BindGroupLayout;
   private readonly deltas = new Map<number, DeltaEntry>();
   private readonly entities = new Map<Entity, EntityEntry>();
   private weightScratch = new Float32Array(0);
@@ -68,6 +71,27 @@ export class MorphGpu {
       });
     }
     return this.layoutValue;
+  }
+
+  /**
+   * The skinned+morphed `@group(3)` layout: the shared joint palette at binding 0
+   * (matching {@link SkinnedPaletteGpu}'s own layout), then morph deltas + weights
+   * storage and the params uniform at 1/2/3. The combined variant binds palette
+   * and morph data together so a skinned mesh can also morph.
+   */
+  ensureCombinedLayout(renderer: Renderer): BindGroupLayout {
+    if (this.combinedLayoutValue === undefined) {
+      this.combinedLayoutValue = renderer.createBindGroupLayout({
+        label: 'morph-skinned',
+        entries: [
+          { binding: 0, visibility: ShaderStage.VERTEX, buffer: { type: 'read-only-storage' } },
+          { binding: 1, visibility: ShaderStage.VERTEX, buffer: { type: 'read-only-storage' } },
+          { binding: 2, visibility: ShaderStage.VERTEX, buffer: { type: 'read-only-storage' } },
+          { binding: 3, visibility: ShaderStage.VERTEX, buffer: { type: 'uniform' } },
+        ],
+      });
+    }
+    return this.combinedLayoutValue;
   }
 
   /**
@@ -96,8 +120,10 @@ export class MorphGpu {
 
   /**
    * Write an entity's live weights and params, (re)building its bind group when
-   * the referenced delta buffer, mesh, or target count changes. Returns the
-   * `@group(3)` bind group to bind for this entity's morphed draw.
+   * the referenced buffers, mesh, or target count change. Returns the `@group(3)`
+   * bind group to bind for this entity's draw: the morph-only layout, or — when
+   * `paletteBuffer` is supplied (a skinned+morphed entity) — the combined layout
+   * with the shared joint palette at binding 0.
    */
   prepareEntity(
     renderer: Renderer,
@@ -106,6 +132,7 @@ export class MorphGpu {
     meshIndex: number,
     weights: readonly number[],
     vertexBase: number,
+    paletteBuffer?: Buffer,
   ): BindGroup {
     const targetCount = delta.targetCount;
     let entry = this.entities.get(entity);
@@ -132,6 +159,7 @@ export class MorphGpu {
           meshIndex: -1,
           targetCount: -1,
           deltaBuffer: undefined as unknown as Buffer,
+          paletteBuffer: undefined,
         };
         this.entities.set(entity, entry);
       } else {
@@ -144,20 +172,34 @@ export class MorphGpu {
       entry.deltaBuffer !== delta.buffer ||
       entry.meshIndex !== meshIndex ||
       entry.targetCount !== targetCount ||
+      entry.paletteBuffer !== paletteBuffer ||
       entry.bindGroup === undefined
     ) {
-      entry.bindGroup = renderer.createBindGroup({
-        label: `morph#${entity}`,
-        layout: this.ensureLayout(renderer),
-        entries: [
-          { binding: 0, resource: { buffer: delta.buffer } },
-          { binding: 1, resource: { buffer: entry.weightsBuffer } },
-          { binding: 2, resource: { buffer: entry.paramsBuffer } },
-        ],
-      });
+      entry.bindGroup =
+        paletteBuffer !== undefined
+          ? renderer.createBindGroup({
+              label: `morph-skinned#${entity}`,
+              layout: this.ensureCombinedLayout(renderer),
+              entries: [
+                { binding: 0, resource: { buffer: paletteBuffer } },
+                { binding: 1, resource: { buffer: delta.buffer } },
+                { binding: 2, resource: { buffer: entry.weightsBuffer } },
+                { binding: 3, resource: { buffer: entry.paramsBuffer } },
+              ],
+            })
+          : renderer.createBindGroup({
+              label: `morph#${entity}`,
+              layout: this.ensureLayout(renderer),
+              entries: [
+                { binding: 0, resource: { buffer: delta.buffer } },
+                { binding: 1, resource: { buffer: entry.weightsBuffer } },
+                { binding: 2, resource: { buffer: entry.paramsBuffer } },
+              ],
+            });
       entry.deltaBuffer = delta.buffer;
       entry.meshIndex = meshIndex;
       entry.targetCount = targetCount;
+      entry.paletteBuffer = paletteBuffer;
     }
 
     if (this.weightScratch.length < targetCount) this.weightScratch = new Float32Array(targetCount);
@@ -175,15 +217,5 @@ export class MorphGpu {
     renderer.writeBuffer(entry.paramsBuffer, 0, this.paramsScratch as unknown as BufferSource);
 
     return entry.bindGroup;
-  }
-
-  /** Drop and free per-entity resources for entities not in `live` this frame. */
-  retainEntities(live: ReadonlySet<Entity>): void {
-    for (const [entity, entry] of this.entities) {
-      if (live.has(entity)) continue;
-      entry.weightsBuffer.destroy();
-      entry.paramsBuffer.destroy();
-      this.entities.delete(entity);
-    }
   }
 }

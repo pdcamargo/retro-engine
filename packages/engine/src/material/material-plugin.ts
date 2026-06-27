@@ -74,7 +74,11 @@ import type { PreparedMaterial } from './prepare-bind-group';
 import { prepareBindGroup, schemaToBindGroupLayout } from './prepare-bind-group';
 import { Skeleton } from '../skinning/skeleton';
 import { SkinnedPaletteGpu } from '../skinning/skinned-palette-gpu';
-import { SKINNED_INSTANCE_LAYOUT } from '../skinning/skinned-instance-layout';
+import {
+  SKINNED_INSTANCE_FLOAT_COUNT,
+  SKINNED_INSTANCE_LAYOUT,
+  packSkinnedInstance,
+} from '../skinning/skinned-instance-layout';
 import type { SkinnedDrawPayload, SkinnedInstanceEntry } from '../skinning/skinned-batching';
 import {
   SkinnedInstanceBuffer,
@@ -634,6 +638,10 @@ class MaterialPluginState<M extends Material> {
   morphedVertexModule: ShaderModule | undefined;
   /** Pipeline layout for the morphed variant: view / material / lights / morph(3). */
   morphedPipelineLayout: PipelineLayout | undefined;
+  /** Vertex module compiled with `SKINNED` + `MORPHED` — palette + morph at `@group(3)`. */
+  skinnedMorphedVertexModule: ShaderModule | undefined;
+  /** Pipeline layout for the skinned+morphed variant: view / material / lights / palette+morph(3). */
+  skinnedMorphedPipelineLayout: PipelineLayout | undefined;
   specialized!: SpecializedRenderPipelines<SpecializeContext>;
   readonly instanceBuffer = new MeshInstanceBuffer();
   /** Sibling of {@link instanceBuffer} for skinned draws (wider stride + `joint_offset`). */
@@ -1010,7 +1018,15 @@ class MaterialPluginState<M extends Material> {
 
     const mainWorldMaterials = app.getResource(this.plugin.Materials) as Materials<M> | undefined;
     const aoCache = app.getResource(AoBindGroupCache);
+    // A skinned mesh that also carries morph targets draws through the combined
+    // (skinned + morphed) variant: @group(3) binds palette + morph data together,
+    // and it cannot share an instanced batch (per-entity bind group), so combined
+    // entries are emitted one draw each.
+    const meshes = app.getResource(Meshes);
+    const morphGpu = app.getResource(MorphGpu);
+    const paletteBuffer = paletteGpu.buffer;
     const entries: SkinnedInstanceEntry[] = [];
+    const combined: SkinnedInstanceEntry[] = [];
 
     for (const view of cameras.views) {
       const cameraEntity = view.sourceEntity;
@@ -1048,6 +1064,12 @@ class MaterialPluginState<M extends Material> {
         const depthBias = materialInstance?.depthBias?.() ?? 0;
         const doubleSided = materialInstance?.doubleSided?.() ?? false;
 
+        const mesh = meshes?.get(mesh3d.handle);
+        const morphWeights =
+          morphGpu !== undefined && mesh?.morphTargets !== undefined && paletteBuffer !== undefined
+            ? app.world.getComponent(entity, MorphWeights)
+            : undefined;
+
         const layout = renderMesh.layout.layout;
         const key: MaterialPipelineKey = {
           msaaSamples: 1,
@@ -1055,6 +1077,7 @@ class MaterialPluginState<M extends Material> {
           vertexLayoutDigest: vertexLayoutDigestFor(layout),
           alphaMode,
           skinned: true,
+          ...(morphWeights !== undefined ? { morphed: true } : {}),
           ...(doubleSided ? { doubleSided: true } : {}),
         };
         const pipeline = this.specialized.get({ key, colorFormat, depthFormat, depthBias, layout });
@@ -1070,16 +1093,32 @@ class MaterialPluginState<M extends Material> {
 
         const bucket: AlphaBucket =
           alphaMode === 'opaque' ? 'opaque' : alphaMode === 'blend' ? 'blend' : 'mask';
+
+        // Combined skinned + morphed: bind the per-entity palette+morph group(3)
+        // (built by MorphGpu over the shared palette buffer) at the palette slot.
+        const group3 =
+          morphWeights !== undefined
+            ? morphGpu!.prepareEntity(
+                app.renderer,
+                entity,
+                morphGpu!.ensureDeltas(app.renderer, mesh3d.handle.index, mesh!.morphTargets!),
+                mesh3d.handle.index,
+                morphWeights.weights,
+                vertexSlice.baseVertex,
+                paletteBuffer,
+              )
+            : paletteBindGroup;
+
         const payload: SkinnedDrawPayload = {
           pipeline,
           materialBindGroup: prepared.bindGroup,
-          paletteBindGroup,
+          paletteBindGroup: group3,
           vertexSlice,
           indexSlice,
           renderMesh,
           ...(restoreGroup3 !== undefined ? { restoreGroup3 } : {}),
         };
-        entries.push({
+        (morphWeights !== undefined ? combined : entries).push({
           cameraEntity,
           bucket,
           groupKey: `${mesh3d.handle.index}/${meshMat.handle.index}`,
@@ -1090,35 +1129,53 @@ class MaterialPluginState<M extends Material> {
         });
       }
     }
-    if (entries.length === 0) return;
+    if (entries.length === 0 && combined.length === 0) return;
 
-    this.skinnedInstanceBuffer.ensureCapacity(app.renderer, entries.length);
+    this.skinnedInstanceBuffer.ensureCapacity(app.renderer, entries.length + combined.length);
+    const f32 = this.skinnedInstanceBuffer.f32;
+    const u32 = this.skinnedInstanceBuffer.u32;
     const { batches, cursorSlots } = packSkinnedBatches(
       entries,
       MaterialPluginState.depthOrderedBuckets,
-      this.skinnedInstanceBuffer.f32,
-      this.skinnedInstanceBuffer.u32,
+      f32,
+      u32,
     );
-    this.skinnedInstanceBuffer.count = entries.length;
-    const buffer = this.skinnedInstanceBuffer.buffer!;
-    if (cursorSlots > 0) {
-      app.renderer.writeBuffer(
-        buffer,
-        0,
-        this.skinnedInstanceBuffer.f32.subarray(0, cursorSlots) as unknown as BufferSource,
-      );
+    // Pack each combined entry as its own instance after the batched region; it
+    // draws alone (count 1) because its @group(3) bind group is per-entity.
+    let cursor = cursorSlots;
+    const combinedDraws: { entry: SkinnedInstanceEntry; firstInstance: number }[] = [];
+    for (const entry of combined) {
+      const firstInstance = cursor / SKINNED_INSTANCE_FLOAT_COUNT;
+      cursor += packSkinnedInstance(f32, u32, cursor, entry.model, entry.jointOffset);
+      combinedDraws.push({ entry, firstInstance });
     }
+    this.skinnedInstanceBuffer.count = entries.length + combined.length;
+    const buffer = this.skinnedInstanceBuffer.buffer!;
+    if (cursor > 0) {
+      app.renderer.writeBuffer(buffer, 0, f32.subarray(0, cursor) as unknown as BufferSource);
+    }
+
+    const push = (cameraEntity: number, bucket: AlphaBucket, item: PhaseItem3d): void => {
+      if (bucket === 'opaque') phases.pushOpaque(cameraEntity, item);
+      else if (bucket === 'blend') phases.pushTransparent(cameraEntity, item);
+      else phases.pushAlphaMask(cameraEntity, item);
+    };
 
     for (const batch of batches) {
       const draw = makeSkinnedDraw(batch.payload, buffer, batch.firstInstance, batch.count);
-      const item: PhaseItem3d = { sourceEntity: batch.cameraEntity, sortDepth: batch.sortDepth, draw };
-      if (batch.bucket === 'opaque') {
-        phases.pushOpaque(batch.cameraEntity, item);
-      } else if (batch.bucket === 'blend') {
-        phases.pushTransparent(batch.cameraEntity, item);
-      } else {
-        phases.pushAlphaMask(batch.cameraEntity, item);
-      }
+      push(batch.cameraEntity, batch.bucket, {
+        sourceEntity: batch.cameraEntity,
+        sortDepth: batch.sortDepth,
+        draw,
+      });
+    }
+    for (const { entry, firstInstance } of combinedDraws) {
+      const draw = makeSkinnedDraw(entry.payload, buffer, firstInstance, 1);
+      push(entry.cameraEntity, entry.bucket, {
+        sourceEntity: entry.cameraEntity,
+        sortDepth: entry.depth,
+        draw,
+      });
     }
   }
 
@@ -1166,7 +1223,6 @@ class MaterialPluginState<M extends Material> {
       readonly payload: MorphedDrawPayload;
     }
     const pending: PendingMorphedDraw[] = [];
-    const live = new Set<Entity>();
 
     for (const view of cameras.views) {
       const cameraEntity = view.sourceEntity;
@@ -1197,7 +1253,6 @@ class MaterialPluginState<M extends Material> {
         const prepared = renderMaterials.get(meshMat.handle);
         if (prepared === undefined) continue;
 
-        live.add(entity);
         const delta = morphGpu.ensureDeltas(renderer, mesh3d.handle.index, mesh.morphTargets);
         const morphBindGroup = morphGpu.prepareEntity(
           renderer,
@@ -1247,7 +1302,6 @@ class MaterialPluginState<M extends Material> {
       }
     }
 
-    morphGpu.retainEntities(live);
     if (pending.length === 0) return;
 
     this.morphInstanceBuffer.ensureCapacity(renderer, pending.length);
@@ -1511,7 +1565,19 @@ class MaterialPluginState<M extends Material> {
     // fragment module. Gated on usesLights so @group(3) always sits at index 3.
     const aoEnabled =
       !skinned && !morphed && ctx.key.aoEnabled === true && this.materialClass.usesLights === true;
-    if (skinned) {
+    // Combined skinned + morphed: @group(3) holds palette (binding 0) + morph
+    // deltas/weights/params (1/2/3), and the vertex module is compiled with both
+    // defines (morph applied before skinning).
+    const skinnedMorphed = skinned && morphed;
+    if (skinnedMorphed) {
+      if (this.skinnedMorphedPipelineLayout === undefined) {
+        const combinedLayout = (this.app.getResource(MorphGpu) as MorphGpu).ensureCombinedLayout(renderer);
+        this.skinnedMorphedPipelineLayout = renderer.createPipelineLayout({
+          label: `material#${this.materialClass.name}#skinned-morphed`,
+          bindGroupLayouts: [...baseLayouts(), combinedLayout],
+        });
+      }
+    } else if (skinned) {
       if (this.skinnedPipelineLayout === undefined) {
         const paletteLayout = (
           this.app.getResource(SkinnedPaletteGpu) as SkinnedPaletteGpu
@@ -1552,19 +1618,23 @@ class MaterialPluginState<M extends Material> {
     const isTransparent = ctx.key.alphaMode === 'blend';
     const descriptor: RenderPipelineDescriptor = {
       label: `material#${this.materialClass.name}#${alphaModeKey(ctx.key.alphaMode)}${aoEnabled ? '#ao' : ''}${skinned ? '#skinned' : ''}${morphed ? '#morphed' : ''}`,
-      layout: skinned
-        ? this.skinnedPipelineLayout!
-        : morphed
-          ? this.morphedPipelineLayout!
-          : aoEnabled
-            ? this.aoPipelineLayout!
-            : this.pipelineLayout!,
-      vertex: {
-        module: skinned
-          ? this.ensureSkinnedVertexModule()
+      layout: skinnedMorphed
+        ? this.skinnedMorphedPipelineLayout!
+        : skinned
+          ? this.skinnedPipelineLayout!
           : morphed
-            ? this.ensureMorphedVertexModule()
-            : this.vertexModule,
+            ? this.morphedPipelineLayout!
+            : aoEnabled
+              ? this.aoPipelineLayout!
+              : this.pipelineLayout!,
+      vertex: {
+        module: skinnedMorphed
+          ? this.ensureSkinnedMorphedVertexModule()
+          : skinned
+            ? this.ensureSkinnedVertexModule()
+            : morphed
+              ? this.ensureMorphedVertexModule()
+              : this.vertexModule,
         entryPoint: this.vertexEntryPoint,
         buffers: [ctx.layout, skinned ? SKINNED_INSTANCE_LAYOUT : INSTANCE_LAYOUT],
       },
@@ -1815,6 +1885,26 @@ class MaterialPluginState<M extends Material> {
       { MORPHED: true },
     );
     return this.morphedVertexModule;
+  }
+
+  /**
+   * Lazily compile the combined `SKINNED` + `MORPHED` vertex module: morph the
+   * rest pose, then skin the result, reading the joint palette + morph data from
+   * one `@group(3)` bind group. For meshes that both deform and morph (a skinned
+   * character with facial blend shapes).
+   */
+  ensureSkinnedMorphedVertexModule(): ShaderModule {
+    if (this.skinnedMorphedVertexModule !== undefined) return this.skinnedMorphedVertexModule;
+    const cache = this.app.getResource(PipelineCache) as PipelineCache;
+    const registry = this.app.getResource(ShaderRegistry) as ShaderRegistry;
+    this.skinnedMorphedVertexModule = compileShaderFromRef(
+      cache,
+      registry,
+      this.vertexShaderRef,
+      `${this.materialClass.name}-vertex+skinned+morphed`,
+      { SKINNED: true, MORPHED: true },
+    );
+    return this.skinnedMorphedVertexModule;
   }
 
   private materialSupportsPrepassNormalFragment(): boolean {
