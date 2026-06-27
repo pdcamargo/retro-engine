@@ -299,19 +299,21 @@ const resolveImageBinding = <M>(
   binding: number,
 ): RenderImage => {
   const raw = (material as Record<string, unknown>)[fieldKey] as Handle<Image> | undefined;
-  const handle: Handle<Image> =
-    raw !== undefined && raw !== null
-      ? raw
-      : fallback === 'white'
-        ? images.WHITE
-        : fallback === 'black'
-          ? images.BLACK
-          : images.NORMAL_FLAT;
-  const renderImage = renderImages.get(handle);
+  const fallbackHandle: Handle<Image> =
+    fallback === 'white' ? images.WHITE : fallback === 'black' ? images.BLACK : images.NORMAL_FLAT;
+  const handle: Handle<Image> = raw !== undefined && raw !== null ? raw : fallbackHandle;
+  let renderImage = renderImages.get(handle);
   if (renderImage === undefined) {
-    throw new Error(
-      `prepareBindGroup: ${kind} binding ${binding} could not resolve image handle ${handle.index} via RenderImages — make sure ImagePlugin is registered before any MaterialPlugin (its prepare system runs in RenderSet.Prepare with label 'image-prepare').`,
-    );
+    // The material's texture may still be loading (async decode + GPU upload).
+    // Render with the default image until it is ready, rather than aborting the
+    // whole frame — the next prepare picks up the real texture once it lands. A
+    // missing *default* image is the real setup error (ImagePlugin not registered).
+    renderImage = renderImages.get(fallbackHandle);
+    if (renderImage === undefined) {
+      throw new Error(
+        `prepareBindGroup: ${kind} binding ${binding} could not resolve image handle ${handle.index} or its default via RenderImages — make sure ImagePlugin is registered before any MaterialPlugin (its prepare system runs in RenderSet.Prepare with label 'image-prepare').`,
+      );
+    }
   }
   const sourceImage = images.get(handle);
   if (sourceImage !== undefined && sourceImage.dimension !== '2d') {

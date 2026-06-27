@@ -21,6 +21,7 @@ import { type FieldType, t } from '@retro-engine/reflect';
 
 import { registerAssetSerializer } from '../asset/asset-serializers';
 
+import type { Image } from '../image/image';
 import { Images } from '../image/images';
 import { RenderImages } from '../image/image-plugin';
 import { GpuLights } from '../light3d/gpu-lights';
@@ -657,6 +658,12 @@ class MaterialPluginState<M extends Material> {
   readonly previousInstanceBuffer = new MeshPreviousInstanceBuffer();
   readonly retainedBuffer = new RetainedMeshBuffer<M>(MaterialPluginState.depthOrderedBuckets);
   scratch = new ArrayBuffer(1024);
+  /**
+   * Materials whose textures haven't all uploaded yet, by handle index → handle.
+   * They prepared against the default image; re-prepared each frame until their
+   * referenced images land (async decode + GPU upload), then dropped.
+   */
+  private readonly pendingTextureMaterials = new Map<number, Handle<M>>();
   app!: App;
   initialised = false;
   /**
@@ -756,16 +763,29 @@ class MaterialPluginState<M extends Material> {
     renderImages: RenderImages,
   ): void {
     const events = materials.drainEvents();
-    if (events.length === 0) return;
+    const pending = this.pendingTextureMaterials;
+    if (events.length === 0 && pending.size === 0) return;
+
+    // (Re)prepare changed/added materials plus any still waiting on a texture.
+    const toPrepare = new Map<number, Handle<M>>();
     for (const event of events) {
       if (event.kind === 'unused') continue;
       if (event.kind === 'removed') {
         renderMaterials.delete(event.handle);
+        pending.delete(event.handle.index);
         continue;
       }
-      const value = materials.get(event.handle);
-      if (value === undefined) continue;
-      const previous = renderMaterials.get(event.handle);
+      toPrepare.set(event.handle.index, event.handle);
+    }
+    for (const [index, handle] of pending) if (!toPrepare.has(index)) toPrepare.set(index, handle);
+
+    for (const [index, handle] of toPrepare) {
+      const value = materials.get(handle);
+      if (value === undefined) {
+        pending.delete(index);
+        continue;
+      }
+      const previous = renderMaterials.get(handle);
       const prepared = prepareBindGroup(
         app.renderer,
         this.materialClass.bindGroup,
@@ -775,10 +795,24 @@ class MaterialPluginState<M extends Material> {
         this.scratch,
         images,
         renderImages,
-        `material#${this.materialClass.name}#${event.handle.index}`,
+        `material#${this.materialClass.name}#${index}`,
       );
-      renderMaterials.set(event.handle, prepared);
+      renderMaterials.set(handle, prepared);
+      // A texture handle not yet in RenderImages prepared against the default
+      // image; keep re-preparing until it lands, then drop from the pending set.
+      if (this.hasPendingTextures(value as M, renderImages)) pending.set(index, handle);
+      else pending.delete(index);
     }
+  }
+
+  /** True if any of `material`'s texture-handle fields references an image not yet uploaded. */
+  private hasPendingTextures(material: M, renderImages: RenderImages): boolean {
+    for (const entry of this.materialClass.bindGroup) {
+      if (entry.kind !== 'texture' || entry.imageMode !== 'handle') continue;
+      const handle = (material as Record<string, unknown>)[entry.fieldKey] as Handle<Image> | undefined;
+      if (handle !== undefined && handle !== null && renderImages.get(handle) === undefined) return true;
+    }
+    return false;
   }
 
   queueMaterials(

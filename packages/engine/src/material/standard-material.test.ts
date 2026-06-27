@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'bun:test';
+import { asAssetIndex, type AssetGuid, makeHandle } from '@retro-engine/assets';
 
 import type {
   BindGroup,
@@ -111,6 +112,22 @@ const seedRenderImages = (images: Images): RenderImages => {
   ri.set(images.NORMAL_FLAT, stubRenderImage);
   return ri;
 };
+
+describe('StandardMaterial texture binding resilience', () => {
+  it('falls back to the default image when a texture is not yet uploaded (still loading), instead of throwing', () => {
+    const { renderer } = makeRecordingRenderer();
+    const images = new Images();
+    const renderImages = seedRenderImages(images); // WHITE seeded; the atlas below is not
+    const layout = schemaToBindGroupLayout(renderer, StandardMaterial.bindGroup, 'standard');
+    const material = new StandardMaterial({
+      baseColorTexture: makeHandle(asAssetIndex(999), 'still-loading' as AssetGuid),
+    });
+    const scratch = new ArrayBuffer(64);
+    expect(() =>
+      prepareBindGroup(renderer, StandardMaterial.bindGroup, layout, material, undefined, scratch, images, renderImages, 'standard'),
+    ).not.toThrow();
+  });
+});
 
 describe('StandardMaterial uniform packing', () => {
   it('packs normalScale into a 64-byte slot at f32 index 12 (byte offset 48)', () => {
