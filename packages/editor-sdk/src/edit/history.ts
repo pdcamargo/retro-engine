@@ -1,10 +1,11 @@
 import type { Entity } from '@retro-engine/ecs';
 
-import { applyEdit, type EditTarget, revertEdit, writeFieldLive } from './apply';
+import { applyEdit, type EditTarget, revertEdit, writeScopedLive } from './apply';
 import { snapshotValue, valueEquals } from './clone';
 import type { EditCommand, SetFieldCommand } from './command';
 import type { ItemEdges } from './emitter';
 import { type FieldPath, pathKeyOf } from './field-path';
+import { type EditScope, entityScope, scopeKey, scopeLabel } from './scope';
 
 /** One undoable unit on the stack: a lone command or a labelled group. */
 type HistoryItem =
@@ -35,7 +36,9 @@ export type HistoryEntryKind =
 export interface HistoryEntryView {
   readonly label: string;
   readonly kind: HistoryEntryKind;
-  /** The entity the entry targets, for single-command entries. */
+  /** The edit scope (entity component or asset), for `setField` entries. */
+  readonly scope?: EditScope;
+  /** The entity the entry targets, for single-command entries (undefined for asset edits). */
   readonly entity?: Entity;
   /** The stable reflection name of the component the entry touched, for single-command entries. */
   readonly componentName?: string;
@@ -67,32 +70,23 @@ export interface HistoryOptions {
 }
 
 interface Pending {
-  readonly entity: Entity;
-  readonly componentName: string;
+  readonly scope: EditScope;
   readonly path: FieldPath;
   readonly key: string;
   readonly before: unknown;
   lastAfter: unknown;
 }
 
-const interactionKey = (entity: Entity, componentName: string, pathKey: string): string =>
-  `${String(entity)}|${componentName}|${pathKey}`;
+const interactionKey = (scope: EditScope, pathKey: string): string => `${scopeKey(scope)}|${pathKey}`;
 
-const setFieldCommand = (
-  entity: Entity,
-  componentName: string,
-  path: FieldPath,
-  before: unknown,
-  after: unknown,
-): SetFieldCommand => ({
+const setFieldCommand = (scope: EditScope, path: FieldPath, before: unknown, after: unknown): SetFieldCommand => ({
   kind: 'setField',
-  entity,
-  componentName,
+  scope,
   path,
   pathKey: pathKeyOf(path),
   before,
   after,
-  label: `Set ${componentName}`,
+  label: `Set ${scopeLabel(scope)}`,
 });
 
 /** The edited leaf as a display string — a field's name or a bracketed index. */
@@ -107,15 +101,16 @@ const toView = (item: HistoryItem): HistoryEntryView => {
   if (item.kind === 'batch') return { label: item.label, kind: 'batch' };
   const c = item.command;
   if (c.kind === 'setField') {
-    return {
+    const view: HistoryEntryView = {
       label: c.label,
       kind: 'setField',
-      entity: c.entity,
-      componentName: c.componentName,
+      scope: c.scope,
+      componentName: c.scope.kind === 'entity' ? c.scope.componentName : c.scope.assetKind,
       field: lastField(c.path),
       before: c.before,
       after: c.after,
     };
+    return c.scope.kind === 'entity' ? { ...view, entity: c.scope.entity } : view;
   }
   if (c.kind === 'addBundle') return { label: c.label, kind: 'addBundle', entity: c.entity };
   return { label: c.label, kind: c.kind, entity: c.entity, componentName: c.componentName };
@@ -181,30 +176,50 @@ export class History {
    * history entry is recorded until {@link sync} reports the interaction ended.
    */
   preview(entity: Entity, componentName: string, path: FieldPath, current: unknown, next: unknown): void {
-    const key = interactionKey(entity, componentName, pathKeyOf(path));
-    if (this.pending !== null && this.pending.key !== key) this.flushPending();
-    if (this.pending === null) {
-      if (valueEquals(next, current)) return;
-      this.pending = { entity, componentName, path, key, before: snapshotValue(current), lastAfter: snapshotValue(next) };
-    } else {
-      this.pending.lastAfter = snapshotValue(next);
-    }
-    writeFieldLive(this.target, entity, componentName, path, next);
+    this.previewScoped(entityScope(entity, componentName), path, current, next);
   }
 
   /** Report a widget's item edges; commits the coalesced interaction when it ends. */
   sync(entity: Entity, componentName: string, path: FieldPath, edges: ItemEdges): void {
-    if (!edges.deactivatedAfterEdit) return;
-    if (this.pending === null) return;
-    if (this.pending.key !== interactionKey(entity, componentName, pathKeyOf(path))) return;
-    this.flushPending();
+    this.syncScoped(entityScope(entity, componentName), path, edges);
   }
 
   /** Apply an atomic edit live and record it as one entry immediately. */
   commit(entity: Entity, componentName: string, path: FieldPath, current: unknown, next: unknown): void {
+    this.commitScoped(entityScope(entity, componentName), path, current, next);
+  }
+
+  /**
+   * Scope-generic {@link preview}: apply a value live during a continuous
+   * interaction on any edit scope (an entity component or a stored asset). The
+   * first changed frame captures the before-value; no history entry is recorded
+   * until {@link syncScoped} reports the interaction ended.
+   */
+  previewScoped(scope: EditScope, path: FieldPath, current: unknown, next: unknown): void {
+    const key = interactionKey(scope, pathKeyOf(path));
+    if (this.pending !== null && this.pending.key !== key) this.flushPending();
+    if (this.pending === null) {
+      if (valueEquals(next, current)) return;
+      this.pending = { scope, path, key, before: snapshotValue(current), lastAfter: snapshotValue(next) };
+    } else {
+      this.pending.lastAfter = snapshotValue(next);
+    }
+    writeScopedLive(this.target, scope, path, next);
+  }
+
+  /** Scope-generic {@link sync}: commit the coalesced interaction on this scope when it ends. */
+  syncScoped(scope: EditScope, path: FieldPath, edges: ItemEdges): void {
+    if (!edges.deactivatedAfterEdit) return;
+    if (this.pending === null) return;
+    if (this.pending.key !== interactionKey(scope, pathKeyOf(path))) return;
+    this.flushPending();
+  }
+
+  /** Scope-generic {@link commit}: apply an atomic edit on this scope and record it immediately. */
+  commitScoped(scope: EditScope, path: FieldPath, current: unknown, next: unknown): void {
     this.flushPending();
     if (valueEquals(current, next)) return;
-    const command = setFieldCommand(entity, componentName, path, snapshotValue(current), snapshotValue(next));
+    const command = setFieldCommand(scope, path, snapshotValue(current), snapshotValue(next));
     applyEdit(command, this.target);
     this.record(command);
   }
@@ -297,7 +312,7 @@ export class History {
     this.pending = null;
     if (pending === null) return;
     if (valueEquals(pending.before, pending.lastAfter)) return;
-    this.record(setFieldCommand(pending.entity, pending.componentName, pending.path, pending.before, pending.lastAfter));
+    this.record(setFieldCommand(pending.scope, pending.path, pending.before, pending.lastAfter));
   }
 
   private record(command: EditCommand): void {

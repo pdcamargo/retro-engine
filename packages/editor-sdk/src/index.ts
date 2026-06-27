@@ -33,7 +33,22 @@ export {
 } from './components';
 export { type ComponentEntry, listComponents } from './component-list';
 export { enableDocking, isDockingEnabled } from './docking';
-export { applyEdit, type EditTarget, revertEdit, writeFieldLive } from './edit/apply';
+export {
+  applyEdit,
+  type AssetEditAccess,
+  type EditTarget,
+  revertEdit,
+  writeAssetFieldLive,
+  writeFieldLive,
+  writeScopedLive,
+} from './edit/apply';
+export {
+  assetScope,
+  type EditScope,
+  entityScope,
+  scopeKey,
+  scopeLabel,
+} from './edit/scope';
 export { snapshotComponent, snapshotValue, valueEquals } from './edit/clone';
 export type {
   AddBundleCommand,
@@ -51,7 +66,11 @@ export {
   type ItemEdges,
   type ScalarEdit,
 } from './edit/emitter';
-export { createHistoryEmitter } from './edit/emitter-history';
+export {
+  createAssetHistoryEmitter,
+  createHistoryEmitter,
+  createScopedHistoryEmitter,
+} from './edit/emitter-history';
 export { type FieldPath, type FieldPathSegment, pathKeyOf, readPath, writePathLeaf } from './edit/field-path';
 export {
   History,

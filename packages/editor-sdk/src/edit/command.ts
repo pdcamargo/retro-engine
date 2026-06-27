@@ -1,6 +1,7 @@
 import type { Entity, World } from '@retro-engine/ecs';
 
 import type { FieldPath } from './field-path';
+import type { EditScope } from './scope';
 
 interface EditBase {
   /** The entity the edit targets. Re-validated (the entity may have despawned) at apply time. */
@@ -14,9 +15,15 @@ interface EditBase {
   readonly label: string;
 }
 
-/** Set one nested value on a component, capturing the prior value for undo. */
-export interface SetFieldCommand extends EditBase {
+/**
+ * Set one nested value on a component or asset, capturing the prior value for
+ * undo. The {@link EditScope} decides whether the applier writes to the live
+ * world (an entity component) or to an asset store (a stored value).
+ */
+export interface SetFieldCommand {
   readonly kind: 'setField';
+  /** Whether this targets an entity component or a stored asset value. */
+  readonly scope: EditScope;
   readonly path: FieldPath;
   /** Canonical key of {@link path}; the coalescing identity within an interaction. */
   readonly pathKey: string;
@@ -24,6 +31,8 @@ export interface SetFieldCommand extends EditBase {
   readonly before: unknown;
   /** Deep-cloned value after the edit. Never aliases live storage. */
   readonly after: unknown;
+  /** A short human label for the action, shown in undo history / tooltips. */
+  readonly label: string;
 }
 
 /** Attach a component to an entity; undo removes it. */

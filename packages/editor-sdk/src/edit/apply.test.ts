@@ -27,8 +27,7 @@ describe('applyEdit / revertEdit — setField', () => {
     const { target, entity } = setup();
     const command: SetFieldCommand = {
       kind: 'setField',
-      entity,
-      componentName: 'Pos',
+      scope: { kind: 'entity', entity, componentName: 'Pos' },
       path: [{ kind: 'field', name: 'v' }, { kind: 'index', index: 0 }],
       pathKey: 'v/[0]',
       before: 1,
@@ -46,8 +45,7 @@ describe('applyEdit / revertEdit — setField', () => {
     target.world.despawn(entity);
     const command: SetFieldCommand = {
       kind: 'setField',
-      entity,
-      componentName: 'Pos',
+      scope: { kind: 'entity', entity, componentName: 'Pos' },
       path: [{ kind: 'field', name: 'v' }, { kind: 'index', index: 0 }],
       pathKey: 'v/[0]',
       before: 1,
