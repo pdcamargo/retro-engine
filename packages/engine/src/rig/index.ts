@@ -5,5 +5,5 @@ export { parseMakeHumanWeights } from './makehuman-weights';
 export type { RigPose } from './rig-pose';
 export { buildRigPose } from './rig-pose';
 export { applySkinWeights } from './skin-weights-mesh';
-export type { SpawnedRig } from './spawn-rig';
+export type { SpawnedRig, SpawnRigOptions } from './spawn-rig';
 export { spawnRig } from './spawn-rig';

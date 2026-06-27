@@ -138,6 +138,21 @@ const SLOT_ALIASES: Readonly<Record<string, HumanoidSlot>> = {
   rightleg: 'RightLowerLeg',
   rightfoot: 'RightFoot',
   righttoebase: 'RightToes',
+  // Unreal mannequin / MakeHuman game_engine
+  pelvis: 'Hips',
+  neck_01: 'Neck',
+  upperarm_l: 'LeftUpperArm',
+  lowerarm_l: 'LeftLowerArm',
+  upperarm_r: 'RightUpperArm',
+  lowerarm_r: 'RightLowerArm',
+  thigh_l: 'LeftUpperLeg',
+  calf_l: 'LeftLowerLeg',
+  foot_l: 'LeftFoot',
+  ball_l: 'LeftToes',
+  thigh_r: 'RightUpperLeg',
+  calf_r: 'RightLowerLeg',
+  foot_r: 'RightFoot',
+  ball_r: 'RightToes',
 };
 
 /**

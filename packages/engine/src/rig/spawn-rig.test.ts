@@ -2,6 +2,7 @@ import { quat, vec3 } from '@retro-engine/math';
 import { describe, expect, it } from 'bun:test';
 
 import { Children, Parent } from '../hierarchy';
+import { Name } from '../name';
 import { App } from '../index';
 import { SkinnedPalettes } from '../skinning/palette';
 import { makeRenderingRenderer } from '../test-utils';
@@ -30,6 +31,14 @@ describe('spawnRig', () => {
     expect(app.world.getComponent(joints[2]!, Parent)?.entity).toBe(joints[1]!);
     expect(app.world.getComponent(joints[0]!, Children)?.entities).toEqual([joints[1]!]);
     expect(app.world.getComponent(joints[1]!, Children)?.entities).toEqual([joints[2]!]);
+  });
+
+  it('names joints when bone names are supplied', () => {
+    const app = makeApp();
+    const rig = parseMakeHumanRig(RIG);
+    const { joints } = spawnRig(app.world, buildRigPose(rig), { names: rig.bones.map((b) => b.name) });
+    expect(app.world.getComponent(joints[0]!, Name)?.value).toBe('Root');
+    expect(app.world.getComponent(joints[2]!, Name)?.value).toBe('head');
   });
 
   it('deforms a descendant joint when an ancestor is posed', () => {

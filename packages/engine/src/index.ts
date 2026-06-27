@@ -175,7 +175,7 @@ export {
   createProxyFittingImporter,
   ProxyPlugin,
 } from './proxy';
-export type { RigBone, MakeHumanRig, SkinWeights, RigPose, SpawnedRig } from './rig';
+export type { RigBone, MakeHumanRig, SkinWeights, RigPose, SpawnedRig, SpawnRigOptions } from './rig';
 export {
   parseMakeHumanRig,
   parseMakeHumanWeights,

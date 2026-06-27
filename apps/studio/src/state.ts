@@ -2,6 +2,7 @@
 // it stands in for what will eventually be engine resources (selection, play
 // state, the active gizmo, editor preferences). Not wired to the engine yet.
 
+import type { AssetSource } from '@retro-engine/assets';
 import { type Entity } from '@retro-engine/ecs';
 import { defaultViewportGizmoOptions, type ViewportGizmoOptions } from '@retro-engine/editor-sdk';
 
@@ -67,6 +68,8 @@ export interface StudioState {
   fps: number;
   /** Live project asset browser (file index + thumbnails), or `null` with no project open. */
   browser: ProjectBrowser | null;
+  /** The open project's file reader, or `null` with no project open. Lets panels read loose project files (e.g. rig/weights JSON) by path. */
+  assetSource: AssetSource | null;
   /** Asset browser panel state: search, zoom, folder, filters, expansion, multi-select. */
   assets: AssetsPanelState;
   /** Hierarchy filter. */
@@ -101,6 +104,7 @@ export const createState = (scene: Scene): StudioState => ({
   showProfiler: false,
   fps: 60,
   browser: null,
+  assetSource: null,
   assets: createAssetsPanelState(),
   entityFilter: '',
   settingsOpen: false,

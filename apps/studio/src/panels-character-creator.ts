@@ -1,29 +1,40 @@
+import type { Entity } from '@retro-engine/ecs';
 import type { EditorContext, PanelDef } from '@retro-engine/editor-sdk';
 import type {
   App,
   Handle,
+  MakeHumanRig,
   MaterialPlugin,
-  Mesh,
   ProxyFitting,
   SparseMorphTarget,
   WeightedMorphTarget,
 } from '@retro-engine/engine';
 import {
   AssetServer,
+  Mesh,
   MeshAttribute,
   Mesh3d,
   Meshes,
+  Name,
   ProxyFittings,
+  SkinnedPalettes,
   SparseMorphTargets,
   StandardMaterial,
   Transform,
   Visibility,
+  applySkinWeights,
   bakeMorphedMesh,
+  buildRigPose,
   composeMorphedPositions,
   fitProxy,
+  parseMakeHumanRig,
+  parseMakeHumanWeights,
+  spawnRig,
+  u16Indices,
+  u32Indices,
 } from '@retro-engine/engine';
 import type { AssetGuid } from '@retro-engine/assets';
-import { vec3, vec4 } from '@retro-engine/math';
+import { quat, vec3, vec4 } from '@retro-engine/math';
 
 import type { StudioState } from './state';
 
@@ -64,6 +75,20 @@ interface CreatorState {
   garments: GarmentSlot[];
   dirty: boolean;
   bakedCount: number;
+  /** The spawned RetroHuman preset (skinned humanoid), once created. */
+  retro?: RetroHumanInstance;
+  retroStatus?: string;
+  /** Spawn requested but waiting on the base mesh to finish loading. */
+  retroPending?: boolean;
+  /** A spawn is in flight (async rig/weights read) — guards against double-spawn. */
+  retroSpawning?: boolean;
+}
+
+/** A spawned RetroHuman: its mesh entity, joint entities (palette order), and source rig. */
+interface RetroHumanInstance {
+  readonly entity: Entity;
+  readonly joints: Entity[];
+  readonly rig: MakeHumanRig;
 }
 
 const SLIDER_RANGE = { min: 0, max: 1 } as const;
@@ -132,6 +157,107 @@ export const characterCreatorPanel = (
     );
     cc.bakedCount += 1;
     return entity;
+  };
+
+  /**
+   * Spawn the RetroHuman preset: load the CC0 base mesh + `game_engine` rig +
+   * weights, build a skinned humanoid (its own mesh so the rigid preview is
+   * untouched), and place it in the world (ADR-0134). The rig/weights are read
+   * by convention from the base mesh's folder, parsed against the base vertex
+   * count, and turned into a joint hierarchy + `Skeleton`.
+   */
+  const spawnRetroHuman = async (
+    baseGuid: string,
+    baseLocation: string,
+  ): Promise<{ entity: number; jointCount: number } | undefined> => {
+    const server = app.getResource(AssetServer);
+    const meshes = app.getResource(Meshes);
+    const materials = app.getResource(material.Materials);
+    const source = state.assetSource;
+    if (server === undefined || meshes === undefined || materials === undefined || source === null) {
+      cc.retroStatus = 'no project / asset source';
+      return undefined;
+    }
+
+    const baseHandle = cc.baseHandle ?? (server.loadByGuid(baseGuid as AssetGuid) as Handle<Mesh>);
+    const baseMesh = meshes.get(baseHandle);
+    const pos = baseMesh?.getAttribute(MeshAttribute.POSITION);
+    const uv = baseMesh?.getAttribute(MeshAttribute.UV_0);
+    if (baseMesh === undefined || pos === undefined || uv === undefined) {
+      cc.retroStatus = 'base mesh not loaded yet — Load Character first';
+      return undefined;
+    }
+    const nor = baseMesh.getAttribute(MeshAttribute.NORMAL);
+    const vertexCount = baseMesh.vertexCount;
+
+    const dir = baseLocation.replace(/[^/]*$/, '');
+    const dec = new TextDecoder();
+    let rig: MakeHumanRig;
+    let weights: ReturnType<typeof parseMakeHumanWeights>;
+    try {
+      rig = parseMakeHumanRig(dec.decode(await source.read(`${dir}rig.game_engine.json`)));
+      weights = parseMakeHumanWeights(
+        dec.decode(await source.read(`${dir}weights.game_engine.json`)),
+        rig,
+        vertexCount,
+      );
+    } catch (err) {
+      cc.retroStatus = `rig/weights load failed: ${String(err)}`;
+      return undefined;
+    }
+    const pose = buildRigPose(rig);
+
+    // Isolated skinned mesh in the canonical attribute order the skinned shader
+    // reads: POSITION(0), NORMAL(1), UV(2), JOINTS_0(3), WEIGHTS_0(4).
+    const human = new Mesh({ label: 'retrohuman-body' });
+    human.insertAttribute(MeshAttribute.POSITION, new Float32Array(pos.data as Float32Array));
+    human.insertAttribute(
+      MeshAttribute.NORMAL,
+      nor !== undefined ? new Float32Array(nor.data as Float32Array) : new Float32Array(vertexCount * 3),
+    );
+    human.insertAttribute(MeshAttribute.UV_0, new Float32Array(uv.data as Float32Array));
+    const idx = baseMesh.indices;
+    if (idx !== undefined) {
+      human.setIndices(idx.kind === 'u16' ? u16Indices(new Uint16Array(idx.data)) : u32Indices(new Uint32Array(idx.data)));
+    }
+    if (nor === undefined && human.indices !== undefined) human.computeSmoothNormals();
+    applySkinWeights(human, weights);
+    const humanHandle = meshes.add(human);
+
+    const matHandle = materials.add(
+      new StandardMaterial({ baseColor: vec4.create(0.82, 0.67, 0.57, 1), roughness: 0.75 }),
+    );
+
+    const { joints, skeleton } = spawnRig(app.world, pose, { names: rig.bones.map((b) => b.name) });
+    const entity = app.world.spawn(
+      new Name('RetroHuman'),
+      new Mesh3d(humanHandle),
+      new material.MeshMaterial3d(matHandle),
+      new Transform(vec3.create(0, 0, 0), undefined, vec3.create(1, 1, 1)),
+      new Visibility('Visible'),
+      skeleton,
+    );
+    cc.retro = { entity, joints, rig };
+    cc.retroStatus = `spawned · ${joints.length} joints`;
+    return { entity, jointCount: joints.length };
+  };
+
+  /** Drive a pending RetroHuman spawn: wait for the base mesh, then spawn once. */
+  const pollRetro = (baseGuid: string, baseLocation: string): void => {
+    if (cc.retroPending !== true || cc.retroSpawning === true || cc.retro !== undefined) return;
+    const meshes = app.getResource(Meshes);
+    const ready =
+      cc.baseHandle !== undefined &&
+      meshes?.get(cc.baseHandle)?.getAttribute(MeshAttribute.POSITION) !== undefined;
+    if (!ready) {
+      cc.retroStatus = 'loading base mesh…';
+      return;
+    }
+    cc.retroSpawning = true;
+    void spawnRetroHuman(baseGuid, baseLocation).finally(() => {
+      cc.retroSpawning = false;
+      cc.retroPending = false;
+    });
   };
 
   const recompose = (): void => {
@@ -298,7 +424,50 @@ export const characterCreatorPanel = (
           previewEntity: (): number | undefined => cc.previewEntity,
           garmentEntities: (): (number | undefined)[] => cc.garments.map((g) => g.entity),
           bake: (): number | undefined => bake(),
+          spawnRetroHuman: (): Promise<{ entity: number; jointCount: number } | undefined> =>
+            spawnRetroHuman(baseAsset.guid, baseAsset.location),
+          retro: (): RetroHumanInstance | undefined => cc.retro,
+          // Verification seam: rotate one joint by `angle` rad about `axis` and
+          // mark it changed so propagation + the skinning palette follow it.
+          poseJoint: (name: string, ax: number, ay: number, az: number, angle: number): boolean => {
+            if (cc.retro === undefined) return false;
+            const ji = cc.retro.rig.indexOf.get(name);
+            if (ji === undefined) return false;
+            const joint = cc.retro.joints[ji];
+            if (joint === undefined) return false;
+            const t = app.world.getComponent(joint, Transform);
+            if (t === undefined) return false;
+            t.rotation = quat.fromAxisAngle(vec3.create(ax, ay, az), angle, quat.create());
+            app.world.markChanged(joint, Transform);
+            return true;
+          },
+          // The 16-float skinning-palette matrix for a joint (by rig bone name) —
+          // its translation columns prove the GPU skin input moved when posed.
+          palette: (name: string): number[] | undefined => {
+            if (cc.retro === undefined) return undefined;
+            const ji = cc.retro.rig.indexOf.get(name);
+            if (ji === undefined) return undefined;
+            const palettes = app.getResource(SkinnedPalettes);
+            const pal = palettes?.byEntity.get(cc.retro.entity as Entity);
+            if (pal === undefined) return undefined;
+            return Array.from(pal.data.slice(ji * 16, ji * 16 + 16));
+          },
         };
+
+        // RetroHuman preset — a one-click skinned humanoid (base + rig + weights),
+        // available in any phase; it loads the base on demand if needed.
+        ui.separatorText('RetroHuman');
+        if (cc.retro === undefined) {
+          if (widgets.button('Spawn RetroHuman', { variant: 'primary', size: 'sm' })) {
+            if (cc.phase === 'idle') beginLoad(baseAsset.guid, targetAssets, garmentAssets);
+            cc.retroPending = true;
+          }
+        } else {
+          ui.textMuted('RetroHuman spawned.');
+        }
+        if (cc.retroStatus !== undefined) ui.textMuted(cc.retroStatus);
+        pollRetro(baseAsset.guid, baseAsset.location);
+        ui.spacing();
 
         if (cc.phase === 'idle') {
           if (widgets.button('Load Character', { variant: 'primary' })) {

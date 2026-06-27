@@ -2,9 +2,22 @@ import type { Entity, World } from '@retro-engine/ecs';
 import { mat4, vec3 } from '@retro-engine/math';
 
 import { Children, Parent } from '../hierarchy';
+import { Name } from '../name';
 import { Skeleton } from '../skinning/skeleton';
 import { Transform } from '../transform';
 import type { RigPose } from './rig-pose';
+
+/** Options for {@link spawnRig}. */
+export interface SpawnRigOptions {
+  /** Parent the rig's root bones under this entity (its `Children` is extended in place). */
+  root?: Entity;
+  /**
+   * Bone names parallel to the pose's joint order. When given, each joint entity
+   * gets a {@link Name}, so name-based consumers (humanoid retargeting) can map
+   * the skeleton.
+   */
+  names?: readonly string[];
+}
 
 /** The entities a {@link spawnRig} call produced, ready to attach to a mesh. */
 export interface SpawnedRig {
@@ -36,7 +49,8 @@ export interface SpawnedRig {
  * The returned {@link SpawnedRig.skeleton} carries fresh inverse-bind copies, so
  * the caller may insert it without aliasing the pose's matrices.
  */
-export const spawnRig = (world: World, pose: RigPose, root?: Entity): SpawnedRig => {
+export const spawnRig = (world: World, pose: RigPose, opts: SpawnRigOptions = {}): SpawnedRig => {
+  const { root, names } = opts;
   const n = pose.localTranslations.length;
   const joints: Entity[] = [];
   const childrenOf: Entity[][] = Array.from({ length: n }, () => []);
@@ -46,6 +60,8 @@ export const spawnRig = (world: World, pose: RigPose, root?: Entity): SpawnedRig
     const transform = new Transform(vec3.clone(pose.localTranslations[i]!, vec3.create()));
     const parentIdx = pose.parentIndex[i]!;
     const components: object[] = [transform];
+    const boneName = names?.[i];
+    if (boneName !== undefined) components.push(new Name(boneName));
     if (parentIdx >= 0) components.push(new Parent(joints[parentIdx]!));
     else if (root !== undefined) components.push(new Parent(root));
 

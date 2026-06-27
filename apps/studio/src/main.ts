@@ -555,6 +555,7 @@ void (async (): Promise<void> => {
       const io = createProjectIo(platform, projectDir);
       projectSink = io.sink;
       mcpProjectIo = io;
+      state.assetSource = io.source;
       const kinds = app.getResource(AssetKinds);
       // Mint a `.meta` sidecar for any loose discoverable asset (a dropped `.glb`,
       // an image) so it gains a stable GUID and enters the manifest. Returns the
