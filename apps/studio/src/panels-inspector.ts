@@ -1,5 +1,6 @@
 import {
   type AssetEditorRegistry,
+  type AssetSelection,
   ASSET_TYPES,
   createAssetHistoryEmitter,
   createHistoryEmitter,
@@ -35,6 +36,7 @@ export const inspectorPanel = (
   inspector: InspectorRegistry,
   history: History,
   assetEditors: AssetEditorRegistry,
+  onExtractCopy: (sel: AssetSelection) => void,
 ): PanelDef => ({
   id: '/inspector',
   title: 'Inspector',
@@ -91,6 +93,18 @@ export const inspectorPanel = (
         if (reg === undefined) {
           ui.textDisabled(`No editable schema registered for '${assetSel.assetKind}'.`);
           return;
+        }
+
+        // A derived (sub-asset) material is a read-only projection of its source
+        // file (e.g. a glb). Edits apply live but cannot persist; offer to extract
+        // an editable `.remat` copy that the meshes are repointed to.
+        const isDerived = assetSel.guid.includes('#');
+        if (isDerived) {
+          ui.textDisabled('Derived from a model — edits apply live but are not saved.');
+          if (widgets.button('Extract editable copy', { variant: 'primary', icon: 'copy', block: true })) {
+            onExtractCopy(assetSel);
+          }
+          ui.spacing();
         }
         const edit = createAssetHistoryEmitter(history, assetSel.assetKind, assetSel.guid);
         const custom = assetEditors.get(assetSel.assetType);

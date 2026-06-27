@@ -1,10 +1,12 @@
 /// <reference types="@webgpu/types" />
 
 import type { AssetGuid, AssetSink } from '@retro-engine/assets';
-import { App, AppBundleRegistry, AppTypeRegistry, AssetKinds, AssetServer, BUNDLE_ASSET_KIND, Commands, EditorGrid, generateMissingSidecars, inState, MaterialPlugin, registerAssetKind, ResMut, saveAsset, StandardMaterial } from '@retro-engine/engine';
+import { asAssetIndex, generateAssetGuid, makeHandle } from '@retro-engine/assets';
+import { App, AppBundleRegistry, AppTypeRegistry, AssetKinds, AssetSerializers, AssetServer, BUNDLE_ASSET_KIND, Commands, EditorGrid, generateMissingSidecars, inState, MATERIAL_ASSET_EXTENSION, MaterialPlugin, promoteAsset, registerAssetKind, ResMut, saveAsset, StandardMaterial } from '@retro-engine/engine';
 import { gltfAssetKindDescriptor } from '@retro-engine/gltf';
 import {
   type AssetEditAccess,
+  type AssetSelection,
   buildOutline,
   createEditor,
   currentSimState,
@@ -137,6 +139,9 @@ const modelSubAssets = createModelSubAssetService(app);
 // The project sink for writing assets (set once a project opens); the composer's
 // bundle-save hook writes `.rebundle` files through it.
 let projectSink: AssetSink | null = null;
+// Re-scan the project manifest + browser (assigned once a project opens); null
+// with no project open. Hoisted so asset tooling (extract-copy) can trigger it.
+let reindexProjectAssets: (() => Promise<void>) | null = null;
 // Composer favorites/recents persistence — localStorage until a project opens,
 // then rebound to the project's personal preference store (ADR-0091).
 let persistComposerPrefs = (): void => saveComposerPrefs(state.composer);
@@ -226,6 +231,63 @@ const history = new History(
   { capacity: 200 },
 );
 
+// "Extract editable copy" for a derived (read-only) asset — e.g. a material that
+// came from a glb sub-asset. Serializes the derived value to a new `.remat`,
+// reindexes so it loads by GUID, repoints every entity using the derived material
+// to the copy (undoable, one batch), then selects the copy. The glb stays the
+// source of truth; the user's edits now live in an editable asset.
+const extractMaterialCopy = (sel: AssetSelection): void => {
+  if (projectSink === null) return;
+  const sink = projectSink;
+  const server = app.getResource(AssetServer);
+  const serializers = app.getResource(AssetSerializers);
+  const registry = app.getResource(AppTypeRegistry)!.registry;
+  if (server === undefined || serializers === undefined) return;
+  const resolved = server.storeForGuid(sel.guid as AssetGuid);
+  const value = resolved?.store.get(resolved.handle);
+  const serializer = serializers.get(sel.assetKind);
+  if (value === undefined || serializer === undefined) return;
+
+  const newGuid = generateAssetGuid();
+  const promoted = promoteAsset(makeHandle(asAssetIndex(0), newGuid), value, sel.assetKind, serializer, {
+    dir: 'assets/materials',
+    extension: MATERIAL_ASSET_EXTENSION,
+  });
+  void (async (): Promise<void> => {
+    await sink.write(promoted.location, promoted.bytes);
+    await sink.write(promoted.metaLocation, promoted.meta);
+    await reindexProjectAssets?.(); // manifest + browser now include the new .remat
+    const newHandle = server.loadByGuid(newGuid);
+    // Fill the store slot synchronously from the in-memory copy so the repointed
+    // meshes have the material this frame (the async disk load re-inserts the same
+    // value once it resolves — idempotent).
+    const resolvedNew = server.storeForGuid(newGuid);
+    if (resolvedNew !== undefined) resolvedNew.store.insert(newHandle, serializer.deserialize(promoted.bytes));
+    const compName = `MeshMaterial3d<${sel.assetKind}>`;
+    const reg = registry.get(compName);
+    if (reg !== undefined) {
+      history.beginBatch('Extract material copy');
+      for (const [entity, mm] of app.world.query([reg.ctor]).entries()) {
+        const current = (mm as { handle?: { guid?: string } }).handle;
+        if (current?.guid !== sel.guid) continue;
+        history.commit(entity, compName, [{ kind: 'field', name: 'handle' }], current, newHandle);
+      }
+      history.endBatch();
+    }
+    state.selectedAsset = { assetType: sel.assetType, guid: newGuid, assetKind: sel.assetKind };
+    state.selectedEntity = null;
+  })();
+};
+// Dev/test seam: jsimgui ignores synthetic clicks, so MCP verification drives the
+// extract action (and asset selection) through this global instead of the button.
+(globalThis as Record<string, unknown>).__studioAssets = {
+  extractMaterialCopy,
+  select: (sel: AssetSelection): void => {
+    state.selectedAsset = sel;
+    state.selectedEntity = null;
+  },
+};
+
 // MCP runtime: lets an AI client drive the live editor through the studio-mcp-server
 // relay. Created here so the MCP panel can reference it; wired to the platform host
 // + project in the async boot tail via studioMcp.attach(...).
@@ -312,7 +374,7 @@ editor
   .addPanel(cap(hierarchyPanel(state, app)))
   .addPanel(cap(scenePanel(state, editorView, sceneGizmos, sceneCamera, scenePicker, orientationGizmo)))
   .addPanel(cap(gamePanel(state, gameView)))
-  .addPanel(cap(inspectorPanel(state, app, editor.inspector, history, editor.assetEditors)))
+  .addPanel(cap(inspectorPanel(state, app, editor.inspector, history, editor.assetEditors, extractMaterialCopy)))
   .addPanel(cap(historyPanel(state, app, history)))
   .addPanel(cap(consolePanel(state)))
   .addPanel(
@@ -473,8 +535,8 @@ void (async (): Promise<void> => {
   let suppressSceneReloadUntil = 0;
   // Set once a project is open: re-scan the project manifest (minting sidecars for
   // newly added loose assets) and refresh the asset browser. Called on a file-watch
-  // reindex. Null with no project open.
-  let reindexProjectAssets: (() => Promise<void>) | null = null;
+  // reindex. Reset here on each project open (the module-level binding is hoisted).
+  reindexProjectAssets = null;
 
   // Read the open project's descriptor (best-effort) so its dock layout + window
   // state persist per-project (keyed by project id in the app config), not globally.
