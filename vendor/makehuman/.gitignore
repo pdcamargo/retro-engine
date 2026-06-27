@@ -1,0 +1,6 @@
+# Fetched CC0 assets are re-derivable via fetch.sh; keep them out of git history
+# until the vendor-vs-fetch decision lands (see docs/roadmap/retrohuman.md).
+*
+!.gitignore
+!README.md
+!fetch.sh
