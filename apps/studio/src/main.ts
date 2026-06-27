@@ -56,6 +56,7 @@ publishHost();
 
 import { makeAssetFieldRenderer } from './inspector/asset-field-renderer';
 import { morphWeightsEditor } from './inspector/morph-weights-editor';
+import { characterCreatorPanel } from './panels-character-creator';
 import { drawDialogs, menus, statusBar, toolbar } from './chrome';
 import { SceneCameraController } from './editor-camera';
 import { EditorOnly } from './editor-markers';
@@ -284,6 +285,7 @@ editor
       }),
     ),
   )
+  .addPanel(cap(characterCreatorPanel(state, app, stdMat)))
   .addPanel(cap(systemsPanel(app)))
   .addPanel(cap(profilerPanel(app)))
   .addPanel(cap(mcpPanel(studioMcp, (text, meta) => pushConsoleForPanels(text, meta))))

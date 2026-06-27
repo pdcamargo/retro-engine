@@ -100,7 +100,10 @@ The MetaHuman-feel authoring surface. Zero runtime cost, WebGL2-safe. Foundation
   - ✅ **3.3a** `ObjMesh` asset kind (`.obj` → `Mesh` via `parseObjBaseMesh`, into the shared `Meshes`
     store). Verified live: `base.obj` loads (19,158 verts), renders, and `getMut` + sparse compose +
     `computeSmoothNormals` reshapes it (renderer stays healthy).
-  - **3.3b** the panel UI (sliders) + preview entity, wrapping the verified compose mechanism.
+  - ✅ **3.3b** the `/character-creator` panel: detects the project's base `.obj` + `morph` targets,
+    loads them, spawns a preview, and renders a `[0,1]` slider per target. Slider edits recompose the
+    live mesh (`composeMorphedPositions` + `getMut` + `computeSmoothNormals`). Verified live: the
+    "nose-base-down" slider reshaped the preview (vertex moved by the exact composed delta).
 - **3.4 bake** → final mesh + skeleton + GLB asset through the existing GLB/animation stack.
 - Curate the slider set (start with face: nose/ears/cheek/chin/eyes/mouth/forehead; then macros).
 
