@@ -75,6 +75,22 @@ fn tangent_basis(n: vec3<f32>) -> mat3x3<f32> {
   return mat3x3<f32>(tangent, bitangent, n);
 }
 
+// Upper bound on a single sampled radiance value during prefiltering. Source
+// HDR environments routinely contain extreme or non-finite radiance — a sun disc
+// that overflows half-float to +inf, or values in the tens of thousands. Left
+// unbounded these wreck the bake: +inf propagates into the baked maps, the
+// \`radiance * cos * sin\` weighting hits inf * 0 = NaN at the hemisphere pole, and
+// the tiny ultra-bright sun aliases into firefly speckle that the finite sample
+// counts cannot resolve. Clamping each sample to a finite cap keeps the
+// convolution smooth and finite while preserving the sky's overall brightness.
+const MAX_RADIANCE: f32 = 50.0;
+
+// Sample the source cube with the radiance cap applied (see MAX_RADIANCE).
+fn sample_radiance(dir: vec3<f32>) -> vec3<f32> {
+  let c = textureSampleLevel(src, src_sampler, dir, 0.0).rgb;
+  return min(c, vec3<f32>(MAX_RADIANCE));
+}
+
 @fragment
 fn fs_irradiance(in: VsOut) -> @location(0) vec4<f32> {
   let n = face_direction(u32(params.data.x), in.ndc);
@@ -92,7 +108,7 @@ fn fs_irradiance(in: VsOut) -> @location(0) vec4<f32> {
       let local = vec3<f32>(sin_t * cos(phi), sin_t * sin(phi), cos_t);
       let world = basis * local;
       // cos·sin weight folds the projected-solid-angle term into the average.
-      irradiance += textureSampleLevel(src, src_sampler, world, 0.0).rgb * cos_t * sin_t;
+      irradiance += sample_radiance(world) * cos_t * sin_t;
       samples += 1.0;
     }
   }
@@ -140,7 +156,7 @@ fn fs_prefilter(in: VsOut) -> @location(0) vec4<f32> {
     let l = normalize(2.0 * dot(v, h) * h - v);
     let n_dot_l = max(dot(n, l), 0.0);
     if (n_dot_l > 0.0) {
-      prefiltered += textureSampleLevel(src, src_sampler, l, 0.0).rgb * n_dot_l;
+      prefiltered += sample_radiance(l) * n_dot_l;
       total_weight += n_dot_l;
     }
   }
