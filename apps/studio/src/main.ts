@@ -1,8 +1,8 @@
 /// <reference types="@webgpu/types" />
 
-import type { AssetGuid, AssetSink } from '@retro-engine/assets';
+import type { AssetGuid, AssetSink, Handle } from '@retro-engine/assets';
 import { asAssetIndex, generateAssetGuid, makeHandle } from '@retro-engine/assets';
-import { App, AppBundleRegistry, AppTypeRegistry, AssetKinds, AssetSerializers, AssetServer, BUNDLE_ASSET_KIND, Commands, EditorGrid, generateMissingSidecars, inState, MATERIAL_ASSET_EXTENSION, MaterialPlugin, promoteAsset, registerAssetKind, ResMut, saveAsset, StandardMaterial } from '@retro-engine/engine';
+import { App, AppBundleRegistry, AppTypeRegistry, AssetKinds, AssetSerializers, AssetServer, BUNDLE_ASSET_KIND, Commands, createAsset, EditorGrid, generateMissingSidecars, inState, MATERIAL_ASSET_EXTENSION, MaterialPlugin, promoteAsset, registerAssetKind, ResMut, saveAsset, StandardMaterial } from '@retro-engine/engine';
 import { gltfAssetKindDescriptor } from '@retro-engine/gltf';
 import {
   type AssetEditAccess,
@@ -280,6 +280,35 @@ const extractMaterialCopy = (sel: AssetSelection): void => {
     state.selectedEntity = null;
   })();
 };
+
+// Mint a persisted `.remat` from an in-memory StandardMaterial (e.g. the textured
+// RetroHuman skin) so a spawned character references a real, reloadable material
+// by GUID instead of a runtime-only one. Returns a GUID-backed handle whose store
+// slot is already filled this frame; `undefined` when there is no project to write
+// to. Mirrors extractMaterialCopy's reindex → load → insert tail.
+const persistMaterial = async (
+  value: StandardMaterial,
+): Promise<Handle<StandardMaterial> | undefined> => {
+  if (projectSink === null) return undefined;
+  const server = app.getResource(AssetServer);
+  const serializers = app.getResource(AssetSerializers);
+  if (server === undefined || serializers === undefined) return undefined;
+  const kind = StandardMaterial.typeName;
+  const serializer = serializers.get(kind);
+  if (serializer === undefined) return undefined;
+  const created = await createAsset(value, kind, serializer, projectSink, {
+    dir: 'assets/materials',
+    extension: MATERIAL_ASSET_EXTENSION,
+  });
+  await reindexProjectAssets?.(); // manifest + browser now include the new .remat
+  const handle = server.loadByGuid(created.guid);
+  // Fill the store slot synchronously from the in-memory copy so the spawn has the
+  // material this frame (the async disk load re-inserts the same value — idempotent).
+  const resolved = server.storeForGuid(created.guid);
+  if (resolved !== undefined) resolved.store.insert(handle, serializer.deserialize(created.bytes));
+  return handle as Handle<StandardMaterial>;
+};
+
 // Dev/test seam: jsimgui ignores synthetic clicks, so MCP verification drives the
 // extract action (and asset selection) through this global instead of the button.
 (globalThis as Record<string, unknown>).__studioAssets = {
@@ -389,7 +418,7 @@ editor
       }),
     ),
   )
-  .addPanel(cap(characterCreatorPanel(state, app, stdMat)))
+  .addPanel(cap(characterCreatorPanel(state, app, stdMat, persistMaterial)))
   .addPanel(cap(systemsPanel(app)))
   .addPanel(cap(profilerPanel(app)))
   .addPanel(cap(mcpPanel(studioMcp, (text, meta) => pushConsoleForPanels(text, meta))))

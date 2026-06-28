@@ -3,6 +3,7 @@ import type { EditorContext, PanelDef } from '@retro-engine/editor-sdk';
 import type {
   App,
   Handle,
+  Image,
   MakeHumanRig,
   MaterialPlugin,
   ProxyFitting,
@@ -64,6 +65,8 @@ interface GarmentSlot {
 interface CreatorState {
   phase: 'idle' | 'loading' | 'ready';
   baseGuid?: string;
+  /** The base mesh's project location — where a co-located skin texture is looked up. */
+  baseLocation?: string;
   baseHandle?: Handle<Mesh>;
   /** Pristine base positions, captured at load — the composition source. */
   basePositions?: Float32Array;
@@ -105,6 +108,7 @@ export const characterCreatorPanel = (
   state: StudioState,
   app: App,
   material: MaterialPlugin<StandardMaterial>,
+  persistMaterial?: (value: StandardMaterial) => Promise<Handle<StandardMaterial> | undefined>,
 ): PanelDef => {
   const cc: CreatorState = { phase: 'idle', targets: [], garments: [], dirty: false, bakedCount: 0 };
 
@@ -130,7 +134,7 @@ export const characterCreatorPanel = (
   };
 
   /** Freeze the current weights into a fresh static mesh and spawn it as a standalone character. */
-  const bake = (): number | undefined => {
+  const bake = async (): Promise<number | undefined> => {
     const meshes = app.getResource(Meshes);
     const materials = app.getResource(material.Materials);
     if (meshes === undefined || materials === undefined) return undefined;
@@ -143,20 +147,72 @@ export const characterCreatorPanel = (
     }
     const baked = bakeMorphedMesh(baseMesh, cc.basePositions, active, `baked-character-${cc.bakedCount}`);
     const handle = meshes.add(baked);
-    if (cc.matHandle === undefined) {
-      cc.matHandle = materials.add(
-        new StandardMaterial({ baseColor: vec4.create(0.82, 0.67, 0.57, 1), roughness: 0.75 }),
-      );
-    }
+    // The baked character is a standalone asset: persist its skin material as a `.remat`
+    // (textured when staged) so it references a real, reloadable material by GUID.
+    const matHandle = await persistSkinMaterial(buildSkinMaterial(cc.baseLocation ?? ''), materials);
     const transform = new Transform(vec3.create(0, 0, 0), undefined, vec3.create(1, 1, 1));
     const entity = app.world.spawn(
       new Mesh3d(handle),
-      new material.MeshMaterial3d(cc.matHandle),
+      new material.MeshMaterial3d(matHandle),
       transform,
       new Visibility('Visible'),
     );
     cc.bakedCount += 1;
     return entity;
+  };
+
+  /**
+   * Resolve a skin texture co-located with the base mesh (same folder, an `image`
+   * asset whose location matches a naming needle) into a GUID-backed `Handle<Image>`.
+   * The handle is valid immediately — the renderer falls back to the default texture
+   * until the async image upload lands, then picks up the skin.
+   */
+  const findSkinTexture = (baseLoc: string, needles: readonly string[]): Handle<Image> | undefined => {
+    const server = app.getResource(AssetServer);
+    if (server === undefined) return undefined;
+    const dir = baseLoc.replace(/[^/]*$/, '').toLowerCase();
+    const hit = (state.browser?.assets ?? []).find((a) => {
+      if (a.type !== 'image') return false;
+      const loc = a.location.toLowerCase();
+      return loc.startsWith(dir) && needles.some((n) => loc.includes(n));
+    });
+    return hit !== undefined ? (server.loadByGuid(hit.guid as AssetGuid) as Handle<Image>) : undefined;
+  };
+
+  /**
+   * Build the character skin material value: textured (skin albedo, plus normal /
+   * roughness maps when staged) when a skin texture sits alongside the base mesh,
+   * else a flat skin-tone fallback. Pure value — persisting it is the caller's call.
+   */
+  const buildSkinMaterial = (baseLoc: string): StandardMaterial => {
+    const albedo = findSkinTexture(baseLoc, ['skin', 'diffuse', 'albedo']);
+    if (albedo === undefined) {
+      return new StandardMaterial({ baseColor: vec4.create(0.82, 0.67, 0.57, 1), roughness: 0.75 });
+    }
+    const normalMap = findSkinTexture(baseLoc, ['normal']);
+    const roughMap = findSkinTexture(baseLoc, ['rough', 'spec']);
+    return new StandardMaterial({
+      baseColorTexture: albedo,
+      roughness: roughMap !== undefined ? 1 : 0.7,
+      ...(normalMap !== undefined ? { normalMapTexture: normalMap } : {}),
+      ...(roughMap !== undefined ? { metallicRoughnessTexture: roughMap } : {}),
+    });
+  };
+
+  /**
+   * Persist a textured skin material as a reloadable `.remat` (returning a GUID-backed
+   * handle) when a project sink is available; otherwise add it in-memory. A flat
+   * fallback material (no texture) is always added in-memory — there is nothing to
+   * persist. Shared by the spawned RetroHuman and baked characters.
+   */
+  const persistSkinMaterial = async (
+    mat: StandardMaterial,
+    materials: { add: (m: StandardMaterial) => Handle<StandardMaterial> },
+  ): Promise<Handle<StandardMaterial>> => {
+    if (mat.baseColorTexture !== undefined && persistMaterial !== undefined) {
+      return (await persistMaterial(mat)) ?? materials.add(mat);
+    }
+    return materials.add(mat);
   };
 
   /**
@@ -224,9 +280,11 @@ export const characterCreatorPanel = (
     applySkinWeights(human, weights);
     const humanHandle = meshes.add(human);
 
-    const matHandle = materials.add(
-      new StandardMaterial({ baseColor: vec4.create(0.82, 0.67, 0.57, 1), roughness: 0.75 }),
-    );
+    // Skin material: textured + persisted as a `.remat` when a skin texture is staged
+    // alongside the base mesh (so the spawned character references a real, reloadable
+    // material by GUID); otherwise a flat skin-tone fallback so the spawn never fails.
+    const skinMat = buildSkinMaterial(baseLocation);
+    const matHandle = await persistSkinMaterial(skinMat, materials);
 
     const { joints, skeleton } = spawnRig(app.world, pose, { names: rig.bones.map((b) => b.name) });
     const entity = app.world.spawn(
@@ -280,6 +338,7 @@ export const characterCreatorPanel = (
 
   const beginLoad = (
     baseGuid: string,
+    baseLocation: string,
     targetAssets: readonly { guid: string; name: string }[],
     garmentAssets: readonly { guid: string; name: string }[],
   ): void => {
@@ -287,6 +346,7 @@ export const characterCreatorPanel = (
     if (server === undefined) return;
     cc.phase = 'loading';
     cc.baseGuid = baseGuid;
+    cc.baseLocation = baseLocation;
     cc.baseHandle = server.loadByGuid(baseGuid as AssetGuid) as Handle<Mesh>;
     cc.targets = targetAssets.map((a) => ({
       guid: a.guid,
@@ -367,10 +427,10 @@ export const characterCreatorPanel = (
     if (cc.previewEntity !== undefined || cc.baseHandle === undefined) return;
     const materials = app.getResource(material.Materials);
     if (materials === undefined) return;
+    // The preview is a transient editing surface, so its skin material stays in-memory
+    // (textured when a skin is staged, else flat) — no `.remat` is persisted for it.
     if (cc.matHandle === undefined) {
-      cc.matHandle = materials.add(
-        new StandardMaterial({ baseColor: vec4.create(0.82, 0.67, 0.57, 1), roughness: 0.75 }),
-      );
+      cc.matHandle = materials.add(buildSkinMaterial(cc.baseLocation ?? ''));
     }
     const transform = new Transform(vec3.create(0, 0, 0), undefined, vec3.create(1, 1, 1));
     cc.previewEntity = app.world.spawn(
@@ -413,7 +473,7 @@ export const characterCreatorPanel = (
         // synthetic clicks, so MCP verification reaches the actions this way).
         (globalThis as Record<string, unknown>).__characterCreator = {
           state: cc,
-          load: (): void => beginLoad(baseAsset.guid, targetAssets, garmentAssets),
+          load: (): void => beginLoad(baseAsset.guid, baseAsset.location, targetAssets, garmentAssets),
           setWeight: (name: string, w: number): void => {
             const slot = cc.targets.find((s) => s.name === name);
             if (slot !== undefined) {
@@ -423,7 +483,7 @@ export const characterCreatorPanel = (
           },
           previewEntity: (): number | undefined => cc.previewEntity,
           garmentEntities: (): (number | undefined)[] => cc.garments.map((g) => g.entity),
-          bake: (): number | undefined => bake(),
+          bake: (): Promise<number | undefined> => bake(),
           spawnRetroHuman: (): Promise<{ entity: number; jointCount: number } | undefined> =>
             spawnRetroHuman(baseAsset.guid, baseAsset.location),
           retro: (): RetroHumanInstance | undefined => cc.retro,
@@ -459,7 +519,7 @@ export const characterCreatorPanel = (
         ui.separatorText('RetroHuman');
         if (cc.retro === undefined) {
           if (widgets.button('Spawn RetroHuman', { variant: 'primary', size: 'sm' })) {
-            if (cc.phase === 'idle') beginLoad(baseAsset.guid, targetAssets, garmentAssets);
+            if (cc.phase === 'idle') beginLoad(baseAsset.guid, baseAsset.location, targetAssets, garmentAssets);
             cc.retroPending = true;
           }
         } else {
@@ -471,7 +531,7 @@ export const characterCreatorPanel = (
 
         if (cc.phase === 'idle') {
           if (widgets.button('Load Character', { variant: 'primary' })) {
-            beginLoad(baseAsset.guid, targetAssets, garmentAssets);
+            beginLoad(baseAsset.guid, baseAsset.location, targetAssets, garmentAssets);
           }
           return;
         }
@@ -487,7 +547,7 @@ export const characterCreatorPanel = (
           cc.dirty = true;
         }
         ui.sameLine();
-        if (widgets.button('Bake', { variant: 'primary', size: 'sm' })) bake();
+        if (widgets.button('Bake', { variant: 'primary', size: 'sm' })) void bake();
         if (cc.bakedCount > 0) ui.textMuted(`${cc.bakedCount} baked`);
         ui.spacing();
         ui.separatorText('Targets');
