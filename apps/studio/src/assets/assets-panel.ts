@@ -4,11 +4,13 @@ import {
   Draw,
   drawIcon,
   type EditorContext,
+  type EntityDragPayload,
   getActivePalette,
   type PanelDef,
   srgbU32,
 } from '@retro-engine/editor-sdk';
 
+import { createPrefabFromEntity, type RunCommand } from '../dnd-actions';
 import type { BrowserAsset } from '../project/project-browser';
 import type { ModelSubAssetService } from '../project/model-subassets';
 import type { AssetItem } from '../scene-data';
@@ -29,6 +31,8 @@ export interface AssetsPanelDeps {
   readonly subs: ModelSubAssetService;
   /** Activate an asset (e.g. open a bundle for editing). */
   readonly onActivate?: (asset: BrowserAsset) => void;
+  /** Invoke an editor command (drag-and-drop authors prefabs through it). */
+  readonly runCommand: RunCommand;
 }
 
 // With no project open, the mock scene assets stand in — adapted to the browser
@@ -139,6 +143,15 @@ export const assetsPanel = (state: StudioState, deps: AssetsPanelDeps): PanelDef
       const p = getActivePalette();
       const pool = state.browser !== null ? state.browser.assets : mockToBrowser(state.scene.assets);
 
+      // Dropping an entity onto the panel authors a prefab from its subtree, into
+      // the folder currently being browsed. Reused by the header and the empty
+      // grid region so the target is reachable whether or not the grid is full.
+      const prefabDrop = {
+        accepts: (payload: { kind: string }): boolean => payload.kind === 'entity',
+        onDrop: (payload: { kind: string }): void =>
+          createPrefabFromEntity(deps.runCommand, (payload as EntityDragPayload).entity, st.folder),
+      };
+
       renderToolbar(ctx, st, pool, subsOf);
 
       // Persist zoom / type filter only when they actually change.
@@ -176,10 +189,19 @@ export const assetsPanel = (state: StudioState, deps: AssetsPanelDeps): PanelDef
         dl.text([top[0] + 26, top[1] + (BREADCRUMB_H - 13) / 2], srgbU32(p.text), breadcrumbText(st.folder));
         const count = `${items.length} item${items.length === 1 ? '' : 's'}`;
         dl.text([top[0] + w - ui.calcTextSize(count)[0] - 10, top[1] + (BREADCRUMB_H - 13) / 2], srgbU32(p.textFaint), count);
-        ui.dummy([w, BREADCRUMB_H]);
+        // A real hit-target (not a Dummy) so it can receive an entity drop.
+        ui.invisibleButton('assets-breadcrumb', [w, BREADCRUMB_H]);
+        ui.dropTarget(prefabDrop);
 
         ui.child('assets-grid', { size: [0, 0], border: false, padding: [10, 8] }, () => {
           renderAssetsGrid(ctx, st, state, state.browser, items, actions);
+          // Empty space below the tiles is a prefab-drop zone too (the common aim
+          // point when dragging an entity in).
+          const rest = ui.contentAvail();
+          if (rest[1] > 4) {
+            ui.invisibleButton('assets-drop-prefab', [Math.max(rest[0], 1), rest[1]]);
+            ui.dropTarget(prefabDrop);
+          }
         });
       });
     },

@@ -74,6 +74,21 @@ const renderCard = (
     subCount,
     expanded: st.expandedAssets.has(asset.guid),
     onContextMenu: () => widgets.contextMenu(asset.guid, buildAssetMenu(asset, isChild, actions)),
+    // Drag the asset onto a compatible inspector field, the hierarchy, or the
+    // scene view. `assetKind` is the manifest kind (meta) for top-level files, or
+    // the browser category for derived sub-assets that have no sidecar of their own.
+    dnd: {
+      source: {
+        payload: {
+          kind: 'asset',
+          guid: asset.guid,
+          assetKind: asset.meta ?? asset.type,
+          assetType: asset.type,
+          name: asset.name,
+          ...(thumbnail !== undefined ? { thumbnail } : {}),
+        },
+      },
+    },
   });
   if (r.expandToggled) {
     if (st.expandedAssets.has(asset.guid)) st.expandedAssets.delete(asset.guid);

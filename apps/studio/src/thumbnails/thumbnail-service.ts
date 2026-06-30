@@ -7,6 +7,8 @@ import { GPU_TEXTURE, type InternalTexture } from '@retro-engine/renderer-webgpu
 import { renderGltfThumbnail } from './gltf-thumbnail';
 import { type PreviewTexture, renderMaterialThumbnail } from './material-thumbnail';
 import { renderMeshThumbnail } from './mesh-thumbnail';
+import { renderPrefabThumbnail } from './prefab-thumbnail';
+import type { ThumbnailRenderService } from './thumbnail-render-service';
 
 /** Side of the square master thumbnail; ImGui samples it down for every zoom size. */
 const SIZE = 256;
@@ -16,6 +18,15 @@ const MESH_EXT = /\.rmesh$/i;
 const MATERIAL_EXT = /\.remat$/i;
 const HDR_EXT = /\.hdr$/i;
 const GLTF_EXT = /\.(glb|gltf)$/i;
+const PREFAB_EXT = /\.prefab$/i;
+
+/** Manifest kind for a renderable asset location, or undefined if the CPU path owns it. */
+const renderKindFor = (location: string): string | undefined => {
+  if (PREFAB_EXT.test(location)) return 'Prefab';
+  if (GLTF_EXT.test(location)) return 'Gltf';
+  if (MESH_EXT.test(location)) return 'Mesh';
+  return undefined;
+};
 
 /** Center an `ImageBitmap` into an aspect-preserved `SIZE×SIZE` RGBA8 buffer. */
 const fitToSquare = (bitmap: ImageBitmap): Uint8Array => {
@@ -100,6 +111,8 @@ export class ThumbnailService {
     private readonly source: AssetSource,
     /** Resolve an asset GUID to its project location — lets a material thumbnail show its base-color texture. */
     private readonly resolveLocation?: (guid: string) => string | undefined,
+    /** Renders prefab/model/mesh previews in-engine (materials + lighting); CPU path is the fallback. */
+    private readonly render?: ThumbnailRenderService,
   ) {}
 
   /**
@@ -118,6 +131,15 @@ export class ThumbnailService {
    * generation on the first miss). Call from the panel draw each frame.
    */
   get(guid: string, location: string): ImTextureRef | undefined {
+    // Prefer the in-engine render (real materials + lighting) for renderable
+    // kinds; while it renders, fall through to the CPU thumbnail as a placeholder.
+    if (this.render !== undefined) {
+      const kind = renderKindFor(location);
+      if (kind !== undefined) {
+        const rendered = this.render.get(guid, kind);
+        if (rendered !== undefined) return rendered;
+      }
+    }
     const hit = this.cache.get(guid);
     if (hit !== undefined) return hit;
     if (!this.inflight.has(guid) && !this.failed.has(guid)) {
@@ -145,6 +167,18 @@ export class ThumbnailService {
         const rendered = await renderGltfThumbnail(location, bytes, SIZE, (loc) => this.source.read(loc));
         // null = a mesh-less glTF (e.g. an animation clip); nothing to preview, so
         // record it as no-preview (the card shows the model icon) without retrying.
+        if (rendered === null) {
+          this.failed.add(guid);
+          return;
+        }
+        pixels = rendered;
+      } else if (PREFAB_EXT.test(location)) {
+        const rendered = await renderPrefabThumbnail(
+          bytes,
+          SIZE,
+          (loc) => this.source.read(loc),
+          (g) => this.resolveLocation?.(g),
+        );
         if (rendered === null) {
           this.failed.add(guid);
           return;

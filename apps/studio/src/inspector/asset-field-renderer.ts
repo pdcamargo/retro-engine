@@ -1,8 +1,13 @@
-import type { Handle } from '@retro-engine/assets';
-import { type PropertyContext, type PropertyRenderer, propertyRow } from '@retro-engine/editor-sdk';
-import { type App, Name } from '@retro-engine/engine';
+import type { AssetGuid, Handle } from '@retro-engine/assets';
+import {
+  type AssetDragPayload,
+  type PropertyContext,
+  type PropertyRenderer,
+  propertyRow,
+} from '@retro-engine/editor-sdk';
+import { type App, AssetServer, Name } from '@retro-engine/engine';
 
-import { assetTypeSpec } from '../asset-picker/asset-picker-catalog';
+import { assetTypeSpec, isCompatible } from '../asset-picker/asset-picker-catalog';
 import { openAssetPicker } from '../asset-picker/asset-picker-state';
 import { augmentedAssets } from '../asset-picker/picker-pool';
 import type { BrowserAsset } from '../project/project-browser';
@@ -58,6 +63,33 @@ export const makeAssetFieldRenderer =
         thumbnail,
         expectsLabel: spec.noun,
         readonly: ctx.readonly,
+        // Accept an asset dragged from the browser when it is assignable to this
+        // slot — the same compatibility test the picker filters by — and commit it
+        // through the same undoable edit boundary as a click-picked value.
+        ...(ctx.readonly !== true
+          ? {
+              dnd: {
+                target: {
+                  accepts: (payload) =>
+                    payload.kind === 'asset' &&
+                    isCompatible(
+                      { type: (payload as AssetDragPayload).assetType } as BrowserAsset,
+                      spec,
+                    ),
+                  onDrop: (payload) => {
+                    const drag = payload as AssetDragPayload;
+                    const server = app.getResource(AssetServer);
+                    if (server === undefined) return;
+                    try {
+                      ctx.edit.scalar(ctx.path, ctx.value).commit(server.loadByGuid(drag.guid as AssetGuid));
+                    } catch (err) {
+                      console.warn(`[studio] asset drop: could not resolve ${drag.guid}`, err);
+                    }
+                  },
+                },
+              },
+            }
+          : {}),
       });
       if (!clicked) return;
       // Capture the edit boundary + address now; the picker commits later.

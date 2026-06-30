@@ -47,6 +47,7 @@ import { saveBundleAsset } from './project/save-bundle';
 import { saveScene } from './project/save-scene';
 import { createSplash } from './splash/splash';
 import { enabledSystemCount } from './systems-view';
+import { ThumbnailRenderService } from './thumbnails/thumbnail-render-service';
 import { ThumbnailService } from './thumbnails/thumbnail-service';
 
 // Mirror webview console to the native terminal (dev observability under Tauri).
@@ -74,6 +75,7 @@ import { inspectorPanel } from './panels-inspector';
 import { hierarchyPanel } from './panels-left';
 import { gamePanel, scenePanel } from './panels-viewport';
 import { createPlatformHost } from './platform/create-platform-host';
+import { SceneDrop } from './scene-drop';
 import { ScenePicker } from './scene-picker';
 import { createScene } from './scene-data';
 import { setupViewportScene } from './scene-bootstrap';
@@ -401,9 +403,31 @@ editor.inspector.registerComponentEditor('MorphWeights', morphWeightsEditor);
 const panelRects = new Map<string, PanelRect>();
 const cap = (def: PanelDef): PanelDef => recordPanelRect(def, panelRects, canvas);
 
+// Drag-and-drop and other UI actions invoke editor commands through the MCP
+// runtime, so they route through the same History + audit path an AI client uses.
+const runCommand = (name: string, args: unknown): Promise<unknown> => studioMcp.run(name, args);
+
+// Drag-and-drop into the Scene viewport (prefab/scene placement + live preview,
+// material apply). Capture runs in the Scene panel body; resolve in postUpdate
+// after the picker so a drop doesn't double as a click-select.
+const sceneDrop = new SceneDrop(app, editorView, state, runCommand);
+app.addSystem('postUpdate', [Commands], (cmd) => sceneDrop.tick(cmd), { name: 'editor-scene-drop' });
+
+// In-engine lit thumbnail rendering (real materials + lighting) — experimental and
+// off by default. It needs live iteration to get instance-readiness + framing right,
+// and a failed/empty render must never shadow the reliable CPU shape thumbnail
+// (glTF geometry + prefab visibility overrides). Flip to true to resume debugging it.
+const RENDERED_THUMBNAILS = false;
+const thumbnailRenderer = RENDERED_THUMBNAILS ? new ThumbnailRenderService(app, renderer) : undefined;
+if (thumbnailRenderer !== undefined) {
+  app.addSystem('postUpdate', [Commands], (cmd) => thumbnailRenderer.tick(cmd), {
+    name: 'editor-thumbnail-render',
+  });
+}
+
 editor
-  .addPanel(cap(hierarchyPanel(state, app)))
-  .addPanel(cap(scenePanel(state, editorView, sceneGizmos, sceneCamera, scenePicker, orientationGizmo)))
+  .addPanel(cap(hierarchyPanel(state, app, runCommand)))
+  .addPanel(cap(scenePanel(state, editorView, sceneGizmos, sceneCamera, scenePicker, orientationGizmo, sceneDrop)))
   .addPanel(cap(gamePanel(state, gameView)))
   .addPanel(cap(inspectorPanel(state, app, editor.inspector, history, editor.assetEditors, extractMaterialCopy)))
   .addPanel(cap(historyPanel(state, app, history)))
@@ -415,6 +439,7 @@ editor
         onActivate: (asset) => {
           if (asset.type === 'bundle') openBundleForEdit(asset);
         },
+        runCommand,
       }),
     ),
   )
@@ -717,8 +742,11 @@ void (async (): Promise<void> => {
       // device is up). Pre-warming + an on-disk cache are a follow-up.
       state.browser = {
         assets: buildBrowserAssets(manifest, kinds),
-        thumbnails: new ThumbnailService(renderer, io.source, (g) =>
-          state.browser?.assets.find((a) => a.guid === g)?.location,
+        thumbnails: new ThumbnailService(
+          renderer,
+          io.source,
+          (g) => state.browser?.assets.find((a) => a.guid === g)?.location,
+          thumbnailRenderer,
         ),
       };
       // Re-scan on a file-watch reindex: mint sidecars for newly added assets and
@@ -1019,6 +1047,9 @@ void (async (): Promise<void> => {
         version: STUDIO_ENGINE_VERSION,
         platform: platform.kind,
         projectDir,
+      },
+      reindexAssets: async () => {
+        await reindexProjectAssets?.();
       },
       ...(mcpSaveScene !== undefined ? { saveScene: mcpSaveScene } : {}),
     })

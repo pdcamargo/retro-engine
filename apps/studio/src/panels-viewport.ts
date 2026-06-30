@@ -13,6 +13,7 @@ import {
 
 import { type SceneCameraController } from './editor-camera';
 import { type SceneGizmos } from './gizmo-wiring';
+import { type SceneDrop } from './scene-drop';
 import { type ScenePicker } from './scene-picker';
 import { handleShortcuts } from './shortcuts';
 import { type StudioState } from './state';
@@ -75,6 +76,7 @@ export const scenePanel = (
   controller?: SceneCameraController,
   picker?: ScenePicker,
   orientation?: SceneOrientationGizmo,
+  drop?: SceneDrop,
 ): PanelDef => ({
   id: '/scene',
   title: 'Scene',
@@ -93,6 +95,9 @@ export const scenePanel = (
     // emitted from a postUpdate system, the 2D drag readout is drawn here.
     gizmos?.capture(rect, navHovered);
     picker?.capture(rect, navHovered);
+    // Drag-and-drop into the viewport: hover is derived from the rect (ImGui
+    // suppresses item hover during a drag), so this is independent of navHovered.
+    drop?.capture(rect);
     gizmos?.drawOverlay();
     // Editor camera navigation + keyboard shortcuts share this pass: ImGui input
     // is only live while the panel body runs. The controller applies movement

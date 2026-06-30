@@ -7,6 +7,7 @@ import type { ThumbnailService } from '../thumbnails/thumbnail-service';
 const IMAGE_EXT = /\.(png|jpe?g|webp|ktx2|basis|hdr)$/i;
 const MESH_EXT = /\.rmesh$/i;
 const GLTF_EXT = /\.(glb|gltf)$/i;
+const PREFAB_EXT = /\.prefab$/i;
 
 /** Maps an asset-kind descriptor's `category` hint to the browser's {@link AssetType}. */
 const CATEGORY_TO_ASSET_TYPE: Readonly<Record<string, AssetType>> = {
@@ -97,7 +98,8 @@ export const buildBrowserAssets = (manifest: AssetManifest, kinds?: AssetKinds):
         type === 'material' ||
         IMAGE_EXT.test(entry.location) ||
         MESH_EXT.test(entry.location) ||
-        GLTF_EXT.test(entry.location),
+        GLTF_EXT.test(entry.location) ||
+        PREFAB_EXT.test(entry.location),
     });
   }
   return out.sort((a, b) => a.name.localeCompare(b.name));

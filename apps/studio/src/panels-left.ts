@@ -1,5 +1,7 @@
 import {
+  type AssetDragPayload,
   buildOutline,
+  type DragPayload,
   Draw,
   drawIcon,
   type EditorContext,
@@ -10,12 +12,18 @@ import {
 import { type App, AppTypeRegistry } from '@retro-engine/engine';
 
 import { openComposer } from './composer/composer-state';
+import { INSTANTIABLE_KINDS, instantiateAsset, type RunCommand } from './dnd-actions';
 import { studioClassifiers } from './entity-classifiers';
+import { computeHierarchyDecorations } from './hierarchy-decorations';
 import { EditorOnly } from './editor-markers';
 import { type StudioState } from './state';
 
+/** Whether a drag payload is an instantiable asset (scene/prefab/glTF/mesh). */
+const isInstantiableDrag = (payload: DragPayload): boolean =>
+  payload.kind === 'asset' && INSTANTIABLE_KINDS.has((payload as AssetDragPayload).assetKind);
+
 /** The HIERARCHY panel — the live entity tree with filter, selection, and expand/collapse. */
-export const hierarchyPanel = (state: StudioState, app: App): PanelDef => ({
+export const hierarchyPanel = (state: StudioState, app: App, runCommand: RunCommand): PanelDef => ({
   id: '/hierarchy',
   title: 'Hierarchy',
   icon: 'list-tree',
@@ -65,20 +73,41 @@ export const hierarchyPanel = (state: StudioState, app: App): PanelDef => ({
       // mode the inspector also lists derived ones, so count everything.
       registry: state.debugMode ? undefined : app.getResource(AppTypeRegistry)!.registry,
     });
+    // Per-frame instance/model styling: prefab/scene/model tone + source name +
+    // override dot for instance roots, and the inherited set for recessing
+    // reactor-spawned children.
+    const deco = computeHierarchyDecorations(app, p);
     const treeH = Math.max(48, totalH - SEARCH_H - FOOTER_H - 8);
     ui.child('hier-tree', { size: [0, treeH], border: false, padding: [4, 4] }, () => {
       ui.withItemSpacing(0, 0, () => {
         for (const node of nodes) {
           if (filter !== '' && !node.name.toLowerCase().includes(filter)) continue;
+          const row = deco.roots.get(node.entity);
           const result = widgets.treeItem({
             id: String(node.entity),
             label: node.name,
-            icon: node.class.icon,
+            icon: row?.icon ?? node.class.icon,
             depth: node.depth,
             hasChildren: node.hasChildren,
             open: !state.collapsed.has(node.entity),
             selected: state.selectedEntity === node.entity,
             badge: node.componentCount > 0 ? String(node.componentCount) : undefined,
+            ...(row !== undefined ? { accent: row.accent, overridden: row.overridden } : {}),
+            ...(row?.suffix !== undefined ? { suffix: row.suffix } : {}),
+            recessed: deco.inherited.has(node.entity),
+            // Drag the entity out (e.g. onto the assets panel to author a prefab);
+            // accept a prefab/scene dropped onto the row to instantiate it as a
+            // child of this entity.
+            dnd: {
+              source: { payload: { kind: 'entity', entity: node.entity, label: node.name } },
+              target: {
+                accepts: isInstantiableDrag,
+                onDrop: (payload) => {
+                  const a = payload as AssetDragPayload;
+                  instantiateAsset(runCommand, a.guid, a.assetKind, { parent: node.entity });
+                },
+              },
+            },
           });
           if (result.toggled) {
             if (state.collapsed.has(node.entity)) state.collapsed.delete(node.entity);
@@ -87,6 +116,19 @@ export const hierarchyPanel = (state: StudioState, app: App): PanelDef => ({
             state.selectedEntity = node.entity;
             state.selectedAsset = null;
           }
+        }
+        // Empty space below the rows accepts a prefab/scene to spawn at the scene
+        // root (no parent).
+        const rest = ui.contentAvail();
+        if (rest[1] > 4) {
+          ui.invisibleButton('hier-drop-root', [Math.max(rest[0], 1), rest[1]]);
+          ui.dropTarget({
+            accepts: isInstantiableDrag,
+            onDrop: (payload) => {
+              const a = payload as AssetDragPayload;
+              instantiateAsset(runCommand, a.guid, a.assetKind);
+            },
+          });
         }
       });
     });

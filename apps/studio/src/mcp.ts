@@ -102,6 +102,7 @@ export interface StudioMcpAttachDeps {
   readonly isEditorEntity: (entity: Entity) => boolean;
   readonly studio: StudioInfo;
   readonly saveScene?: () => Promise<SaveSceneResult>;
+  readonly reindexAssets?: () => Promise<void>;
 }
 
 const defaultEnabled = (): boolean =>
@@ -165,6 +166,7 @@ export class StudioMcp {
       isEditorEntity: deps.isEditorEntity,
       allowEval: () => this.evalAllowed,
       ...(deps.saveScene !== undefined ? { saveScene: deps.saveScene } : {}),
+      ...(deps.reindexAssets !== undefined ? { reindexAssets: deps.reindexAssets } : {}),
     };
 
     this.bridge = createStudioBridge(this.registry, ctx, {
@@ -176,6 +178,17 @@ export class StudioMcp {
     });
     this.attached = true;
     if (this.enabledFlag) this.bridge.start();
+  }
+
+  /**
+   * Invoke an editor command by name against the live studio — the same path an
+   * AI client takes (routes through editor History + the audit ring). Studio UI
+   * actions (drag-and-drop, toolbar) use this so they undo and audit identically.
+   * Rejects if the runtime is not attached or the command fails.
+   */
+  async run(name: string, args: unknown): Promise<unknown> {
+    if (this.bridge === null) throw new Error('studio MCP not attached');
+    return this.bridge.run(name, args);
   }
 
   // ---- panel-facing API ----
