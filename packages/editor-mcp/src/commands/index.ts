@@ -9,6 +9,7 @@ import { hierarchyCommands } from './hierarchy';
 import { historyCommands } from './history';
 import { logCommands } from './logs';
 import { panelCommands } from './panels';
+import { prefabCommands } from './prefab';
 import { rendererCommands } from './renderer';
 import { sceneCommands } from './scene';
 import { screenshotCommands } from './screenshot';
@@ -23,6 +24,7 @@ export const defaultCommands: readonly CommandDef[] = [
   ...entityCommands,
   ...componentCommands,
   ...assetCommands,
+  ...prefabCommands,
   ...sceneCommands,
   ...historyCommands,
   ...rendererCommands,

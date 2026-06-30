@@ -102,6 +102,18 @@ export class StudioBridge {
     this.send({ type: 'catalog', commands: this.registry.manifest(this.ctx) });
   }
 
+  /**
+   * Invoke a command by name against the live context — the same path a remote
+   * MCP invoke takes (history + audit). This is how studio UI actions (e.g. a
+   * drag-and-drop) route through the one command implementation, so they undo and
+   * audit identically. Resolves with the command's return value; rejects on failure.
+   */
+  async run(name: string, args: unknown): Promise<unknown> {
+    const outcome = await this.runOne(name, args);
+    if (!outcome.ok) throw new Error(outcome.error.message);
+    return outcome.value;
+  }
+
   private connect(): void {
     if (!this.enabled) return;
     let ws: WebSocket;

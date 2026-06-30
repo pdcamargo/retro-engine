@@ -126,4 +126,9 @@ export interface CommandContext {
   readonly composer?: ComposerControl;
   /** Persist the current scene, if a project is open. */
   saveScene?(): Promise<SaveSceneResult>;
+  /**
+   * Rescan the open project's assets so a just-written file is in the manifest and
+   * the browser. Provided by the studio; absent in headless contexts.
+   */
+  reindexAssets?(): Promise<void>;
 }
