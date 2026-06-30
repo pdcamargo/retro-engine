@@ -9,6 +9,13 @@ import {
   ImVec4,
 } from '@mori2003/jsimgui';
 
+import {
+  beginDragSource,
+  type DragSourceOptions,
+  type DropTargetOptions,
+  handleDropTarget,
+} from './dnd/dnd-ui';
+import type { DragPayload } from './dnd/drag-payload';
 import type { ItemEdges } from './edit/emitter';
 import { getFont } from './fonts';
 import { drawIcon } from './icon-shapes';
@@ -235,6 +242,19 @@ export interface Ui {
 
   /** A terse hover tooltip for the last item. */
   setItemTooltip(text: string): void;
+
+  /**
+   * Mark the last-submitted item as a drag source carrying `payload`. Call
+   * immediately after submitting the item. Returns `true` on frames the drag is
+   * active. This is the general editor drag primitive — see {@link Ui.dropTarget}.
+   */
+  dragSource(payload: DragPayload, options?: DragSourceOptions): boolean;
+  /**
+   * Mark the last-submitted item as a drop target. While a compatible editor drag
+   * hovers it an accept/reject highlight is drawn; on release over an accepted
+   * target, `options.onDrop` fires with the payload. Call immediately after the item.
+   */
+  dropTarget(options: DropTargetOptions): void;
 
   /** The width of the content region remaining on the current line/column. */
   contentAvail(): Vec2;
@@ -558,6 +578,14 @@ export const ui: Ui = {
 
   setItemTooltip(text: string): void {
     ImGui.SetItemTooltip(text);
+  },
+
+  dragSource(payload: DragPayload, options?: DragSourceOptions): boolean {
+    return beginDragSource(payload, options);
+  },
+
+  dropTarget(options: DropTargetOptions): void {
+    handleDropTarget(options);
   },
 
   contentAvail(): Vec2 {

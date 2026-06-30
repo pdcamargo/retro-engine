@@ -49,6 +49,12 @@ export interface RetroPalette {
   readonly red400: Srgb8;
   /** Play-mode signal — the inset viewport border while running. */
   readonly magenta400: Srgb8;
+  /** Prefab-instance accent — a prefab instance's name + icon in the hierarchy. */
+  readonly prefab: Srgb8;
+  /** Nested-scene-instance accent — a scene instance's name + icon. */
+  readonly scene: Srgb8;
+  /** Model-root accent — an imported glTF/mesh model's name + icon. */
+  readonly model: Srgb8;
   /** Near-white — nav windowing highlight, table zebra. */
   readonly white: Srgb8;
   /** Green-tinted title bar of the focused window. */
@@ -139,6 +145,9 @@ export const defaultTokens: ThemeTokens = {
     amber500: [255, 176, 0],
     red400: [240, 85, 106],
     magenta400: [232, 73, 200],
+    prefab: [72, 207, 173],
+    scene: [167, 139, 250],
+    model: [110, 160, 247],
     white: [241, 250, 244],
     titleActive: [21, 33, 28],
     borderSubtle: [24, 35, 38],

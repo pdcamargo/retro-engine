@@ -3,6 +3,7 @@ import { ImGui, ImGuiCol, type ImTextureRef } from '@mori2003/jsimgui';
 import { Draw } from './draw';
 import { drawIcon } from './icon-shapes';
 import { type IconName } from './icons';
+import { applyItemDnd, type ItemDnd } from './dnd/item-dnd';
 import { getActivePalette, packU32, srgbU32, type Tone, toneColors } from './palette';
 import { ui } from './ui';
 import type { Vec2 } from './units';
@@ -101,6 +102,8 @@ export interface AssetCardOptions {
    * attach a right-click menu.
    */
   readonly onContextMenu?: (() => void) | undefined;
+  /** Drag-and-drop binding for the tile (attached to the tile's hit-target). */
+  readonly dnd?: ItemDnd | undefined;
 }
 
 /** What an {@link assetCard} reported this frame. */
@@ -217,9 +220,10 @@ export const assetCard = (o: AssetCardOptions): AssetCardResult => {
       rightClicked = ui.isItemClicked(1);
       const leftClicked = ui.isItemClicked(0);
       const m = ui.mousePos();
-      // Anchor a right-click menu to the tile while its hit-target is the last
-      // item submitted (before the overlays' draw-list calls and the label).
+      // Anchor a right-click menu + drag/drop to the tile while its hit-target is
+      // the last item submitted (before the overlays' draw-list calls and label).
       o.onContextMenu?.();
+      applyItemDnd(o.dnd);
       const dl = Draw.window();
       const max: Vec2 = [min[0] + size, min[1] + size];
       dl.rectFilled(min, max, srgbU32(p.gray2), 4);

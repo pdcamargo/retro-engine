@@ -22,12 +22,13 @@ import {
 } from './components-asset';
 import { assetField, type AssetFieldOptions } from './components-asset-field';
 import { dataTable, type DataTableOptions } from './components-table';
+import { applyItemDnd, type ItemDnd } from './dnd/item-dnd';
 import { Draw } from './draw';
 import { drawIcon } from './icon-shapes';
 import { type IconName } from './icons';
 import { type Axis, axisColor, getActivePalette, srgbU32, type Tone, toneColors } from './palette';
 import { ui } from './ui';
-import type { Rgba } from './units';
+import type { Rgba, Srgb8 } from './units';
 
 /** Control heights (px) on the design system's scale. */
 export const ControlHeight = { xs: 20, sm: 26, md: 32, lg: 40 } as const;
@@ -145,6 +146,16 @@ export interface TreeItemOptions {
   readonly badge?: string | undefined;
   /** When provided, a hover eye toggle appears; the value sets the glyph. */
   readonly visible?: boolean | undefined;
+  /** Drag-and-drop binding for the row (attached to the row's selectable). */
+  readonly dnd?: ItemDnd | undefined;
+  /** Accent color for the name + icon (e.g. a prefab/scene/model tone). Defaults to the neutral text color. */
+  readonly accent?: Srgb8 | undefined;
+  /** A faint source reference drawn after the name (e.g. `coin.prefab`), prefixed with `·`. */
+  readonly suffix?: string | undefined;
+  /** Draw an amber override dot on the icon (the row differs from its source). */
+  readonly overridden?: boolean | undefined;
+  /** Dim the row — an inherited entity instantiated from a source, not authored here. */
+  readonly recessed?: boolean | undefined;
 }
 
 /** What a {@link Widgets.treeItem} reported this frame. */
@@ -633,6 +644,9 @@ export const widgets: Widgets = {
       ImGuiSelectableFlags.AllowOverlap,
       new ImVec2(0, rowH),
     );
+    // Bind drag/drop to the selectable while it is the last item — before the
+    // decorative draws below (which submit id-less dummies of their own).
+    applyItemDnd(options.dnd);
     const hovered = ui.isItemHovered();
     const [min, max] = ui.itemRect();
     const cy = (min[1] + max[1]) / 2;
@@ -642,12 +656,35 @@ export const widgets: Widgets = {
     if (options.hasChildren === true) {
       drawIcon(options.open === true ? 'chevron-down' : 'chevron-right', [chevronX, cy - 6], 12, srgbU32(p.textMuted));
     }
+    // Instance rows tint name + icon by their kind (prefab / scene / model);
+    // inherited rows are dimmed; selection always wins.
+    const iconColor =
+      options.selected === true
+        ? p.green400
+        : options.recessed === true
+          ? p.textFaint
+          : (options.accent ?? p.textMuted);
+    const labelColor =
+      options.selected === true
+        ? p.green400
+        : options.recessed === true
+          ? p.textMuted
+          : (options.accent ?? p.text);
     const iconX = chevronX + 16;
     if (options.icon !== undefined) {
-      drawIcon(options.icon, [iconX, cy - 8], 16, srgbU32(options.selected === true ? p.green400 : p.textMuted));
+      drawIcon(options.icon, [iconX, cy - 8], 16, srgbU32(iconColor));
+      // Override dot: the row differs from the source it was instantiated from.
+      if (options.overridden === true) {
+        dl.circleFilled([iconX + 15, cy - 7], 3.5, srgbU32(p.amber400));
+      }
     }
     const labelX = iconX + (options.icon !== undefined ? 23 : 0);
-    dl.text([labelX, cy - th / 2], srgbU32(options.selected === true ? p.green400 : p.text), options.label);
+    dl.text([labelX, cy - th / 2], srgbU32(labelColor), options.label);
+    // Faint source reference (e.g. `· coin.prefab`) after the name.
+    if (options.suffix !== undefined && options.suffix.length > 0) {
+      const sx = labelX + ui.calcTextSize(options.label)[0] + 8;
+      dl.text([sx, cy - th / 2], srgbU32(p.textFaint), `· ${options.suffix}`);
+    }
 
     let visibilityToggled = false;
     const eyeX = max[0] - 22;

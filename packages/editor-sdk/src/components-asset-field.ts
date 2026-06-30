@@ -1,6 +1,7 @@
 import type { ImTextureRef } from '@mori2003/jsimgui';
 
 import { ASSET_TYPES, type AssetType } from './components-asset';
+import { applyItemDnd, type ItemDnd } from './dnd/item-dnd';
 import { Draw } from './draw';
 import { drawIcon } from './icon-shapes';
 import { getActivePalette, srgbU32, toneColors } from './palette';
@@ -22,6 +23,8 @@ export interface AssetFieldOptions {
   readonly expectsLabel?: string | undefined;
   /** Draw inert (no hover/click) — the field is read-only this frame. */
   readonly readonly?: boolean | undefined;
+  /** Drag-and-drop binding (attached to the field's hit-target). */
+  readonly dnd?: ItemDnd | undefined;
 }
 
 /**
@@ -39,6 +42,8 @@ export const assetField = (id: string, o: AssetFieldOptions): { clicked: boolean
   const max: Vec2 = [min[0] + w, min[1] + FIELD_H];
 
   const clicked = ui.invisibleButton(`##af-${id}`, [w, FIELD_H]);
+  // Bind drag/drop while the hit-target is the last item (before the draws below).
+  applyItemDnd(o.dnd);
   const hovered = ui.isItemHovered() && o.readonly !== true;
   const assigned = o.name !== undefined;
 

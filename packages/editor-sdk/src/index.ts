@@ -183,6 +183,16 @@ export type {
   WindowFlags,
   WindowOptions,
 } from './ui';
+export { dragContext, DND_TYPE } from './dnd/drag-context';
+export type { DragContext } from './dnd/drag-context';
+export type {
+  AssetDragPayload,
+  DragPayload,
+  EntityDragPayload,
+} from './dnd/drag-payload';
+export type { DragSourceOptions, DropTargetOptions } from './dnd/dnd-ui';
+export { applyItemDnd } from './dnd/item-dnd';
+export type { ItemDnd } from './dnd/item-dnd';
 export type { Rgb, Rgba, Srgb8, Vec2 } from './units';
 export {
   type BuildOutlineOptions,
