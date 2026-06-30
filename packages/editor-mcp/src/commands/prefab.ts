@@ -44,8 +44,9 @@ const makeInstanceComponent = (kind: string, handle: Handle<unknown>): object | 
 const despawnSubtree = (world: World, root: Entity): void => {
   if (!world.hasEntity(root)) return;
   const children = world.getComponent(root, Children) as { entities: Entity[] } | undefined;
+  // Safe to iterate directly: world.despawn is raw (it doesn't maintain Children).
   if (children !== undefined) {
-    for (const child of [...children.entities]) despawnSubtree(world, child);
+    for (const child of children.entities) despawnSubtree(world, child);
   }
   world.despawn(root);
 };
