@@ -8,6 +8,12 @@ import { Scenes } from './scene-asset';
 import { createSceneImporter } from './scene-importer';
 import { addSceneInstantiation } from './scene-reactor';
 
+/** The manifest `kind` tag used for prefab documents. */
+export const PREFAB_ASSET_KIND = 'Prefab';
+
+/** The file extension prefab documents are written with. */
+export const PREFAB_ASSET_EXTENSION = 'prefab';
+
 /**
  * Adds `.rescene` loading and instantiation to an `App`.
  *
@@ -50,6 +56,21 @@ export class ScenePlugin implements PluginObject {
       discoverable: false,
       category: 'scene',
     });
+
+    // A prefab is a Scene-shaped asset: same wire format, same `Scenes` store,
+    // same `SceneRoot` mount path — distinguished only by its kind tag (so the
+    // editor and asset catalogue treat it as a reusable object, and the two can
+    // diverge later without reclassifying existing files). The kind loader routes
+    // a `Prefab`-tagged manifest entry into the shared store; the mount path
+    // resolves it by GUID and never inspects the kind.
+    server.registerLoaderByKind(PREFAB_ASSET_KIND, scenes, createSceneImporter());
+    registerAssetKind(app, {
+      kind: PREFAB_ASSET_KIND,
+      extensions: [PREFAB_ASSET_EXTENSION],
+      discoverable: false,
+      category: 'prefab',
+    });
+
     addSceneInstantiation(app);
   }
 }

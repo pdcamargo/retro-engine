@@ -4,7 +4,7 @@ import type { EncodeEnv, SerializedValue, TypeRegistry } from '@retro-engine/ref
 import { diffComponent, encodeComponent, schemaHasEntityField } from '@retro-engine/reflect';
 
 import type { App } from '../index';
-import { Parent } from '../hierarchy';
+import { Children, Parent } from '../hierarchy';
 import { AppTypeRegistry } from './app-type-registry';
 import { CompositionBaseline, CompositionRegistry } from './composition';
 import type { CompositionAnchor } from './composition';
@@ -333,4 +333,91 @@ export const serializeScene = (app: App, opts: SerializeOptions = {}): SceneData
   return resources.length > 0
     ? { version: SCENE_FORMAT_VERSION, entities, resources }
     : { version: SCENE_FORMAT_VERSION, entities };
+};
+
+/**
+ * Whether a composition mount (a `SceneRoot`/instance entity) currently differs
+ * from the source it was instantiated from — i.e. the user edited its derived
+ * subtree. The same diff {@link serializeScene} records as overrides, surfaced
+ * live for editor affordances (e.g. the hierarchy's "changed from source" dot).
+ * `false` for an entity with no {@link CompositionBaseline}.
+ */
+export const hasCompositionOverrides = (app: App, mount: Entity): boolean => {
+  if (app.world.getComponent(mount, CompositionBaseline) === undefined) return false;
+  const registry = app.getResource(AppTypeRegistry)!.registry;
+  const { env } = buildEncodeEnv(app.world, registry, {});
+  return deriveOverrides(app.world, registry, env, mount) !== undefined;
+};
+
+/**
+ * Collect an entity and every descendant reachable through {@link Children},
+ * skipping any child that is no longer live. Used to scope a prefab capture to a
+ * single subtree.
+ */
+const collectSubtree = (world: World, root: Entity): Set<Entity> => {
+  const subtree = new Set<Entity>();
+  const stack: Entity[] = [root];
+  while (stack.length > 0) {
+    const entity = stack.pop()!;
+    if (subtree.has(entity)) continue;
+    subtree.add(entity);
+    const children = world.getComponent(entity, Children);
+    if (children === undefined) continue;
+    for (const child of children.entities) {
+      if (world.hasEntity(child)) stack.push(child);
+    }
+  }
+  return subtree;
+};
+
+/**
+ * Serialize a single entity and its descendants into {@link SceneData} — the
+ * capture half of authoring a reusable prefab from a live entity. The subtree is
+ * gathered by walking {@link Children} from `root`, and the root's own `Parent`
+ * edge is dropped so the result is a self-contained graph that mounts under
+ * wherever it is instantiated.
+ *
+ * Unlike {@link serializeScene}, no App resources are captured: a prefab is an
+ * object dropped into a world, not a world that configures one. The output loads
+ * and instantiates through the same `Scenes` store and `SceneRoot` path as a
+ * scene, so a prefab is a {@link Scene}-shaped asset distinguished only by its
+ * asset kind — see {@link PREFAB_ASSET_KIND}.
+ */
+export const serializePrefab = (
+  app: App,
+  root: Entity,
+  opts: SerializeOptions = {},
+): SceneData => {
+  const registry = app.getResource(AppTypeRegistry)!.registry;
+  const world = app.world;
+  const subtree = collectSubtree(world, root);
+  const callerFilter = opts.filter;
+  const filter = (entity: Entity): boolean =>
+    subtree.has(entity) && (callerFilter === undefined || callerFilter(entity));
+
+  const { env, idOf, live } = buildEncodeEnv(world, registry, { ...opts, filter });
+  const entities = serializeEntities(
+    world,
+    registry,
+    env,
+    idOf,
+    live,
+    collectComposition(world, app.getResource(CompositionRegistry)),
+  );
+
+  // The root's Parent points outside the captured subtree, so its serialized id
+  // would dangle (decode to a dead entity, warned every frame). Drop it: the
+  // prefab's root is a top-level node the mount re-parents on instantiation.
+  const parentName = registry.getByCtor(Parent)?.name;
+  const rootId = idOf.get(root);
+  const scoped =
+    parentName !== undefined && rootId !== undefined
+      ? entities.map((entity) =>
+          entity.id === rootId
+            ? { ...entity, components: entity.components.filter((c) => c.type !== parentName) }
+            : entity,
+        )
+      : entities;
+
+  return { version: SCENE_FORMAT_VERSION, entities: scoped };
 };

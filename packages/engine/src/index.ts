@@ -326,7 +326,12 @@ export type {
 } from './scene/scene-data';
 export { SCENE_FORMAT_VERSION } from './scene/scene-data';
 export type { SerializeOptions } from './scene/serialize';
-export { serializeScene, serializeWorld } from './scene/serialize';
+export {
+  hasCompositionOverrides,
+  serializePrefab,
+  serializeScene,
+  serializeWorld,
+} from './scene/serialize';
 export type { DeserializeOptions } from './scene/deserialize';
 export { deserializeScene } from './scene/deserialize';
 export type { SpawnSceneOptions } from './scene/spawn';
@@ -336,7 +341,11 @@ export { createSceneImporter, createSceneSerializer } from './scene/scene-import
 export { SceneInstance, SceneRoot } from './scene/scene-root';
 export { addSceneInstantiation } from './scene/scene-reactor';
 export { collectSceneHandleRefs, unloadUnusedAssets } from './scene/scene-streaming';
-export { ScenePlugin } from './scene/scene-plugin';
+export {
+  PREFAB_ASSET_EXTENSION,
+  PREFAB_ASSET_KIND,
+  ScenePlugin,
+} from './scene/scene-plugin';
 export { SceneStateRoots } from './scene/scene-state';
 export type { AddSceneOptions } from './scene/scene-state';
 export type { ParamSchema, ResolvedParams, Template, TemplateDefinition } from './prefab/template';
