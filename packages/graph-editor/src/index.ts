@@ -61,6 +61,9 @@ export type { ResolvedPin, ConnectRule, GraphKindOptions } from './kind';
 export { GraphKind, defaultConnectRule } from './kind';
 export { GraphEnvironment, createGraphEnvironment } from './environment';
 
+export type { OpenGraphInfo } from './host';
+export { GraphHost } from './host';
+
 export type { GraphGeometry, GraphChrome } from './theme';
 export { GraphTheme, DEFAULT_GEOMETRY, createGraphTheme, setTheme } from './theme';
 export type { Interaction, Hover, GraphView } from './view';

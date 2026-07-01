@@ -5,6 +5,7 @@ import { assetCommands } from './asset';
 import { componentCommands } from './component';
 import { composerCommands } from './composer';
 import { entityCommands } from './entity';
+import { graphCommands } from './graph';
 import { hierarchyCommands } from './hierarchy';
 import { historyCommands } from './history';
 import { logCommands } from './logs';
@@ -32,6 +33,7 @@ export const defaultCommands: readonly CommandDef[] = [
   ...panelCommands,
   ...composerCommands,
   ...screenshotCommands,
+  ...graphCommands,
 ];
 
 /** A registry pre-loaded with every built-in command. Add plugin commands before connecting. */

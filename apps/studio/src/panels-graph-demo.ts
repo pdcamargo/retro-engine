@@ -14,22 +14,22 @@ import {
   createGraphEnvironment,
   createGraphTheme,
   createGraphView,
-  type GraphDocument,
   GraphEditor,
-  type GraphEnvironment,
+  GraphHost,
   type GraphTheme,
   type GraphView,
 } from '@retro-engine/graph-editor';
 
-interface DemoState {
-  env: GraphEnvironment;
-  doc: GraphDocument;
+/** The shared demo state: the host (registered as an App resource) + this view's transform. */
+export interface GraphDemo {
+  host: GraphHost;
   view: GraphView;
   theme: GraphTheme;
   fitRequested: boolean;
 }
 
-const buildDemo = (): DemoState => {
+/** Build the demo environment + sample document and wrap it in a shared {@link GraphHost}. */
+export const createGraphDemo = (): GraphDemo => {
   const env = createGraphEnvironment();
   const kind = env.registerKind({ id: 'dataflow', label: 'Dataflow' });
   kind.nodeTypes
@@ -137,13 +137,13 @@ const buildDemo = (): DemoState => {
   const col = addNode(doc, { typeId: 'Multiply', pos: [300, 480], title: 'Collapsed' });
   col.collapsed = true;
 
-  return { env, doc, view, theme: createGraphTheme(), fitRequested: false };
+  const host = new GraphHost(env);
+  host.open(doc);
+  return { host, view, theme: createGraphTheme(), fitRequested: false };
 };
 
-let demo: DemoState | null = null;
-
-/** The graph-editor demo/acceptance panel. */
-export const graphDemoPanel = (): PanelDef => ({
+/** The graph-editor demo/acceptance panel. Shares its {@link GraphHost} with the MCP layer. */
+export const graphDemoPanel = (demo: GraphDemo): PanelDef => ({
   id: '/graph-demo',
   title: 'Graph Editor',
   icon: 'workflow',
@@ -151,17 +151,19 @@ export const graphDemoPanel = (): PanelDef => ({
   closable: true,
   flush: true,
   render: ({ ui }: EditorContext): void => {
-    const d = (demo ??= buildDemo());
+    const d = demo;
+    const doc = d.host.active();
+    if (doc === undefined) return;
 
     ui.child('graph-demo-toolbar', { size: [0, 30], padding: [8, 4], noScrollbar: true }, () => {
       if (ui.button('Fit')) d.fitRequested = true;
       ui.sameLine(0, 6);
       if (ui.button(d.view.scanlines ? 'Scanlines ✓' : 'Scanlines')) d.view.scanlines = !d.view.scanlines;
       ui.sameLine(0, 12);
-      ui.textMuted(`zoom ${Math.round(d.view.zoom * 100)}%  ·  ${d.doc.nodeOrder.length} nodes  ·  ${Object.keys(d.doc.edges).length} wires`);
+      ui.textMuted(`zoom ${Math.round(d.view.zoom * 100)}%  ·  ${doc.nodeOrder.length} nodes  ·  ${Object.keys(doc.edges).length} wires`);
     });
 
-    const params = { ui, doc: d.doc, view: d.view, env: d.env, theme: d.theme };
+    const params = { ui, doc, view: d.view, env: d.host.env, theme: d.theme };
     // Auto-frame the graph every frame until the user pans/zooms; the Fit button
     // re-arms auto-framing. This is immune to first-frame docking-size timing.
     if (d.fitRequested) {

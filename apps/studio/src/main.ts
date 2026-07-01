@@ -70,7 +70,7 @@ import { assetsPanel } from './assets/assets-panel';
 import { loadAssetsPrefs } from './assets/assets-panel-state';
 import { createModelSubAssetService } from './project/model-subassets';
 import { consolePanel, profilerPanel, systemsPanel } from './panels-dock';
-import { graphDemoPanel } from './panels-graph-demo';
+import { createGraphDemo, graphDemoPanel } from './panels-graph-demo';
 import { historyPanel } from './panels-history';
 import { inspectorPanel } from './panels-inspector';
 import { hierarchyPanel } from './panels-left';
@@ -426,6 +426,11 @@ if (thumbnailRenderer !== undefined) {
   });
 }
 
+// Shared graph-editor demo: register its GraphHost as an App resource so the
+// panel and the MCP `graph.*` commands operate on the same document.
+const graphDemo = createGraphDemo();
+app.insertResource(graphDemo.host);
+
 editor
   .addPanel(cap(hierarchyPanel(state, app, runCommand)))
   .addPanel(cap(scenePanel(state, editorView, sceneGizmos, sceneCamera, scenePicker, orientationGizmo, sceneDrop)))
@@ -447,7 +452,7 @@ editor
   .addPanel(cap(characterCreatorPanel(state, app, stdMat, persistMaterial)))
   .addPanel(cap(systemsPanel(app)))
   .addPanel(cap(profilerPanel(app)))
-  .addPanel(cap(graphDemoPanel()))
+  .addPanel(cap(graphDemoPanel(graphDemo)))
   .addPanel(cap(mcpPanel(studioMcp, (text, meta) => pushConsoleForPanels(text, meta))))
   .setToolbar(toolbar(state, editor, app))
   .setStatusBar(statusBar(state, app));
