@@ -42,6 +42,7 @@ export type { Blend2dMode } from './blend-tree';
 
 export {
   AnimationController,
+  MotionScratch,
   evaluateMotion,
   motionDuration,
 } from './animation-controller';

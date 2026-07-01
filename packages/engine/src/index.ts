@@ -211,6 +211,7 @@ export {
   weights1d,
   weights2d,
   AnimationController,
+  MotionScratch,
   evaluateMotion,
   motionDuration,
   ANIMATION_CONTROLLER_ASSET_KIND,

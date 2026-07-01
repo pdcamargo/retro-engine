@@ -32,7 +32,7 @@ const normalize = (out: Float32Array, n: number, nearest: number): void => {
  * the written weights sum to 1.
  */
 export const weights1d = (
-  thresholds: readonly number[],
+  thresholds: ArrayLike<number>,
   param: number,
   out: Float32Array,
 ): void => {

@@ -11,8 +11,9 @@ import { Transform } from '../transform';
 import type { AnimationClip, AnimationTrack } from './animation-clip';
 import { AnimationClips } from './animation-clip-asset';
 import {
-  type AnimationController,
+  type Motion,
   type MotionInput,
+  MotionScratch,
   evaluateMotion,
   motionDuration,
 } from './animation-controller';
@@ -257,6 +258,16 @@ const ensureParameterDefaults = (
 type ClipStore = Pick<AnimationClips, 'get'>;
 type ControllerStore = Pick<AnimationControllers, 'get'>;
 
+/** Append every leaf clip a motion could sample to `out`, recursing through nested blend trees. */
+const collectMotionClips = (motion: Motion, clips: ClipStore, out: AnimationClip[]): void => {
+  if (motion.kind === 'clip') {
+    const clip = clips.get(motion.clip);
+    if (clip !== undefined) out.push(clip);
+    return;
+  }
+  for (const child of motion.children) collectMotionClips(child.motion, clips, out);
+};
+
 /** Append every clip a layer's source could sample to `out`, for building the shared slot layout. */
 const collectLayerClips = (
   layer: AnimationLayer,
@@ -272,27 +283,16 @@ const collectLayerClips = (
   }
   const controller = controllers.get(source.controller);
   if (controller === undefined) return;
-  for (const state of controller.states) {
-    const motion = state.motion;
-    if (motion.kind === 'clip') {
-      const clip = clips.get(motion.clip);
-      if (clip !== undefined) out.push(clip);
-    } else {
-      for (const child of motion.children) {
-        const clip = clips.get(child.clip);
-        if (clip !== undefined) out.push(clip);
-      }
-    }
-  }
+  for (const state of controller.states) collectMotionClips(state.motion, clips, out);
 };
 
 /**
  * Fill `inputs` with one layer's weighted clip contributions for this frame,
  * advancing its transient {@link LayerRuntime} (clip cursor, or controller state
- * machine). Returns the (possibly grown) `weightScratch`. A clip layer yields a
- * single weight-1 input; a controller layer steps its state machine and emits
- * the active (and transitioning-out) states' blended motions, exactly as the
- * standalone controller path does.
+ * machine). A clip layer yields a single weight-1 input; a controller layer steps
+ * its state machine and emits the active (and transitioning-out) states' blended
+ * motions, exactly as the standalone controller path does. `scratch` supplies the
+ * per-depth blend-weight buffers, reused across layers.
  */
 const evaluateLayerInputs = (
   layer: AnimationLayer,
@@ -301,14 +301,14 @@ const evaluateLayerInputs = (
   clips: ClipStore,
   controllers: ControllerStore,
   inputs: MotionInput[],
-  weightScratch: Float32Array<ArrayBuffer>,
-): Float32Array<ArrayBuffer> => {
+  scratch: MotionScratch,
+): void => {
   inputs.length = 0;
   const source = layer.source;
 
   if (source.kind === 'clip') {
     const clip = clips.get(source.clip);
-    if (clip === undefined) return weightScratch;
+    if (clip === undefined) return;
     if (source.playing) {
       const advanced = advancePlayerTime(
         runtime.time,
@@ -320,11 +320,11 @@ const evaluateLayerInputs = (
       source.playing = advanced.playing;
     }
     inputs.push({ clip, time: runtime.time, weight: 1 });
-    return weightScratch;
+    return;
   }
 
   const controller = controllers.get(source.controller);
-  if (controller === undefined || controller.states.length === 0) return weightScratch;
+  if (controller === undefined || controller.states.length === 0) return;
   if (runtime.controller === undefined || runtime.controller.phase.length !== controller.states.length) {
     runtime.controller = createControllerRuntime(controller.states.length);
   }
@@ -342,9 +342,6 @@ const evaluateLayerInputs = (
   }
 
   const weights = stateWeights(rt);
-  const maxChildren = controllerMaxChildren(controller);
-  let scratch = weightScratch;
-  if (maxChildren > scratch.length) scratch = new Float32Array(maxChildren);
   if (rt.fromState >= 0) {
     evaluateMotion(
       controller.states[rt.fromState]!.motion,
@@ -365,7 +362,6 @@ const evaluateLayerInputs = (
     scratch,
     inputs,
   );
-  return scratch;
 };
 
 /**
@@ -392,7 +388,7 @@ export const addAnimationSampling = (app: App): void => {
   const slotByTargetId = new Map<string, number>();
   const slotEntities: Entity[] = [];
   const inputs: MotionInput[] = [];
-  let weightScratch = new Float32Array(64);
+  const motionScratch = new MotionScratch();
   // Reused by the layered driver: shared slot layout, scratch poses, mask bits.
   const slotTargetIds: string[] = [];
   const layoutClips: AnimationClip[] = [];
@@ -506,8 +502,6 @@ export const addAnimationSampling = (app: App): void => {
         if (ids === undefined) continue;
 
         const weights = stateWeights(runtime);
-        const maxChildren = controllerMaxChildren(controller);
-        if (maxChildren > weightScratch.length) weightScratch = new Float32Array(maxChildren);
 
         inputs.length = 0;
         if (runtime.fromState >= 0) {
@@ -517,7 +511,7 @@ export const addAnimationSampling = (app: App): void => {
             weights.from,
             params.get,
             resolveClip,
-            weightScratch,
+            motionScratch,
             inputs,
           );
         }
@@ -527,7 +521,7 @@ export const addAnimationSampling = (app: App): void => {
           weights.current,
           params.get,
           resolveClip,
-          weightScratch,
+          motionScratch,
           inputs,
         );
         applyBlendInputs(app, registry, inputs, ids, poseFor(playerEntity), slotByTargetId, slotEntities, scratch);
@@ -630,7 +624,7 @@ export const addAnimationSampling = (app: App): void => {
         for (let li = 0; li < stack.layers.length; li++) {
           const layer = stack.layers[li]!;
           const rt = layerRts[li]!;
-          weightScratch = evaluateLayerInputs(layer, rt, dt, playerClips, controllers, inputs, weightScratch);
+          evaluateLayerInputs(layer, rt, dt, playerClips, controllers, inputs, motionScratch);
           if (inputs.length === 0) continue;
 
           if (jointCount > 0) {
@@ -660,15 +654,4 @@ export const addAnimationSampling = (app: App): void => {
     },
     { name: 'animation-sample', label: 'animation-sample' },
   );
-};
-
-/** Largest blend-tree child count across a controller's states (sizes the weight scratch). */
-const controllerMaxChildren = (controller: AnimationController): number => {
-  let max = 1;
-  for (const state of controller.states) {
-    if (state.motion.kind !== 'clip' && state.motion.children.length > max) {
-      max = state.motion.children.length;
-    }
-  }
-  return max;
 };

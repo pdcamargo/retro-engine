@@ -41,6 +41,7 @@ import './ao.bench';
 import './gizmo-buffer.bench';
 import './scene-streaming.bench';
 import './animation-sampling.bench';
+import './nested-blend-tree.bench';
 import './pose-blend.bench';
 import './layer-blend.bench';
 import './ik-solve.bench';

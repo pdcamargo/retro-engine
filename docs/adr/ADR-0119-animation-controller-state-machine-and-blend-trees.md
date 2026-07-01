@@ -1,6 +1,7 @@
 # ADR-0119: Animation controller — state machine, blend trees, and transitions
 
-- **Status:** Accepted
+- **Status:** Superseded by ADR-0140 (blend-tree children now hold nested
+  recursive motions; the controller/state-machine/transition model here stands)
 - **Date:** 2026-06-25
 
 ## Context

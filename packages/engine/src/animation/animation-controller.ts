@@ -21,27 +21,30 @@ export interface ControllerParameter {
 }
 
 /**
- * What a state plays: a single clip, or a blend tree whose child clips are
- * weighted by one (1D) or two (2D) float parameters. Blend trees are motions
- * inside a state — there is no free-standing blend graph.
+ * What a state plays: a single clip, or a blend tree whose children are
+ * themselves {@link Motion}s weighted by one (1D) or two (2D) float parameters.
+ *
+ * Because every child is a full motion, blend trees nest arbitrarily deep: a
+ * child slot may hold another blend tree driven by a *different* parameter than
+ * its parent (e.g. an outer directional `blend2d` on `moveX`/`moveY` whose slots
+ * are each a `blend1d` on `speed`). A leaf is `{ kind: 'clip', clip }`. The
+ * driving parameter(s) live on the blend node, so each nesting level can key off
+ * its own parameter. Blend trees are motions inside a state — there is no
+ * free-standing blend graph.
  */
 export type Motion =
   | { readonly kind: 'clip'; readonly clip: Handle<AnimationClip> }
   | {
       readonly kind: 'blend1d';
       readonly parameter: string;
-      readonly children: readonly { readonly clip: Handle<AnimationClip>; readonly threshold: number }[];
+      readonly children: readonly { readonly motion: Motion; readonly threshold: number }[];
     }
   | {
       readonly kind: 'blend2d';
       readonly mode: Blend2dMode;
       readonly parameterX: string;
       readonly parameterY: string;
-      readonly children: readonly {
-        readonly clip: Handle<AnimationClip>;
-        readonly x: number;
-        readonly y: number;
-      }[];
+      readonly children: readonly { readonly motion: Motion; readonly x: number; readonly y: number }[];
     };
 
 /** One state in the machine: a name and the {@link Motion} it plays, with an optional speed multiplier. */
@@ -103,66 +106,100 @@ export interface MotionInput {
 }
 
 /**
- * Append a state's motion to `out` as weighted clip contributions. A clip motion
- * yields one input; a blend tree resolves its child weights from the float
- * parameter(s) via {@link weights1d}/{@link weights2d}, dropping zero-weight
- * children. Each clip is sampled at `phase × clipDuration`, so different-length
- * clips in one blend tree stay synchronized by normalized phase. `stateWeight`
- * scales every contribution (the cross-state crossfade weight). `weightScratch`
- * must be at least as long as the largest child count and is reused across calls.
+ * Per-nesting-level scratch for {@link evaluateMotion}. A recursive blend tree
+ * needs a distinct weight buffer at every depth (a parent's per-child weights
+ * must survive while it recurses into each child), plus a scratch for the blend
+ * node's thresholds (1D) or interleaved positions (2D). Buffers are keyed by
+ * depth, grown on demand, and reused across calls — so evaluating a nested tree
+ * allocates nothing on the steady-state per-frame path.
+ */
+export class MotionScratch {
+  private readonly weightBufs: Float32Array[] = [];
+  private readonly inputBufs: Float32Array[] = [];
+
+  /** Weight-output buffer for `depth`, at least `n` long. */
+  weightsAt(depth: number, n: number): Float32Array {
+    let buf = this.weightBufs[depth];
+    if (buf === undefined || buf.length < n) {
+      buf = new Float32Array(n);
+      this.weightBufs[depth] = buf;
+    }
+    return buf;
+  }
+
+  /** Threshold/position input buffer for `depth`, at least `len` long. */
+  inputAt(depth: number, len: number): Float32Array {
+    let buf = this.inputBufs[depth];
+    if (buf === undefined || buf.length < len) {
+      buf = new Float32Array(len);
+      this.inputBufs[depth] = buf;
+    }
+    return buf;
+  }
+}
+
+/**
+ * Append a motion to `out` as weighted clip contributions, recursing through
+ * nested blend trees. A clip motion yields one input weighted by `weight`; a
+ * blend tree resolves its per-child weights from the driving float parameter(s)
+ * via {@link weights1d}/{@link weights2d} and recurses into each child whose
+ * weight is positive, scaling the incoming `weight` by the child's share. So a
+ * leaf clip's final weight is the product of every blend weight along the path
+ * from the state down to it, times the cross-state crossfade `weight`.
+ *
+ * `phase` propagates down unchanged: every leaf clip is sampled at
+ * `phase × clipDuration`, keeping different-length clips synchronized by
+ * normalized phase across the whole nested structure. `scratch` supplies the
+ * per-depth weight and threshold/position buffers; `depth` is the current
+ * nesting level (0 at the state's root motion) and grows the scratch as needed.
  */
 export const evaluateMotion = (
   motion: Motion,
   phase: number,
-  stateWeight: number,
+  weight: number,
   getFloat: (name: string) => number,
   resolve: (handle: Handle<AnimationClip>) => AnimationClip | undefined,
-  weightScratch: Float32Array,
+  scratch: MotionScratch,
   out: MotionInput[],
+  depth = 0,
 ): void => {
-  if (stateWeight <= 0) return;
+  if (weight <= 0) return;
 
   if (motion.kind === 'clip') {
     const clip = resolve(motion.clip);
-    if (clip !== undefined) out.push({ clip, time: phase * clip.duration, weight: stateWeight });
+    if (clip !== undefined) out.push({ clip, time: phase * clip.duration, weight });
     return;
   }
 
   const n = motion.children.length;
   if (n === 0) return;
 
+  const weights = scratch.weightsAt(depth, n);
   if (motion.kind === 'blend1d') {
-    const thresholds: number[] = [];
-    for (let i = 0; i < n; i++) thresholds.push(motion.children[i]!.threshold);
-    weights1d(thresholds, getFloat(motion.parameter), weightScratch);
+    const thresholds = scratch.inputAt(depth, n);
+    for (let i = 0; i < n; i++) thresholds[i] = motion.children[i]!.threshold;
+    weights1d(thresholds, getFloat(motion.parameter), weights);
   } else {
-    const positions = new Float32Array(n * 2);
+    const positions = scratch.inputAt(depth, n * 2);
     for (let i = 0; i < n; i++) {
       positions[i * 2] = motion.children[i]!.x;
       positions[i * 2 + 1] = motion.children[i]!.y;
     }
-    weights2d(
-      motion.mode,
-      positions,
-      n,
-      getFloat(motion.parameterX),
-      getFloat(motion.parameterY),
-      weightScratch,
-    );
+    weights2d(motion.mode, positions, n, getFloat(motion.parameterX), getFloat(motion.parameterY), weights);
   }
 
-  // Both blend kinds share the `clip` field; weights are positional.
   for (let i = 0; i < n; i++) {
-    const w = weightScratch[i]!;
+    const w = weights[i]!;
     if (w <= 0) continue;
-    const clip = resolve(motion.children[i]!.clip);
-    if (clip !== undefined) {
-      out.push({ clip, time: phase * clip.duration, weight: stateWeight * w });
-    }
+    evaluateMotion(motion.children[i]!.motion, phase, weight * w, getFloat, resolve, scratch, out, depth + 1);
   }
 };
 
-/** The longest clip duration across a motion's clips — the state's representative period for phase advance. */
+/**
+ * The longest leaf-clip duration anywhere in a motion — the state's
+ * representative period for phase advance. Recurses through nested blend trees
+ * down to the clips.
+ */
 export const motionDuration = (
   motion: Motion,
   resolve: (handle: Handle<AnimationClip>) => AnimationClip | undefined,
@@ -170,7 +207,7 @@ export const motionDuration = (
   if (motion.kind === 'clip') return resolve(motion.clip)?.duration ?? 0;
   let max = 0;
   for (const child of motion.children) {
-    const d = resolve(child.clip)?.duration ?? 0;
+    const d = motionDuration(child.motion, resolve);
     if (d > max) max = d;
   }
   return max;

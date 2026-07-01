@@ -19,24 +19,26 @@ export class AnimationControllers extends Assets<AnimationController> {}
 export const ANIMATION_CONTROLLER_ASSET_KIND = 'AnimationController';
 
 /** Current `.ranimctrl` wire-format version. Bumped only on a breaking shape change. */
-export const ANIMATION_CONTROLLER_FORMAT_VERSION = 1;
+export const ANIMATION_CONTROLLER_FORMAT_VERSION = 2;
 
-// A motion's clip handles are written by GUID and resolved back through the
+// A motion's leaf clip handles are written by GUID and resolved back through the
 // AnimationClips store on load, so a controller round-trips independently of the
-// runtime slot a clip happens to occupy.
+// runtime slot a clip happens to occupy. Blend children carry a full nested
+// motion (which may itself be a blend tree), so the whole recursive structure is
+// serialized and clip handles are emitted/resolved only at the leaves.
 type SerializedMotion =
   | { readonly kind: 'clip'; readonly clip: string }
   | {
       readonly kind: 'blend1d';
       readonly parameter: string;
-      readonly children: readonly { readonly clip: string; readonly threshold: number }[];
+      readonly children: readonly { readonly motion: SerializedMotion; readonly threshold: number }[];
     }
   | {
       readonly kind: 'blend2d';
       readonly mode: Blend2dMode;
       readonly parameterX: string;
       readonly parameterY: string;
-      readonly children: readonly { readonly clip: string; readonly x: number; readonly y: number }[];
+      readonly children: readonly { readonly motion: SerializedMotion; readonly x: number; readonly y: number }[];
     };
 
 interface SerializedState {
@@ -67,7 +69,7 @@ const encodeMotion = (motion: Motion): SerializedMotion => {
     return {
       kind: 'blend1d',
       parameter: motion.parameter,
-      children: motion.children.map((c) => ({ clip: guidOf(c.clip), threshold: c.threshold })),
+      children: motion.children.map((c) => ({ motion: encodeMotion(c.motion), threshold: c.threshold })),
     };
   }
   return {
@@ -75,7 +77,7 @@ const encodeMotion = (motion: Motion): SerializedMotion => {
     mode: motion.mode,
     parameterX: motion.parameterX,
     parameterY: motion.parameterY,
-    children: motion.children.map((c) => ({ clip: guidOf(c.clip), x: c.x, y: c.y })),
+    children: motion.children.map((c) => ({ motion: encodeMotion(c.motion), x: c.x, y: c.y })),
   };
 };
 
@@ -87,7 +89,7 @@ const decodeMotion = (motion: SerializedMotion, clips: AnimationClips): Motion =
     return {
       kind: 'blend1d',
       parameter: motion.parameter,
-      children: motion.children.map((c) => ({ clip: resolve(c.clip), threshold: c.threshold })),
+      children: motion.children.map((c) => ({ motion: decodeMotion(c.motion, clips), threshold: c.threshold })),
     };
   }
   return {
@@ -95,7 +97,7 @@ const decodeMotion = (motion: SerializedMotion, clips: AnimationClips): Motion =
     mode: motion.mode,
     parameterX: motion.parameterX,
     parameterY: motion.parameterY,
-    children: motion.children.map((c) => ({ clip: resolve(c.clip), x: c.x, y: c.y })),
+    children: motion.children.map((c) => ({ motion: decodeMotion(c.motion, clips), x: c.x, y: c.y })),
   };
 };
 

@@ -1,7 +1,7 @@
 import type { AssetGuid, Handle } from '@retro-engine/assets';
 import { parseSubAssetGuid } from '@retro-engine/assets';
 import type { Entity } from '@retro-engine/ecs';
-import type { AnimationClip, AnimationController, App, RetargetRig } from '@retro-engine/engine';
+import type { AnimationClip, AnimationController, App, Motion, RetargetRig } from '@retro-engine/engine';
 import {
   AnimationClips,
   AnimationControllerPlayer,
@@ -216,12 +216,12 @@ export const addGltfAutoRetarget = (app: App): void => {
       // target rig (mutating the world), which must not happen while a query is
       // still iterating. Reading the controller asset here is mutation-free.
       const work: { player: Entity; clip: Handle<AnimationClip> }[] = [];
+      const addMotionClips = (motion: Motion, player: Entity): void => {
+        if (motion.kind === 'clip') work.push({ player, clip: motion.clip });
+        else for (const child of motion.children) addMotionClips(child.motion, player);
+      };
       const addControllerClips = (controller: AnimationController, player: Entity): void => {
-        for (const state of controller.states) {
-          const motion = state.motion;
-          if (motion.kind === 'clip') work.push({ player, clip: motion.clip });
-          else for (const child of motion.children) work.push({ player, clip: child.clip });
-        }
+        for (const state of controller.states) addMotionClips(state.motion, player);
       };
 
       for (const [player, comp] of players.entries()) {
