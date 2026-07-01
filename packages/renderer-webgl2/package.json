@@ -1,6 +1,6 @@
 {
   "name": "@retro-engine/renderer-webgl2",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "WebGL2 implementation of the Retro Engine renderer HAL. Stub — not implemented yet.",
   "type": "module",
   "main": "./src/index.ts",

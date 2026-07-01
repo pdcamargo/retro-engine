@@ -1,6 +1,6 @@
 {
   "name": "@retro-engine/editor-mcp",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Command registry + studio-side bridge for the Retro Engine MCP. Defines editor-control commands and connects the live studio to a studio-mcp-server relay. Browser/webview-safe.",
   "type": "module",
   "main": "./src/index.ts",

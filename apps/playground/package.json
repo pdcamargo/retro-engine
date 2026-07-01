@@ -1,6 +1,6 @@
 {
   "name": "@retro-engine/playground",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "private": true,
   "description": "Browser-only smoke-test app that hosts the engine without Tauri. Used to validate end-to-end engine features quickly.",
   "type": "module",

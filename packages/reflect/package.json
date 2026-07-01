@@ -1,6 +1,6 @@
 {
   "name": "@retro-engine/reflect",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Runtime type reflection for Retro Engine. A type registry keyed by stable name, a typed field-type vocabulary, and a JSON value codec for scene serialization.",
   "type": "module",
   "main": "./src/index.ts",

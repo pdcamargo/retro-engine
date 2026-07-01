@@ -1,6 +1,6 @@
 {
   "name": "@retro-engine/editor-platform",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Platform-host abstraction (preferences now; filesystem/dialogs later) for the studio. Browser-safe; the Tauri implementation lives in the app.",
   "type": "module",
   "main": "./src/index.ts",

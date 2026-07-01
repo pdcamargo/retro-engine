@@ -1,6 +1,6 @@
 {
   "name": "@retro-engine/renderer-core",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Hardware abstraction layer (HAL) for Retro Engine renderers. Interfaces only.",
   "type": "module",
   "main": "./src/index.ts",
