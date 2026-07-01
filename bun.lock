@@ -134,6 +134,14 @@
         "@retro-engine/assets": "workspace:*",
       },
     },
+    "packages/graph-editor": {
+      "name": "@retro-engine/graph-editor",
+      "version": "0.0.0",
+      "dependencies": {
+        "@retro-engine/editor-sdk": "workspace:*",
+        "@retro-engine/math": "workspace:*",
+      },
+    },
     "packages/math": {
       "name": "@retro-engine/math",
       "version": "0.0.0",
@@ -326,6 +334,8 @@
     "@retro-engine/engine": ["@retro-engine/engine@workspace:packages/engine"],
 
     "@retro-engine/gltf": ["@retro-engine/gltf@workspace:packages/gltf"],
+
+    "@retro-engine/graph-editor": ["@retro-engine/graph-editor@workspace:packages/graph-editor"],
 
     "@retro-engine/math": ["@retro-engine/math@workspace:packages/math"],
 
