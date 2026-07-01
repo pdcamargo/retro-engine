@@ -49,3 +49,14 @@ export {
 } from './ops';
 
 export { GRAPH_FORMAT_VERSION, serializeGraph, deserializeGraph } from './serialize';
+
+export type { PinShape, DataTypeDescriptor } from './data-type';
+export { BUILTIN_DATA_TYPES, DataTypeRegistry } from './data-type';
+export type { CategoryDescriptor } from './category';
+export { BUILTIN_CATEGORIES, CategoryRegistry } from './category';
+export type { FieldKind, FieldDescriptor } from './field';
+export type { PinDescriptor, NodeTypeDescriptor } from './node-type';
+export { NodeTypeRegistry } from './node-type';
+export type { ResolvedPin, ConnectRule, GraphKindOptions } from './kind';
+export { GraphKind, defaultConnectRule } from './kind';
+export { GraphEnvironment, createGraphEnvironment } from './environment';
