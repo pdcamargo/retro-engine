@@ -47,14 +47,15 @@ Each phase ends with something verifiable in the studio **Graph Editor Demo** pa
    (state nodes, transitions with arrowheads + midpoint badges, subgraph group,
    exec pins, subgraph typed rows). Two kinds coexist. ✅
 
-### Known follow-ups (small, non-blocking)
+### Post-review polish (done)
 
-- Direct-manipulation edits (node drag, field toggle, reroute drag) mutate the
-  document directly; routing them through the same `History` snapshot-command
-  (ADR-0139) so they undo like MCP edits is a tracked follow-up.
-- Context/VFX **stack** node style (`NodeStyle` has the slot; renders as a normal
-  node today).
-- Group move/resize interaction (groups render but aren't draggable yet).
+- Gesture panning: right-drag / middle-drag / Space+left-drag pan; left-drag
+  box-selects. Minimap viewport rect clamped (no canvas spill). ✅
+- Direct-manipulation undo: node/reroute/group drag, connect, field toggle, and
+  delete record on the editor `History` (ADR-0139), alongside MCP edits. ✅
+- Context/VFX **stack** node style (phosphor cap + stacked field blocks). ✅
+- Group **move** (drag the title tab, members follow) and **resize** (bottom-right
+  handle), with Delete to remove. ✅
 
 ## Out of scope (future backlog when promoted)
 
