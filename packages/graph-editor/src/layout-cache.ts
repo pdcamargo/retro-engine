@@ -135,9 +135,10 @@ export const buildLayout = (doc: GraphDocument, env: GraphEnvironment, geo: Grap
 export const pinAnchor = (layout: NodeLayout, pin: string, dir: 'in' | 'out'): Point | undefined =>
   (dir === 'in' ? layout.inputs : layout.outputs).find((p) => p.name === pin)?.anchor;
 
-/** What a world-space point is over: a pin, a reroute knot, or a node body. */
+/** What a world-space point is over. */
 export type PickResult =
   | { readonly k: 'pin'; readonly node: NodeId; readonly pin: string; readonly dir: 'in' | 'out' }
+  | { readonly k: 'field'; readonly node: NodeId; readonly name: string }
   | { readonly k: 'reroute'; readonly id: string }
   | { readonly k: 'node'; readonly id: NodeId };
 
@@ -148,26 +149,19 @@ const dist2 = (a: Point, bx: number, by: number): number => {
 };
 
 /**
- * Hit-test a world point against the layout, top-most first. Precedence: pins
- * (small edge targets) → reroute knots → node bodies. `pinRadius` /
- * `rerouteRadius` are world-space hit radii (a caller derives them from geometry
- * and zoom so the target stays comfortable to click at any zoom).
+ * Hit-test a world point against the layout, top-most first. Within a node the
+ * precedence is pins → fields → body; reroute knots are tested before nodes.
+ * `pinRadius` / `rerouteRadius` / `rowHalf` are world-space hit sizes (a caller
+ * derives them from geometry + zoom so targets stay comfortable at any zoom).
  */
 export const pick = (
   layout: GraphLayout,
   doc: GraphDocument,
   wx: number,
   wy: number,
-  opts: { pinRadius: number; rerouteRadius: number },
+  opts: { pinRadius: number; rerouteRadius: number; rowHalf: number },
 ): PickResult | null => {
   const pinR2 = opts.pinRadius * opts.pinRadius;
-  // Nodes top-most first: pins beat the node body they sit on.
-  for (let i = doc.nodeOrder.length - 1; i >= 0; i--) {
-    const nl = layout.nodes.get(doc.nodeOrder[i]!);
-    if (nl === undefined) continue;
-    for (const pin of nl.inputs) if (dist2(pin.anchor, wx, wy) <= pinR2) return { k: 'pin', node: nl.id, pin: pin.name, dir: 'in' };
-    for (const pin of nl.outputs) if (dist2(pin.anchor, wx, wy) <= pinR2) return { k: 'pin', node: nl.id, pin: pin.name, dir: 'out' };
-  }
   const rerouteR2 = opts.rerouteRadius * opts.rerouteRadius;
   for (const r of Object.values(doc.reroutes)) {
     if (dist2(r.pos, wx, wy) <= rerouteR2) return { k: 'reroute', id: r.id };
@@ -175,7 +169,13 @@ export const pick = (
   for (let i = doc.nodeOrder.length - 1; i >= 0; i--) {
     const nl = layout.nodes.get(doc.nodeOrder[i]!);
     if (nl === undefined) continue;
-    if (wx >= nl.x && wx <= nl.x + nl.w && wy >= nl.y && wy <= nl.y + nl.h) return { k: 'node', id: nl.id };
+    for (const pin of nl.inputs) if (dist2(pin.anchor, wx, wy) <= pinR2) return { k: 'pin', node: nl.id, pin: pin.name, dir: 'in' };
+    for (const pin of nl.outputs) if (dist2(pin.anchor, wx, wy) <= pinR2) return { k: 'pin', node: nl.id, pin: pin.name, dir: 'out' };
+    const inside = wx >= nl.x && wx <= nl.x + nl.w && wy >= nl.y && wy <= nl.y + nl.h;
+    if (inside) {
+      for (const f of nl.fields) if (Math.abs(wy - f.cy) <= opts.rowHalf) return { k: 'field', node: nl.id, name: f.name };
+      return { k: 'node', id: nl.id };
+    }
   }
   return null;
 };

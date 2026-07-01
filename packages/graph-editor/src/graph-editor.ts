@@ -100,6 +100,18 @@ export const GraphEditor = {
     // Wires behind nodes.
     for (const edge of Object.values(doc.edges)) drawEdge(draw, edge, layout, origin, params);
 
+    // Reroute weight-points, colored by their edge's data type, above wires.
+    for (const knot of Object.values(doc.reroutes)) {
+      const edge = doc.edges[knot.edge];
+      const dt = edge !== undefined ? env.edgeDataType(doc, edge) : undefined;
+      const col = dt !== undefined ? theme.colorFor(dt.name, dt.color) : theme.chrome.textMuted;
+      const c = worldToScreen(view, origin, knot.pos[0], knot.pos[1]);
+      const r = (theme.geo.rerouteSize * view.zoom) / 2;
+      draw.circleFilled(c, r, col);
+      draw.circle(c, r, theme.pack('#0a0f0c'), Math.max(1, 2 * view.zoom));
+      if (view.rerouteSelection.has(knot.id)) draw.circle(c, r + 2 * view.zoom, theme.chrome.selection, Math.max(1, view.zoom));
+    }
+
     // Nodes back-to-front.
     for (const id of doc.nodeOrder) {
       const node = doc.nodes[id];

@@ -16,7 +16,7 @@ export type Interaction =
   | { k: 'panning'; startMouse: Vec2; startPan: Vec2 }
   | { k: 'marquee'; startWorld: Point; additive: boolean }
   | { k: 'dragNode'; ids: NodeId[]; startMouse: Point; starts: Map<NodeId, Point>; moved: boolean }
-  | { k: 'dragReroute'; id: RerouteId; startMouse: Point; start: Point }
+  | { k: 'dragReroute'; id: RerouteId; grab: Point }
   | { k: 'connecting'; from: PinRef; dir: 'in' | 'out'; candidate: PinRef | null };
 
 /** What the pointer is currently over (recomputed each frame). */
@@ -38,6 +38,8 @@ export interface GraphView {
   selection: Set<NodeId>;
   /** Selected edge ids. */
   edgeSelection: Set<EdgeId>;
+  /** Selected reroute-knot ids. */
+  rerouteSelection: Set<RerouteId>;
   /** Whether the CRT scanline overlay is drawn. */
   scanlines: boolean;
   /** Set once the user has panned or zoomed — lets a host auto-frame until then. */
@@ -54,6 +56,7 @@ export const createGraphView = (opts?: Partial<Pick<GraphView, 'pan' | 'zoom' | 
   maxZoom: 2,
   selection: new Set(),
   edgeSelection: new Set(),
+  rerouteSelection: new Set(),
   scanlines: opts?.scanlines ?? true,
   userNavigated: false,
   interaction: { k: 'idle' },

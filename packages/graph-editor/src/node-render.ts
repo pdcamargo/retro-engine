@@ -9,6 +9,7 @@ import type { Draw, Vec2 } from '@retro-engine/editor-sdk';
 
 import type { GraphNode, HeaderVariant, Point } from './document';
 import type { GraphEnvironment } from './environment';
+import type { FieldDescriptor } from './field';
 import type { NodeLayout, PinLayout } from './layout-cache';
 import type { NodeTypeDescriptor } from './node-type';
 import type { GraphTheme } from './theme';
@@ -106,15 +107,17 @@ export const drawNode = (p: DrawNodeParams): void => {
     return;
   }
 
-  // Field rows (P3: label + inset well placeholder; real widgets land later).
+  // Field rows: inset wells rendering the live value per field kind.
   if (z >= TEXT_LOD) {
     const labelSize = geo.fontLabel * z;
-    for (const f of layout.fields) {
+    for (let i = 0; i < layout.fields.length; i++) {
+      const f = layout.fields[i]!;
+      const fd = type?.fields?.[i];
       const cyS = worldToScreen(view, origin, layout.x, f.cy)[1];
-      draw.textAt([min[0] + 10 * z, cyS - labelSize / 2], withA(theme.chrome.textMuted), f.name, { size: labelSize });
-      const wx0 = min[0] + Math.min(70 * z, layout.w * z * 0.5);
-      draw.rectFilled([wx0, cyS - 8 * z], [max[0] - 8 * z, cyS + 8 * z], withA(theme.chrome.wellBg), 2 * z);
-      draw.rect([wx0, cyS - 8 * z], [max[0] - 8 * z, cyS + 8 * z], withA(theme.chrome.border), 2 * z, 1);
+      const hasLabel = fd?.label !== '' && fd !== undefined;
+      if (hasLabel) draw.textAt([min[0] + 10 * z, cyS - labelSize / 2], withA(theme.chrome.textMuted), fd?.label ?? f.name, { size: labelSize });
+      const wx0 = hasLabel ? min[0] + Math.min(70 * z, layout.w * z * 0.5) : min[0] + 10 * z;
+      drawField(p, fd, node.fieldValues[f.name] ?? fd?.default, [wx0, cyS - 8 * z], [max[0] - 8 * z, cyS + 8 * z], withA);
     }
     // Row labels next to pins.
     const labelFor = (pin: PinLayout, out: boolean): void => {
@@ -149,6 +152,69 @@ const drawPins = (p: DrawNodeParams, pins: readonly PinLayout[]): void => {
     const soft = theme.softFor(pin.type, env.dataTypes.get(pin.type)?.color ?? '#34e07a');
     if (isExec(env, pin.type)) drawExecPin(draw, c, theme.geo.pinExec * z, col, theme.chrome.bodyBg, on);
     else drawDataPin(draw, c, (theme.geo.pinDot * z) / 2, col, theme.chrome.bodyBg, soft, on, Math.max(1, theme.geo.pinRing * z), hovered);
+  }
+};
+
+/** Render one embedded field's inset well, showing its live value per kind. */
+const drawField = (
+  p: DrawNodeParams,
+  fd: FieldDescriptor | undefined,
+  value: unknown,
+  mn: Point,
+  mx: Point,
+  withA: (c: number) => number,
+): void => {
+  const { draw, theme, view } = p;
+  const z = view.zoom;
+  const wellBg = withA(theme.chrome.wellBg);
+  const border = withA(theme.chrome.border);
+  const on = withA(theme.pack('#34e07a'));
+  const h = mx[1] - mn[1];
+  const midY = mn[1] + h / 2;
+  const textSize = theme.geo.fontLabel * z;
+  const kind = fd?.kind ?? 'text';
+
+  if (kind === 'swatch') {
+    const col = typeof value === 'string' ? theme.pack(value) : theme.pack('#ff5cc8');
+    draw.rectFilled(mn, mx, withA(col), 2 * z);
+    draw.rect(mn, mx, border, 2 * z, 1);
+    return;
+  }
+  if (kind === 'toggle') {
+    const w = h * 1.9;
+    const trackMax: Point = [mn[0] + w, mx[1]];
+    draw.rectFilled(mn, trackMax, value === true ? withA(theme.pack('#34e07a', 90)) : wellBg, h / 2);
+    draw.rect(mn, trackMax, value === true ? on : border, h / 2, 1);
+    const kr = h / 2 - 2 * z;
+    const kx = value === true ? mn[0] + w - kr - 2 * z : mn[0] + kr + 2 * z;
+    draw.circleFilled([kx, midY], kr, value === true ? on : withA(theme.chrome.textMuted));
+    return;
+  }
+  if (kind === 'checkbox') {
+    const box: Point = [mn[0] + h, mx[1]];
+    draw.rectFilled(mn, box, value === true ? on : wellBg, 2 * z);
+    draw.rect(mn, box, value === true ? on : border, 2 * z, 1);
+    if (value === true) {
+      draw.line([mn[0] + h * 0.25, midY], [mn[0] + h * 0.45, mx[1] - h * 0.28], withA(theme.chrome.canvasBg), Math.max(1, 1.5 * z));
+      draw.line([mn[0] + h * 0.45, mx[1] - h * 0.28], [mn[0] + h * 0.78, mn[1] + h * 0.28], withA(theme.chrome.canvasBg), Math.max(1, 1.5 * z));
+    }
+    return;
+  }
+  // combo / number / text: an inset well with the value text.
+  draw.rectFilled(mn, mx, wellBg, 2 * z);
+  draw.rect(mn, mx, border, 2 * z, 1);
+  if (z >= 0.4) {
+    const text = value === undefined || value === null ? '' : String(value);
+    if (kind === 'number') {
+      const wpx = text.length * textSize * 0.6;
+      draw.textAt([mx[0] - 6 * z - wpx, midY - textSize / 2], withA(theme.chrome.textBright), text, { size: textSize });
+    } else {
+      draw.textAt([mn[0] + 6 * z, midY - textSize / 2], withA(theme.chrome.textBright), text, { size: textSize });
+    }
+    if (kind === 'combo') {
+      const cx = mx[0] - 8 * z;
+      draw.triFilled([cx - 3 * z, midY - 2 * z], [cx + 3 * z, midY - 2 * z], [cx, midY + 3 * z], withA(theme.chrome.textFaint));
+    }
   }
 };
 

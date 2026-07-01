@@ -22,7 +22,7 @@ kind.nodeTypes.register({
 
 const doc = makeGridGraph(500);
 const layout = buildLayout(doc, env, DEFAULT_GEOMETRY);
-const opts = { pinRadius: 7, rerouteRadius: 9 };
+const opts = { pinRadius: 7, rerouteRadius: 9, rowHalf: 11 };
 
 summary(() => {
   bench('pick miss (empty space, 500 nodes)', function* () {

@@ -21,7 +21,7 @@ const setup = () => {
   return { env, doc, n, layout, nl: layout.nodes.get(n.id)! };
 };
 
-const OPTS = { pinRadius: 7, rerouteRadius: 9 };
+const OPTS = { pinRadius: 7, rerouteRadius: 9, rowHalf: 11 };
 
 describe('pick', () => {
   it('returns null over empty space', () => {
@@ -47,6 +47,18 @@ describe('pick', () => {
     const o = nl.outputs[0]!.anchor;
     const hit = pick(layout, doc, o[0], o[1], OPTS);
     expect(hit).toEqual({ k: 'pin', node: n.id, pin: 'out', dir: 'out' });
+  });
+
+  it('hits a field row (field beats the node body)', () => {
+    const env = createGraphEnvironment();
+    const kind = env.registerKind({ id: 'k' });
+    kind.nodeTypes.register({ type: 'Op', category: 'math', fields: [{ name: 'mode', kind: 'combo', options: ['A', 'B'] }] });
+    const doc = createGraphDocument({ kindId: 'k' });
+    const n = addNode(doc, { typeId: 'Op', pos: [0, 0] });
+    const layout = buildLayout(doc, env, DEFAULT_GEOMETRY);
+    const f = layout.nodes.get(n.id)!.fields[0]!;
+    const hit = pick(layout, doc, 20, f.cy, OPTS);
+    expect(hit).toEqual({ k: 'field', node: n.id, name: 'mode' });
   });
 
   it('picks the top-most node when two overlap', () => {

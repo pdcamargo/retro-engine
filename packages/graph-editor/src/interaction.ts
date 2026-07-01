@@ -11,7 +11,17 @@ import { Keys, type Ui, type Vec2 } from '@retro-engine/editor-sdk';
 import type { EdgeId, GraphDocument, NodeId, Point } from './document';
 import type { GraphEnvironment } from './environment';
 import { type GraphLayout, pick, type PickResult, pinAnchor } from './layout-cache';
-import { connect, disconnect, moveNode, removeNode, raiseNode } from './ops';
+import {
+  addReroute,
+  connect,
+  disconnect,
+  moveNode,
+  moveReroute,
+  removeNode,
+  removeReroute,
+  raiseNode,
+  setFieldValue,
+} from './ops';
 import type { GraphGeometry } from './theme';
 import { type GraphView, type Hover, screenToWorld, worldToScreen } from './view';
 import { wireDistance } from './wire';
@@ -32,13 +42,30 @@ export interface InteractionCtx {
 const clearSelection = (view: GraphView): void => {
   view.selection.clear();
   view.edgeSelection.clear();
+  view.rerouteSelection.clear();
 };
 
 const hitToHover = (hit: PickResult | null): Hover | null => {
-  if (hit === null) return null;
+  if (hit === null || hit.k === 'field') return null;
   if (hit.k === 'node') return { k: 'node', id: hit.id };
   if (hit.k === 'reroute') return { k: 'reroute', id: hit.id };
   return { k: 'pin', ref: { node: hit.node, pin: hit.pin }, dir: hit.dir };
+};
+
+/** Toggle/cycle a clicked embedded field. Continuous fields (number/swatch) are no-ops here. */
+const editField = (ctx: InteractionCtx, nodeId: NodeId, name: string): void => {
+  const { doc, env } = ctx;
+  const node = doc.nodes[nodeId];
+  if (node === undefined) return;
+  const fd = env.kind(doc.kindId)?.nodeTypes.get(node.typeId)?.fields?.find((f) => f.name === name);
+  if (fd === undefined) return;
+  const cur = node.fieldValues[name] ?? fd.default;
+  if (fd.kind === 'toggle' || fd.kind === 'checkbox') {
+    setFieldValue(doc, nodeId, name, cur !== true);
+  } else if (fd.kind === 'combo' && fd.options !== undefined && fd.options.length > 0) {
+    const i = Math.max(0, fd.options.indexOf(String(cur)));
+    setFieldValue(doc, nodeId, name, fd.options[(i + 1) % fd.options.length]);
+  }
 };
 
 /** Screen-space wire hit-test: the id of the wire nearest the point within tolerance, else null. */
@@ -78,13 +105,23 @@ export const updateInteraction = (ctx: InteractionCtx): PickResult | null => {
   const world = screenToWorld(view, origin, mouse[0], mouse[1]);
   const pinRadius = Math.max(geo.pinDot / 2 + 2, 8 / view.zoom);
   const rerouteRadius = Math.max(geo.rerouteSize / 2, 9 / view.zoom);
-  const hit = hovered ? pick(layout, doc, world[0], world[1], { pinRadius, rerouteRadius }) : null;
+  const hit = hovered ? pick(layout, doc, world[0], world[1], { pinRadius, rerouteRadius, rowHalf: geo.rowH / 2 }) : null;
 
   const st = view.interaction;
   switch (st.k) {
     case 'idle':
     case 'panning':
-      if (hovered && ui.isMouseClicked(0)) startLeftPress(ctx, hit, world);
+      // Double-click on a wire drops a reroute weight-point there.
+      if (hovered && ui.isMouseDoubleClicked(0) && (hit === null || hit.k === 'reroute')) {
+        const edgeId = pickEdge(ctx, mouse[0], mouse[1]);
+        if (edgeId !== null) addReroute(doc, edgeId, [world[0], world[1]], insertIndexFor(ctx, edgeId, world[0]));
+      } else if (hovered && ui.isMouseClicked(0)) {
+        startLeftPress(ctx, hit, world);
+      }
+      break;
+    case 'dragReroute':
+      if (ui.isMouseDown(0)) moveReroute(doc, st.id, [world[0] - st.grab[0], world[1] - st.grab[1]]);
+      else view.interaction = { k: 'idle' };
       break;
     case 'dragNode': {
       if (ui.isMouseDown(0)) {
@@ -136,6 +173,11 @@ const startLeftPress = (ctx: InteractionCtx, hit: PickResult | null, world: Poin
   const { doc, view, ui } = ctx;
   const additive = ui.keyShift() || ui.keyCtrl();
 
+  if (hit?.k === 'field') {
+    editField(ctx, hit.node, hit.name);
+    return;
+  }
+
   if (hit?.k === 'node') {
     if (view.selection.has(hit.id)) {
       if (additive) view.selection.delete(hit.id);
@@ -158,8 +200,13 @@ const startLeftPress = (ctx: InteractionCtx, hit: PickResult | null, world: Poin
     return;
   }
 
-  // Reroute dragging lands in the next phase.
-  if (hit?.k === 'reroute') return;
+  if (hit?.k === 'reroute') {
+    if (!additive) clearSelection(view);
+    view.rerouteSelection.add(hit.id);
+    const knot = doc.reroutes[hit.id];
+    if (knot !== undefined) view.interaction = { k: 'dragReroute', id: hit.id, grab: [world[0] - knot.pos[0], world[1] - knot.pos[1]] };
+    return;
+  }
 
   // Empty canvas: select a wire under the cursor, else begin a marquee.
   const mouse = ui.mousePos();
@@ -171,6 +218,18 @@ const startLeftPress = (ctx: InteractionCtx, hit: PickResult | null, world: Poin
   }
   if (!additive) clearSelection(view);
   view.interaction = { k: 'marquee', startWorld: [world[0], world[1]], additive };
+};
+
+/** Where to insert a new reroute among an edge's existing knots, ordered by world x. */
+const insertIndexFor = (ctx: InteractionCtx, edgeId: string, wx: number): number => {
+  const edge = ctx.doc.edges[edgeId];
+  if (edge === undefined) return 0;
+  let i = 0;
+  for (const knotId of edge.via) {
+    const r = ctx.doc.reroutes[knotId];
+    if (r !== undefined && r.pos[0] < wx) i++;
+  }
+  return i;
 };
 
 const applyMarquee = (ctx: InteractionCtx, a: Point, b: Point, additive: boolean): void => {
@@ -188,6 +247,7 @@ const applyMarquee = (ctx: InteractionCtx, a: Point, b: Point, additive: boolean
 const handleKeys = (ctx: InteractionCtx): void => {
   const { ui, doc, view } = ctx;
   if (ui.isKeyPressed(Keys.Delete) || ui.isKeyPressed(Keys.Backspace)) {
+    for (const id of view.rerouteSelection) removeReroute(doc, id);
     for (const id of view.edgeSelection) disconnect(doc, id);
     for (const id of view.selection) removeNode(doc, id);
     clearSelection(view);
