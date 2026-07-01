@@ -19,13 +19,18 @@ export interface PinDescriptor {
   readonly label?: string;
 }
 
+/** How a node is shaped/rendered: a standard node, a state-machine state, or a context/stack block. */
+export type NodeStyle = 'node' | 'state' | 'stack';
+
 /** Describes a kind of node: its look, its pins, and its embedded fields. */
 export interface NodeTypeDescriptor {
   /** Unique type id within its owning kind. */
   readonly type: string;
   /** Category name (see {@link CategoryRegistry}); drives the header accent color. */
   readonly category: string;
-  /** Header treatment. Defaults to `'stripe'`. */
+  /** Render style. Defaults to `'node'`. */
+  readonly style?: NodeStyle;
+  /** Header treatment (for `'node'` style). Defaults to `'stripe'`. */
   readonly header?: HeaderVariant;
   /** Lucide icon name shown in the header; resolved by the host. */
   readonly icon?: string;

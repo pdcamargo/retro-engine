@@ -18,6 +18,7 @@ import {
   GraphHost,
   type GraphTheme,
   type GraphView,
+  mintId,
 } from '@retro-engine/graph-editor';
 
 /** The shared demo state: the host (registered as an App resource) + this view's transform. */
@@ -137,8 +138,66 @@ export const createGraphDemo = (): GraphDemo => {
   const col = addNode(doc, { typeId: 'Multiply', pos: [300, 480], title: 'Collapsed' });
   col.collapsed = true;
 
+  // A second kind — a flow / state machine — to prove multiple kinds coexist in
+  // one environment: exec pins, state nodes, transitions, a subgraph group.
+  const flow = env.registerKind({ id: 'flow', label: 'Flow / State' });
+  flow.nodeTypes
+    .register({ type: 'Entry', category: 'input', style: 'state', sub: 'entry' })
+    .register({ type: 'State', category: 'flow', style: 'state', sub: 'loop' })
+    .register({
+      type: 'Branch',
+      category: 'logic',
+      header: 'solid',
+      sub: 'flow',
+      inputs: [
+        { name: 'exec', type: 'exec' },
+        { name: 'cond', type: 'bool' },
+      ],
+      outputs: [
+        { name: 'true', type: 'exec' },
+        { name: 'false', type: 'exec' },
+      ],
+    })
+    .register({
+      type: 'Subgraph',
+      category: 'subgraph',
+      header: 'stripe',
+      sub: 'subgraph',
+      inputs: [
+        { name: 'Boolean', type: 'bool' },
+        { name: 'Float', type: 'float' },
+        { name: 'Vector', type: 'vector' },
+        { name: 'Color', type: 'color' },
+        { name: 'Texture', type: 'texture' },
+      ],
+      outputs: [{ name: 'Output', type: 'object' }],
+      fields: [{ name: 'mode', kind: 'combo', options: ['Add', 'Blend'], default: 'Blend' }],
+    });
+
+  const flowDoc = createGraphDocument({ kindId: 'flow' });
+  const entry = addNode(flowDoc, { typeId: 'Entry', pos: [60, 60], title: 'Entry' });
+  const idle = addNode(flowDoc, { typeId: 'State', pos: [270, 60], title: 'Idle' });
+  const walk = addNode(flowDoc, { typeId: 'State', pos: [480, 20], title: 'Walk' });
+  const jump = addNode(flowDoc, { typeId: 'State', pos: [480, 150], title: 'Jump' });
+  const transition = (a: string, b: string, label?: string): void => {
+    const e = connect(flowDoc, { node: a, pin: '' }, { node: b, pin: '' });
+    if (e !== undefined) {
+      e.style = 'transition';
+      if (label !== undefined) e.label = label;
+    }
+  };
+  transition(entry.id, idle.id);
+  transition(idle.id, walk.id, 'W');
+  transition(walk.id, jump.id, 'J');
+  transition(jump.id, idle.id, 'L');
+  addNode(flowDoc, { typeId: 'Branch', pos: [60, 300] });
+  addNode(flowDoc, { typeId: 'Subgraph', pos: [320, 300] });
+  const gid = mintId(flowDoc, 'group');
+  flowDoc.groups[gid] = { id: gid, rect: [40, 10, 620, 220], title: 'State Machine', categoryId: 'flow' };
+
   const host = new GraphHost(env);
   host.open(doc);
+  host.open(flowDoc);
   return { host, view, theme: createGraphTheme(), fitRequested: false };
 };
 
@@ -159,6 +218,16 @@ export const graphDemoPanel = (demo: GraphDemo): PanelDef => ({
       if (ui.button('Fit')) d.fitRequested = true;
       ui.sameLine(0, 6);
       if (ui.button(d.view.scanlines ? 'Scanlines ✓' : 'Scanlines')) d.view.scanlines = !d.view.scanlines;
+      ui.sameLine(0, 6);
+      const docs = d.host.list();
+      if (docs.length > 1 && ui.button(`Kind: ${doc.kindId}`)) {
+        const i = docs.findIndex((x) => x.guid === doc.guid);
+        d.host.setActive(docs[(i + 1) % docs.length]!.guid);
+        d.view.userNavigated = false; // re-frame the newly active document
+        d.view.selection.clear();
+        d.view.edgeSelection.clear();
+        d.view.rerouteSelection.clear();
+      }
       ui.sameLine(0, 12);
       ui.textMuted(`zoom ${Math.round(d.view.zoom * 100)}%  ·  ${doc.nodeOrder.length} nodes  ·  ${Object.keys(doc.edges).length} wires`);
     });

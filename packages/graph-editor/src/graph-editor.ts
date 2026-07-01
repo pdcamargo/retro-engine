@@ -14,6 +14,7 @@ import type { GraphEnvironment } from './environment';
 import { updateInteraction } from './interaction';
 import { buildLayout, type GraphLayout, pinAnchor } from './layout-cache';
 import { drawNode, pinKey } from './node-render';
+import { drawMinimap, drawStatus, minimapNavigate } from './overlays';
 import type { GraphTheme } from './theme';
 import { type GraphView, worldToScreen } from './view';
 import { drawWire } from './wire';
@@ -26,6 +27,23 @@ export interface GraphDrawParams {
   readonly env: GraphEnvironment;
   readonly theme: GraphTheme;
 }
+
+const dashedRect = (draw: Draw, mn: Point, mx: Point, col: number, dash: number, gap: number, th: number): void => {
+  const seg = (x0: number, y0: number, x1: number, y1: number): void => {
+    const len = Math.hypot(x1 - x0, y1 - y0);
+    if (len === 0) return;
+    const dx = (x1 - x0) / len;
+    const dy = (y1 - y0) / len;
+    for (let s = 0; s < len; s += dash + gap) {
+      const e = Math.min(s + dash, len);
+      draw.line([x0 + dx * s, y0 + dy * s], [x0 + dx * e, y0 + dy * e], col, th);
+    }
+  };
+  seg(mn[0], mn[1], mx[0], mn[1]);
+  seg(mx[0], mn[1], mx[0], mx[1]);
+  seg(mx[0], mx[1], mn[0], mx[1]);
+  seg(mn[0], mx[1], mn[0], mn[1]);
+};
 
 const connectedPins = (doc: GraphDocument): Set<string> => {
   const set = new Set<string>();
@@ -47,6 +65,32 @@ const drawEdge = (
   const fromL = layout.nodes.get(edge.from.node);
   const toL = layout.nodes.get(edge.to.node);
   if (fromL === undefined || toL === undefined) return;
+
+  if (edge.style === 'transition') {
+    // State-machine transition: connect node edges (not pins), arrowhead + badge.
+    const rightward = toL.x + toL.w / 2 >= fromL.x + fromL.w / 2;
+    const aw: Point = [rightward ? fromL.x + fromL.w : fromL.x, fromL.y + fromL.headerH / 2];
+    const bw: Point = [rightward ? toL.x : toL.x + toL.w, toL.y + toL.headerH / 2];
+    const a = worldToScreen(view, origin, aw[0], aw[1]);
+    const b = worldToScreen(view, origin, bw[0], bw[1]);
+    const selected = view.edgeSelection.has(edge.id);
+    const col = selected ? theme.chrome.selection : theme.pack('#8a938d');
+    drawWire(draw, [a, b], col, (selected ? theme.geo.wireWSel : theme.geo.wireW) * view.zoom, view.zoom);
+    // Arrowhead at the target, pointing into the node.
+    const dir = rightward ? 1 : -1;
+    const s = 7 * view.zoom;
+    draw.triFilled([b[0], b[1] - s * 0.7], [b[0], b[1] + s * 0.7], [b[0] + dir * s, b[1]], col);
+    // Midpoint glyph badge.
+    const mid: Point = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+    const r = 9 * view.zoom;
+    draw.circleFilled(mid, r, theme.chrome.headerBg);
+    draw.circle(mid, r, selected ? theme.chrome.selection : theme.chrome.borderStrong, Math.max(1, view.zoom));
+    if (edge.label !== undefined && view.zoom >= 0.4) {
+      draw.textAt([mid[0] - edge.label.length * 3 * view.zoom, mid[1] - 5 * view.zoom], theme.chrome.textMuted, edge.label, { size: 9 * view.zoom });
+    }
+    return;
+  }
+
   const a = pinAnchor(fromL, edge.from.pin, 'out');
   const b = pinAnchor(toL, edge.to.pin, 'in');
   if (a === undefined || b === undefined) return;
@@ -86,8 +130,11 @@ export const GraphEditor = {
     // (which may move nodes), then rebuild the layout so wires/pins track nodes
     // within the same frame (no one-frame drag lag).
     const pickLayout = buildLayout(doc, env, theme.geo);
-    handleNavigation(ui, view, origin, hovered);
-    updateInteraction({ ui, doc, view, env, origin, layout: pickLayout, geo: theme.geo, hovered });
+    // Minimap click/drag navigation takes precedence over canvas interaction.
+    const overMinimap = minimapNavigate(ui, pickLayout, view, origin, size);
+    const canvasHovered = hovered && !overMinimap;
+    handleNavigation(ui, view, origin, canvasHovered);
+    updateInteraction({ ui, doc, view, env, origin, layout: pickLayout, geo: theme.geo, hovered: canvasHovered });
 
     const layout = buildLayout(doc, env, theme.geo);
     const draw = Draw.window();
@@ -96,6 +143,21 @@ export const GraphEditor = {
 
     const connected = connectedPins(doc);
     const kind = env.kind(doc.kindId);
+
+    // Subgraph groups behind everything: translucent tint, dashed border, title tab.
+    for (const g of Object.values(doc.groups)) {
+      const catHex = (g.categoryId !== undefined ? env.categories.get(g.categoryId)?.color : undefined) ?? '#67a6fb';
+      const mn = worldToScreen(view, origin, g.rect[0], g.rect[1]);
+      const mx: Point = [mn[0] + g.rect[2] * view.zoom, mn[1] + g.rect[3] * view.zoom];
+      draw.rectFilled(mn, mx, theme.pack(catHex, 18), 6 * view.zoom);
+      dashedRect(draw, mn, mx, theme.pack(catHex), 6 * view.zoom, 4 * view.zoom, Math.max(1, view.zoom));
+      if (view.zoom >= 0.4) {
+        const tabH = 16 * view.zoom;
+        const tabW = (g.title.length * 6.5 + 16) * view.zoom;
+        draw.rectFilled([mn[0], mn[1] - tabH], [mn[0] + tabW, mn[1]], theme.pack(catHex, 70), 3 * view.zoom);
+        draw.textAt([mn[0] + 8 * view.zoom, mn[1] - tabH + 2 * view.zoom], theme.chrome.textBright, g.title, { size: theme.geo.fontLabel * view.zoom });
+      }
+    }
 
     // Wires behind nodes.
     for (const edge of Object.values(doc.edges)) drawEdge(draw, edge, layout, origin, params);
@@ -165,6 +227,10 @@ export const GraphEditor = {
       draw.rectFilled([Math.min(a[0], m[0]), Math.min(a[1], m[1])], [Math.max(a[0], m[0]), Math.max(a[1], m[1])], theme.pack('#ffc233', 30));
       draw.rect([Math.min(a[0], m[0]), Math.min(a[1], m[1])], [Math.max(a[0], m[0]), Math.max(a[1], m[1])], theme.chrome.selection, 0, 1);
     }
+
+    // Overlays (above nodes): minimap + status chip.
+    drawMinimap(draw, doc, layout, view, env, theme, origin, size);
+    drawStatus(draw, doc, view, theme, origin, size);
   },
 
   /** Frame all nodes in the current region with padding. Call after a layout pass. */

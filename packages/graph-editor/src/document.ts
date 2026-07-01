@@ -63,6 +63,14 @@ export interface GraphEdge {
   to: PinRef;
   /** Ordered reroute-knot ids the wire threads through, source→target. */
   via: RerouteId[];
+  /**
+   * Render style. A `'transition'` edge (state-machine paradigm) draws an
+   * arrowhead at the target and a glyph badge at its midpoint, connecting node
+   * edges rather than typed pins. Omitted = a normal typed data/exec wire.
+   */
+  style?: 'transition';
+  /** Optional short glyph/label shown on a transition's midpoint badge. */
+  label?: string;
 }
 
 /** A draggable "weight point" an edge threads through to organize its routing. */

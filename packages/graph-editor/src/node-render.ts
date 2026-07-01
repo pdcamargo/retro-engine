@@ -49,8 +49,37 @@ const typeColor = (env: GraphEnvironment, theme: GraphTheme, type: string): numb
 
 const isExec = (env: GraphEnvironment, type: string): boolean => env.dataTypes.get(type)?.shape === 'triangle';
 
+/** Draw a state-machine state: a rounded box with a top accent bar and a centered name. */
+const drawStateNode = (p: DrawNodeParams): void => {
+  const { draw, node, layout, type, view, origin, env, theme } = p;
+  const z = view.zoom;
+  const min = worldToScreen(view, origin, layout.x, layout.y);
+  const max: Point = [min[0] + layout.w * z, min[1] + layout.h * z];
+  const rounding = 6 * z;
+  const cat = categoryColor(env, theme, type?.category);
+  draw.rectFilled(min, max, theme.chrome.headerBg, rounding);
+  draw.rectFilled(min, [max[0], min[1] + Math.max(2, 3 * z)], cat, rounding, ROUND_TOP);
+  const border = node.error ? theme.chrome.danger : p.selected ? theme.chrome.selection : theme.chrome.borderStrong;
+  draw.rect(min, max, border, rounding, Math.max(1, z));
+  if (p.selected) draw.rect([min[0] - 1, min[1] - 1], [max[0] + 1, max[1] + 1], theme.chrome.selection, rounding, Math.max(1, z));
+  if (z >= TEXT_LOD) {
+    const name = node.title ?? type?.label ?? node.typeId;
+    const size = theme.geo.fontTitle * z;
+    draw.textAt([min[0] + 12 * z, (min[1] + max[1]) / 2 - size / 2], theme.chrome.textBright, name, { size });
+    const tag = (type?.sub ?? '').toUpperCase();
+    if (tag.length > 0) {
+      const sub = theme.geo.fontSub * z;
+      draw.textAt([max[0] - tag.length * sub * 0.62 - 8 * z, (min[1] + max[1]) / 2 - sub / 2], theme.chrome.textFaint, tag, { font: 'pixel', size: sub });
+    }
+  }
+};
+
 /** Draw one node. */
 export const drawNode = (p: DrawNodeParams): void => {
+  if ((p.type?.style ?? 'node') === 'state') {
+    drawStateNode(p);
+    return;
+  }
   const { draw, node, layout, type, view, origin, env, theme } = p;
   const z = view.zoom;
   const geo = theme.geo;
