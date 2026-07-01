@@ -18,7 +18,7 @@ import { type GraphView, worldToScreen } from './view';
 const ROUND_TOP = (1 << 4) | (1 << 5);
 
 /** The minimum zoom at which text is legible; below this, labels are culled. */
-const TEXT_LOD = 0.5;
+const TEXT_LOD = 0.4;
 
 /** Key identifying a pin endpoint, for the connected-pins lookup. */
 export const pinKey = (node: string, dir: 'in' | 'out', pin: string): string => `${node}|${dir}|${pin}`;

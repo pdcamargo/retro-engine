@@ -110,30 +110,31 @@ const buildDemo = (): DemoState => {
       ],
     });
 
+  // Compact 3-column layout so the graph frames at a label-legible zoom.
   const doc = createGraphDocument({ kindId: 'dataflow' });
-  const cp = addNode(doc, { typeId: 'ColorParameter', pos: [40, 120] });
-  const tx = addNode(doc, { typeId: 'Texture2D', pos: [300, 70] });
-  const ml = addNode(doc, { typeId: 'Multiply', pos: [620, 120] });
-  const fr = addNode(doc, { typeId: 'Fresnel', pos: [40, 470] });
-  const ad = addNode(doc, { typeId: 'Add', pos: [620, 470] });
-  const out = addNode(doc, { typeId: 'Output', pos: [980, 70] });
+  const cp = addNode(doc, { typeId: 'ColorParameter', pos: [20, 60] });
+  const tx = addNode(doc, { typeId: 'Texture2D', pos: [20, 300] });
+  const ml = addNode(doc, { typeId: 'Multiply', pos: [300, 40] });
+  const fr = addNode(doc, { typeId: 'Fresnel', pos: [300, 320] });
+  const out = addNode(doc, { typeId: 'Output', pos: [580, 40] });
+  const ad = addNode(doc, { typeId: 'Add', pos: [580, 340] });
 
   const e1 = connect(doc, { node: cp.id, pin: 'color' }, { node: ml.id, pin: 'a' })!;
-  addReroute(doc, e1.id, [560, 250]);
+  addReroute(doc, e1.id, [250, 170]);
   connect(doc, { node: tx.id, pin: 'color' }, { node: ml.id, pin: 'b' });
   const e3 = connect(doc, { node: ml.id, pin: 'out' }, { node: out.id, pin: 'Albedo' })!;
-  addReroute(doc, e3.id, [920, 300]);
+  addReroute(doc, e3.id, [540, 130]);
   connect(doc, { node: fr.id, pin: 'result' }, { node: ad.id, pin: 'a' });
   connect(doc, { node: ad.id, pin: 'out' }, { node: out.id, pin: 'Emission' });
   connect(doc, { node: fr.id, pin: 'result' }, { node: out.id, pin: 'AO' });
 
   // State variety, so every node state is visible for verification.
   const view = createGraphView();
-  view.selection.add(ml.id);
-  ad.error = 'Type mismatch on input b';
-  const dis = addNode(doc, { typeId: 'Add', pos: [300, 470], title: 'Disabled' });
+  view.selection.add(ml.id); // Multiply shows the amber selection ring
+  ad.error = 'Type mismatch on input b'; // Add shows the red error ring
+  const dis = addNode(doc, { typeId: 'Add', pos: [20, 470], title: 'Disabled' });
   dis.disabled = true;
-  const col = addNode(doc, { typeId: 'Multiply', pos: [300, 620], title: 'Collapsed' });
+  const col = addNode(doc, { typeId: 'Multiply', pos: [300, 480], title: 'Collapsed' });
   col.collapsed = true;
 
   return { env, doc, view, theme: createGraphTheme(), fitRequested: false };
