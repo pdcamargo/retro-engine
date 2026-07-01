@@ -9,6 +9,7 @@
 
 import { run } from 'mitata';
 
+import './pick.bench';
 import './serialize.bench';
 
 interface NormalizedBench {

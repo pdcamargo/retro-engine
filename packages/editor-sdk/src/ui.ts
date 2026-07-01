@@ -327,7 +327,31 @@ export interface Ui {
   mouseDragDelta(button?: number): Vec2;
   /** Reset a mouse button's drag delta accumulator (default: left). */
   resetMouseDragDelta(button?: number): void;
+  /** Whether a key (see {@link Keys}) was pressed this frame; `repeat` enables key-repeat. */
+  isKeyPressed(key: number, repeat?: boolean): boolean;
+  /** Whether a key (see {@link Keys}) is currently held. */
+  isKeyDown(key: number): boolean;
+  /** Whether a Ctrl key is held (Cmd is reported here too on macOS via the super mapping). */
+  keyCtrl(): boolean;
+  /** Whether a Shift key is held. */
+  keyShift(): boolean;
+  /** Whether an Alt/Option key is held. */
+  keyAlt(): boolean;
 }
+
+/** Common `ImGuiKey` codes for {@link Ui.isKeyPressed} / {@link Ui.isKeyDown}. */
+export const Keys = {
+  LeftArrow: 513,
+  RightArrow: 514,
+  UpArrow: 515,
+  DownArrow: 516,
+  Delete: 522,
+  Backspace: 523,
+  Space: 524,
+  Escape: 526,
+  A: 546,
+  F: 551,
+} as const;
 
 const colored = (color: Rgba, value: string): void => {
   ImGui.TextColored(new ImVec4(color[0], color[1], color[2], color[3]), value);
@@ -729,6 +753,27 @@ export const ui: Ui = {
 
   resetMouseDragDelta(button = 0): void {
     ImGui.ResetMouseDragDelta(button);
+  },
+
+  isKeyPressed(key: number, repeat = false): boolean {
+    return ImGui.IsKeyPressed(key, repeat);
+  },
+
+  isKeyDown(key: number): boolean {
+    return ImGui.IsKeyDown(key);
+  },
+
+  keyCtrl(): boolean {
+    const io = ImGui.GetIO();
+    return io.KeyCtrl || io.KeySuper;
+  },
+
+  keyShift(): boolean {
+    return ImGui.GetIO().KeyShift;
+  },
+
+  keyAlt(): boolean {
+    return ImGui.GetIO().KeyAlt;
   },
 };
 

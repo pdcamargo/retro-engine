@@ -12,12 +12,12 @@ import type { EdgeId, NodeId, PinRef, Point, RerouteId } from './document';
 
 /** The current pointer interaction; only committed results mutate the document. */
 export type Interaction =
-  | { readonly k: 'idle' }
-  | { readonly k: 'panning'; readonly startMouse: Vec2; readonly startPan: Vec2 }
-  | { readonly k: 'marquee'; readonly startWorld: Vec2; readonly additive: boolean }
-  | { readonly k: 'dragNode'; readonly ids: readonly NodeId[]; readonly grab: Vec2; readonly moved: boolean }
-  | { readonly k: 'dragReroute'; readonly id: RerouteId; readonly grab: Vec2 }
-  | { readonly k: 'connecting'; readonly from: PinRef; readonly candidate: PinRef | null };
+  | { k: 'idle' }
+  | { k: 'panning'; startMouse: Vec2; startPan: Vec2 }
+  | { k: 'marquee'; startWorld: Point; additive: boolean }
+  | { k: 'dragNode'; ids: NodeId[]; startMouse: Point; starts: Map<NodeId, Point>; moved: boolean }
+  | { k: 'dragReroute'; id: RerouteId; startMouse: Point; start: Point }
+  | { k: 'connecting'; from: PinRef; dir: 'in' | 'out'; candidate: PinRef | null };
 
 /** What the pointer is currently over (recomputed each frame). */
 export type Hover =

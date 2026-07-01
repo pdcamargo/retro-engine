@@ -11,6 +11,7 @@ import { Draw, type Ui, type Vec2 } from '@retro-engine/editor-sdk';
 import { drawGrid, drawScanlines, fitBounds, handleNavigation } from './canvas';
 import type { GraphDocument, GraphEdge, Point } from './document';
 import type { GraphEnvironment } from './environment';
+import { updateInteraction } from './interaction';
 import { buildLayout, type GraphLayout, pinAnchor } from './layout-cache';
 import { drawNode, pinKey } from './node-render';
 import type { GraphTheme } from './theme';
@@ -80,13 +81,19 @@ export const GraphEditor = {
     // Background input surface: hover/active for empty-canvas navigation.
     ui.invisibleButton('graph::canvas', size);
     const hovered = ui.isItemHovered();
-    handleNavigation(ui, view, origin, hovered);
 
+    // Hit-test against a pre-interaction layout, run navigation + interaction
+    // (which may move nodes), then rebuild the layout so wires/pins track nodes
+    // within the same frame (no one-frame drag lag).
+    const pickLayout = buildLayout(doc, env, theme.geo);
+    handleNavigation(ui, view, origin, hovered);
+    updateInteraction({ ui, doc, view, origin, layout: pickLayout, geo: theme.geo, hovered });
+
+    const layout = buildLayout(doc, env, theme.geo);
     const draw = Draw.window();
     drawGrid(draw, origin, size, view, theme);
     if (view.scanlines) drawScanlines(draw, origin, size, theme);
 
-    const layout = buildLayout(doc, env, theme.geo);
     const connected = connectedPins(doc);
     const kind = env.kind(doc.kindId);
 
@@ -110,6 +117,14 @@ export const GraphEditor = {
         selected: view.selection.has(id),
         connected,
       });
+    }
+
+    // Marquee selection rectangle (over nodes).
+    if (view.interaction.k === 'marquee') {
+      const a = worldToScreen(view, origin, view.interaction.startWorld[0], view.interaction.startWorld[1]);
+      const m = ui.mousePos();
+      draw.rectFilled([Math.min(a[0], m[0]), Math.min(a[1], m[1])], [Math.max(a[0], m[0]), Math.max(a[1], m[1])], theme.pack('#ffc233', 30));
+      draw.rect([Math.min(a[0], m[0]), Math.min(a[1], m[1])], [Math.max(a[0], m[0]), Math.max(a[1], m[1])], theme.chrome.selection, 0, 1);
     }
   },
 
