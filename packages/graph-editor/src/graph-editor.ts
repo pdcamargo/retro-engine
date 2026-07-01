@@ -161,6 +161,9 @@ export const GraphEditor = {
         draw.rectFilled([mn[0], mn[1] - tabH], [mn[0] + tabW, mn[1]], theme.pack(catHex, selected ? 120 : 70), 3 * view.zoom);
         draw.textAt([mn[0] + 8 * view.zoom, mn[1] - tabH + 2 * view.zoom], theme.chrome.textBright, g.title, { size: theme.geo.fontLabel * view.zoom });
       }
+      // Bottom-right resize handle.
+      const hs = 12 * view.zoom;
+      draw.triFilled([mx[0] - hs, mx[1]], [mx[0], mx[1] - hs], [mx[0], mx[1]], borderCol);
     }
 
     // Wires behind nodes.

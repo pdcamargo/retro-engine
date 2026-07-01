@@ -173,6 +173,17 @@ export const createGraphDemo = (): GraphDemo => {
       ],
       outputs: [{ name: 'Output', type: 'object' }],
       fields: [{ name: 'mode', kind: 'combo', options: ['Add', 'Blend'], default: 'Blend' }],
+    })
+    .register({
+      type: 'Context',
+      category: 'subgraph',
+      style: 'stack',
+      sub: 'context',
+      fields: [
+        { name: 'Lifetime', kind: 'number', default: 1 },
+        { name: 'Velocity', kind: 'number', default: 4 },
+        { name: 'Gravity', kind: 'number', default: -9.8 },
+      ],
     });
 
   const flowDoc = createGraphDocument({ kindId: 'flow' });
@@ -193,6 +204,7 @@ export const createGraphDemo = (): GraphDemo => {
   transition(jump.id, idle.id, 'L');
   addNode(flowDoc, { typeId: 'Branch', pos: [60, 300] });
   addNode(flowDoc, { typeId: 'Subgraph', pos: [320, 300] });
+  addNode(flowDoc, { typeId: 'Context', pos: [640, 300], title: 'Initialize Particle' });
   const gid = mintId(flowDoc, 'group');
   flowDoc.groups[gid] = { id: gid, rect: [40, 10, 620, 220], title: 'State Machine', categoryId: 'flow' };
 

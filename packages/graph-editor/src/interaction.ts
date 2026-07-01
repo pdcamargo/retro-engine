@@ -69,7 +69,7 @@ const clearSelection = (view: GraphView): void => {
 };
 
 const hitToHover = (hit: PickResult | null): Hover | null => {
-  if (hit === null || hit.k === 'field' || hit.k === 'group') return null;
+  if (hit === null || hit.k === 'field' || hit.k === 'group' || hit.k === 'groupResize') return null;
   if (hit.k === 'node') return { k: 'node', id: hit.id };
   if (hit.k === 'reroute') return { k: 'reroute', id: hit.id };
   return { k: 'pin', ref: { node: hit.node, pin: hit.pin }, dir: hit.dir };
@@ -194,6 +194,22 @@ export const updateInteraction = (ctx: InteractionCtx): PickResult | null => {
       }
       break;
     }
+    case 'dragGroupResize': {
+      if (ui.isMouseDown(0)) {
+        const dx = world[0] - st.startMouse[0];
+        const dy = world[1] - st.startMouse[1];
+        if (dx !== 0 || dy !== 0) st.moved = true;
+        const g = doc.groups[st.id];
+        if (g !== undefined) {
+          g.rect[2] = Math.max(80, st.sizeStart[0] + dx);
+          g.rect[3] = Math.max(60, st.sizeStart[1] + dy);
+        }
+      } else {
+        commitEdit(ctx, st.moved);
+        view.interaction = { k: 'idle' };
+      }
+      break;
+    }
     case 'connecting': {
       // A candidate is a pin on the opposite side of a different node.
       st.candidate =
@@ -232,6 +248,17 @@ const startLeftPress = (ctx: InteractionCtx, hit: PickResult | null, world: Poin
 
   if (hit?.k === 'field') {
     edit(ctx, 'Edit field', () => editField(ctx, hit.node, hit.name));
+    return;
+  }
+
+  if (hit?.k === 'groupResize') {
+    const g = doc.groups[hit.id];
+    if (g !== undefined) {
+      if (!additive) clearSelection(view);
+      view.groupSelection.add(hit.id);
+      beginEdit(ctx, 'Resize group');
+      view.interaction = { k: 'dragGroupResize', id: hit.id, startMouse: [world[0], world[1]], sizeStart: [g.rect[2], g.rect[3]], moved: false };
+    }
     return;
   }
 

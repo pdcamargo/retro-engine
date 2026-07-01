@@ -19,6 +19,7 @@ export type Interaction =
   | { k: 'dragNode'; ids: NodeId[]; startMouse: Point; starts: Map<NodeId, Point>; moved: boolean }
   | { k: 'dragReroute'; id: RerouteId; grab: Point; moved: boolean }
   | { k: 'dragGroup'; id: string; startMouse: Point; groupStart: Point; members: Map<NodeId, Point>; moved: boolean }
+  | { k: 'dragGroupResize'; id: string; startMouse: Point; sizeStart: Point; moved: boolean }
   | { k: 'connecting'; from: PinRef; dir: 'in' | 'out'; candidate: PinRef | null };
 
 /** What the pointer is currently over (recomputed each frame). */

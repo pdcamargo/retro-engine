@@ -86,6 +86,21 @@ export const layoutNode = (
     return { id: node.id, x, y, w, h: headerH, headerH, collapsed: true, inputs, outputs, fields: [] };
   }
 
+  // Context/VFX stack: a titled vertical block list (each field is a block).
+  if (type?.style === 'stack') {
+    const cap = 4;
+    const titleH = 30;
+    const blockH = 40;
+    const addH = 26;
+    const pad = 8;
+    const fields: FieldRowLayout[] = (type.fields ?? []).map((f, i) => ({
+      name: f.name,
+      cy: y + cap + titleH + pad + i * (blockH + 6) + blockH / 2,
+    }));
+    const h = cap + titleH + pad + fields.length * (blockH + 6) + addH + pad;
+    return { id: node.id, x, y, w, h, headerH: cap + titleH, collapsed: false, inputs: [], outputs: [], fields };
+  }
+
   const bodyPad = 6;
   let row = 0;
   const rowCy = (i: number): number => y + headerH + bodyPad + i * geo.rowH + geo.rowH / 2;
@@ -141,6 +156,7 @@ export type PickResult =
   | { readonly k: 'field'; readonly node: NodeId; readonly name: string }
   | { readonly k: 'reroute'; readonly id: string }
   | { readonly k: 'group'; readonly id: string }
+  | { readonly k: 'groupResize'; readonly id: string }
   | { readonly k: 'node'; readonly id: NodeId };
 
 /** Approximate world height of a group's title tab (its drag handle). */
@@ -170,7 +186,13 @@ export const pick = (
   for (const r of Object.values(doc.reroutes)) {
     if (dist2(r.pos, wx, wy) <= rerouteR2) return { k: 'reroute', id: r.id };
   }
-  // Group title tabs are dedicated drag handles above the group's top-left.
+  // Group resize handles (bottom-right corner) then title tabs (drag handles).
+  const handle = Math.max(14, opts.rerouteRadius);
+  for (const g of Object.values(doc.groups)) {
+    const cx = g.rect[0] + g.rect[2];
+    const cy = g.rect[1] + g.rect[3];
+    if (wx >= cx - handle && wx <= cx && wy >= cy - handle && wy <= cy) return { k: 'groupResize', id: g.id };
+  }
   for (const g of Object.values(doc.groups)) {
     const tabW = g.title.length * 6.5 + 16;
     if (wx >= g.rect[0] && wx <= g.rect[0] + tabW && wy >= g.rect[1] - GROUP_TAB_H && wy <= g.rect[1]) {

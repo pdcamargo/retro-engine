@@ -74,10 +74,60 @@ const drawStateNode = (p: DrawNodeParams): void => {
   }
 };
 
+/** Draw a VFX context/stack node: a phosphor cap, centered title, stacked field blocks, and an add affordance. */
+const drawStackNode = (p: DrawNodeParams): void => {
+  const { draw, node, layout, type, view, origin, theme } = p;
+  const z = view.zoom;
+  const geo = theme.geo;
+  const cat = categoryColor(p.env, theme, type?.category);
+  const min = worldToScreen(view, origin, layout.x, layout.y);
+  const max: Point = [min[0] + layout.w * z, min[1] + layout.h * z];
+  const rounding = geo.nodeRadius * z;
+
+  draw.rectFilled(min, max, theme.chrome.bodyBg, rounding);
+  draw.rectFilled(min, [max[0], min[1] + 4 * z], cat, rounding, ROUND_TOP); // phosphor cap
+  const border = node.error ? theme.chrome.danger : p.selected ? theme.chrome.selection : theme.chrome.border;
+  draw.rect(min, max, border, rounding, Math.max(1, z));
+  if (p.selected) draw.rect([min[0] - 1, min[1] - 1], [max[0] + 1, max[1] + 1], theme.chrome.selection, rounding, Math.max(1, z));
+
+  if (z >= TEXT_LOD) {
+    const title = node.title ?? type?.label ?? node.typeId;
+    const size = geo.fontTitle * z;
+    draw.textAt([min[0] + (layout.w * z - title.length * size * 0.6) / 2, min[1] + 10 * z], theme.chrome.textBright, title, { size });
+  }
+
+  // Field blocks.
+  const labelSize = geo.fontLabel * z;
+  for (let i = 0; i < layout.fields.length; i++) {
+    const f = layout.fields[i]!;
+    const fd = type?.fields?.[i];
+    const cyS = worldToScreen(view, origin, layout.x, f.cy)[1];
+    const bMin: Point = [min[0] + 8 * z, cyS - 18 * z];
+    const bMax: Point = [max[0] - 8 * z, cyS + 18 * z];
+    draw.rectFilled(bMin, bMax, theme.chrome.headerBg, 3 * z);
+    draw.rect(bMin, bMax, theme.chrome.border, 3 * z, 1);
+    if (z >= TEXT_LOD) {
+      draw.textAt([bMin[0] + 8 * z, bMin[1] + 4 * z], theme.chrome.textMuted, fd?.label ?? f.name, { size: labelSize });
+      drawField(p, fd, node.fieldValues[f.name] ?? fd?.default, [bMin[0] + 8 * z, bMin[1] + 20 * z], [bMax[0] - 8 * z, bMin[1] + 34 * z], (c) => c);
+    }
+  }
+
+  // "Add a Block" affordance.
+  if (z >= TEXT_LOD) {
+    const ay = max[1] - 24 * z;
+    draw.textAt([min[0] + (layout.w * z - 70 * z) / 2, ay + 4 * z], theme.chrome.textMuted, '+ Add a Block', { size: labelSize });
+  }
+};
+
 /** Draw one node. */
 export const drawNode = (p: DrawNodeParams): void => {
-  if ((p.type?.style ?? 'node') === 'state') {
+  const style = p.type?.style ?? 'node';
+  if (style === 'state') {
     drawStateNode(p);
+    return;
+  }
+  if (style === 'stack') {
+    drawStackNode(p);
     return;
   }
   const { draw, node, layout, type, view, origin, env, theme } = p;
