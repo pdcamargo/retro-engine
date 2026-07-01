@@ -26,7 +26,6 @@ interface DemoState {
   doc: GraphDocument;
   view: GraphView;
   theme: GraphTheme;
-  fitted: boolean;
   fitRequested: boolean;
 }
 
@@ -137,7 +136,7 @@ const buildDemo = (): DemoState => {
   const col = addNode(doc, { typeId: 'Multiply', pos: [300, 620], title: 'Collapsed' });
   col.collapsed = true;
 
-  return { env, doc, view, theme: createGraphTheme(), fitted: false, fitRequested: false };
+  return { env, doc, view, theme: createGraphTheme(), fitRequested: false };
 };
 
 let demo: DemoState | null = null;
@@ -162,11 +161,13 @@ export const graphDemoPanel = (): PanelDef => ({
     });
 
     const params = { ui, doc: d.doc, view: d.view, env: d.env, theme: d.theme };
-    if (!d.fitted || d.fitRequested) {
-      GraphEditor.fit(params);
-      d.fitted = true;
+    // Auto-frame the graph every frame until the user pans/zooms; the Fit button
+    // re-arms auto-framing. This is immune to first-frame docking-size timing.
+    if (d.fitRequested) {
+      d.view.userNavigated = false;
       d.fitRequested = false;
     }
+    if (!d.view.userNavigated) GraphEditor.fit(params);
     GraphEditor.draw(params);
   },
 });

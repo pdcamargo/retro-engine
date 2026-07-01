@@ -60,17 +60,29 @@ export class Draw {
   }
 
   /**
-   * Draw text directly into the draw list at an explicit pixel size, **without**
-   * submitting an ImGui item (unlike {@link text}, which submits one per call).
-   * Use this for high-volume, transform-positioned labels (node titles, pin
-   * names) where item overhead and ID-stack pollution would be prohibitive.
+   * Draw text at an explicit position, optionally in a named font and/or at an
+   * arbitrary pixel size (via the dynamic-font path, so it stays crisp under
+   * zoom). Use this for transform-positioned labels (node titles, pin names).
    * `opts.font` names a registered font (falls back to the current font);
    * `opts.size` is the pixel size (falls back to the current font size).
+   *
+   * Note: the draw-list `AddText(font, size, …)` overload is unbound in the
+   * current jsimgui build (its clip-rect argument fails to marshal), so this
+   * pushes the sized font and submits a colored `Text` at an absolute cursor
+   * position, restoring the cursor afterward — the same mechanism as {@link text}.
    */
   textAt(pos: Vec2, col: number, text: string, opts?: { font?: string; size?: number }): void {
-    const font = (opts?.font !== undefined ? getFont(opts.font) : undefined) ?? ImGui.GetFont();
-    const size = opts?.size ?? ImGui.GetFontSize();
-    this.dl.AddTextImFontPtr(font, size, v(pos), col, text);
+    const font = opts?.font !== undefined ? getFont(opts.font) : undefined;
+    const sized = font !== undefined || opts?.size !== undefined;
+    if (sized) ImGui.PushFontFloat(font ?? ImGui.GetFont(), opts?.size ?? ImGui.GetFontSize());
+    const prev = ImGui.GetCursorScreenPos();
+    ImGui.SetCursorScreenPos(v(pos));
+    ImGui.PushStyleColor(ImGuiCol.Text, col);
+    ImGui.Text(text);
+    ImGui.PopStyleColor(1);
+    ImGui.SetCursorScreenPos(prev);
+    ImGui.Dummy(ZERO);
+    if (sized) ImGui.PopFont();
   }
 
   /** A cubic bezier curve through the two endpoints `p1`/`p4` and controls `p2`/`p3`. */

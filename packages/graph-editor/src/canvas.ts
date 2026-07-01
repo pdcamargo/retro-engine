@@ -48,7 +48,10 @@ export const drawScanlines = (draw: Draw, origin: Vec2, size: Vec2, theme: Graph
 export const handleNavigation = (ui: Ui, view: GraphView, origin: Vec2, hovered: boolean): void => {
   if (hovered) {
     const wheel = ui.mouseWheel();
-    if (wheel !== 0) zoomAt(view, origin, ui.mousePos(), wheel > 0 ? 1.1 : 1 / 1.1);
+    if (wheel !== 0) {
+      zoomAt(view, origin, ui.mousePos(), wheel > 0 ? 1.1 : 1 / 1.1);
+      view.userNavigated = true;
+    }
   }
   // Middle-button drag pans. Once a drag is in flight it keeps panning even if the
   // cursor briefly leaves the canvas; require hover only to begin.
@@ -57,6 +60,7 @@ export const handleNavigation = (ui: Ui, view: GraphView, origin: Vec2, hovered:
     const d = ui.mouseDragDelta(2);
     panBy(view, d[0], d[1]);
     ui.resetMouseDragDelta(2);
+    view.userNavigated = true;
     if (!panning) view.interaction = { k: 'panning', startMouse: ui.mousePos(), startPan: [view.pan[0], view.pan[1]] };
   } else if (panning && !ui.isMouseDown(2)) {
     view.interaction = { k: 'idle' };

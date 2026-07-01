@@ -40,6 +40,8 @@ export interface GraphView {
   edgeSelection: Set<EdgeId>;
   /** Whether the CRT scanline overlay is drawn. */
   scanlines: boolean;
+  /** Set once the user has panned or zoomed — lets a host auto-frame until then. */
+  userNavigated: boolean;
   interaction: Interaction;
   hovered: Hover | null;
 }
@@ -53,6 +55,7 @@ export const createGraphView = (opts?: Partial<Pick<GraphView, 'pan' | 'zoom' | 
   selection: new Set(),
   edgeSelection: new Set(),
   scanlines: opts?.scanlines ?? true,
+  userNavigated: false,
   interaction: { k: 'idle' },
   hovered: null,
 });
