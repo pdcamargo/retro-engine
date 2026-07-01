@@ -70,7 +70,7 @@ export { GraphHost } from './host';
 
 export type { GraphGeometry, GraphChrome } from './theme';
 export { GraphTheme, DEFAULT_GEOMETRY, createGraphTheme, setTheme } from './theme';
-export type { Interaction, Hover, GraphView, GraphTool } from './view';
+export type { Interaction, Hover, GraphView } from './view';
 export { createGraphView, worldToScreen, screenToWorld, zoomAt, panBy } from './view';
 export type { PinLayout, FieldRowLayout, NodeLayout, GraphLayout, PickResult } from './layout-cache';
 export { buildLayout, layoutNode, pinAnchor, pick } from './layout-cache';

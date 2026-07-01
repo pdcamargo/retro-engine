@@ -53,13 +53,17 @@ export const handleNavigation = (ui: Ui, view: GraphView, origin: Vec2, hovered:
       view.userNavigated = true;
     }
   }
-  // Middle-button drag always pans (stateless — the interaction state machine
-  // owns left-button panning via the pan tool / space).
-  if (ui.isMouseDragging(2)) {
-    const d = ui.mouseDragDelta(2);
-    panBy(view, d[0], d[1]);
-    ui.resetMouseDragDelta(2);
-    view.userNavigated = true;
+  // Right- or middle-button drag pans (stateless). A two-finger trackpad
+  // click-drag reports as the right button. Space+left-drag is handled by the
+  // interaction state machine. Gated on hover so it only pans over the canvas.
+  if (!hovered) return;
+  for (const btn of [1, 2]) {
+    if (ui.isMouseDragging(btn)) {
+      const d = ui.mouseDragDelta(btn);
+      panBy(view, d[0], d[1]);
+      ui.resetMouseDragDelta(btn);
+      view.userNavigated = true;
+    }
   }
 };
 

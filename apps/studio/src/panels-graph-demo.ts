@@ -242,11 +242,6 @@ export const graphDemoPanel = (demo: GraphDemo): PanelDef => ({
     if (doc === undefined) return;
 
     ui.child('graph-demo-toolbar', { size: [0, 30], padding: [8, 4], noScrollbar: true }, () => {
-      if (ui.button(d.view.tool === 'pan' ? 'Tool: Pan' : 'Tool: Select')) {
-        d.view.tool = d.view.tool === 'pan' ? 'select' : 'pan';
-      }
-      ui.setItemTooltip('Pan: drag empty space to move the canvas. Select: drag to box-select. (Middle-drag or Space+drag always pans.)');
-      ui.sameLine(0, 6);
       if (ui.button('Fit')) d.fitRequested = true;
       ui.setItemTooltip('Frame all nodes (or press F)');
       ui.sameLine(0, 6);

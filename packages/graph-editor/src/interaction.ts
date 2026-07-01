@@ -261,9 +261,9 @@ const startLeftPress = (ctx: InteractionCtx, hit: PickResult | null, world: Poin
     return;
   }
 
-  // Otherwise pan (pan tool or Space held) or begin a marquee (select tool).
-  const panMode = (view.tool === 'pan' || ui.isKeyDown(Keys.Space)) && !additive;
-  if (panMode) {
+  // Space+left-drag pans; otherwise a left-drag on empty space box-selects.
+  // (Right-drag / middle-drag pan is handled in handleNavigation.)
+  if (ui.isKeyDown(Keys.Space)) {
     view.interaction = { k: 'panning', startMouse: [mouse[0], mouse[1]], startPan: [view.pan[0], view.pan[1]], button: 0 };
     return;
   }
