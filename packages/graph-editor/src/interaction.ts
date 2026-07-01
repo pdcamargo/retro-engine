@@ -1,24 +1,27 @@
 /**
  * The pointer/keyboard interaction state machine. Runs once per frame: hit-tests
  * the cursor against the layout cache, then advances the explicit interaction
- * state (select / drag-node / marquee) and applies keyboard actions (delete,
- * nudge, frame). Only committed results mutate the document; navigation
+ * state (select / drag-node / marquee / connecting) and applies keyboard actions
+ * (delete, nudge, frame). Only committed results mutate the document; navigation
  * (pan/zoom) is handled separately in {@link handleNavigation}.
  */
 
 import { Keys, type Ui, type Vec2 } from '@retro-engine/editor-sdk';
 
-import type { GraphDocument, NodeId, Point } from './document';
-import { type GraphLayout, pick, type PickResult } from './layout-cache';
-import { moveNode, removeNode, raiseNode } from './ops';
+import type { EdgeId, GraphDocument, NodeId, Point } from './document';
+import type { GraphEnvironment } from './environment';
+import { type GraphLayout, pick, type PickResult, pinAnchor } from './layout-cache';
+import { connect, disconnect, moveNode, removeNode, raiseNode } from './ops';
 import type { GraphGeometry } from './theme';
-import { type GraphView, type Hover, screenToWorld } from './view';
+import { type GraphView, type Hover, screenToWorld, worldToScreen } from './view';
+import { wireDistance } from './wire';
 
 /** Everything the interaction step reads for one frame. */
 export interface InteractionCtx {
   readonly ui: Ui;
   readonly doc: GraphDocument;
   readonly view: GraphView;
+  readonly env: GraphEnvironment;
   readonly origin: Vec2;
   readonly layout: GraphLayout;
   readonly geo: GraphGeometry;
@@ -38,12 +41,39 @@ const hitToHover = (hit: PickResult | null): Hover | null => {
   return { k: 'pin', ref: { node: hit.node, pin: hit.pin }, dir: hit.dir };
 };
 
+/** Screen-space wire hit-test: the id of the wire nearest the point within tolerance, else null. */
+const pickEdge = (ctx: InteractionCtx, sx: number, sy: number): EdgeId | null => {
+  const { doc, view, origin, layout } = ctx;
+  let best = 7; // px tolerance
+  let bestId: EdgeId | null = null;
+  for (const edge of Object.values(doc.edges)) {
+    const fromL = layout.nodes.get(edge.from.node);
+    const toL = layout.nodes.get(edge.to.node);
+    if (fromL === undefined || toL === undefined) continue;
+    const a = pinAnchor(fromL, edge.from.pin, 'out');
+    const b = pinAnchor(toL, edge.to.pin, 'in');
+    if (a === undefined || b === undefined) continue;
+    const pts: Point[] = [worldToScreen(view, origin, a[0], a[1])];
+    for (const k of edge.via) {
+      const r = doc.reroutes[k];
+      if (r !== undefined) pts.push(worldToScreen(view, origin, r.pos[0], r.pos[1]));
+    }
+    pts.push(worldToScreen(view, origin, b[0], b[1]));
+    const d = wireDistance(pts, sx, sy, view.zoom);
+    if (d < best) {
+      best = d;
+      bestId = edge.id;
+    }
+  }
+  return bestId;
+};
+
 /**
  * Advance interaction for the frame. Returns the current pick result (so the
- * caller can style hover / start a connection in a later phase).
+ * caller can style hover / draw the in-progress connection).
  */
 export const updateInteraction = (ctx: InteractionCtx): PickResult | null => {
-  const { ui, doc, view, origin, layout, geo, hovered } = ctx;
+  const { ui, doc, view, env, origin, layout, geo, hovered } = ctx;
   const mouse = ui.mousePos();
   const world = screenToWorld(view, origin, mouse[0], mouse[1]);
   const pinRadius = Math.max(geo.pinDot / 2 + 2, 8 / view.zoom);
@@ -70,6 +100,22 @@ export const updateInteraction = (ctx: InteractionCtx): PickResult | null => {
       }
       break;
     }
+    case 'connecting': {
+      // A candidate is a pin on the opposite side of a different node.
+      st.candidate =
+        hit?.k === 'pin' && hit.dir !== st.dir && hit.node !== st.from.node
+          ? { node: hit.node, pin: hit.pin }
+          : null;
+      if (!ui.isMouseDown(0)) {
+        if (st.candidate !== null) {
+          const out = st.dir === 'out' ? st.from : st.candidate;
+          const inp = st.dir === 'out' ? st.candidate : st.from;
+          if (env.canConnect(doc, out, inp)) connect(doc, out, inp);
+        }
+        view.interaction = { k: 'idle' };
+      }
+      break;
+    }
     case 'marquee':
       if (!ui.isMouseDown(0)) {
         applyMarquee(ctx, st.startWorld, world, st.additive);
@@ -81,7 +127,7 @@ export const updateInteraction = (ctx: InteractionCtx): PickResult | null => {
       break;
   }
 
-  if (hovered) handleKeys(ctx, world);
+  if (hovered) handleKeys(ctx);
   view.hovered = hitToHover(hit);
   return hit;
 };
@@ -107,10 +153,22 @@ const startLeftPress = (ctx: InteractionCtx, hit: PickResult | null, world: Poin
     return;
   }
 
-  // Pins (connecting) and reroute knots (dragging) are wired in later phases.
-  if (hit?.k === 'pin' || hit?.k === 'reroute') return;
+  if (hit?.k === 'pin') {
+    view.interaction = { k: 'connecting', from: { node: hit.node, pin: hit.pin }, dir: hit.dir, candidate: null };
+    return;
+  }
 
-  // Empty canvas: begin a marquee (clears first unless additive).
+  // Reroute dragging lands in the next phase.
+  if (hit?.k === 'reroute') return;
+
+  // Empty canvas: select a wire under the cursor, else begin a marquee.
+  const mouse = ui.mousePos();
+  const edgeId = pickEdge(ctx, mouse[0], mouse[1]);
+  if (edgeId !== null) {
+    if (!additive) clearSelection(view);
+    view.edgeSelection.add(edgeId);
+    return;
+  }
   if (!additive) clearSelection(view);
   view.interaction = { k: 'marquee', startWorld: [world[0], world[1]], additive };
 };
@@ -127,9 +185,10 @@ const applyMarquee = (ctx: InteractionCtx, a: Point, b: Point, additive: boolean
   }
 };
 
-const handleKeys = (ctx: InteractionCtx, _world: Point): void => {
+const handleKeys = (ctx: InteractionCtx): void => {
   const { ui, doc, view } = ctx;
   if (ui.isKeyPressed(Keys.Delete) || ui.isKeyPressed(Keys.Backspace)) {
+    for (const id of view.edgeSelection) disconnect(doc, id);
     for (const id of view.selection) removeNode(doc, id);
     clearSelection(view);
   }

@@ -139,12 +139,16 @@ const drawPins = (p: DrawNodeParams, pins: readonly PinLayout[]): void => {
   const { draw, node, view, origin, env, theme } = p;
   const z = view.zoom;
   const alpha = node.disabled ? 0.45 : 1;
+  const hv = view.hovered;
   for (const pin of pins) {
     const c = worldToScreen(view, origin, pin.anchor[0], pin.anchor[1]);
     const col = alpha >= 1 ? typeColor(env, theme, pin.type) : dim(typeColor(env, theme, pin.type), alpha);
     const on = p.connected.has(pinKey(node.id, pin.dir, pin.name));
+    const hovered =
+      hv?.k === 'pin' && hv.ref.node === node.id && hv.ref.pin === pin.name && hv.dir === pin.dir;
+    const soft = theme.softFor(pin.type, env.dataTypes.get(pin.type)?.color ?? '#34e07a');
     if (isExec(env, pin.type)) drawExecPin(draw, c, theme.geo.pinExec * z, col, theme.chrome.bodyBg, on);
-    else drawDataPin(draw, c, (theme.geo.pinDot * z) / 2, col, theme.chrome.bodyBg, theme.softFor(pin.type, env.dataTypes.get(pin.type)?.color ?? '#34e07a'), on, Math.max(1, theme.geo.pinRing * z));
+    else drawDataPin(draw, c, (theme.geo.pinDot * z) / 2, col, theme.chrome.bodyBg, soft, on, Math.max(1, theme.geo.pinRing * z), hovered);
   }
 };
 
@@ -157,7 +161,9 @@ const drawDataPin = (
   soft: number,
   connected: boolean,
   ring: number,
+  hovered: boolean,
 ): void => {
+  if (hovered) draw.circleFilled(center, r * 2.1, soft); // brighter/larger hover halo
   if (connected) {
     draw.circleFilled(center, r * 1.8, soft); // halo
     draw.circleFilled(center, r, col);

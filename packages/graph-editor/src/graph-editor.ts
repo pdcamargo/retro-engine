@@ -87,7 +87,7 @@ export const GraphEditor = {
     // within the same frame (no one-frame drag lag).
     const pickLayout = buildLayout(doc, env, theme.geo);
     handleNavigation(ui, view, origin, hovered);
-    updateInteraction({ ui, doc, view, origin, layout: pickLayout, geo: theme.geo, hovered });
+    updateInteraction({ ui, doc, view, env, origin, layout: pickLayout, geo: theme.geo, hovered });
 
     const layout = buildLayout(doc, env, theme.geo);
     const draw = Draw.window();
@@ -117,6 +117,33 @@ export const GraphEditor = {
         selected: view.selection.has(id),
         connected,
       });
+    }
+
+    // In-progress connection wire (source pin → cursor or candidate pin).
+    if (view.interaction.k === 'connecting') {
+      const c = view.interaction;
+      const srcL = layout.nodes.get(c.from.node);
+      const srcAnchor = srcL !== undefined ? pinAnchor(srcL, c.from.pin, c.dir) : undefined;
+      if (srcAnchor !== undefined) {
+        const srcPins = c.dir === 'out' ? srcL!.outputs : srcL!.inputs;
+        const srcType = srcPins.find((p) => p.name === c.from.pin)?.type ?? 'float';
+        const src = worldToScreen(view, origin, srcAnchor[0], srcAnchor[1]);
+        const m = ui.mousePos();
+        let end: Point = [m[0], m[1]];
+        let ok = true;
+        if (c.candidate !== null) {
+          const candL = layout.nodes.get(c.candidate.node);
+          const candAnchor = candL !== undefined ? pinAnchor(candL, c.candidate.pin, c.dir === 'out' ? 'in' : 'out') : undefined;
+          if (candAnchor !== undefined) end = worldToScreen(view, origin, candAnchor[0], candAnchor[1]);
+          const out = c.dir === 'out' ? c.from : c.candidate;
+          const inp = c.dir === 'out' ? c.candidate : c.from;
+          ok = env.canConnect(doc, out, inp);
+        }
+        const col = c.candidate !== null && !ok ? theme.chrome.danger : theme.colorFor(srcType, env.dataTypes.get(srcType)?.color ?? '#34e07a');
+        // Draw output-first so the horizontal-tangent shape reads correctly.
+        const pts: Point[] = c.dir === 'out' ? [src, end] : [end, src];
+        drawWire(draw, pts, col, theme.geo.wireW * view.zoom, view.zoom);
+      }
     }
 
     // Marquee selection rectangle (over nodes).

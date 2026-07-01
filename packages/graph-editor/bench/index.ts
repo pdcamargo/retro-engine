@@ -11,6 +11,7 @@ import { run } from 'mitata';
 
 import './pick.bench';
 import './serialize.bench';
+import './wire.bench';
 
 interface NormalizedBench {
   readonly key: string;
