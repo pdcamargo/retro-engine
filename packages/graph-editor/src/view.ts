@@ -9,6 +9,7 @@
 import type { Vec2 } from '@retro-engine/editor-sdk';
 
 import type { EdgeId, NodeId, PinRef, Point, RerouteId } from './document';
+import type { DocSnapshot } from './edit';
 
 /** The current pointer interaction; only committed results mutate the document. */
 export type Interaction =
@@ -16,8 +17,8 @@ export type Interaction =
   | { k: 'panning'; startMouse: Point; startPan: Point; button: number }
   | { k: 'marquee'; startWorld: Point; additive: boolean }
   | { k: 'dragNode'; ids: NodeId[]; startMouse: Point; starts: Map<NodeId, Point>; moved: boolean }
-  | { k: 'dragReroute'; id: RerouteId; grab: Point }
-  | { k: 'dragGroup'; id: string; startMouse: Point; groupStart: Point; members: Map<NodeId, Point> }
+  | { k: 'dragReroute'; id: RerouteId; grab: Point; moved: boolean }
+  | { k: 'dragGroup'; id: string; startMouse: Point; groupStart: Point; members: Map<NodeId, Point>; moved: boolean }
   | { k: 'connecting'; from: PinRef; dir: 'in' | 'out'; candidate: PinRef | null };
 
 /** What the pointer is currently over (recomputed each frame). */
@@ -49,6 +50,8 @@ export interface GraphView {
   userNavigated: boolean;
   interaction: Interaction;
   hovered: Hover | null;
+  /** Pending undo snapshot captured at the start of a drag, flushed on release. */
+  pendingEdit: { before: DocSnapshot; label: string } | null;
 }
 
 /** Create a fresh view centered at the origin at 100% zoom. */
@@ -65,6 +68,7 @@ export const createGraphView = (opts?: Partial<Pick<GraphView, 'pan' | 'zoom' | 
   userNavigated: false,
   interaction: { k: 'idle' },
   hovered: null,
+  pendingEdit: null,
 });
 
 const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));

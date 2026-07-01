@@ -452,7 +452,7 @@ editor
   .addPanel(cap(characterCreatorPanel(state, app, stdMat, persistMaterial)))
   .addPanel(cap(systemsPanel(app)))
   .addPanel(cap(profilerPanel(app)))
-  .addPanel(cap(graphDemoPanel(graphDemo)))
+  .addPanel(cap(graphDemoPanel(graphDemo, history)))
   .addPanel(cap(mcpPanel(studioMcp, (text, meta) => pushConsoleForPanels(text, meta))))
   .setToolbar(toolbar(state, editor, app))
   .setStatusBar(statusBar(state, app));

@@ -5,7 +5,7 @@
 // reroute weight-points). It is the acceptance surface for the phased build-out;
 // consumer graphs (animation, shader) come later.
 
-import { type EditorContext, type PanelDef } from '@retro-engine/editor-sdk';
+import { type EditorContext, type History, type PanelDef } from '@retro-engine/editor-sdk';
 import {
   addGroup,
   addNode,
@@ -229,7 +229,7 @@ const addGroupAroundSelection = (d: GraphDemo): void => {
 };
 
 /** The graph-editor demo/acceptance panel. Shares its {@link GraphHost} with the MCP layer. */
-export const graphDemoPanel = (demo: GraphDemo): PanelDef => ({
+export const graphDemoPanel = (demo: GraphDemo, history: History): PanelDef => ({
   id: '/graph-demo',
   title: 'Graph Editor',
   icon: 'workflow',
@@ -266,7 +266,7 @@ export const graphDemoPanel = (demo: GraphDemo): PanelDef => ({
       ui.textMuted(`zoom ${Math.round(d.view.zoom * 100)}%  ·  ${doc.nodeOrder.length} nodes  ·  ${Object.keys(doc.edges).length} wires`);
     });
 
-    const params = { ui, doc, view: d.view, env: d.host.env, theme: d.theme };
+    const params = { ui, doc, view: d.view, env: d.host.env, theme: d.theme, history };
     // Auto-frame the graph every frame until the user pans/zooms; the Fit button
     // re-arms auto-framing. This is immune to first-frame docking-size timing.
     if (d.fitRequested) {

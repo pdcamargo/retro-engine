@@ -6,9 +6,10 @@
  * (pan/zoom) is handled separately in {@link handleNavigation}.
  */
 
-import { Keys, type Ui, type Vec2 } from '@retro-engine/editor-sdk';
+import { type History, Keys, type Ui, type Vec2 } from '@retro-engine/editor-sdk';
 
 import type { EdgeId, GraphDocument, NodeId, Point } from './document';
+import { recordGraphEdit, snapshotCommand, snapshotDoc } from './edit';
 import type { GraphEnvironment } from './environment';
 import { type GraphLayout, pick, type PickResult, pinAnchor } from './layout-cache';
 import {
@@ -38,7 +39,27 @@ export interface InteractionCtx {
   readonly geo: GraphGeometry;
   /** Whether the canvas background item is hovered (gates press-to-start + keys). */
   readonly hovered: boolean;
+  /** When provided, edits are recorded here for undo/redo (ADR-0139). */
+  readonly history?: History;
 }
+
+/** Snapshot the document at the start of a drag so it can be flushed as one undo entry on release. */
+const beginEdit = (ctx: InteractionCtx, label: string): void => {
+  if (ctx.history !== undefined) ctx.view.pendingEdit = { before: snapshotDoc(ctx.doc), label };
+};
+
+/** Flush the pending drag snapshot into the History (only if something actually changed). */
+const commitEdit = (ctx: InteractionCtx, changed: boolean): void => {
+  const p = ctx.view.pendingEdit;
+  ctx.view.pendingEdit = null;
+  if (ctx.history !== undefined && p !== null && changed) {
+    ctx.history.apply(snapshotCommand(ctx.doc, p.label, p.before, snapshotDoc(ctx.doc)));
+  }
+};
+
+/** Run a discrete mutation, recording it for undo when a history is wired. */
+const edit = <T>(ctx: InteractionCtx, label: string, mutate: () => T): T =>
+  ctx.history !== undefined ? recordGraphEdit(ctx.history, ctx.doc, label, mutate) : mutate();
 
 const clearSelection = (view: GraphView): void => {
   view.selection.clear();
@@ -115,7 +136,7 @@ export const updateInteraction = (ctx: InteractionCtx): PickResult | null => {
       // Double-click on a wire drops a reroute weight-point there.
       if (hovered && ui.isMouseDoubleClicked(0) && (hit === null || hit.k === 'reroute')) {
         const edgeId = pickEdge(ctx, mouse[0], mouse[1]);
-        if (edgeId !== null) addReroute(doc, edgeId, [world[0], world[1]], insertIndexFor(ctx, edgeId, world[0]));
+        if (edgeId !== null) edit(ctx, 'Add reroute', () => addReroute(doc, edgeId, [world[0], world[1]], insertIndexFor(ctx, edgeId, world[0])));
       } else if (hovered && ui.isMouseClicked(0)) {
         startLeftPress(ctx, hit, world, mouse);
       }
@@ -130,13 +151,22 @@ export const updateInteraction = (ctx: InteractionCtx): PickResult | null => {
       }
       break;
     case 'dragReroute':
-      if (ui.isMouseDown(0)) moveReroute(doc, st.id, [world[0] - st.grab[0], world[1] - st.grab[1]]);
-      else view.interaction = { k: 'idle' };
+      if (ui.isMouseDown(0)) {
+        const tx = world[0] - st.grab[0];
+        const ty = world[1] - st.grab[1];
+        const k = doc.reroutes[st.id];
+        if (k !== undefined && (k.pos[0] !== tx || k.pos[1] !== ty)) st.moved = true;
+        moveReroute(doc, st.id, [tx, ty]);
+      } else {
+        commitEdit(ctx, st.moved);
+        view.interaction = { k: 'idle' };
+      }
       break;
     case 'dragGroup': {
       if (ui.isMouseDown(0)) {
         const dx = world[0] - st.startMouse[0];
         const dy = world[1] - st.startMouse[1];
+        if (dx !== 0 || dy !== 0) st.moved = true;
         const g = doc.groups[st.id];
         if (g !== undefined) {
           g.rect[0] = st.groupStart[0] + dx;
@@ -144,6 +174,7 @@ export const updateInteraction = (ctx: InteractionCtx): PickResult | null => {
         }
         for (const [id, p] of st.members) moveNode(doc, id, [p[0] + dx, p[1] + dy]);
       } else {
+        commitEdit(ctx, st.moved);
         view.interaction = { k: 'idle' };
       }
       break;
@@ -158,6 +189,7 @@ export const updateInteraction = (ctx: InteractionCtx): PickResult | null => {
           if (s !== undefined) moveNode(doc, id, [s[0] + dx, s[1] + dy]);
         }
       } else {
+        commitEdit(ctx, st.moved);
         view.interaction = { k: 'idle' };
       }
       break;
@@ -172,7 +204,7 @@ export const updateInteraction = (ctx: InteractionCtx): PickResult | null => {
         if (st.candidate !== null) {
           const out = st.dir === 'out' ? st.from : st.candidate;
           const inp = st.dir === 'out' ? st.candidate : st.from;
-          if (env.canConnect(doc, out, inp)) connect(doc, out, inp);
+          if (env.canConnect(doc, out, inp)) edit(ctx, 'Connect', () => connect(doc, out, inp));
         }
         view.interaction = { k: 'idle' };
       }
@@ -199,7 +231,7 @@ const startLeftPress = (ctx: InteractionCtx, hit: PickResult | null, world: Poin
   const additive = ui.keyShift() || ui.keyCtrl();
 
   if (hit?.k === 'field') {
-    editField(ctx, hit.node, hit.name);
+    edit(ctx, 'Edit field', () => editField(ctx, hit.node, hit.name));
     return;
   }
 
@@ -218,7 +250,8 @@ const startLeftPress = (ctx: InteractionCtx, hit: PickResult | null, world: Poin
           members.set(id, [n.pos[0], n.pos[1]]);
         }
       }
-      view.interaction = { k: 'dragGroup', id: hit.id, startMouse: [world[0], world[1]], groupStart: [g.rect[0], g.rect[1]], members };
+      beginEdit(ctx, 'Move group');
+      view.interaction = { k: 'dragGroup', id: hit.id, startMouse: [world[0], world[1]], groupStart: [g.rect[0], g.rect[1]], members, moved: false };
     }
     return;
   }
@@ -230,6 +263,7 @@ const startLeftPress = (ctx: InteractionCtx, hit: PickResult | null, world: Poin
       if (!additive) clearSelection(view);
       view.selection.add(hit.id);
     }
+    beginEdit(ctx, 'Move node');
     raiseNode(doc, hit.id);
     const starts = new Map<NodeId, Point>();
     for (const id of view.selection) {
@@ -249,7 +283,10 @@ const startLeftPress = (ctx: InteractionCtx, hit: PickResult | null, world: Poin
     if (!additive) clearSelection(view);
     view.rerouteSelection.add(hit.id);
     const knot = doc.reroutes[hit.id];
-    if (knot !== undefined) view.interaction = { k: 'dragReroute', id: hit.id, grab: [world[0] - knot.pos[0], world[1] - knot.pos[1]] };
+    if (knot !== undefined) {
+      beginEdit(ctx, 'Move reroute');
+      view.interaction = { k: 'dragReroute', id: hit.id, grab: [world[0] - knot.pos[0], world[1] - knot.pos[1]], moved: false };
+    }
     return;
   }
 
@@ -298,11 +335,17 @@ const applyMarquee = (ctx: InteractionCtx, a: Point, b: Point, additive: boolean
 const handleKeys = (ctx: InteractionCtx): void => {
   const { ui, doc, view } = ctx;
   if (ui.isKeyPressed(Keys.Delete) || ui.isKeyPressed(Keys.Backspace)) {
-    for (const id of view.rerouteSelection) removeReroute(doc, id);
-    for (const id of view.edgeSelection) disconnect(doc, id);
-    for (const id of view.selection) removeNode(doc, id);
-    for (const id of view.groupSelection) removeGroup(doc, id);
-    clearSelection(view);
+    const hasSel =
+      view.rerouteSelection.size + view.edgeSelection.size + view.selection.size + view.groupSelection.size > 0;
+    if (hasSel) {
+      edit(ctx, 'Delete', () => {
+        for (const id of view.rerouteSelection) removeReroute(doc, id);
+        for (const id of view.edgeSelection) disconnect(doc, id);
+        for (const id of view.selection) removeNode(doc, id);
+        for (const id of view.groupSelection) removeGroup(doc, id);
+      });
+      clearSelection(view);
+    }
   }
   if (ui.isKeyPressed(Keys.F)) view.userNavigated = false; // re-arm host auto-frame
   const step = ui.keyShift() ? 10 : 1;

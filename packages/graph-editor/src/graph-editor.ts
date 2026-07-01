@@ -6,7 +6,7 @@
  * are hit-tested manually against the layout cache in later phases.
  */
 
-import { Draw, type Ui, type Vec2 } from '@retro-engine/editor-sdk';
+import { Draw, type History, type Ui, type Vec2 } from '@retro-engine/editor-sdk';
 
 import { drawGrid, drawScanlines, fitBounds, handleNavigation } from './canvas';
 import type { GraphDocument, GraphEdge, Point } from './document';
@@ -26,6 +26,8 @@ export interface GraphDrawParams {
   readonly view: GraphView;
   readonly env: GraphEnvironment;
   readonly theme: GraphTheme;
+  /** When provided, direct-manipulation edits record undo entries here (ADR-0139). */
+  readonly history?: History;
 }
 
 const dashedRect = (draw: Draw, mn: Point, mx: Point, col: number, dash: number, gap: number, th: number): void => {
@@ -134,7 +136,7 @@ export const GraphEditor = {
     const overMinimap = minimapNavigate(ui, pickLayout, view, origin, size);
     const canvasHovered = hovered && !overMinimap;
     handleNavigation(ui, view, origin, canvasHovered);
-    updateInteraction({ ui, doc, view, env, origin, layout: pickLayout, geo: theme.geo, hovered: canvasHovered });
+    updateInteraction({ ui, doc, view, env, origin, layout: pickLayout, geo: theme.geo, hovered: canvasHovered, ...(params.history !== undefined ? { history: params.history } : {}) });
 
     const layout = buildLayout(doc, env, theme.geo);
     const draw = Draw.window();

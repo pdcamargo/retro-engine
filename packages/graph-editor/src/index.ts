@@ -54,6 +54,9 @@ export {
 
 export { GRAPH_FORMAT_VERSION, serializeGraph, deserializeGraph } from './serialize';
 
+export type { DocSnapshot } from './edit';
+export { snapshotDoc, restoreDoc, snapshotCommand, recordGraphEdit } from './edit';
+
 export type { PinShape, DataTypeDescriptor } from './data-type';
 export { BUILTIN_DATA_TYPES, DataTypeRegistry } from './data-type';
 export type { CategoryDescriptor } from './category';

@@ -1,5 +1,3 @@
-import type { Entity } from '@retro-engine/ecs';
-import type { CustomCommand, History } from '@retro-engine/editor-sdk';
 import {
   addNode,
   addReroute,
@@ -8,6 +6,7 @@ import {
   type GraphDocument,
   GraphHost,
   moveNode,
+  recordGraphEdit,
   removeNode,
   removeReroute,
   setFieldValue,
@@ -17,50 +16,7 @@ import { asRecord, optString, reqString } from '../args';
 import type { CommandContext } from '../context';
 import { type CommandDef, defineCommand } from '../registry';
 
-const NO_ENTITY = 0 as Entity;
-
-type DocSnapshot = Pick<GraphDocument, 'nodes' | 'edges' | 'reroutes' | 'groups' | 'nodeOrder' | 'counters'>;
-
-const snapshot = (doc: GraphDocument): DocSnapshot =>
-  structuredClone({
-    nodes: doc.nodes,
-    edges: doc.edges,
-    reroutes: doc.reroutes,
-    groups: doc.groups,
-    nodeOrder: doc.nodeOrder,
-    counters: doc.counters,
-  });
-
-const restore = (doc: GraphDocument, s: DocSnapshot): void => {
-  doc.nodes = s.nodes;
-  doc.edges = s.edges;
-  doc.reroutes = s.reroutes;
-  doc.groups = s.groups;
-  doc.nodeOrder = s.nodeOrder;
-  doc.counters = s.counters;
-};
-
-/**
- * Run a pure document mutation and record it on the editor History as an
- * undoable snapshot-command (see ADR-0139): `before`/`after` are structural
- * clones of the document's collections, so undo/redo restore whole-state with
- * stable ids. Returns the mutation's result.
- */
-const graphEdit = <T>(history: History, doc: GraphDocument, label: string, mutate: () => T): T => {
-  const before = snapshot(doc);
-  const result = mutate();
-  const after = snapshot(doc);
-  const cmd: CustomCommand = {
-    kind: 'custom',
-    entity: NO_ENTITY,
-    componentName: '',
-    label,
-    apply: () => restore(doc, structuredClone(after)),
-    revert: () => restore(doc, structuredClone(before)),
-  };
-  history.apply(cmd);
-  return result;
-};
+const graphEdit = recordGraphEdit;
 
 const host = (ctx: CommandContext): GraphHost => {
   const h = ctx.app.getResource(GraphHost);
