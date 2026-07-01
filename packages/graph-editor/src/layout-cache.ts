@@ -140,7 +140,11 @@ export type PickResult =
   | { readonly k: 'pin'; readonly node: NodeId; readonly pin: string; readonly dir: 'in' | 'out' }
   | { readonly k: 'field'; readonly node: NodeId; readonly name: string }
   | { readonly k: 'reroute'; readonly id: string }
+  | { readonly k: 'group'; readonly id: string }
   | { readonly k: 'node'; readonly id: NodeId };
+
+/** Approximate world height of a group's title tab (its drag handle). */
+export const GROUP_TAB_H = 16;
 
 const dist2 = (a: Point, bx: number, by: number): number => {
   const dx = a[0] - bx;
@@ -165,6 +169,13 @@ export const pick = (
   const rerouteR2 = opts.rerouteRadius * opts.rerouteRadius;
   for (const r of Object.values(doc.reroutes)) {
     if (dist2(r.pos, wx, wy) <= rerouteR2) return { k: 'reroute', id: r.id };
+  }
+  // Group title tabs are dedicated drag handles above the group's top-left.
+  for (const g of Object.values(doc.groups)) {
+    const tabW = g.title.length * 6.5 + 16;
+    if (wx >= g.rect[0] && wx <= g.rect[0] + tabW && wy >= g.rect[1] - GROUP_TAB_H && wy <= g.rect[1]) {
+      return { k: 'group', id: g.id };
+    }
   }
   for (let i = doc.nodeOrder.length - 1; i >= 0; i--) {
     const nl = layout.nodes.get(doc.nodeOrder[i]!);

@@ -17,6 +17,7 @@ import {
   disconnect,
   moveNode,
   moveReroute,
+  removeGroup,
   removeNode,
   removeReroute,
   raiseNode,
@@ -43,10 +44,11 @@ const clearSelection = (view: GraphView): void => {
   view.selection.clear();
   view.edgeSelection.clear();
   view.rerouteSelection.clear();
+  view.groupSelection.clear();
 };
 
 const hitToHover = (hit: PickResult | null): Hover | null => {
-  if (hit === null || hit.k === 'field') return null;
+  if (hit === null || hit.k === 'field' || hit.k === 'group') return null;
   if (hit.k === 'node') return { k: 'node', id: hit.id };
   if (hit.k === 'reroute') return { k: 'reroute', id: hit.id };
   return { k: 'pin', ref: { node: hit.node, pin: hit.pin }, dir: hit.dir };
@@ -110,19 +112,42 @@ export const updateInteraction = (ctx: InteractionCtx): PickResult | null => {
   const st = view.interaction;
   switch (st.k) {
     case 'idle':
-    case 'panning':
       // Double-click on a wire drops a reroute weight-point there.
       if (hovered && ui.isMouseDoubleClicked(0) && (hit === null || hit.k === 'reroute')) {
         const edgeId = pickEdge(ctx, mouse[0], mouse[1]);
         if (edgeId !== null) addReroute(doc, edgeId, [world[0], world[1]], insertIndexFor(ctx, edgeId, world[0]));
       } else if (hovered && ui.isMouseClicked(0)) {
-        startLeftPress(ctx, hit, world);
+        startLeftPress(ctx, hit, world, mouse);
+      }
+      break;
+    case 'panning':
+      if (ui.isMouseDown(st.button)) {
+        view.pan[0] = st.startPan[0] + (mouse[0] - st.startMouse[0]);
+        view.pan[1] = st.startPan[1] + (mouse[1] - st.startMouse[1]);
+        view.userNavigated = true;
+      } else {
+        view.interaction = { k: 'idle' };
       }
       break;
     case 'dragReroute':
       if (ui.isMouseDown(0)) moveReroute(doc, st.id, [world[0] - st.grab[0], world[1] - st.grab[1]]);
       else view.interaction = { k: 'idle' };
       break;
+    case 'dragGroup': {
+      if (ui.isMouseDown(0)) {
+        const dx = world[0] - st.startMouse[0];
+        const dy = world[1] - st.startMouse[1];
+        const g = doc.groups[st.id];
+        if (g !== undefined) {
+          g.rect[0] = st.groupStart[0] + dx;
+          g.rect[1] = st.groupStart[1] + dy;
+        }
+        for (const [id, p] of st.members) moveNode(doc, id, [p[0] + dx, p[1] + dy]);
+      } else {
+        view.interaction = { k: 'idle' };
+      }
+      break;
+    }
     case 'dragNode': {
       if (ui.isMouseDown(0)) {
         const dx = world[0] - st.startMouse[0];
@@ -169,12 +194,32 @@ export const updateInteraction = (ctx: InteractionCtx): PickResult | null => {
   return hit;
 };
 
-const startLeftPress = (ctx: InteractionCtx, hit: PickResult | null, world: Point): void => {
-  const { doc, view, ui } = ctx;
+const startLeftPress = (ctx: InteractionCtx, hit: PickResult | null, world: Point, mouse: Vec2): void => {
+  const { doc, view, ui, layout } = ctx;
   const additive = ui.keyShift() || ui.keyCtrl();
 
   if (hit?.k === 'field') {
     editField(ctx, hit.node, hit.name);
+    return;
+  }
+
+  if (hit?.k === 'group') {
+    const g = doc.groups[hit.id];
+    if (g !== undefined) {
+      if (!additive) clearSelection(view);
+      view.groupSelection.add(hit.id);
+      // Drag the group with the nodes it contains.
+      const members = new Map<NodeId, Point>();
+      for (const id of doc.nodeOrder) {
+        const n = doc.nodes[id];
+        const nl = layout.nodes.get(id);
+        if (n === undefined || nl === undefined) continue;
+        if (n.pos[0] >= g.rect[0] && n.pos[1] >= g.rect[1] && n.pos[0] + nl.w <= g.rect[0] + g.rect[2] && n.pos[1] + nl.h <= g.rect[1] + g.rect[3]) {
+          members.set(id, [n.pos[0], n.pos[1]]);
+        }
+      }
+      view.interaction = { k: 'dragGroup', id: hit.id, startMouse: [world[0], world[1]], groupStart: [g.rect[0], g.rect[1]], members };
+    }
     return;
   }
 
@@ -208,12 +253,18 @@ const startLeftPress = (ctx: InteractionCtx, hit: PickResult | null, world: Poin
     return;
   }
 
-  // Empty canvas: select a wire under the cursor, else begin a marquee.
-  const mouse = ui.mousePos();
+  // Empty canvas: a wire under the cursor selects that edge.
   const edgeId = pickEdge(ctx, mouse[0], mouse[1]);
   if (edgeId !== null) {
     if (!additive) clearSelection(view);
     view.edgeSelection.add(edgeId);
+    return;
+  }
+
+  // Otherwise pan (pan tool or Space held) or begin a marquee (select tool).
+  const panMode = (view.tool === 'pan' || ui.isKeyDown(Keys.Space)) && !additive;
+  if (panMode) {
+    view.interaction = { k: 'panning', startMouse: [mouse[0], mouse[1]], startPan: [view.pan[0], view.pan[1]], button: 0 };
     return;
   }
   if (!additive) clearSelection(view);
@@ -250,6 +301,7 @@ const handleKeys = (ctx: InteractionCtx): void => {
     for (const id of view.rerouteSelection) removeReroute(doc, id);
     for (const id of view.edgeSelection) disconnect(doc, id);
     for (const id of view.selection) removeNode(doc, id);
+    for (const id of view.groupSelection) removeGroup(doc, id);
     clearSelection(view);
   }
   if (ui.isKeyPressed(Keys.F)) view.userNavigated = false; // re-arm host auto-frame

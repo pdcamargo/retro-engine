@@ -13,11 +13,15 @@ import type { EdgeId, NodeId, PinRef, Point, RerouteId } from './document';
 /** The current pointer interaction; only committed results mutate the document. */
 export type Interaction =
   | { k: 'idle' }
-  | { k: 'panning'; startMouse: Vec2; startPan: Vec2 }
+  | { k: 'panning'; startMouse: Point; startPan: Point; button: number }
   | { k: 'marquee'; startWorld: Point; additive: boolean }
   | { k: 'dragNode'; ids: NodeId[]; startMouse: Point; starts: Map<NodeId, Point>; moved: boolean }
   | { k: 'dragReroute'; id: RerouteId; grab: Point }
+  | { k: 'dragGroup'; id: string; startMouse: Point; groupStart: Point; members: Map<NodeId, Point> }
   | { k: 'connecting'; from: PinRef; dir: 'in' | 'out'; candidate: PinRef | null };
+
+/** The active canvas tool: dragging empty space pans (`'pan'`) or box-selects (`'select'`). */
+export type GraphTool = 'pan' | 'select';
 
 /** What the pointer is currently over (recomputed each frame). */
 export type Hover =
@@ -40,6 +44,10 @@ export interface GraphView {
   edgeSelection: Set<EdgeId>;
   /** Selected reroute-knot ids. */
   rerouteSelection: Set<RerouteId>;
+  /** Selected group ids. */
+  groupSelection: Set<string>;
+  /** Active tool: `'pan'` (drag empty to pan) or `'select'` (drag empty to marquee). */
+  tool: GraphTool;
   /** Whether the CRT scanline overlay is drawn. */
   scanlines: boolean;
   /** Set once the user has panned or zoomed — lets a host auto-frame until then. */
@@ -57,6 +65,8 @@ export const createGraphView = (opts?: Partial<Pick<GraphView, 'pan' | 'zoom' | 
   selection: new Set(),
   edgeSelection: new Set(),
   rerouteSelection: new Set(),
+  groupSelection: new Set(),
+  tool: 'pan',
   scanlines: opts?.scanlines ?? true,
   userNavigated: false,
   interaction: { k: 'idle' },

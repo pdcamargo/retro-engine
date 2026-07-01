@@ -71,12 +71,15 @@ export const drawMinimap = (
     draw.rectFilled(a, [Math.max(b[0], a[0] + 1), Math.max(b[1], a[1] + 1)], col, 1);
   }
 
-  // Viewport rectangle: the world region the canvas currently shows.
-  const vx0 = (origin[0] - origin[0] - view.pan[0]) / view.zoom;
+  // Viewport rectangle: the world region the canvas currently shows, clamped to
+  // the minimap so it never spills onto the working area.
+  const vx0 = -view.pan[0] / view.zoom;
   const vy0 = -view.pan[1] / view.zoom;
   const va = toMini(vx0, vy0);
   const vb = toMini(vx0 + size[0] / view.zoom, vy0 + size[1] / view.zoom);
-  draw.rect(va, vb, theme.chrome.selection, 1, 1);
+  const cx = (x: number): number => Math.max(mn[0] + 1, Math.min(mx[0] - 1, x));
+  const cy = (y: number): number => Math.max(mn[1] + 1, Math.min(mx[1] - 1, y));
+  draw.rect([cx(va[0]), cy(va[1])], [cx(vb[0]), cy(vb[1])], theme.chrome.selection, 1, 1);
 };
 
 /** Recenter the view on a world point derived from a minimap click, if the click is inside the minimap. */

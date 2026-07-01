@@ -147,14 +147,16 @@ export const GraphEditor = {
     // Subgraph groups behind everything: translucent tint, dashed border, title tab.
     for (const g of Object.values(doc.groups)) {
       const catHex = (g.categoryId !== undefined ? env.categories.get(g.categoryId)?.color : undefined) ?? '#67a6fb';
+      const selected = view.groupSelection.has(g.id);
       const mn = worldToScreen(view, origin, g.rect[0], g.rect[1]);
       const mx: Point = [mn[0] + g.rect[2] * view.zoom, mn[1] + g.rect[3] * view.zoom];
+      const borderCol = selected ? theme.chrome.selection : theme.pack(catHex);
       draw.rectFilled(mn, mx, theme.pack(catHex, 18), 6 * view.zoom);
-      dashedRect(draw, mn, mx, theme.pack(catHex), 6 * view.zoom, 4 * view.zoom, Math.max(1, view.zoom));
+      dashedRect(draw, mn, mx, borderCol, 6 * view.zoom, 4 * view.zoom, Math.max(1, (selected ? 2 : 1) * view.zoom));
       if (view.zoom >= 0.4) {
         const tabH = 16 * view.zoom;
         const tabW = (g.title.length * 6.5 + 16) * view.zoom;
-        draw.rectFilled([mn[0], mn[1] - tabH], [mn[0] + tabW, mn[1]], theme.pack(catHex, 70), 3 * view.zoom);
+        draw.rectFilled([mn[0], mn[1] - tabH], [mn[0] + tabW, mn[1]], theme.pack(catHex, selected ? 120 : 70), 3 * view.zoom);
         draw.textAt([mn[0] + 8 * view.zoom, mn[1] - tabH + 2 * view.zoom], theme.chrome.textBright, g.title, { size: theme.geo.fontLabel * view.zoom });
       }
     }

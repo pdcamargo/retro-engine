@@ -10,13 +10,16 @@ import {
   type EdgeId,
   type GraphDocument,
   type GraphEdge,
+  type GraphGroup,
   type GraphNode,
   type GraphReroute,
+  type GroupId,
   type HeaderVariant,
   mintId,
   type NodeId,
   type PinRef,
   type Point,
+  type Rect,
   type RerouteId,
 } from './document';
 
@@ -163,4 +166,39 @@ export const setFieldValue = (
 export const setCollapsed = (doc: GraphDocument, nodeId: NodeId, collapsed: boolean): void => {
   const node = doc.nodes[nodeId];
   if (node !== undefined) node.collapsed = collapsed;
+};
+
+/** Add a subgraph group container. */
+export const addGroup = (doc: GraphDocument, rect: Rect, title: string, categoryId?: string): GraphGroup => {
+  const id = mintId(doc, 'group');
+  const group: GraphGroup = { id, rect: [rect[0], rect[1], rect[2], rect[3]], title };
+  if (categoryId !== undefined) group.categoryId = categoryId;
+  doc.groups[id] = group;
+  return group;
+};
+
+/** Move a group's top-left corner in place (its width/height are unchanged). */
+export const moveGroup = (doc: GraphDocument, id: GroupId, x: number, y: number): void => {
+  const g = doc.groups[id];
+  if (g === undefined) return;
+  g.rect[0] = x;
+  g.rect[1] = y;
+};
+
+/** Remove a group container (its member nodes are untouched). */
+export const removeGroup = (doc: GraphDocument, id: GroupId): void => {
+  delete doc.groups[id];
+};
+
+/** Node ids whose rectangle lies within a group's rectangle (its members for group drag). */
+export const nodesInGroup = (doc: GraphDocument, group: GraphGroup, layoutSize: (id: NodeId) => Point): NodeId[] => {
+  const [gx, gy, gw, gh] = group.rect;
+  const out: NodeId[] = [];
+  for (const id of doc.nodeOrder) {
+    const n = doc.nodes[id];
+    if (n === undefined) continue;
+    const [w, h] = layoutSize(id);
+    if (n.pos[0] >= gx && n.pos[1] >= gy && n.pos[0] + w <= gx + gw && n.pos[1] + h <= gy + gh) out.push(id);
+  }
+  return out;
 };

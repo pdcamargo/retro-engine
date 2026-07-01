@@ -53,17 +53,13 @@ export const handleNavigation = (ui: Ui, view: GraphView, origin: Vec2, hovered:
       view.userNavigated = true;
     }
   }
-  // Middle-button drag pans. Once a drag is in flight it keeps panning even if the
-  // cursor briefly leaves the canvas; require hover only to begin.
-  const panning = view.interaction.k === 'panning';
-  if (ui.isMouseDragging(2) && (hovered || panning)) {
+  // Middle-button drag always pans (stateless — the interaction state machine
+  // owns left-button panning via the pan tool / space).
+  if (ui.isMouseDragging(2)) {
     const d = ui.mouseDragDelta(2);
     panBy(view, d[0], d[1]);
     ui.resetMouseDragDelta(2);
     view.userNavigated = true;
-    if (!panning) view.interaction = { k: 'panning', startMouse: ui.mousePos(), startPan: [view.pan[0], view.pan[1]] };
-  } else if (panning && !ui.isMouseDown(2)) {
-    view.interaction = { k: 'idle' };
   }
 };
 

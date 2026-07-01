@@ -7,6 +7,7 @@
 
 import { type EditorContext, type PanelDef } from '@retro-engine/editor-sdk';
 import {
+  addGroup,
   addNode,
   addReroute,
   connect,
@@ -201,6 +202,32 @@ export const createGraphDemo = (): GraphDemo => {
   return { host, view, theme: createGraphTheme(), fitRequested: false };
 };
 
+/** Wrap the selected nodes (or all nodes) in a new subgraph group. */
+const addGroupAroundSelection = (d: GraphDemo): void => {
+  const doc = d.host.active();
+  if (doc === undefined) return;
+  const ids = d.view.selection.size > 0 ? [...d.view.selection] : doc.nodeOrder;
+  const NW = 190;
+  const NH = 130;
+  const pad = 32;
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  let any = false;
+  for (const id of ids) {
+    const n = doc.nodes[id];
+    if (n === undefined) continue;
+    any = true;
+    minX = Math.min(minX, n.pos[0]);
+    minY = Math.min(minY, n.pos[1]);
+    maxX = Math.max(maxX, n.pos[0] + NW);
+    maxY = Math.max(maxY, n.pos[1] + NH);
+  }
+  if (!any) return;
+  addGroup(doc, [minX - pad, minY - pad, maxX - minX + pad * 2, maxY - minY + pad * 2], 'Group', 'subgraph');
+};
+
 /** The graph-editor demo/acceptance panel. Shares its {@link GraphHost} with the MCP layer. */
 export const graphDemoPanel = (demo: GraphDemo): PanelDef => ({
   id: '/graph-demo',
@@ -215,9 +242,19 @@ export const graphDemoPanel = (demo: GraphDemo): PanelDef => ({
     if (doc === undefined) return;
 
     ui.child('graph-demo-toolbar', { size: [0, 30], padding: [8, 4], noScrollbar: true }, () => {
-      if (ui.button('Fit')) d.fitRequested = true;
+      if (ui.button(d.view.tool === 'pan' ? 'Tool: Pan' : 'Tool: Select')) {
+        d.view.tool = d.view.tool === 'pan' ? 'select' : 'pan';
+      }
+      ui.setItemTooltip('Pan: drag empty space to move the canvas. Select: drag to box-select. (Middle-drag or Space+drag always pans.)');
       ui.sameLine(0, 6);
-      if (ui.button(d.view.scanlines ? 'Scanlines ✓' : 'Scanlines')) d.view.scanlines = !d.view.scanlines;
+      if (ui.button('Fit')) d.fitRequested = true;
+      ui.setItemTooltip('Frame all nodes (or press F)');
+      ui.sameLine(0, 6);
+      if (ui.button('+ Group')) addGroupAroundSelection(d);
+      ui.setItemTooltip('Group the selected nodes (drag a group by its title tab; Delete removes it)');
+      ui.sameLine(0, 6);
+      if (ui.button(d.view.scanlines ? 'Scanlines: on' : 'Scanlines: off')) d.view.scanlines = !d.view.scanlines;
+      ui.setItemTooltip('Toggle the retro CRT scanline overlay (cosmetic)');
       ui.sameLine(0, 6);
       const docs = d.host.list();
       if (docs.length > 1 && ui.button(`Kind: ${doc.kindId}`)) {
@@ -227,7 +264,9 @@ export const graphDemoPanel = (demo: GraphDemo): PanelDef => ({
         d.view.selection.clear();
         d.view.edgeSelection.clear();
         d.view.rerouteSelection.clear();
+        d.view.groupSelection.clear();
       }
+      ui.setItemTooltip('Switch which graph document is active');
       ui.sameLine(0, 12);
       ui.textMuted(`zoom ${Math.round(d.view.zoom * 100)}%  ·  ${doc.nodeOrder.length} nodes  ·  ${Object.keys(doc.edges).length} wires`);
     });

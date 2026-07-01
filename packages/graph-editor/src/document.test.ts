@@ -2,14 +2,17 @@ import { describe, expect, it } from 'bun:test';
 
 import { createGraphDocument } from './document';
 import {
+  addGroup,
   addNode,
   addReroute,
   connect,
   disconnect,
   findEdge,
   incidentEdges,
+  moveGroup,
   moveNode,
   raiseNode,
+  removeGroup,
   removeNode,
   removeReroute,
   setFieldValue,
@@ -74,6 +77,17 @@ describe('ops', () => {
     disconnect(doc, e.id);
     expect(doc.edges[e.id]).toBeUndefined();
     expect(Object.keys(doc.reroutes)).toHaveLength(0);
+  });
+
+  it('adds, moves, and removes groups', () => {
+    const { doc } = doc3();
+    const g = addGroup(doc, [10, 20, 300, 200], 'Cluster', 'subgraph');
+    expect(doc.groups[g.id]).toBeDefined();
+    expect(g.categoryId).toBe('subgraph');
+    moveGroup(doc, g.id, 50, 60);
+    expect(doc.groups[g.id]!.rect).toEqual([50, 60, 300, 200]);
+    removeGroup(doc, g.id);
+    expect(doc.groups[g.id]).toBeUndefined();
   });
 
   it('moves nodes and sets field values in place', () => {

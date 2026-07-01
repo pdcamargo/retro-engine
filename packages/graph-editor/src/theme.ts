@@ -144,7 +144,7 @@ export const createGraphTheme = (geoOverrides?: Partial<GraphGeometry>): GraphTh
     danger: packU32(p.red400[0], p.red400[1], p.red400[2]),
     gridDot: packU32(p.gray4[0], p.gray4[1], p.gray4[2], 90),
     gridDotMajor: packU32(p.gray6[0], p.gray6[1], p.gray6[2], 140),
-    scanline: packU32(0, 0, 0, 26),
+    scanline: packU32(0, 0, 0, 64),
   };
   return new GraphTheme({ ...DEFAULT_GEOMETRY, ...geoOverrides }, chrome);
 };
