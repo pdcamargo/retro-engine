@@ -60,3 +60,16 @@ export { NodeTypeRegistry } from './node-type';
 export type { ResolvedPin, ConnectRule, GraphKindOptions } from './kind';
 export { GraphKind, defaultConnectRule } from './kind';
 export { GraphEnvironment, createGraphEnvironment } from './environment';
+
+export type { GraphGeometry, GraphChrome } from './theme';
+export { GraphTheme, DEFAULT_GEOMETRY, createGraphTheme, setTheme } from './theme';
+export type { Interaction, Hover, GraphView } from './view';
+export { createGraphView, worldToScreen, screenToWorld, zoomAt, panBy } from './view';
+export type { PinLayout, FieldRowLayout, NodeLayout, GraphLayout } from './layout-cache';
+export { buildLayout, layoutNode, pinAnchor } from './layout-cache';
+export { drawGrid, drawScanlines, handleNavigation, fitBounds } from './canvas';
+export { wireTangent, drawWire } from './wire';
+export type { DrawNodeParams } from './node-render';
+export { drawNode, pinKey } from './node-render';
+export type { GraphDrawParams } from './graph-editor';
+export { GraphEditor } from './graph-editor';

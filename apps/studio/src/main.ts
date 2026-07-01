@@ -70,6 +70,7 @@ import { assetsPanel } from './assets/assets-panel';
 import { loadAssetsPrefs } from './assets/assets-panel-state';
 import { createModelSubAssetService } from './project/model-subassets';
 import { consolePanel, profilerPanel, systemsPanel } from './panels-dock';
+import { graphDemoPanel } from './panels-graph-demo';
 import { historyPanel } from './panels-history';
 import { inspectorPanel } from './panels-inspector';
 import { hierarchyPanel } from './panels-left';
@@ -446,6 +447,7 @@ editor
   .addPanel(cap(characterCreatorPanel(state, app, stdMat, persistMaterial)))
   .addPanel(cap(systemsPanel(app)))
   .addPanel(cap(profilerPanel(app)))
+  .addPanel(cap(graphDemoPanel()))
   .addPanel(cap(mcpPanel(studioMcp, (text, meta) => pushConsoleForPanels(text, meta))))
   .setToolbar(toolbar(state, editor, app))
   .setStatusBar(statusBar(state, app));

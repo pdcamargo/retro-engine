@@ -27,6 +27,7 @@
     "@retro-engine/engine": "workspace:*",
     "@retro-engine/mcp-protocol": "workspace:*",
     "@retro-engine/gltf": "workspace:*",
+    "@retro-engine/graph-editor": "workspace:*",
     "@retro-engine/math": "workspace:*",
     "@retro-engine/project": "workspace:*",
     "@retro-engine/reflect": "workspace:*",

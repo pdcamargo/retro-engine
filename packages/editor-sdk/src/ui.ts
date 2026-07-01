@@ -304,6 +304,29 @@ export interface Ui {
    * the window's top-left corner, growing right/down. Call inside a window body.
    */
   windowMousePos(): Vec2;
+  /**
+   * Whether the current window is hovered. Call inside a window body. Pass
+   * `ImGuiHoveredFlags` (e.g. child-window / allow-when-blocked) when needed.
+   */
+  isWindowHovered(flags?: number): boolean;
+  /** Whether the current window is focused. Call inside a window body. */
+  isWindowFocused(flags?: number): boolean;
+  /** Vertical mouse-wheel delta this frame (positive = scroll up / zoom in). */
+  mouseWheel(): number;
+  /** Whether a mouse button is currently held (default: left). */
+  isMouseDown(button?: number): boolean;
+  /** Whether a mouse button was pressed this frame (default: left). */
+  isMouseClicked(button?: number): boolean;
+  /** Whether a mouse button was released this frame (default: left). */
+  isMouseReleased(button?: number): boolean;
+  /** Whether a mouse button was double-clicked this frame (default: left). */
+  isMouseDoubleClicked(button?: number): boolean;
+  /** Whether a mouse button is being dragged past a small threshold (default: left). */
+  isMouseDragging(button?: number, threshold?: number): boolean;
+  /** Drag delta for a mouse button since the drag began (default: left). */
+  mouseDragDelta(button?: number): Vec2;
+  /** Reset a mouse button's drag delta accumulator (default: left). */
+  resetMouseDragDelta(button?: number): void;
 }
 
 const colored = (color: Rgba, value: string): void => {
@@ -666,6 +689,46 @@ export const ui: Ui = {
     const m = ImGui.GetMousePos();
     const p = ImGui.GetWindowPos();
     return [m.x - p.x, m.y - p.y];
+  },
+
+  isWindowHovered(flags?: number): boolean {
+    return ImGui.IsWindowHovered(flags ?? 0);
+  },
+
+  isWindowFocused(flags?: number): boolean {
+    return ImGui.IsWindowFocused(flags ?? 0);
+  },
+
+  mouseWheel(): number {
+    return ImGui.GetIO().MouseWheel;
+  },
+
+  isMouseDown(button = 0): boolean {
+    return ImGui.IsMouseDown(button);
+  },
+
+  isMouseClicked(button = 0): boolean {
+    return ImGui.IsMouseClicked(button, false);
+  },
+
+  isMouseReleased(button = 0): boolean {
+    return ImGui.IsMouseReleased(button);
+  },
+
+  isMouseDoubleClicked(button = 0): boolean {
+    return ImGui.IsMouseDoubleClicked(button);
+  },
+
+  isMouseDragging(button = 0, threshold = -1): boolean {
+    return ImGui.IsMouseDragging(button, threshold);
+  },
+
+  mouseDragDelta(button = 0): Vec2 {
+    return toVec2(ImGui.GetMouseDragDelta(button, -1));
+  },
+
+  resetMouseDragDelta(button = 0): void {
+    ImGui.ResetMouseDragDelta(button);
   },
 };
 

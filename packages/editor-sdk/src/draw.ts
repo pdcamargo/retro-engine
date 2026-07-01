@@ -1,5 +1,6 @@
 import { type ImDrawList, ImGui, ImGuiCol, type ImTextureRef, ImVec2 } from '@mori2003/jsimgui';
 
+import { getFont } from './fonts';
 import { packU32 } from './palette';
 import type { Vec2 } from './units';
 
@@ -56,6 +57,25 @@ export class Draw {
     ImGui.PopStyleColor(1);
     ImGui.SetCursorScreenPos(prev);
     ImGui.Dummy(ZERO);
+  }
+
+  /**
+   * Draw text directly into the draw list at an explicit pixel size, **without**
+   * submitting an ImGui item (unlike {@link text}, which submits one per call).
+   * Use this for high-volume, transform-positioned labels (node titles, pin
+   * names) where item overhead and ID-stack pollution would be prohibitive.
+   * `opts.font` names a registered font (falls back to the current font);
+   * `opts.size` is the pixel size (falls back to the current font size).
+   */
+  textAt(pos: Vec2, col: number, text: string, opts?: { font?: string; size?: number }): void {
+    const font = (opts?.font !== undefined ? getFont(opts.font) : undefined) ?? ImGui.GetFont();
+    const size = opts?.size ?? ImGui.GetFontSize();
+    this.dl.AddTextImFontPtr(font, size, v(pos), col, text);
+  }
+
+  /** A cubic bezier curve through the two endpoints `p1`/`p4` and controls `p2`/`p3`. */
+  bezierCubic(p1: Vec2, p2: Vec2, p3: Vec2, p4: Vec2, col: number, thickness: number, segments = 0): void {
+    this.dl.AddBezierCubic(v(p1), v(p2), v(p3), v(p4), col, thickness, segments);
   }
 
   circleFilled(center: Vec2, radius: number, col: number, segments = 0): void {
