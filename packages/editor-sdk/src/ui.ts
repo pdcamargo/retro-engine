@@ -126,6 +126,8 @@ export interface InputTextOptions {
   readonly readOnly?: boolean;
   /** Width in pixels; defaults to the available content width. */
   readonly width?: number;
+  /** A leading icon drawn inside the field on the left; text is inset past it (e.g. a search glyph). */
+  readonly icon?: IconName | (string & {});
 }
 
 /**
@@ -223,6 +225,13 @@ export interface Ui {
    */
   setKeyboardFocusHere(offset?: number): void;
 
+  /** Open a named popup (call once, e.g. from a custom button's click). */
+  openPopup(id: string): void;
+  /** Render `body` while the named popup is open (a floating menu anchored to the caller). */
+  popup(id: string, body: () => void): void;
+  /** Close the current popup from within its body (e.g. after a menu choice). */
+  closePopup(): void;
+
   /** Whether the last item is hovered. */
   isItemHovered(): boolean;
   /** Whether the last item is held down. */
@@ -233,6 +242,8 @@ export interface Ui {
   isItemActivated(): boolean;
   /** Whether the last item ended interaction this frame after an edit (drag released, field blurred). */
   isItemDeactivatedAfterEdit(): boolean;
+  /** Whether the last item ended interaction this frame (blur without edit, e.g. Escape). */
+  isItemDeactivated(): boolean;
   /** Whether the last item's value changed this frame. */
   isItemEdited(): boolean;
   /** The last item's interaction edges in one read — for coalescing a scrub into a single undo step. */
@@ -519,10 +530,26 @@ export const ui: Ui = {
     let flags = 0;
     if (options?.password === true) flags |= 1 << 15; // ImGuiInputTextFlags_Password
     if (options?.readOnly === true) flags |= 1 << 14; // ImGuiInputTextFlags_ReadOnly
+    // A leading icon: inset the frame's left padding so text clears the glyph, then
+    // draw the glyph centered in that inset after the field renders.
+    const icon = options?.icon;
+    const ICON = 15;
+    const cur = icon !== undefined ? ImGui.GetCursorScreenPos() : undefined;
+    let padY = 0;
+    if (icon !== undefined) {
+      const fp = ImGui.GetStyle().FramePadding;
+      padY = fp.y;
+      ImGui.PushStyleVarImVec2(ImGuiStyleVar.FramePadding, new ImVec2(ICON + 10, padY));
+    }
     if (options?.hint !== undefined) {
       ImGui.InputTextWithHint(label, options.hint, ref, value.length + 256, flags);
     } else {
       ImGui.InputText(label, ref, value.length + 256, flags);
+    }
+    if (icon !== undefined && cur !== undefined) {
+      ImGui.PopStyleVar();
+      const h = ImGui.GetFrameHeight();
+      drawIcon(icon, [cur.x + 7, cur.y + (h - ICON) / 2], ICON, packU32(...getActivePalette().textMuted));
     }
     return ref[0];
   },
@@ -587,6 +614,21 @@ export const ui: Ui = {
     ImGui.SetKeyboardFocusHere(offset ?? 0);
   },
 
+  openPopup(id: string): void {
+    ImGui.OpenPopup(`pop-${id}`);
+  },
+
+  popup(id: string, body: () => void): void {
+    if (ImGui.BeginPopup(`pop-${id}`)) {
+      body();
+      ImGui.EndPopup();
+    }
+  },
+
+  closePopup(): void {
+    ImGui.CloseCurrentPopup();
+  },
+
   isItemHovered(): boolean {
     return ImGui.IsItemHovered();
   },
@@ -605,6 +647,10 @@ export const ui: Ui = {
 
   isItemDeactivatedAfterEdit(): boolean {
     return ImGui.IsItemDeactivatedAfterEdit();
+  },
+
+  isItemDeactivated(): boolean {
+    return ImGui.IsItemDeactivated();
   },
 
   isItemEdited(): boolean {

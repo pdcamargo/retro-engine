@@ -377,6 +377,40 @@ export const drawIcon = (name: string, min: Vec2, size: number, col: number): vo
       line(0.5, 0.4, 0.5, 0.63);
       dot(0.5, 0.74, 0.045);
       break;
+    case 'minus':
+      line(0.22, 0.5, 0.78, 0.5);
+      break;
+    case 'scan':
+      // Four corner brackets (Lucide scan) — used for masks.
+      line(0.2, 0.34, 0.2, 0.2);
+      line(0.2, 0.2, 0.34, 0.2);
+      line(0.8, 0.34, 0.8, 0.2);
+      line(0.8, 0.2, 0.66, 0.2);
+      line(0.2, 0.66, 0.2, 0.8);
+      line(0.2, 0.8, 0.34, 0.8);
+      line(0.8, 0.66, 0.8, 0.8);
+      line(0.8, 0.8, 0.66, 0.8);
+      break;
+    case 'git-fork':
+      circle(0.3, 0.26, 0.1);
+      circle(0.7, 0.26, 0.1);
+      circle(0.5, 0.74, 0.1);
+      line(0.3, 0.36, 0.3, 0.48);
+      line(0.7, 0.36, 0.7, 0.48);
+      line(0.3, 0.48, 0.7, 0.48);
+      line(0.5, 0.48, 0.5, 0.64);
+      break;
+    case 'shuffle':
+      line(0.16, 0.7, 0.84, 0.3);
+      tri(0.86, 0.28, 0.7, 0.28, 0.78, 0.42);
+      line(0.16, 0.3, 0.84, 0.7);
+      tri(0.86, 0.72, 0.7, 0.72, 0.78, 0.58);
+      break;
+    case 'move-horizontal':
+      line(0.16, 0.5, 0.84, 0.5);
+      tri(0.1, 0.5, 0.26, 0.4, 0.26, 0.6);
+      tri(0.9, 0.5, 0.74, 0.4, 0.74, 0.6);
+      break;
     default:
       dl.rect(p(0.22, 0.22), p(0.78, 0.78), col, 0.12 * size, t);
       dot(0.5, 0.5, 0.06);
