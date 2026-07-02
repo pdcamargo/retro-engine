@@ -450,94 +450,19 @@ export const addAnimationSampling = (app: App): void => {
         return pose;
       };
 
-      // Single-clip players: one weighted source through the pose pipeline.
-      for (const [playerEntity, player] of players.entries()) {
-        resolverPlayer = playerEntity;
-        const clip = playerClips.get(player.clip);
-        if (clip === undefined) continue;
-
-        if (player.playing) {
-          const advanced = advancePlayerTime(
-            player.time,
-            time.virtual.delta * player.speed,
-            clip.duration,
-            player.repeat,
-          );
-          player.time = advanced.time;
-          player.playing = advanced.playing;
-        }
-
-        const ids = byPlayer.get(playerEntity);
-        if (ids === undefined) continue;
-        inputs.length = 0;
-        inputs.push({ clip, time: player.time, weight: 1 });
-        applyBlendInputs(app, registry, inputs, ids, poseFor(playerEntity), slotByTargetId, slotEntities, scratch);
-      }
-
-      // Controller players: state machine → blended motions through the pose pipeline.
-      for (const [playerEntity, player] of controllerPlayers.entries()) {
-        const controller = controllers.get(player.controller);
-        if (controller === undefined || controller.states.length === 0) continue;
-
-        let runtime = runtimes.byPlayer.get(playerEntity) as ControllerRuntime | undefined;
-        if (runtime === undefined || runtime.phase.length !== controller.states.length) {
-          runtime = createControllerRuntime(controller.states.length);
-          runtimes.byPlayer.set(playerEntity, runtime);
-        }
-
-        resolverPlayer = playerEntity;
-        ensureParameterDefaults(player.parameters, controller);
-        const params = makeParameterAccess(player.parameters);
-        const resolveClip = (h: Handle<AnimationClip>): AnimationClip | undefined => playerClips.get(h);
-        const durationOf = (stateIndex: number): number =>
-          motionDuration(controller.states[stateIndex]!.motion, resolveClip);
-
-        if (player.playing) {
-          stepController(controller, runtime, params, time.virtual.delta * player.speed, durationOf);
-        } else if (runtime.currentState < 0) {
-          stepController(controller, runtime, params, 0, durationOf);
-        }
-
-        const ids = byPlayer.get(playerEntity);
-        if (ids === undefined) continue;
-
-        const weights = stateWeights(runtime);
-
-        inputs.length = 0;
-        if (runtime.fromState >= 0) {
-          evaluateMotion(
-            controller.states[runtime.fromState]!.motion,
-            runtime.phase[runtime.fromState]!,
-            weights.from,
-            params.get,
-            resolveClip,
-            motionScratch,
-            inputs,
-          );
-        }
-        evaluateMotion(
-          controller.states[runtime.currentState]!.motion,
-          runtime.phase[runtime.currentState]!,
-          weights.current,
-          params.get,
-          resolveClip,
-          motionScratch,
-          inputs,
-        );
-        applyBlendInputs(app, registry, inputs, ids, poseFor(playerEntity), slotByTargetId, slotEntities, scratch);
-      }
-
-      // Layered players: a stack of clip/controller layers blended bottom-up
-      // (override or additive, masked per layer) into one pose, committed once.
-      for (const [playerEntity, stack] of layered.entries()) {
-        if (stack.layers.length === 0) continue;
+      // Drive one layer stack bottom-up (override/additive, masked per layer) into
+      // a single accumulated pose and commit it once. Shared by standalone
+      // `AnimationLayers` and by a controller player whose controller declares
+      // `layers` (its base machine is prepended as layer 0).
+      const driveStack = (playerEntity: Entity, layers: AnimationLayer[]): void => {
+        if (layers.length === 0) return;
         resolverPlayer = playerEntity;
         const ids = byPlayer.get(playerEntity);
-        if (ids === undefined) continue;
+        if (ids === undefined) return;
 
         let layerRts = layerRuntimes.byPlayer.get(playerEntity);
-        if (layerRts === undefined || layerRts.length !== stack.layers.length) {
-          layerRts = stack.layers.map((): LayerRuntime => ({ time: 0 }));
+        if (layerRts === undefined || layerRts.length !== layers.length) {
+          layerRts = layers.map((): LayerRuntime => ({ time: 0 }));
           layerRuntimes.byPlayer.set(playerEntity, layerRts);
         }
 
@@ -547,7 +472,7 @@ export const addAnimationSampling = (app: App): void => {
         slotEntities.length = 0;
         slotTargetIds.length = 0;
         layoutClips.length = 0;
-        for (const layer of stack.layers) collectLayerClips(layer, playerClips, controllers, layoutClips);
+        for (const layer of layers) collectLayerClips(layer, playerClips, controllers, layoutClips);
         for (const clip of layoutClips) {
           for (const track of clip.tracks) {
             if (boneTrackField(track) === undefined) continue;
@@ -563,7 +488,7 @@ export const addAnimationSampling = (app: App): void => {
         const jointCount = slotEntities.length;
 
         let hasAdditive = false;
-        for (const layer of stack.layers) {
+        for (const layer of layers) {
           if (layer.blend === 'additive') {
             hasAdditive = true;
             break;
@@ -621,8 +546,8 @@ export const addAnimationSampling = (app: App): void => {
         for (let s = 0; s < jointCount; s++) acc.targets[s] = slotEntities[s]!;
 
         const dt = time.virtual.delta;
-        for (let li = 0; li < stack.layers.length; li++) {
-          const layer = stack.layers[li]!;
+        for (let li = 0; li < layers.length; li++) {
+          const layer = layers[li]!;
           const rt = layerRts[li]!;
           evaluateLayerInputs(layer, rt, dt, playerClips, controllers, inputs, motionScratch);
           if (inputs.length === 0) continue;
@@ -650,6 +575,110 @@ export const addAnimationSampling = (app: App): void => {
         }
 
         if (jointCount > 0) commitPoseToTransforms(acc, app.world);
+      };
+
+      // Single-clip players: one weighted source through the pose pipeline.
+      for (const [playerEntity, player] of players.entries()) {
+        resolverPlayer = playerEntity;
+        const clip = playerClips.get(player.clip);
+        if (clip === undefined) continue;
+
+        if (player.playing) {
+          const advanced = advancePlayerTime(
+            player.time,
+            time.virtual.delta * player.speed,
+            clip.duration,
+            player.repeat,
+          );
+          player.time = advanced.time;
+          player.playing = advanced.playing;
+        }
+
+        const ids = byPlayer.get(playerEntity);
+        if (ids === undefined) continue;
+        inputs.length = 0;
+        inputs.push({ clip, time: player.time, weight: 1 });
+        applyBlendInputs(app, registry, inputs, ids, poseFor(playerEntity), slotByTargetId, slotEntities, scratch);
+      }
+
+      // Controller players: state machine → blended motions through the pose pipeline.
+      for (const [playerEntity, player] of controllerPlayers.entries()) {
+        const controller = controllers.get(player.controller);
+        if (controller === undefined || controller.states.length === 0) continue;
+
+        // A controller that declares layers composes as a stack: its base machine
+        // is layer 0 (a controller-source layer over this same controller), with the
+        // authored layers above it, driven through the shared layered path.
+        if (controller.layers.length > 0) {
+          driveStack(playerEntity, [
+            {
+              weight: 1,
+              blend: 'override',
+              source: {
+                kind: 'controller',
+                controller: player.controller,
+                speed: player.speed,
+                playing: player.playing,
+                parameters: player.parameters,
+              },
+            },
+            ...controller.layers,
+          ]);
+          continue;
+        }
+
+        let runtime = runtimes.byPlayer.get(playerEntity) as ControllerRuntime | undefined;
+        if (runtime === undefined || runtime.phase.length !== controller.states.length) {
+          runtime = createControllerRuntime(controller.states.length);
+          runtimes.byPlayer.set(playerEntity, runtime);
+        }
+
+        resolverPlayer = playerEntity;
+        ensureParameterDefaults(player.parameters, controller);
+        const params = makeParameterAccess(player.parameters);
+        const resolveClip = (h: Handle<AnimationClip>): AnimationClip | undefined => playerClips.get(h);
+        const durationOf = (stateIndex: number): number =>
+          motionDuration(controller.states[stateIndex]!.motion, resolveClip);
+
+        if (player.playing) {
+          stepController(controller, runtime, params, time.virtual.delta * player.speed, durationOf);
+        } else if (runtime.currentState < 0) {
+          stepController(controller, runtime, params, 0, durationOf);
+        }
+
+        const ids = byPlayer.get(playerEntity);
+        if (ids === undefined) continue;
+
+        const weights = stateWeights(runtime);
+
+        inputs.length = 0;
+        if (runtime.fromState >= 0) {
+          evaluateMotion(
+            controller.states[runtime.fromState]!.motion,
+            runtime.phase[runtime.fromState]!,
+            weights.from,
+            params.get,
+            resolveClip,
+            motionScratch,
+            inputs,
+          );
+        }
+        evaluateMotion(
+          controller.states[runtime.currentState]!.motion,
+          runtime.phase[runtime.currentState]!,
+          weights.current,
+          params.get,
+          resolveClip,
+          motionScratch,
+          inputs,
+        );
+        applyBlendInputs(app, registry, inputs, ids, poseFor(playerEntity), slotByTargetId, slotEntities, scratch);
+      }
+
+      // Layered players: a stack of clip/controller layers blended bottom-up
+      // (override or additive, masked per layer) into one pose, committed once.
+      for (const [playerEntity, stack] of layered.entries()) {
+        driveStack(playerEntity, stack.layers);
       }
     },
     { name: 'animation-sample', label: 'animation-sample' },

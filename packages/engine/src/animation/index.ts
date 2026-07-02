@@ -48,6 +48,7 @@ export {
 } from './animation-controller';
 export type {
   ConditionOp,
+  ControllerLayer,
   ControllerParameter,
   ControllerState,
   Motion,

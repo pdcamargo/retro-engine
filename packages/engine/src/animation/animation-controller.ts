@@ -1,6 +1,7 @@
 import type { Handle } from '@retro-engine/assets';
 
 import type { AnimationClip } from './animation-clip';
+import type { AnimationLayer } from './animation-layers';
 import type { Blend2dMode } from './blend-tree';
 import { weights1d, weights2d } from './blend-tree';
 
@@ -36,11 +37,15 @@ export type Motion =
   | { readonly kind: 'clip'; readonly clip: Handle<AnimationClip> }
   | {
       readonly kind: 'blend1d';
+      /** Optional author-facing name, shown when this blend is a child of another tree. */
+      readonly name?: string;
       readonly parameter: string;
       readonly children: readonly { readonly motion: Motion; readonly threshold: number }[];
     }
   | {
       readonly kind: 'blend2d';
+      /** Optional author-facing name, shown when this blend is a child of another tree. */
+      readonly name?: string;
       readonly mode: Blend2dMode;
       readonly parameterX: string;
       readonly parameterY: string;
@@ -81,11 +86,24 @@ export interface Transition {
 }
 
 /**
+ * One additional layer stacked on top of a controller's base state machine. The
+ * controller's own `parameters`/`states`/`transitions` are the base layer
+ * (index 0, always full-body at weight 1); `layers` holds the layers composited
+ * above it, bottom-first. Structurally an {@link AnimationLayer} (weight, blend
+ * mode, optional mask, and a clip-or-controller source) plus a display `name`.
+ */
+export interface ControllerLayer extends AnimationLayer {
+  /** Label shown in the editor's Layers list. */
+  name: string;
+}
+
+/**
  * A reusable animation state machine: parameters, states (each playing a clip or
- * blend tree), and condition-driven transitions. Entity-agnostic and shareable
- * like an {@link AnimationClip} — an `AnimationControllerPlayer` binds it to a
- * concrete rig. Drives bone `Transform`s through the pose pipeline; states blend
- * within a blend tree and crossfade across a transition.
+ * blend tree), condition-driven transitions, and an optional stack of additional
+ * `layers` composited over the base machine. Entity-agnostic and shareable like an
+ * {@link AnimationClip} — an `AnimationControllerPlayer` binds it to a concrete
+ * rig. Drives bone `Transform`s through the pose pipeline; states blend within a
+ * blend tree and crossfade across a transition, and layers override/add on top.
  */
 export class AnimationController {
   constructor(
@@ -95,6 +113,8 @@ export class AnimationController {
     /** Index of the state entered when a player first evaluates the controller. */
     public defaultState: number = 0,
     public name?: string,
+    /** Layers composited over the base machine, bottom-first; empty for a single-layer controller. */
+    public layers: ControllerLayer[] = [],
   ) {}
 }
 

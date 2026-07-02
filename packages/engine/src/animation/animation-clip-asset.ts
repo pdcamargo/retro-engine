@@ -1,6 +1,7 @@
 import type { AssetImporter, AssetSerializer } from '@retro-engine/assets';
 import { Assets } from '@retro-engine/assets';
 import type { FieldPath } from '@retro-engine/reflect';
+import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 
 import { AnimationClip, type AnimationTrack, type Interpolation } from './animation-clip';
 
@@ -51,11 +52,11 @@ const encodeClip = (clip: AnimationClip): Uint8Array => {
       },
     })),
   };
-  return new TextEncoder().encode(JSON.stringify(file));
+  return new TextEncoder().encode(stringifyYaml(file));
 };
 
 const decodeClip = (bytes: Uint8Array): AnimationClip => {
-  const raw = JSON.parse(new TextDecoder().decode(bytes)) as Partial<AnimationClipFile>;
+  const raw = parseYaml(new TextDecoder().decode(bytes)) as Partial<AnimationClipFile>;
   if (raw.version !== ANIMATION_CLIP_FORMAT_VERSION) {
     throw new Error(
       `AnimationClip: unsupported format version ${String(raw.version)} (expected ${ANIMATION_CLIP_FORMAT_VERSION})`,
@@ -77,16 +78,17 @@ const decodeClip = (bytes: Uint8Array): AnimationClip => {
 };
 
 /**
- * Build the {@link AssetImporter} that turns `.ranim` bytes (UTF-8 JSON) into an
+ * Build the {@link AssetImporter} that turns `.ranim` bytes (UTF-8 YAML) into an
  * {@link AnimationClip}. Synchronous — a clip is self-contained, with no external
- * buffers to resolve.
+ * buffers to resolve. YAML is a JSON superset, so legacy JSON-encoded clips still
+ * load.
  */
 export const createAnimationClipImporter = (): AssetImporter<AnimationClip> => (bytes) =>
   decodeClip(bytes);
 
 /**
  * Build the {@link AssetSerializer} that round-trips an {@link AnimationClip}
- * through its canonical `.ranim` JSON form — the inverse of
+ * through its canonical `.ranim` YAML form — the inverse of
  * {@link createAnimationClipImporter}.
  */
 export const createAnimationClipSerializer = (): AssetSerializer<AnimationClip> => ({

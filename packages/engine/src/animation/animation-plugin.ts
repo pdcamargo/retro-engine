@@ -110,7 +110,7 @@ export class AnimationPlugin implements PluginObject {
     registerAssetSerializer(
       app,
       ANIMATION_CONTROLLER_ASSET_KIND,
-      createAnimationControllerSerializer(clips),
+      createAnimationControllerSerializer(clips, controllers, masks),
     );
     // `.ranimctrl` files reference clips by GUID and, like `.ranim`, are authored/
     // saved with a sidecar rather than dropped in loose.
@@ -139,7 +139,7 @@ export class AnimationPlugin implements PluginObject {
     // moment it is inserted — in both cases before any scene loads.
     app.whenResource(AssetServer, (server) => {
       server.registerLoader('ranim', clips, createAnimationClipImporter());
-      server.registerLoader('ranimctrl', controllers, createAnimationControllerImporter(clips));
+      server.registerLoader('ranimctrl', controllers, createAnimationControllerImporter(clips, controllers, masks));
       server.registerLoader('ramask', masks, createAvatarMaskImporter());
       // glTF labels its extracted clips `Animation0`, `Animation1`, … so a
       // sub-asset reference `"<modelGuid>#Animation0"` resolves into this store.

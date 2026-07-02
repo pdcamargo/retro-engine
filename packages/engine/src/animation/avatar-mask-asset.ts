@@ -1,5 +1,6 @@
 import type { AssetImporter, AssetSerializer } from '@retro-engine/assets';
 import { Assets } from '@retro-engine/assets';
+import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 
 import { AvatarMask } from './avatar-mask';
 
@@ -24,11 +25,11 @@ const encodeMask = (mask: AvatarMask): Uint8Array => {
     ...(mask.name !== undefined ? { name: mask.name } : {}),
     included: mask.ids(),
   };
-  return new TextEncoder().encode(JSON.stringify(file));
+  return new TextEncoder().encode(stringifyYaml(file));
 };
 
 const decodeMask = (bytes: Uint8Array): AvatarMask => {
-  const raw = JSON.parse(new TextDecoder().decode(bytes)) as Partial<AvatarMaskFile>;
+  const raw = parseYaml(new TextDecoder().decode(bytes)) as Partial<AvatarMaskFile>;
   if (raw.version !== AVATAR_MASK_FORMAT_VERSION) {
     throw new Error(
       `AvatarMask: unsupported format version ${String(raw.version)} (expected ${AVATAR_MASK_FORMAT_VERSION})`,
@@ -41,14 +42,15 @@ const decodeMask = (bytes: Uint8Array): AvatarMask => {
 };
 
 /**
- * Build the {@link AssetImporter} that turns `.ramask` bytes (UTF-8 JSON) into an
- * {@link AvatarMask}. Synchronous — a mask is self-contained.
+ * Build the {@link AssetImporter} that turns `.ramask` bytes (UTF-8 YAML) into an
+ * {@link AvatarMask}. Synchronous — a mask is self-contained. YAML is a JSON
+ * superset, so legacy JSON-encoded masks still load.
  */
 export const createAvatarMaskImporter = (): AssetImporter<AvatarMask> => (bytes) => decodeMask(bytes);
 
 /**
  * Build the {@link AssetSerializer} that round-trips an {@link AvatarMask} through
- * its canonical `.ramask` JSON form — the inverse of {@link createAvatarMaskImporter}.
+ * its canonical `.ramask` YAML form — the inverse of {@link createAvatarMaskImporter}.
  */
 export const createAvatarMaskSerializer = (): AssetSerializer<AvatarMask> => ({
   serialize: (mask) => encodeMask(mask),
