@@ -71,6 +71,9 @@ import { loadAssetsPrefs } from './assets/assets-panel-state';
 import { createModelSubAssetService } from './project/model-subassets';
 import { consolePanel, profilerPanel, systemsPanel } from './panels-dock';
 import { createGraphDemo, graphDemoPanel } from './panels-graph-demo';
+import { animatorPanel } from './animator/animator-panel';
+import { createAnimatorSession, enterBlendTree, exitToStateMachine } from './animator/animator-session';
+import { type AcAssetDeps, createControllerAsset, openControllerByGuid } from './animator/ac-asset';
 import { historyPanel } from './panels-history';
 import { inspectorPanel } from './panels-inspector';
 import { hierarchyPanel } from './panels-left';
@@ -431,11 +434,36 @@ if (thumbnailRenderer !== undefined) {
 const graphDemo = createGraphDemo();
 app.insertResource(graphDemo.host);
 
+// The Animation Controller editor session (its own graph host + view).
+const animatorSession = createAnimatorSession();
+// Dev probe (mirrors window.__studioMcp): lets MCP eval inspect/drive the Animator
+// selection without synthetic canvas clicks (jsimgui ignores those).
+(window as unknown as { __animatorSession: unknown }).__animatorSession = animatorSession;
+(window as unknown as { __animatorEnter: unknown }).__animatorEnter = (s: number, p: number[]) => enterBlendTree(animatorSession, s, p);
+(window as unknown as { __animatorExit: unknown }).__animatorExit = () => exitToStateMachine(animatorSession);
+// On-disk helpers need the project sink, which resolves only once a project opens.
+const acAssetDeps = (): AcAssetDeps | null =>
+  projectSink === null
+    ? null
+    : {
+        app,
+        session: animatorSession,
+        sink: projectSink,
+        reindex: async () => {
+          await reindexProjectAssets?.();
+        },
+      };
+const newAnimationControllerInFolder = (dir: string): void => {
+  const deps = acAssetDeps();
+  if (deps === null) return;
+  void createControllerAsset(deps, dir === '' ? 'assets' : dir, 'New Animation Controller');
+};
+
 editor
   .addPanel(cap(hierarchyPanel(state, app, runCommand)))
   .addPanel(cap(scenePanel(state, editorView, sceneGizmos, sceneCamera, scenePicker, orientationGizmo, sceneDrop)))
   .addPanel(cap(gamePanel(state, gameView)))
-  .addPanel(cap(inspectorPanel(state, app, editor.inspector, history, editor.assetEditors, extractMaterialCopy)))
+  .addPanel(cap(inspectorPanel(state, app, editor.inspector, history, editor.assetEditors, extractMaterialCopy, animatorSession, acAssetDeps)))
   .addPanel(cap(historyPanel(state, app, history)))
   .addPanel(cap(consolePanel(state)))
   .addPanel(
@@ -444,7 +472,12 @@ editor
         subs: modelSubAssets,
         onActivate: (asset) => {
           if (asset.type === 'bundle') openBundleForEdit(asset);
+          else if (asset.location.endsWith('.ranimctrl')) {
+            const deps = acAssetDeps();
+            if (deps !== null) openControllerByGuid(deps, asset.guid, asset.location);
+          }
         },
+        onCreateController: newAnimationControllerInFolder,
         runCommand,
       }),
     ),
@@ -453,6 +486,7 @@ editor
   .addPanel(cap(systemsPanel(app)))
   .addPanel(cap(profilerPanel(app)))
   .addPanel(cap(graphDemoPanel(graphDemo, history)))
+  .addPanel(cap(animatorPanel(animatorSession, history, acAssetDeps, state)))
   .addPanel(cap(mcpPanel(studioMcp, (text, meta) => pushConsoleForPanels(text, meta))))
   .setToolbar(toolbar(state, editor, app))
   .setStatusBar(statusBar(state, app));

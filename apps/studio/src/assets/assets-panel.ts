@@ -31,6 +31,8 @@ export interface AssetsPanelDeps {
   readonly subs: ModelSubAssetService;
   /** Activate an asset (e.g. open a bundle for editing). */
   readonly onActivate?: (asset: BrowserAsset) => void;
+  /** Create a new Animation Controller in the given folder (empty-space "New" menu). */
+  readonly onCreateController?: (dir: string) => void;
   /** Invoke an editor command (drag-and-drop authors prefabs through it). */
   readonly runCommand: RunCommand;
 }
@@ -201,6 +203,13 @@ export const assetsPanel = (state: StudioState, deps: AssetsPanelDeps): PanelDef
           if (rest[1] > 4) {
             ui.invisibleButton('assets-drop-prefab', [Math.max(rest[0], 1), rest[1]]);
             ui.dropTarget(prefabDrop);
+            // Right-clicking the empty grid offers a "New" menu (create-on-disk).
+            if (deps.onCreateController !== undefined) {
+              ctx.widgets.contextMenu('assets-bg-menu', [
+                { heading: 'NEW' },
+                { label: 'Animation Controller', icon: 'film', onClick: () => deps.onCreateController?.(st.folder) },
+              ]);
+            }
           }
         });
       });

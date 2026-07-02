@@ -21,6 +21,9 @@ import type { AssetGuid } from '@retro-engine/assets';
 import { type App, AppTypeRegistry, AssetServer, Name } from '@retro-engine/engine';
 import { gltfAnchorForEntity } from '@retro-engine/gltf';
 
+import type { AcAssetDeps } from './animator/ac-asset';
+import { renderAnimatorInspectorBody } from './animator/ac-inspector';
+import type { AnimatorSession } from './animator/animator-session';
 import { openComposer } from './composer/composer-state';
 import { type StudioState } from './state';
 
@@ -37,6 +40,8 @@ export const inspectorPanel = (
   history: History,
   assetEditors: AssetEditorRegistry,
   onExtractCopy: (sel: AssetSelection) => void,
+  animatorSession: AnimatorSession,
+  acDeps: () => AcAssetDeps | null,
 ): PanelDef => ({
   id: '/inspector',
   title: 'Inspector',
@@ -44,7 +49,8 @@ export const inspectorPanel = (
   slot: 'right',
   closable: true,
   flush: true,
-  render: ({ ui, widgets }: EditorContext): void => {
+  render: (ctx: EditorContext): void => {
+    const { ui, widgets } = ctx;
     const p = getActivePalette();
     const selected = state.selectedEntity;
     const alive = selected !== null && app.world.hasEntity(selected);
@@ -59,6 +65,13 @@ export const inspectorPanel = (
 
     // Scrolling body; the footer badges stay pinned at the bottom.
     ui.child('insp-body', { size: [0, totalH - FOOTER_H], border: false, padding: [12, 10] }, () => {
+      // The Animator populates this shared Inspector when it holds the selection.
+      // An entity/asset selection takes precedence and clears the Animator's.
+      if (state.selectedEntity !== null || state.selectedAsset !== null) {
+        animatorSession.selection = null;
+      } else if (renderAnimatorInspectorBody(ctx, animatorSession, acDeps())) {
+        return;
+      }
       // Asset editing: a selected asset (material, …) shows its editor instead of
       // an entity's components. The default editor walks the asset's reflection
       // schema; a registered custom editor overrides it.
