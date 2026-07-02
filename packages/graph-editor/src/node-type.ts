@@ -8,6 +8,7 @@
 
 import type { HeaderVariant } from './document';
 import type { FieldDescriptor } from './field';
+import type { Side } from './side';
 
 /** One declared pin on a node type. */
 export interface PinDescriptor {
@@ -17,6 +18,8 @@ export interface PinDescriptor {
   readonly type: string;
   /** Display label; defaults to `name`. */
   readonly label?: string;
+  /** Which node edge the pin docks on. Defaults to `left` for inputs, `right` for outputs. */
+  readonly side?: Side;
 }
 
 /** How a node is shaped/rendered: a standard node, a state-machine state, or a context/stack block. */
@@ -44,6 +47,12 @@ export interface NodeTypeDescriptor {
   readonly outputs?: readonly PinDescriptor[];
   /** Embedded fields drawn in the node body. */
   readonly fields?: readonly FieldDescriptor[];
+  /**
+   * Optional size override for a custom node look, in world units. Any field it
+   * omits falls back to the default measured value. Pairs with a registered
+   * {@link NodeRenderer} for the type's `style`.
+   */
+  readonly measure?: (node: { readonly title?: string }) => { w?: number; h?: number; headerH?: number };
 }
 
 /** A per-kind registry of {@link NodeTypeDescriptor}s, keyed by type id. */

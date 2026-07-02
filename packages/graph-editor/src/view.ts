@@ -47,6 +47,8 @@ export interface GraphView {
   groupSelection: Set<string>;
   /** Whether the CRT scanline overlay is drawn. */
   scanlines: boolean;
+  /** Background renderer id (see the environment's background registry). Default `grid`. */
+  background: string;
   /** Set once the user has panned or zoomed — lets a host auto-frame until then. */
   userNavigated: boolean;
   interaction: Interaction;
@@ -56,7 +58,7 @@ export interface GraphView {
 }
 
 /** Create a fresh view centered at the origin at 100% zoom. */
-export const createGraphView = (opts?: Partial<Pick<GraphView, 'pan' | 'zoom' | 'scanlines'>>): GraphView => ({
+export const createGraphView = (opts?: Partial<Pick<GraphView, 'pan' | 'zoom' | 'scanlines' | 'background'>>): GraphView => ({
   pan: opts?.pan ? [opts.pan[0], opts.pan[1]] : [0, 0],
   zoom: opts?.zoom ?? 1,
   minZoom: 0.35,
@@ -66,6 +68,7 @@ export const createGraphView = (opts?: Partial<Pick<GraphView, 'pan' | 'zoom' | 
   rerouteSelection: new Set(),
   groupSelection: new Set(),
   scanlines: opts?.scanlines ?? true,
+  background: opts?.background ?? 'grid',
   userNavigated: false,
   interaction: { k: 'idle' },
   hovered: null,

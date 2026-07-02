@@ -8,8 +8,9 @@
 
 import { Draw, type History, type Ui, type Vec2 } from '@retro-engine/editor-sdk';
 
-import { drawGrid, drawScanlines, fitBounds, handleNavigation } from './canvas';
+import { drawScanlines, fitBounds, handleNavigation } from './canvas';
 import type { GraphDocument, GraphEdge, Point } from './document';
+import { drawDefaultEdge, isMergedAway } from './edge-render';
 import type { GraphEnvironment } from './environment';
 import { updateInteraction } from './interaction';
 import { buildLayout, type GraphLayout, pinAnchor } from './layout-cache';
@@ -28,6 +29,12 @@ export interface GraphDrawParams {
   readonly theme: GraphTheme;
   /** When provided, direct-manipulation edits record undo entries here (ADR-0139). */
   readonly history?: History;
+  /**
+   * Toggles for the canvas overlays. Both default to shown; a consumer that owns
+   * its own chrome (e.g. a breadcrumb with zoom) can hide the minimap and the
+   * node/wire/zoom status chip.
+   */
+  readonly overlays?: { readonly minimap?: boolean; readonly status?: boolean };
 }
 
 const dashedRect = (draw: Draw, mn: Point, mx: Point, col: number, dash: number, gap: number, th: number): void => {
@@ -64,53 +71,11 @@ const drawEdge = (
   params: GraphDrawParams,
 ): void => {
   const { doc, env, theme, view } = params;
-  const fromL = layout.nodes.get(edge.from.node);
-  const toL = layout.nodes.get(edge.to.node);
-  if (fromL === undefined || toL === undefined) return;
-
-  if (edge.style === 'transition') {
-    // State-machine transition: connect node edges (not pins), arrowhead + badge.
-    const rightward = toL.x + toL.w / 2 >= fromL.x + fromL.w / 2;
-    const aw: Point = [rightward ? fromL.x + fromL.w : fromL.x, fromL.y + fromL.headerH / 2];
-    const bw: Point = [rightward ? toL.x : toL.x + toL.w, toL.y + toL.headerH / 2];
-    const a = worldToScreen(view, origin, aw[0], aw[1]);
-    const b = worldToScreen(view, origin, bw[0], bw[1]);
-    const selected = view.edgeSelection.has(edge.id);
-    const col = selected ? theme.chrome.selection : theme.pack('#8a938d');
-    drawWire(draw, [a, b], col, (selected ? theme.geo.wireWSel : theme.geo.wireW) * view.zoom, view.zoom);
-    // Arrowhead at the target, pointing into the node.
-    const dir = rightward ? 1 : -1;
-    const s = 7 * view.zoom;
-    draw.triFilled([b[0], b[1] - s * 0.7], [b[0], b[1] + s * 0.7], [b[0] + dir * s, b[1]], col);
-    // Midpoint glyph badge.
-    const mid: Point = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
-    const r = 9 * view.zoom;
-    draw.circleFilled(mid, r, theme.chrome.headerBg);
-    draw.circle(mid, r, selected ? theme.chrome.selection : theme.chrome.borderStrong, Math.max(1, view.zoom));
-    if (edge.label !== undefined && view.zoom >= 0.4) {
-      draw.textAt([mid[0] - edge.label.length * 3 * view.zoom, mid[1] - 5 * view.zoom], theme.chrome.textMuted, edge.label, { size: 9 * view.zoom });
-    }
-    return;
-  }
-
-  const a = pinAnchor(fromL, edge.from.pin, 'out');
-  const b = pinAnchor(toL, edge.to.pin, 'in');
-  if (a === undefined || b === undefined) return;
-
-  const dt = env.edgeDataType(doc, edge);
-  const exec = dt?.shape === 'triangle';
-  const col = dt !== undefined ? theme.colorFor(dt.name, dt.color) : theme.chrome.textMuted;
-  const selected = view.edgeSelection.has(edge.id);
-  const thickness = (selected ? theme.geo.wireWSel : exec ? theme.geo.wireWExec : theme.geo.wireW) * view.zoom;
-
-  const worldPts: Point[] = [a];
-  for (const knot of edge.via) {
-    const r = doc.reroutes[knot];
-    if (r !== undefined) worldPts.push(r.pos);
-  }
-  worldPts.push(b);
-  const screenPts = worldPts.map((wp) => worldToScreen(view, origin, wp[0], wp[1]));
-  drawWire(draw, screenPts, selected ? theme.chrome.selection : col, thickness, view.zoom);
+  const desc = env.edgeType(doc.kindId, edge.style);
+  // The primary (smaller-id) half of a merged reciprocal pair draws the one line.
+  if (isMergedAway(doc, desc, edge)) return;
+  const renderer = desc.render ?? drawDefaultEdge;
+  renderer({ draw, edge, desc, doc, env, theme, view, layout, origin, selected: view.edgeSelection.has(edge.id) });
 };
 
 /**
@@ -131,16 +96,22 @@ export const GraphEditor = {
     // Hit-test against a pre-interaction layout, run navigation + interaction
     // (which may move nodes), then rebuild the layout so wires/pins track nodes
     // within the same frame (no one-frame drag lag).
+    const showMinimap = params.overlays?.minimap ?? true;
+    const showStatus = params.overlays?.status ?? true;
+
     const pickLayout = buildLayout(doc, env, theme.geo);
     // Minimap click/drag navigation takes precedence over canvas interaction.
-    const overMinimap = minimapNavigate(ui, pickLayout, view, origin, size);
+    const overMinimap = showMinimap ? minimapNavigate(ui, pickLayout, view, origin, size) : false;
     const canvasHovered = hovered && !overMinimap;
     handleNavigation(ui, view, origin, canvasHovered);
     updateInteraction({ ui, doc, view, env, origin, layout: pickLayout, geo: theme.geo, hovered: canvasHovered, ...(params.history !== undefined ? { history: params.history } : {}) });
 
     const layout = buildLayout(doc, env, theme.geo);
     const draw = Draw.window();
-    drawGrid(draw, origin, size, view, theme);
+    // Paint the canvas void so the graph reads on its own dark backdrop rather than
+    // the host panel's child surface.
+    draw.rectFilled(origin, [origin[0] + size[0], origin[1] + size[1]], theme.chrome.canvasBg);
+    env.background(view.background)(draw, origin, size, view, theme);
     if (view.scanlines) drawScanlines(draw, origin, size, theme);
 
     const connected = connectedPins(doc);
@@ -235,9 +206,9 @@ export const GraphEditor = {
       draw.rect([Math.min(a[0], m[0]), Math.min(a[1], m[1])], [Math.max(a[0], m[0]), Math.max(a[1], m[1])], theme.chrome.selection, 0, 1);
     }
 
-    // Overlays (above nodes): minimap + status chip.
-    drawMinimap(draw, doc, layout, view, env, theme, origin, size);
-    drawStatus(draw, doc, view, theme, origin, size);
+    // Overlays (above nodes): minimap + status chip, each opt-out.
+    if (showMinimap) drawMinimap(draw, doc, layout, view, env, theme, origin, size);
+    if (showStatus) drawStatus(draw, doc, view, theme, origin, size);
   },
 
   /** Frame all nodes in the current region with padding. Call after a layout pass. */

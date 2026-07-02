@@ -68,6 +68,25 @@ export type { ResolvedPin, ConnectRule, GraphKindOptions } from './kind';
 export { GraphKind, defaultConnectRule } from './kind';
 export { GraphEnvironment, createGraphEnvironment } from './environment';
 
+export type { Side, PortSide, SideRect } from './side';
+export { sideNormal, oppositeSide, autoSides, sideMidpoint } from './side';
+export type { EndpointGeom, EdgePathInput, CubicSegment, EdgeShape, EdgePathFn } from './edge-path';
+export {
+  straightPath,
+  bezierPath,
+  orthogonalPath,
+  drawEdgeShape,
+  edgeShapeDistance,
+  edgeShapeMidpoint,
+  edgeShapeTangents,
+} from './edge-path';
+export type { EdgeEndpoints, EdgeTypeDescriptor } from './edge-type';
+export { EdgeTypeRegistry, BUILTIN_EDGE_TYPES } from './edge-type';
+export type { EdgeRenderCtx, EdgeRenderer } from './edge-render';
+export { resolveEdgeGeom, drawDefaultEdge, reciprocalPartner, isMergedAway } from './edge-render';
+export type { BackgroundRenderer } from './background';
+export { BUILTIN_BACKGROUNDS, gridBackground, dotsBackground, linesBackground, noneBackground } from './background';
+
 export type { OpenGraphInfo } from './host';
 export { GraphHost } from './host';
 
@@ -81,8 +100,8 @@ export type { InteractionCtx } from './interaction';
 export { updateInteraction } from './interaction';
 export { drawGrid, drawScanlines, handleNavigation, fitBounds } from './canvas';
 export { wireTangent, drawWire } from './wire';
-export type { DrawNodeParams } from './node-render';
-export { drawNode, pinKey } from './node-render';
+export type { DrawNodeParams, NodeRenderer } from './node-render';
+export { drawNode, drawStandardNode, pinKey, BUILTIN_NODE_RENDERERS } from './node-render';
 export type { GraphDrawParams } from './graph-editor';
 export { GraphEditor } from './graph-editor';
 export { drawMinimap, drawStatus, minimapNavigate, minimapRect } from './overlays';

@@ -57,6 +57,22 @@ Each phase ends with something verifiable in the studio **Graph Editor Demo** pa
 - Group **move** (drag the title tab, members follow) and **resize** (bottom-right
   handle), with Delete to remove. ✅
 
+### Extensible renderers (done) — [ADR-0143](../adr/ADR-0143-graph-editor-extensible-renderers.md)
+
+The render layer moved from hardcoded cases to strategy registries so consumers
+(and users) can supply custom visuals, React-Flow style:
+
+- **Port sides + auto docking**: pins dock left/right/top/bottom; edge endpoints
+  can `auto`-dock to the side facing the other node. ✅
+- **Edge path strategies**: `bezier` / `straight` / `orthogonal` + registrable
+  custom curves; one `EdgeShape` feeds both draw and hit-test. ✅
+- **Edge-type registry** (per kind): endpoints (pins vs. node edges), arrowheads,
+  midpoint badge, and reciprocal-merge; built-in `default` + `transition`. ✅
+- **Node-renderer registry** + `NodeTypeDescriptor.measure`; **background registry**
+  (`grid` / `dots` / `lines` / `none`) selected via `GraphView.background`. ✅
+- Fixed the transition defects: straight lines with threaded anchor points,
+  tangent-correct arrowheads, and reciprocal pairs drawn as one double-arrow line. ✅
+
 ## Out of scope (future backlog when promoted)
 
 These are the *consumers* the toolkit exists to enable. The toolkit must make each

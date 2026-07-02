@@ -9,29 +9,7 @@ import type { Draw, Ui, Vec2 } from '@retro-engine/editor-sdk';
 import type { GraphTheme } from './theme';
 import { type GraphView, panBy, zoomAt } from './view';
 
-/** Draw the dotted grid over the canvas region. Skipped when dots get too dense. */
-export const drawGrid = (draw: Draw, origin: Vec2, size: Vec2, view: GraphView, theme: GraphTheme): void => {
-  const pitch = theme.geo.gridPitch * view.zoom;
-  if (pitch < 6) return; // too dense to read; skip
-  const [ox, oy] = origin;
-  const [w, h] = size;
-  const major = Math.max(2, Math.round(theme.geo.gridMajor));
-  // Phase the grid to the pan so dots track content.
-  const startX = ox + (((view.pan[0] % pitch) + pitch) % pitch);
-  const startY = oy + (((view.pan[1] % pitch) + pitch) % pitch);
-  // Index of the first column/row in world-dot units, for major-dot striping.
-  const col0 = Math.round((startX - ox - view.pan[0]) / pitch);
-  const row0 = Math.round((startY - oy - view.pan[1]) / pitch);
-  let ci = 0;
-  for (let x = startX; x <= ox + w; x += pitch, ci++) {
-    let ri = 0;
-    for (let y = startY; y <= oy + h; y += pitch, ri++) {
-      const isMajor = (col0 + ci) % major === 0 && (row0 + ri) % major === 0;
-      const r = isMajor ? 1.4 : 0.9;
-      draw.rectFilled([x - r, y - r], [x + r, y + r], isMajor ? theme.chrome.gridDotMajor : theme.chrome.gridDot);
-    }
-  }
-};
+export { gridBackground as drawGrid } from './background';
 
 /** Draw the faint horizontal scanline wash over the canvas region. */
 export const drawScanlines = (draw: Draw, origin: Vec2, size: Vec2, theme: GraphTheme): void => {

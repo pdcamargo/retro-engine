@@ -6,7 +6,9 @@
 
 import type { GraphDocument, GraphNode, NodeId, Point } from './document';
 import type { GraphEnvironment } from './environment';
+import type { PinDescriptor } from './node-type';
 import type { NodeTypeDescriptor } from './node-type';
+import type { Side } from './side';
 import type { GraphGeometry } from './theme';
 
 /** A laid-out pin: its declared name/type plus its world anchor on the node edge. */
@@ -14,7 +16,11 @@ export interface PinLayout {
   readonly name: string;
   readonly type: string;
   readonly dir: 'in' | 'out';
-  /** World anchor point (on the node's left edge for inputs, right edge for outputs). */
+  /** Display label next to the pin dot; falls back to `name` when absent. */
+  readonly label?: string;
+  /** The node edge this pin docks on. */
+  readonly side: Side;
+  /** World anchor point on the node's `side` edge. */
   readonly anchor: Point;
 }
 
@@ -52,8 +58,8 @@ const estimateWidth = (node: GraphNode, type: NodeTypeDescriptor | undefined, ge
   // Header: icon + title + sub-label; body: widest input/output label pair.
   const headerW = 24 + title.length * charW + 34;
   let rowW = 0;
-  for (const p of type?.inputs ?? []) rowW = Math.max(rowW, (p.label ?? p.name).length * geo.fontLabel * 0.6 + 24);
-  for (const p of type?.outputs ?? []) rowW = Math.max(rowW, (p.label ?? p.name).length * geo.fontLabel * 0.6 + 24);
+  for (const p of node.inputs ?? type?.inputs ?? []) rowW = Math.max(rowW, (p.label ?? p.name).length * geo.fontLabel * 0.6 + 24);
+  for (const p of node.outputs ?? type?.outputs ?? []) rowW = Math.max(rowW, (p.label ?? p.name).length * geo.fontLabel * 0.6 + 24);
   return Math.max(geo.nodeMinW, Math.ceil(Math.max(headerW, rowW)));
 };
 
@@ -65,22 +71,25 @@ export const layoutNode = (
 ): NodeLayout => {
   const x = node.pos[0];
   const y = node.pos[1];
-  const w = estimateWidth(node, type, geo);
-  const headerH = geo.headerH;
+  const m = type?.measure?.(node);
+  const w = m?.w ?? estimateWidth(node, type, geo);
+  const headerH = m?.headerH ?? geo.headerH;
 
   if (node.collapsed) {
     const midY = y + headerH / 2;
     // Collapsed: pins collapse onto the header edges.
-    const inputs: PinLayout[] = (type?.inputs ?? []).map((p) => ({
+    const inputs: PinLayout[] = (node.inputs ?? type?.inputs ?? []).map((p) => ({
       name: p.name,
       type: p.type,
       dir: 'in' as const,
+      side: 'left' as const,
       anchor: [x, midY] as Point,
     }));
-    const outputs: PinLayout[] = (type?.outputs ?? []).map((p) => ({
+    const outputs: PinLayout[] = (node.outputs ?? type?.outputs ?? []).map((p) => ({
       name: p.name,
       type: p.type,
       dir: 'out' as const,
+      side: 'right' as const,
       anchor: [x + w, midY] as Point,
     }));
     return { id: node.id, x, y, w, h: headerH, headerH, collapsed: true, inputs, outputs, fields: [] };
@@ -106,20 +115,56 @@ export const layoutNode = (
   const rowCy = (i: number): number => y + headerH + bodyPad + i * geo.rowH + geo.rowH / 2;
 
   const fields: FieldRowLayout[] = (type?.fields ?? []).map((f) => ({ name: f.name, cy: rowCy(row++) }));
-  const inputs: PinLayout[] = (type?.inputs ?? []).map((p) => ({
-    name: p.name,
-    type: p.type,
-    dir: 'in' as const,
-    anchor: [x, rowCy(row++)] as Point,
-  }));
-  const outputs: PinLayout[] = (type?.outputs ?? []).map((p) => ({
-    name: p.name,
-    type: p.type,
-    dir: 'out' as const,
-    anchor: [x + w, rowCy(row++)] as Point,
-  }));
 
-  const h = headerH + bodyPad * 2 + row * geo.rowH;
+  const sideOf = (p: PinDescriptor, dir: 'in' | 'out'): Side => p.side ?? (dir === 'in' ? 'left' : 'right');
+  const inPins = node.inputs ?? type?.inputs ?? [];
+  const outPins = node.outputs ?? type?.outputs ?? [];
+
+  // Left/right pins occupy body rows (the single-column layout); top/bottom pins
+  // are distributed along their edge after the body height is known.
+  const inputs: PinLayout[] = [];
+  const outputs: PinLayout[] = [];
+  const deferred: { p: PinDescriptor; dir: 'in' | 'out'; side: Side }[] = [];
+  const rowPin = (p: PinDescriptor, dir: 'in' | 'out', side: Side): PinLayout => ({
+    name: p.name,
+    type: p.type,
+    dir,
+    ...(p.label !== undefined ? { label: p.label } : {}),
+    side,
+    anchor: [side === 'left' ? x : x + w, rowCy(row++)] as Point,
+  });
+  for (const p of inPins) {
+    const side = sideOf(p, 'in');
+    if (side === 'left' || side === 'right') inputs.push(rowPin(p, 'in', side));
+    else deferred.push({ p, dir: 'in', side });
+  }
+  for (const p of outPins) {
+    const side = sideOf(p, 'out');
+    if (side === 'left' || side === 'right') outputs.push(rowPin(p, 'out', side));
+    else deferred.push({ p, dir: 'out', side });
+  }
+
+  const h = m?.h ?? headerH + bodyPad * 2 + row * geo.rowH;
+
+  // Top/bottom pins spread evenly across the node's width on their edge.
+  const topPins = deferred.filter((d) => d.side === 'top');
+  const bottomPins = deferred.filter((d) => d.side === 'bottom');
+  const spread = (list: typeof deferred, edgeY: number): void => {
+    list.forEach((d, i) => {
+      const pin: PinLayout = {
+        name: d.p.name,
+        type: d.p.type,
+        dir: d.dir,
+        ...(d.p.label !== undefined ? { label: d.p.label } : {}),
+        side: d.side,
+        anchor: [x + (w * (i + 1)) / (list.length + 1), edgeY] as Point,
+      };
+      (d.dir === 'in' ? inputs : outputs).push(pin);
+    });
+  };
+  spread(topPins, y);
+  spread(bottomPins, y + h);
+
   return { id: node.id, x, y, w, h, headerH, collapsed: false, inputs, outputs, fields };
 };
 

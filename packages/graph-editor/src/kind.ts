@@ -7,6 +7,7 @@
  */
 
 import type { GraphNode } from './document';
+import { EdgeTypeRegistry } from './edge-type';
 import { NodeTypeRegistry, type NodeTypeDescriptor, type PinDescriptor } from './node-type';
 
 /** A pin resolved against a document + node type: everything a rule needs. */
@@ -41,6 +42,8 @@ export class GraphKind {
   readonly id: string;
   readonly label: string;
   readonly nodeTypes = new NodeTypeRegistry();
+  /** Per-kind edge-type overrides; unregistered ids fall back to the environment built-ins. */
+  readonly edgeTypes = new EdgeTypeRegistry();
   private readonly rule: ConnectRule;
 
   constructor(opts: GraphKindOptions) {

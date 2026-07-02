@@ -11,7 +11,7 @@ import type { GraphNode, HeaderVariant, Point } from './document';
 import type { GraphEnvironment } from './environment';
 import type { FieldDescriptor } from './field';
 import type { NodeLayout, PinLayout } from './layout-cache';
-import type { NodeTypeDescriptor } from './node-type';
+import type { NodeStyle, NodeTypeDescriptor } from './node-type';
 import type { GraphTheme } from './theme';
 import { type GraphView, worldToScreen } from './view';
 
@@ -119,17 +119,11 @@ const drawStackNode = (p: DrawNodeParams): void => {
   }
 };
 
-/** Draw one node. */
-export const drawNode = (p: DrawNodeParams): void => {
-  const style = p.type?.style ?? 'node';
-  if (style === 'state') {
-    drawStateNode(p);
-    return;
-  }
-  if (style === 'stack') {
-    drawStackNode(p);
-    return;
-  }
+/** A node renderer: paints one node of a given style to the draw list. */
+export type NodeRenderer = (p: DrawNodeParams) => void;
+
+/** Draw a standard node: body + header (variant) + field rows + labeled pins. */
+export const drawStandardNode = (p: DrawNodeParams): void => {
   const { draw, node, layout, type, view, origin, env, theme } = p;
   const z = view.zoom;
   const geo = theme.geo;
@@ -201,7 +195,7 @@ export const drawNode = (p: DrawNodeParams): void => {
     // Row labels next to pins.
     const labelFor = (pin: PinLayout, out: boolean): void => {
       const cyS = worldToScreen(view, origin, 0, pin.anchor[1])[1];
-      const label = pin.name;
+      const label = pin.label ?? pin.name;
       if (out) {
         const wpx = label.length * labelSize * 0.6;
         draw.textAt([max[0] - 14 * z - wpx, cyS - labelSize / 2], withA(theme.chrome.textMuted), label, { size: labelSize });
@@ -337,4 +331,19 @@ const drawExecPin = (draw: Draw, center: Point, box: number, col: number, bg: nu
 const dim = (col: number, f: number): number => {
   const a = (col >>> 24) & 0xff;
   return (col & 0x00ffffff) | (Math.round(a * f) << 24);
+};
+
+/** The built-in node renderers seeded on every environment, keyed by node style. */
+export const BUILTIN_NODE_RENDERERS: Readonly<Record<NodeStyle, NodeRenderer>> = {
+  node: drawStandardNode,
+  state: drawStateNode,
+  stack: drawStackNode,
+};
+
+/**
+ * Draw one node, dispatching through the environment's node-renderer registry
+ * (keyed by the type's `style`, falling back to the standard node renderer).
+ */
+export const drawNode = (p: DrawNodeParams): void => {
+  p.env.nodeRenderer(p.type?.style ?? 'node')(p);
 };

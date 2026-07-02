@@ -9,9 +9,11 @@
 import { type History, Keys, type Ui, type Vec2 } from '@retro-engine/editor-sdk';
 
 import type { EdgeId, GraphDocument, NodeId, Point } from './document';
+import { edgeShapeDistance } from './edge-path';
+import { isMergedAway, resolveEdgeGeom } from './edge-render';
 import { recordGraphEdit, snapshotCommand, snapshotDoc } from './edit';
 import type { GraphEnvironment } from './environment';
-import { type GraphLayout, pick, type PickResult, pinAnchor } from './layout-cache';
+import { type GraphLayout, pick, type PickResult } from './layout-cache';
 import {
   addReroute,
   connect,
@@ -25,8 +27,7 @@ import {
   setFieldValue,
 } from './ops';
 import type { GraphGeometry } from './theme';
-import { type GraphView, type Hover, screenToWorld, worldToScreen } from './view';
-import { wireDistance } from './wire';
+import { type GraphView, type Hover, screenToWorld } from './view';
 
 /** Everything the interaction step reads for one frame. */
 export interface InteractionCtx {
@@ -93,23 +94,16 @@ const editField = (ctx: InteractionCtx, nodeId: NodeId, name: string): void => {
 
 /** Screen-space wire hit-test: the id of the wire nearest the point within tolerance, else null. */
 const pickEdge = (ctx: InteractionCtx, sx: number, sy: number): EdgeId | null => {
-  const { doc, view, origin, layout } = ctx;
+  const { doc, env, view, origin, layout } = ctx;
   let best = 7; // px tolerance
   let bestId: EdgeId | null = null;
   for (const edge of Object.values(doc.edges)) {
-    const fromL = layout.nodes.get(edge.from.node);
-    const toL = layout.nodes.get(edge.to.node);
-    if (fromL === undefined || toL === undefined) continue;
-    const a = pinAnchor(fromL, edge.from.pin, 'out');
-    const b = pinAnchor(toL, edge.to.pin, 'in');
-    if (a === undefined || b === undefined) continue;
-    const pts: Point[] = [worldToScreen(view, origin, a[0], a[1])];
-    for (const k of edge.via) {
-      const r = doc.reroutes[k];
-      if (r !== undefined) pts.push(worldToScreen(view, origin, r.pos[0], r.pos[1]));
-    }
-    pts.push(worldToScreen(view, origin, b[0], b[1]));
-    const d = wireDistance(pts, sx, sy, view.zoom);
+    const desc = env.edgeType(doc.kindId, edge.style);
+    // A merged reciprocal pair is one line; only its primary is hit-testable.
+    if (isMergedAway(doc, desc, edge)) continue;
+    const geom = resolveEdgeGeom(edge, desc, doc, env, view, origin, layout);
+    if (geom === undefined) continue;
+    const d = edgeShapeDistance(geom.shape, sx, sy);
     if (d < best) {
       best = d;
       bestId = edge.id;

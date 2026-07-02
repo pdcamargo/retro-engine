@@ -21,6 +21,8 @@ export type Point = [x: number, y: number];
 /** A world-space rectangle `[x, y, w, h]`. */
 export type Rect = [x: number, y: number, w: number, h: number];
 
+import type { PinDescriptor } from './node-type';
+
 /** Which header treatment a node draws with; see the node-type default. */
 export type HeaderVariant = 'stripe' | 'solid' | 'tick';
 
@@ -50,6 +52,13 @@ export interface GraphNode {
   title?: string;
   /** Header-variant override; falls back to the node type's default. */
   headerVariant?: HeaderVariant;
+  /**
+   * Per-instance pin overrides. When present they replace the node type's static
+   * pins — for nodes whose ports are data-driven (a blend-tree root grows one
+   * output row per child). Absent = use the type's declared pins.
+   */
+  inputs?: readonly PinDescriptor[];
+  outputs?: readonly PinDescriptor[];
   /** Current values of the node's embedded fields, keyed by field name. */
   fieldValues: Record<string, unknown>;
 }
@@ -64,12 +73,12 @@ export interface GraphEdge {
   /** Ordered reroute-knot ids the wire threads through, source→target. */
   via: RerouteId[];
   /**
-   * Render style. A `'transition'` edge (state-machine paradigm) draws an
-   * arrowhead at the target and a glyph badge at its midpoint, connecting node
-   * edges rather than typed pins. Omitted = a normal typed data/exec wire.
+   * Edge-type id selecting how the wire attaches and draws (see the environment's
+   * edge-type registry). `'transition'` is the built-in state-machine arrow;
+   * omitted = the built-in `'default'` typed data/exec wire between pins.
    */
-  style?: 'transition';
-  /** Optional short glyph/label shown on a transition's midpoint badge. */
+  style?: string;
+  /** Optional short glyph/label shown on an edge's midpoint badge. */
   label?: string;
 }
 
