@@ -41,7 +41,7 @@ const makeInstanceComponent = (kind: string, handle: Handle<unknown>): object | 
  * those children (the `Children` cascade runs through the Commands layer, which a
  * History revert does not flush). Walking `Children` post-order removes the lot.
  */
-const despawnSubtree = (world: World, root: Entity): void => {
+export const despawnSubtree = (world: World, root: Entity): void => {
   if (!world.hasEntity(root)) return;
   const children = world.getComponent(root, Children) as { entities: Entity[] } | undefined;
   // Safe to iterate directly: world.despawn is raw (it doesn't maintain Children).

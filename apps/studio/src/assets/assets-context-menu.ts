@@ -29,7 +29,7 @@ export const registerBuiltinAssetActions = (registry: AssetActionRegistry, deps:
       id: 'open',
       label: 'Open',
       icon: 'square-arrow-out-up-right',
-      shortcut: '↵',
+      shortcut: 'Enter',
       order: 10,
       when: isFileAsset,
       run: (ctx) => {
@@ -47,7 +47,7 @@ export const registerBuiltinAssetActions = (registry: AssetActionRegistry, deps:
         if (ctx.asset !== undefined) ctx.host.beginRename(ctx.asset.guid);
       },
     })
-    .registerForAll({ id: 'duplicate', label: 'Duplicate', icon: 'copy', shortcut: '⌘D', order: 30, when: isFileAsset, run: stubRun('Duplicate') })
+    .registerForAll({ id: 'duplicate', label: 'Duplicate', icon: 'copy', shortcut: 'Ctrl+D', order: 30, when: isFileAsset, run: stubRun('Duplicate') })
     .registerForAll({ id: 'reimport', label: 'Reimport', icon: 'refresh-cw', order: 40, separatorBefore: true, when: isFileAsset, run: stubRun('Reimport') })
     .registerForAll({ id: 'show-in-explorer', label: 'Show in Explorer', icon: 'folder-open', order: 50, when: isFileAsset, run: stubRun('Show in Explorer') })
     .registerForAll({
@@ -65,7 +65,7 @@ export const registerBuiltinAssetActions = (registry: AssetActionRegistry, deps:
       id: 'delete',
       label: 'Delete',
       icon: 'trash-2',
-      shortcut: '⌫',
+      shortcut: 'Del',
       danger: true,
       order: 100,
       separatorBefore: true,

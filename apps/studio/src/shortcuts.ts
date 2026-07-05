@@ -17,14 +17,14 @@ export const EDITOR_SHORTCUTS: ReadonlyArray<{ group: string; items: ReadonlyArr
     items: [
       { keys: '2', label: '2D (orthographic) view' },
       { keys: '3', label: '3D (perspective) view' },
-      { keys: 'F', label: 'Frame scene' },
+      { keys: 'F', label: 'Frame selected' },
     ],
   },
   {
     group: 'Edit',
     items: [
-      { keys: '⌘Z', label: 'Undo' },
-      { keys: '⌘Y / ⇧⌘Z', label: 'Redo' },
+      { keys: 'Ctrl+Z', label: 'Undo' },
+      { keys: 'Ctrl+Y / Ctrl+Shift+Z', label: 'Redo' },
     ],
   },
   {
@@ -75,7 +75,7 @@ export const handleShortcuts = (
 
   if (pressed(ImGuiKey._2)) state.viewMode = '2d';
   if (pressed(ImGuiKey._3)) state.viewMode = '3d';
-  if (pressed(ImGuiKey._F)) controller.frame();
+  if (pressed(ImGuiKey._F)) controller.frame(state.selectedEntity);
   for (const { key, tool } of TOOL_KEYS) {
     if (pressed(key)) state.tool = tool;
   }

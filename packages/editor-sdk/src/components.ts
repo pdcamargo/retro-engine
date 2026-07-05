@@ -28,7 +28,7 @@ import { Draw } from './draw';
 import { drawIcon } from './icon-shapes';
 import { type IconName } from './icons';
 import { type Axis, axisColor, getActivePalette, srgbU32, type Tone, toneColors } from './palette';
-import { ui } from './ui';
+import { Keys, ui } from './ui';
 import type { Rgba, Srgb8 } from './units';
 
 /** Control heights (px) on the design system's scale. */
@@ -157,6 +157,35 @@ export interface TreeItemOptions {
   readonly overridden?: boolean | undefined;
   /** Dim the row — an inherited entity instantiated from a source, not authored here. */
   readonly recessed?: boolean | undefined;
+  /** When set, a focused inline text field replaces the label — for renaming a row or naming a not-yet-created one. */
+  readonly editing?: TreeItemEditing | undefined;
+  /** Called while the row's selectable is the current item, so a right-click context menu anchors to it. */
+  readonly onContextMenu?: (() => void) | undefined;
+}
+
+/**
+ * Inline-edit state for a {@link Widgets.treeItem}: renders a focused text field in
+ * place of the label, for renaming a row or naming a virtual (not-yet-created) one.
+ */
+export interface TreeItemEditing {
+  /** The current buffer (controlled by the caller). */
+  readonly value: string;
+  /** Request keyboard focus this frame (a one-shot; the caller clears it after). */
+  readonly focus: boolean;
+  /** Mark the name invalid: tooltip on hover, and the caller blocks the commit. */
+  readonly error?: boolean | undefined;
+  /** Tooltip shown on hover when `error` is set. Defaults to a generic message. */
+  readonly errorText?: string | undefined;
+}
+
+/** What a {@link Widgets.treeItem}'s inline field reported this frame. */
+export interface TreeItemEdit {
+  /** The current field text. */
+  readonly value: string;
+  /** Enter pressed or focus lost — apply the edit. */
+  readonly commit: boolean;
+  /** Escape pressed — discard the edit. */
+  readonly cancel: boolean;
 }
 
 /** What a {@link Widgets.treeItem} reported this frame. */
@@ -167,6 +196,8 @@ export interface TreeItemResult {
   readonly toggled: boolean;
   /** The visibility eye was clicked. */
   readonly visibilityToggled: boolean;
+  /** The inline field's state this frame, when `editing` was set. */
+  readonly edit?: TreeItemEdit | undefined;
 }
 
 /** A context-menu entry for {@link Widgets.contextMenu}. */
@@ -217,6 +248,31 @@ export const renderMenuEntries = (entries: readonly MenuEntry[], idPrefix: strin
     if (e.danger === true) ImGui.PopStyleColor(1);
   }
 }
+
+/** Comfortable minimum width (px) for context-menu popups so short labels don't look cramped. */
+const MENU_MIN_WIDTH = 208;
+
+/**
+ * Push the shared context-menu popup styling — window padding + row spacing that
+ * make menus read as finished rather than tight. Pair every call with
+ * `ImGui.PopStyleVar(2)` after the popup block (whether or not it opened).
+ */
+const pushMenuStyle = (): void => {
+  ImGui.PushStyleVarImVec2(ImGuiStyleVar.WindowPadding, new ImVec2(10, 8));
+  ImGui.PushStyleVarImVec2(ImGuiStyleVar.ItemSpacing, new ImVec2(14, 7));
+};
+
+/**
+ * Render menu entries, then floor the popup width so short menus don't collapse
+ * to a cramped sliver. The width spacer is a zero-height dummy whose leading row
+ * spacing is removed, so it adds no gap — the bottom padding stays even with the top.
+ */
+const renderMenuBody = (entries: readonly MenuEntry[], idPrefix: string): void => {
+  renderMenuEntries(entries, idPrefix);
+  ImGui.PushStyleVarImVec2(ImGuiStyleVar.ItemSpacing, new ImVec2(0, 0));
+  ImGui.Dummy(new ImVec2(MENU_MIN_WIDTH, 0));
+  ImGui.PopStyleVar();
+};
 
 const heightOf = (size: keyof typeof ControlHeight | undefined): number => ControlHeight[size ?? 'md'];
 
@@ -685,9 +741,13 @@ export const widgets: Widgets = {
       ImGuiSelectableFlags.AllowOverlap,
       new ImVec2(0, rowH),
     );
-    // Bind drag/drop to the selectable while it is the last item — before the
-    // decorative draws below (which submit id-less dummies of their own).
-    applyItemDnd(options.dnd);
+    // Bind drag/drop + context menu to the selectable while it is the last item —
+    // before the decorative draws below (which submit id-less dummies of their own).
+    // While editing, the inline field owns interaction, so neither is bound.
+    if (options.editing === undefined) {
+      applyItemDnd(options.dnd);
+      options.onContextMenu?.();
+    }
     const hovered = ui.isItemHovered();
     const [min, max] = ui.itemRect();
     const cy = (min[1] + max[1]) / 2;
@@ -720,28 +780,48 @@ export const widgets: Widgets = {
       }
     }
     const labelX = iconX + (options.icon !== undefined ? 23 : 0);
-    dl.text([labelX, cy - th / 2], srgbU32(labelColor), options.label);
-    // Faint source reference (e.g. `· coin.prefab`) after the name.
-    if (options.suffix !== undefined && options.suffix.length > 0) {
-      const sx = labelX + ui.calcTextSize(options.label)[0] + 8;
-      dl.text([sx, cy - th / 2], srgbU32(p.textFaint), `· ${options.suffix}`);
-    }
-
     let visibilityToggled = false;
     const eyeX = max[0] - 22;
-    if (options.visible !== undefined && (hovered || options.visible === false)) {
-      const col = options.visible ? p.textMuted : p.textFaint;
-      drawIcon(options.visible ? 'eye' : 'eye-off', [eyeX, cy - 8], 16, srgbU32(col));
-    }
-    if (options.badge !== undefined) {
-      const ts = ui.calcTextSize(options.badge);
-      const bw = Math.max(ts[1], ts[0] + 12);
-      const bh = 16;
-      const bx = (options.visible !== undefined ? eyeX - 6 : max[0] - 8) - bw;
-      dl.rectFilled([bx, cy - bh / 2], [bx + bw, cy + bh / 2], srgbU32(p.gray5, 0.85), 3);
-      dl.text([bx + (bw - ts[0]) / 2, cy - th / 2], srgbU32(p.textMuted), options.badge);
+    let editResult: TreeItemEdit | undefined;
+    if (options.editing !== undefined) {
+      // A focused inline field replaces the name (and its trailing decorations).
+      const e = options.editing;
+      if (e.focus) ui.setKeyboardFocusHere();
+      // Escape reverts + deactivates the field; check it before treating the
+      // deactivation as a commit so Escape cancels while Enter / click-away commits.
+      const escaped = ui.isKeyPressed(Keys.Escape);
+      const inputW = Math.max(40, max[0] - labelX - 8);
+      ui.setCursorScreenPos([labelX, cy - ui.frameHeight() / 2]);
+      const next = ui.inputText(`##tree-edit-${options.id}`, e.value, { width: inputW });
+      const editHovered = ui.isItemHovered();
+      const deactivated = ui.isItemDeactivated();
+      if (e.error === true && (hovered || editHovered)) ImGui.SetTooltip(e.errorText ?? 'Name already exists');
+      editResult = { value: next, commit: !escaped && deactivated, cancel: escaped };
+    } else {
+      dl.text([labelX, cy - th / 2], srgbU32(labelColor), options.label);
+      // Faint source reference (e.g. `· coin.prefab`) after the name.
+      if (options.suffix !== undefined && options.suffix.length > 0) {
+        const sx = labelX + ui.calcTextSize(options.label)[0] + 8;
+        dl.text([sx, cy - th / 2], srgbU32(p.textFaint), `· ${options.suffix}`);
+      }
+      if (options.visible !== undefined && (hovered || options.visible === false)) {
+        const col = options.visible ? p.textMuted : p.textFaint;
+        drawIcon(options.visible ? 'eye' : 'eye-off', [eyeX, cy - 8], 16, srgbU32(col));
+      }
+      if (options.badge !== undefined) {
+        const ts = ui.calcTextSize(options.badge);
+        const bw = Math.max(ts[1], ts[0] + 12);
+        const bh = 16;
+        const bx = (options.visible !== undefined ? eyeX - 6 : max[0] - 8) - bw;
+        dl.rectFilled([bx, cy - bh / 2], [bx + bw, cy + bh / 2], srgbU32(p.gray5, 0.85), 3);
+        dl.text([bx + (bw - ts[0]) / 2, cy - th / 2], srgbU32(p.textMuted), options.badge);
+      }
     }
 
+    // While editing, the inline field owns the row — clicks/toggles are inert.
+    if (options.editing !== undefined) {
+      return { clicked: false, toggled: false, visibilityToggled: false, edit: editResult };
+    }
     const mx = ui.mousePos()[0];
     let toggled = false;
     if (clicked && options.hasChildren === true && mx >= chevronX && mx <= chevronX + 16) toggled = true;
@@ -766,18 +846,22 @@ export const widgets: Widgets = {
   },
 
   contextMenu(id: string, entries: readonly MenuEntry[]): void {
-    if (!ImGui.BeginPopupContextItem(`ctx-${id}`)) return;
-    renderMenuEntries(entries, `ctx-${id}`);
-    ImGui.EndPopup();
+    pushMenuStyle();
+    if (ImGui.BeginPopupContextItem(`ctx-${id}`)) {
+      renderMenuBody(entries, `ctx-${id}`);
+      ImGui.EndPopup();
+    }
+    ImGui.PopStyleVar(2);
   },
 
   contextMenuWindow(id: string, entries: readonly MenuEntry[]): void {
+    pushMenuStyle();
     // NoOpenOverItems: right-clicking a card opens its own item menu, not this one.
-    if (!ImGui.BeginPopupContextWindow(`ctxw-${id}`, ImGuiPopupFlags.MouseButtonRight | ImGuiPopupFlags.NoOpenOverItems)) {
-      return;
+    if (ImGui.BeginPopupContextWindow(`ctxw-${id}`, ImGuiPopupFlags.MouseButtonRight | ImGuiPopupFlags.NoOpenOverItems)) {
+      renderMenuBody(entries, `ctxw-${id}`);
+      ImGui.EndPopup();
     }
-    renderMenuEntries(entries, `ctxw-${id}`);
-    ImGui.EndPopup();
+    ImGui.PopStyleVar(2);
   },
 
   dropdown(id: string, label: string, icon: IconName | undefined, body: () => void): void {

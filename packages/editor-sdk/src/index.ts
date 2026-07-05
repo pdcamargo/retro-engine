@@ -27,6 +27,8 @@ export {
   type MenuEntry,
   type Option,
   type SliderOptions,
+  type TreeItemEdit,
+  type TreeItemEditing,
   type TreeItemOptions,
   type TreeItemResult,
   type Vec3,

@@ -5,10 +5,12 @@ import {
   Camera,
   Camera3d,
   CameraRenderTarget,
+  Children,
   ClearColorConfig,
   type CommandsHandle,
   DepthPrepass,
   EDITOR_GIZMO_LAYER,
+  GlobalTransform,
   MotionVectorPrepass,
   OrthographicProjection,
   PerspectiveProjection,
@@ -19,7 +21,7 @@ import {
   Transform,
 } from '@retro-engine/engine';
 import { type AxisPick } from '@retro-engine/editor-sdk';
-import { mat4, quat, type Vec3, vec3 } from '@retro-engine/math';
+import { Aabb, mat4, quat, type Vec3, vec3 } from '@retro-engine/math';
 import { type Texture } from '@retro-engine/renderer-core';
 
 import { EditorOnly } from './editor-markers';
@@ -42,6 +44,12 @@ const DEFAULT_EYE: readonly [number, number, number] = [8, 6.5, 10];
 const DEFAULT_TARGET: readonly [number, number, number] = [0, 0.3, 0];
 /** World units visible vertically when the 2D editor camera first opens. */
 const DEFAULT_VIEW_HEIGHT = 16;
+
+/** Framing (F) leaves a little air around the target's bounds. */
+const FRAME_PADDING = 1.35;
+/** Floors for framing so a zero-size target (an empty, a point light) still gets a sane view. */
+const MIN_FRAME_RADIUS = 0.5;
+const MIN_VIEW_HEIGHT = 1;
 
 const FLY_SPEED = 6; // world units / second
 const FLY_FAST_MULT = 4;
@@ -228,23 +236,85 @@ export class SceneCameraController {
     return this.gesture !== 'none';
   }
 
-  /** Re-frame the focus point. Bound to the Frame Selected shortcut. */
-  frame(): void {
-    // No ECS-backed selection yet, so frame the scene origin. When hierarchy
-    // selection is wired to live entities this targets the selection's bounds.
+  /**
+   * Frame `entity` and its subtree using their world bounds — the Frame Selected
+   * (F) shortcut. Falls back to the scene origin when nothing is selected or the
+   * target has no world transform.
+   */
+  frame(entity: Entity | null): void {
+    const bounds = entity !== null ? this.subtreeWorldBounds(entity) : undefined;
     if (this.appliedMode === '3d') {
-      this.pivot = [0, 0, 0];
-      const dist = 14;
-      const f = this.forward();
-      this.eye = [
-        this.pivot[0] - f[0] * dist,
-        this.pivot[1] - f[1] * dist,
-        this.pivot[2] - f[2] * dist,
-      ];
+      if (bounds !== undefined) {
+        this.pivot = [bounds.center[0], bounds.center[1], bounds.center[2]];
+        const fov = this.findEditorCamera()?.projection?.fov ?? Math.PI / 4;
+        const radius = Math.max(bounds.radius, MIN_FRAME_RADIUS);
+        this.placeEyeFromAngles((radius / Math.tan(fov / 2)) * FRAME_PADDING);
+      } else {
+        this.pivot = [0, 0, 0];
+        this.placeEyeFromAngles(14);
+      }
+    } else if (bounds !== undefined) {
+      this.center = [bounds.center[0], bounds.center[1]];
+      this.viewHeight = Math.max(bounds.halfExtents[1] * 2 * FRAME_PADDING, MIN_VIEW_HEIGHT);
     } else {
       this.center = [0, 0];
       this.viewHeight = DEFAULT_VIEW_HEIGHT;
     }
+  }
+
+  /**
+   * The world-space bounds of `root` and every descendant reachable through
+   * `Children`: each node's local {@link Aabb} transformed by its
+   * `GlobalTransform` (or, lacking an `Aabb`, its world origin as a point).
+   * `undefined` when no node in the subtree has a `GlobalTransform`.
+   */
+  private subtreeWorldBounds(
+    root: Entity,
+  ): { center: [number, number, number]; halfExtents: [number, number, number]; radius: number } | undefined {
+    const world = this.app.world;
+    const min: [number, number, number] = [Infinity, Infinity, Infinity];
+    const max: [number, number, number] = [-Infinity, -Infinity, -Infinity];
+    const grow = (x: number, y: number, z: number): void => {
+      if (x < min[0]) min[0] = x;
+      if (y < min[1]) min[1] = y;
+      if (z < min[2]) min[2] = z;
+      if (x > max[0]) max[0] = x;
+      if (y > max[1]) max[1] = y;
+      if (z > max[2]) max[2] = z;
+    };
+    const worldAabb = new Aabb();
+    const seen = new Set<Entity>();
+    const stack: Entity[] = [root];
+    let any = false;
+    while (stack.length > 0) {
+      const e = stack.pop()!;
+      if (seen.has(e) || !world.hasEntity(e)) continue;
+      seen.add(e);
+      const global = world.getComponent(e, GlobalTransform);
+      if (global !== undefined) {
+        const local = world.getComponent(e, Aabb);
+        if (local !== undefined) {
+          const w = Aabb.transform(local, global.matrix, worldAabb);
+          const c = w.center;
+          const h = w.halfExtents;
+          grow(c[0]! - h[0]!, c[1]! - h[1]!, c[2]! - h[2]!);
+          grow(c[0]! + h[0]!, c[1]! + h[1]!, c[2]! + h[2]!);
+        } else {
+          const m = global.matrix;
+          grow(m[12]!, m[13]!, m[14]!);
+        }
+        any = true;
+      }
+      const children = world.getComponent(e, Children);
+      if (children !== undefined) for (const c of children.entities) if (world.hasEntity(c)) stack.push(c);
+    }
+    if (!any) return undefined;
+    const halfExtents: [number, number, number] = [(max[0] - min[0]) / 2, (max[1] - min[1]) / 2, (max[2] - min[2]) / 2];
+    return {
+      center: [(min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2],
+      halfExtents,
+      radius: Math.hypot(halfExtents[0], halfExtents[1], halfExtents[2]),
+    };
   }
 
   /**

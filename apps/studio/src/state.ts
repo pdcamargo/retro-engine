@@ -42,6 +42,18 @@ export interface StudioState {
   selectedAsset: AssetSelection | null;
   /** Entities the user has collapsed in the hierarchy (default expanded; rebuilt each frame). */
   collapsed: Set<Entity>;
+  /** Entity being inline-renamed in the hierarchy, or `null`. Mutually exclusive with {@link entityDraft}. */
+  renamingEntity: Entity | null;
+  /**
+   * An in-progress "create empty" — a virtual tree row with an editable name that
+   * has no backing entity yet; committing spawns it under `parent` (root when `null`).
+   * Mutually exclusive with {@link renamingEntity}.
+   */
+  entityDraft: { parent: Entity | null } | null;
+  /** Shared buffer for the active hierarchy rename / draft field (only one at a time). */
+  entityEditBuffer: string;
+  /** One-shot: focus the hierarchy edit field next frame. */
+  entityEditFocus: boolean;
   /** Reveal derived / non-serializable components in the inspector (a debug view). */
   debugMode: boolean;
   /** Last history cursor the panel rendered — drives auto-scroll only when it changes. */
@@ -94,6 +106,10 @@ export const createState = (scene: Scene): StudioState => ({
   selectedEntity: null,
   selectedAsset: null,
   collapsed: new Set(),
+  renamingEntity: null,
+  entityDraft: null,
+  entityEditBuffer: '',
+  entityEditFocus: false,
   debugMode: false,
   historyLastCurrent: -1,
   historyClearConfirm: false,

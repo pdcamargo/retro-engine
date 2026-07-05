@@ -53,17 +53,17 @@ export const menus = (state: StudioState, history: History, actions: MenuActions
     items: () => [
       { label: 'Open Project…', icon: 'folder-open', onClick: () => actions.openProject() },
       { separator: true },
-      { label: 'New Scene', icon: 'plus', shortcut: '⌘N' },
-      { label: 'Open Scene…', shortcut: '⌘O' },
+      { label: 'New Scene', icon: 'plus', shortcut: 'Ctrl+N' },
+      { label: 'Open Scene…', shortcut: 'Ctrl+O' },
       { separator: true },
       {
         label: 'Save Scene',
         icon: 'check',
-        shortcut: '⌘S',
+        shortcut: 'Ctrl+S',
         disabled: !actions.canSaveScene() || !state.dirty,
         onClick: () => actions.saveScene(),
       },
-      { label: 'Save As…', shortcut: '⇧⌘S', disabled: true },
+      { label: 'Save As…', shortcut: 'Ctrl+Shift+S', disabled: true },
       { separator: true },
       { label: 'Project Settings…', icon: 'settings', onClick: () => (state.settingsOpen = true) },
     ],
@@ -72,8 +72,8 @@ export const menus = (state: StudioState, history: History, actions: MenuActions
     id: '/edit',
     label: 'Edit',
     items: () => [
-      { label: 'Undo', shortcut: '⌘Z', disabled: !history.canUndo, onClick: () => history.undo() },
-      { label: 'Redo', shortcut: '⇧⌘Z', disabled: !history.canRedo, onClick: () => history.redo() },
+      { label: 'Undo', shortcut: 'Ctrl+Z', disabled: !history.canUndo, onClick: () => history.undo() },
+      { label: 'Redo', shortcut: 'Ctrl+Shift+Z', disabled: !history.canRedo, onClick: () => history.redo() },
       {
         label: 'Clear History',
         icon: 'trash-2',
@@ -81,9 +81,9 @@ export const menus = (state: StudioState, history: History, actions: MenuActions
         onClick: () => (state.historyClearConfirm = true),
       },
       { separator: true },
-      { label: 'Cut', shortcut: '⌘X' },
-      { label: 'Copy', shortcut: '⌘C' },
-      { label: 'Paste', shortcut: '⌘V' },
+      { label: 'Cut', shortcut: 'Ctrl+X' },
+      { label: 'Copy', shortcut: 'Ctrl+C' },
+      { label: 'Paste', shortcut: 'Ctrl+V' },
     ],
   },
   {
@@ -91,9 +91,9 @@ export const menus = (state: StudioState, history: History, actions: MenuActions
     label: 'Entity',
     items: () => [
       { label: 'Create Empty', icon: 'plus' },
-      { label: 'Duplicate', icon: 'copy', shortcut: '⌘D' },
+      { label: 'Duplicate', icon: 'copy', shortcut: 'Ctrl+D' },
       { separator: true },
-      { label: 'Delete', icon: 'trash-2', danger: true, shortcut: '⌫' },
+      { label: 'Delete', icon: 'trash-2', danger: true, shortcut: 'Del' },
     ],
   },
   {
@@ -117,7 +117,7 @@ export const menus = (state: StudioState, history: History, actions: MenuActions
     id: '/run',
     label: 'Run',
     items: () => [
-      { label: state.playing ? 'Stop' : 'Play', icon: state.playing ? 'square' : 'play', shortcut: '⌘P' },
+      { label: state.playing ? 'Stop' : 'Play', icon: state.playing ? 'square' : 'play', shortcut: 'Ctrl+P' },
       { label: 'Pause', icon: 'pause', disabled: !state.playing },
       { label: 'Step', icon: 'skip-forward', disabled: !state.playing },
     ],

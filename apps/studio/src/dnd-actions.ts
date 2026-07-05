@@ -41,6 +41,11 @@ export const createPrefabFromEntity = (run: RunCommand, entity: Entity, dir?: st
   }).catch(warn('prefab create'));
 };
 
+/** Reparent an entity under `parent`, or to the scene root when `parent` is `null`. */
+export const reparentEntity = (run: RunCommand, entity: Entity, parent: Entity | null): void => {
+  void run('hierarchy.reparent', { entity, parent }).catch(warn('reparent entity'));
+};
+
 /** Point an entity's MeshMaterial3d at a material asset by GUID. */
 export const applyMaterial = (
   run: RunCommand,
