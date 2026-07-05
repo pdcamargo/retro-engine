@@ -1,11 +1,14 @@
 import {
   ASSET_TYPES,
+  type AssetActionHost,
+  type AssetActionRegistry,
   type AssetType,
   Draw,
   drawIcon,
   type EditorContext,
   type EntityDragPayload,
   getActivePalette,
+  Keys,
   type PanelDef,
   srgbU32,
 } from '@retro-engine/editor-sdk';
@@ -16,7 +19,7 @@ import type { ModelSubAssetService } from '../project/model-subassets';
 import type { AssetItem } from '../scene-data';
 import { type AssetZoom, type StudioState } from '../state';
 
-import { type GridActions, renderAssetsGrid } from './assets-grid';
+import { assetBaseName, type GridActions, renderAssetsGrid } from './assets-grid';
 import { breadcrumbText, renderAssetsTree } from './assets-tree';
 import { filterAssetsForPanel, presentTypesForPanel } from './assets-filter';
 import { type AssetsPanelState, saveAssetsPrefs } from './assets-panel-state';
@@ -29,13 +32,25 @@ const BREADCRUMB_H = 24;
 export interface AssetsPanelDeps {
   /** Lazily enumerates a model's derived children (animations / meshes / materials). */
   readonly subs: ModelSubAssetService;
+  /** The asset-action registry (editor + user actions) that drives the context menus. */
+  readonly actions: AssetActionRegistry;
   /** Activate an asset (e.g. open a bundle for editing). */
   readonly onActivate?: (asset: BrowserAsset) => void;
-  /** Create a new Animation Controller in the given folder (empty-space "New" menu). */
-  readonly onCreateController?: (dir: string) => void;
+  /** Commit an inline rename: rename the asset's file + `.meta` sidecar. */
+  readonly renameAsset: (guid: string, newBase: string) => void;
+  /** Delete an asset: its file + `.meta` sidecar + registry entry. */
+  readonly deleteAsset: (guid: string) => void;
   /** Invoke an editor command (drag-and-drop authors prefabs through it). */
   readonly runCommand: RunCommand;
 }
+
+/** Directory of a project-relative path (no trailing slash). */
+const dirOfLocation = (location: string): string => {
+  const i = location.lastIndexOf('/');
+  return i >= 0 ? location.slice(0, i) : '';
+};
+/** File name of a project-relative path. */
+const fileNameOfLocation = (location: string): string => location.slice(location.lastIndexOf('/') + 1);
 
 // With no project open, the mock scene assets stand in — adapted to the browser
 // shape (their sprite subs become `sprite`-typed children) so the same grid,
@@ -130,7 +145,6 @@ const renderToolbar = (
 export const assetsPanel = (state: StudioState, deps: AssetsPanelDeps): PanelDef => {
   let lastPrefs = '';
   const subsOf = (a: BrowserAsset): readonly BrowserAsset[] | undefined => deps.subs.subsFor(a);
-  const actions: GridActions = deps.onActivate !== undefined ? { onActivate: deps.onActivate } : {};
 
   return {
     id: '/assets',
@@ -144,6 +158,36 @@ export const assetsPanel = (state: StudioState, deps: AssetsPanelDeps): PanelDef
       const st = state.assets;
       const p = getActivePalette();
       const pool = state.browser !== null ? state.browser.assets : mockToBrowser(state.scene.assets);
+
+      // New assets land in the browsed folder ('all'/'' → the project's assets root).
+      const createDir = st.folder === 'all' || st.folder === '' ? 'assets' : st.folder;
+      const duplicate = (dir: string, filename: string, exceptGuid?: string): boolean =>
+        pool.some((a) => a.guid !== exceptGuid && dirOfLocation(a.location) === dir && fileNameOfLocation(a.location) === filename);
+      const host: AssetActionHost = {
+        beginCreate: (draft) => {
+          st.draft = draft;
+          st.renaming = null;
+          st.editBuffer = draft.defaultName;
+          st.editFocus = true;
+        },
+        beginRename: (guid) => {
+          const a = pool.find((x) => x.guid === guid);
+          if (a === undefined) return;
+          st.draft = null;
+          st.renaming = guid;
+          st.editBuffer = assetBaseName(a);
+          st.editFocus = true;
+        },
+        deleteAsset: (target) => deps.deleteAsset(target.guid),
+      };
+      const actions: GridActions = {
+        registry: deps.actions,
+        host,
+        folder: createDir,
+        duplicate,
+        renameAsset: deps.renameAsset,
+        ...(deps.onActivate !== undefined ? { onActivate: deps.onActivate } : {}),
+      };
 
       // Dropping an entity onto the panel authors a prefab from its subtree, into
       // the folder currently being browsed. Reused by the header and the empty
@@ -203,13 +247,15 @@ export const assetsPanel = (state: StudioState, deps: AssetsPanelDeps): PanelDef
           if (rest[1] > 4) {
             ui.invisibleButton('assets-drop-prefab', [Math.max(rest[0], 1), rest[1]]);
             ui.dropTarget(prefabDrop);
-            // Right-clicking the empty grid offers a "New" menu (create-on-disk).
-            if (deps.onCreateController !== undefined) {
-              ctx.widgets.contextMenu('assets-bg-menu', [
-                { heading: 'NEW' },
-                { label: 'Animation Controller', icon: 'film', onClick: () => deps.onCreateController?.(st.folder) },
-              ]);
-            }
+          }
+          // Right-clicking anywhere in the grid background opens the create menu
+          // (defers to a card's own menu when over a tile).
+          ctx.widgets.contextMenuWindow('assets-panel', deps.actions.buildPanelMenu({ folder: createDir, host }));
+          // With the grid focused and one asset selected: Enter/F2 rename, Delete deletes.
+          if (st.draft === null && st.renaming === null && state.selected !== null && ui.isWindowFocused()) {
+            const sel = state.selected;
+            if (ui.isKeyPressed(Keys.Enter) || ui.isKeyPressed(Keys.F2)) host.beginRename(sel);
+            else if (ui.isKeyPressed(Keys.Delete)) deps.deleteAsset(sel);
           }
         });
       });

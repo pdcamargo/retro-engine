@@ -102,6 +102,36 @@ fn project_write_file(state: tauri::State<ProjectRoot>, request: Request) -> Res
     fs::write(path, bytes).map_err(|e| e.to_string())
 }
 
+// Deletes a project file (root-scoped). Used to remove an asset and its `.meta`
+// sidecar; a missing file is not an error (idempotent from the studio's view).
+#[tauri::command]
+fn project_delete_file(state: tauri::State<ProjectRoot>, relative: String) -> Result<(), String> {
+    let root = project_root_path(&state)?;
+    let path = resolve_in_root(&root, &relative)?;
+    match fs::remove_file(&path) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+// Renames/moves a project file (both paths root-scoped). Used to rename an asset
+// and its `.meta` sidecar together; creates the destination's parent if needed.
+#[tauri::command]
+fn project_rename_file(
+    state: tauri::State<ProjectRoot>,
+    from: String,
+    to: String,
+) -> Result<(), String> {
+    let root = project_root_path(&state)?;
+    let from_path = resolve_in_root(&root, &from)?;
+    let to_path = resolve_in_root(&root, &to)?;
+    if let Some(parent) = to_path.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    fs::rename(from_path, to_path).map_err(|e| e.to_string())
+}
+
 // All files under `relative`, recursively, as project-relative `/`-separated paths.
 #[tauri::command]
 fn project_read_dir(state: tauri::State<ProjectRoot>, relative: String) -> Result<Vec<String>, String> {
@@ -263,7 +293,9 @@ pub fn run() {
       set_project_root,
       project_read_file,
       project_write_file,
-      project_read_dir
+      project_read_dir,
+      project_delete_file,
+      project_rename_file
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");

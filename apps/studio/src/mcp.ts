@@ -103,6 +103,9 @@ export interface StudioMcpAttachDeps {
   readonly studio: StudioInfo;
   readonly saveScene?: () => Promise<SaveSceneResult>;
   readonly reindexAssets?: () => Promise<void>;
+  readonly createAsset?: (kind: string, name: string, folder: string) => Promise<string | undefined>;
+  readonly renameAsset?: (guid: string, newBaseName: string) => Promise<void>;
+  readonly deleteAsset?: (guid: string) => Promise<void>;
 }
 
 const defaultEnabled = (): boolean =>
@@ -167,6 +170,9 @@ export class StudioMcp {
       allowEval: () => this.evalAllowed,
       ...(deps.saveScene !== undefined ? { saveScene: deps.saveScene } : {}),
       ...(deps.reindexAssets !== undefined ? { reindexAssets: deps.reindexAssets } : {}),
+      ...(deps.createAsset !== undefined ? { createAsset: deps.createAsset } : {}),
+      ...(deps.renameAsset !== undefined ? { renameAsset: deps.renameAsset } : {}),
+      ...(deps.deleteAsset !== undefined ? { deleteAsset: deps.deleteAsset } : {}),
     };
 
     this.bridge = createStudioBridge(this.registry, ctx, {

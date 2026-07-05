@@ -5,7 +5,7 @@ import { drawIcon } from './icon-shapes';
 import { type IconName } from './icons';
 import { applyItemDnd, type ItemDnd } from './dnd/item-dnd';
 import { getActivePalette, packU32, srgbU32, type Tone, toneColors } from './palette';
-import { ui } from './ui';
+import { Keys, ui } from './ui';
 import type { Vec2 } from './units';
 
 /** The asset kinds the browser knows how to preview. */
@@ -76,12 +76,37 @@ export const ASSET_TYPES: Readonly<Record<AssetType, AssetTypeInfo>> = {
   folder: { icon: 'folder', tag: '', tone: 'neutral' },
 };
 
+/**
+ * Inline-edit state for an {@link assetCard}: renders a focused text field in place
+ * of the name label, for creating (a virtual card) or renaming an asset.
+ */
+export interface AssetCardEditing {
+  /** The current buffer (controlled by the caller). */
+  readonly value: string;
+  /** Request keyboard focus this frame (a one-shot; the caller clears it after). */
+  readonly focus: boolean;
+  /** Mark the name invalid (duplicate): red border + tooltip, and the caller blocks the commit. */
+  readonly error?: boolean | undefined;
+  /** Tooltip shown on hover when `error` is set. Defaults to a generic message. */
+  readonly errorText?: string | undefined;
+}
+
 /** Options for {@link Widgets.assetCard}. */
 export interface AssetCardOptions {
   readonly id: string;
   readonly name: string;
   readonly type: AssetType;
   readonly meta?: string | undefined;
+  /**
+   * Override the icon/tag/tone the card derives from {@link ASSET_TYPES} for its
+   * `type` — so kinds sharing one browser bucket (e.g. animation controller vs
+   * clip vs mask) read distinctly.
+   */
+  readonly icon?: IconName | undefined;
+  readonly tag?: string | undefined;
+  readonly tone?: Tone | undefined;
+  /** When set, the card renders an inline name editor instead of the static label. */
+  readonly editing?: AssetCardEditing | undefined;
   /** Preview tile size in px (e.g. 64 / 88 / 120). */
   readonly tile: number;
   /**
@@ -116,7 +141,19 @@ export interface AssetCardResult {
   readonly checkToggled: boolean;
   /** The tile was right-clicked (select it, then its context menu opens). */
   readonly rightClicked: boolean;
+  /** Inline-edit outcome this frame (only when {@link AssetCardOptions.editing} was set). */
+  readonly edit?: { readonly value: string; readonly commit: boolean; readonly cancel: boolean } | undefined;
 }
+
+/** The card's resolved icon/tag/tone: per-card overrides win over the {@link ASSET_TYPES} defaults. */
+const cardInfo = (o: AssetCardOptions): AssetTypeInfo => {
+  const base = ASSET_TYPES[o.type];
+  return {
+    icon: o.icon ?? base.icon,
+    tag: o.tag ?? base.tag,
+    tone: o.tone ?? base.tone,
+  };
+};
 
 const truncate = (name: string, maxW: number): string => {
   if (ui.calcTextSize(name)[0] <= maxW) return name;
@@ -144,7 +181,7 @@ const drawPreview = (o: AssetCardOptions, min: Vec2, size: number): void => {
     dl.image(o.thumbnail, min, max);
     return;
   }
-  const info = ASSET_TYPES[o.type];
+  const info = cardInfo(o);
   switch (o.type) {
     case 'texture':
     case 'image':
@@ -212,6 +249,7 @@ export const assetCard = (o: AssetCardOptions): AssetCardResult => {
   let checkToggled = false;
   let clicked = false;
   let rightClicked = false;
+  let editResult: AssetCardResult['edit'];
   ui.withId(o.id, () => {
     ui.group(() => {
       const min = ui.cursorScreenPos();
@@ -228,12 +266,13 @@ export const assetCard = (o: AssetCardOptions): AssetCardResult => {
       const max: Vec2 = [min[0] + size, min[1] + size];
       dl.rectFilled(min, max, srgbU32(p.gray2), 4);
       drawPreview(o, min, size);
-      // Border / selection.
-      if (o.selected === true) dl.rect(min, max, srgbU32(p.green400), 4, 1.5);
+      // Border / selection. A rename/create with a duplicate name shows red.
+      if (o.editing?.error === true) dl.rect(min, max, srgbU32(p.red400), 4, 1.5);
+      else if (o.selected === true) dl.rect(min, max, srgbU32(p.green400), 4, 1.5);
       else if (hovered) dl.rect(min, max, srgbU32(p.gray7), 4);
       else dl.rect(min, max, srgbU32(p.gray6), 4);
       // Type tag (bottom-left).
-      const info = ASSET_TYPES[o.type];
+      const info = cardInfo(o);
       if (info.tag !== '') {
         const tc = toneColors(info.tone);
         const ts = ui.calcTextSize(info.tag);
@@ -264,19 +303,41 @@ export const assetCard = (o: AssetCardOptions): AssetCardResult => {
           expandToggled = true;
         }
       }
-      // Label + meta.
+      // Label + meta — or, when editing, a focused inline name field in its place.
       const labelW = size - 4;
       ui.setCursorScreenPos([min[0], max[1] + 4]);
-      const nameCol = o.error === true ? p.red400 : p.text;
-      ImGui.PushStyleColor(ImGuiCol.Text, srgbU32(nameCol));
-      ui.text(truncate(o.name, labelW));
-      ImGui.PopStyleColor(1);
-      if (o.meta !== undefined) ui.textDisabled(o.meta);
-      else ui.dummy([labelW, ui.textLineHeight()]);
+      if (o.editing !== undefined) {
+        if (o.editing.focus) ui.setKeyboardFocusHere();
+        // Escape reverts + deactivates the field; check it before treating the
+        // deactivation as a commit so Escape cancels while Enter / click-away commits.
+        const escaped = ui.isKeyPressed(Keys.Escape);
+        const next = ui.inputText('##edit', o.editing.value, { width: labelW });
+        const editHovered = ui.isItemHovered();
+        const deactivated = ui.isItemDeactivated();
+        if (o.editing.error === true && (hovered || editHovered)) {
+          ImGui.SetTooltip(o.editing.errorText ?? 'Name already exists');
+        }
+        editResult = { value: next, commit: !escaped && deactivated, cancel: escaped };
+        ui.dummy([labelW, ui.textLineHeight()]);
+      } else {
+        const nameCol = o.error === true ? p.red400 : p.text;
+        ImGui.PushStyleColor(ImGuiCol.Text, srgbU32(nameCol));
+        ui.text(truncate(o.name, labelW));
+        ImGui.PopStyleColor(1);
+        if (o.meta !== undefined) ui.textDisabled(o.meta);
+        else ui.dummy([labelW, ui.textLineHeight()]);
+      }
     });
   });
   const consumed = expandToggled || checkToggled;
-  return { clicked: clicked && !consumed, expandToggled, checkToggled, rightClicked };
+  // While editing, the tile click is inert (the field owns the interaction).
+  return {
+    clicked: clicked && !consumed && o.editing === undefined,
+    expandToggled,
+    checkToggled,
+    rightClicked,
+    edit: editResult,
+  };
 };
 
 /** Options for {@link Widgets.assetGroup}. */

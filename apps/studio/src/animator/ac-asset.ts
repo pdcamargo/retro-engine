@@ -34,6 +34,14 @@ const CONTROLLER_EXTENSION = 'ranimctrl';
 export const newAnimationController = (name: string): AnimationController =>
   new AnimationController([], [], [], 0, name);
 
+/** A user-typed name → a safe file base name: trimmed, path separators stripped, extension dropped. */
+const sanitizeBaseName = (name: string, extension: string): string => {
+  let base = name.trim().replace(/[/\\]/g, '-');
+  const dot = `.${extension}`;
+  if (base.toLowerCase().endsWith(dot.toLowerCase())) base = base.slice(0, -dot.length);
+  return base.length > 0 ? base : 'Untitled';
+};
+
 /**
  * Create a new `.ranimctrl` on disk under `dir`, reindex so it loads by GUID, fill
  * its store slot this frame, and open it in the Animator. Returns the new GUID.
@@ -49,10 +57,12 @@ export const createControllerAsset = async (
   const serializer = serializers.get(ANIMATION_CONTROLLER_ASSET_KIND);
   if (serializer === undefined) return undefined;
 
-  const value = newAnimationController(name);
+  const base = sanitizeBaseName(name, CONTROLLER_EXTENSION);
+  const value = newAnimationController(base);
   const created = await createAsset(value, ANIMATION_CONTROLLER_ASSET_KIND, serializer, deps.sink, {
     dir,
     extension: CONTROLLER_EXTENSION,
+    basename: () => base,
   });
   await deps.reindex();
   const handle = server.loadByGuid(created.guid);

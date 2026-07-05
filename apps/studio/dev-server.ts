@@ -5,9 +5,15 @@
 // App-layer only — may use Bun APIs. The Tauri `dev` script (`bun index.html`)
 // stays as-is; this is a separate entry for plain-browser runs.
 
+import { mkdir, rename as fsRename, unlink } from 'node:fs/promises';
+import { dirname } from 'node:path';
+
 import homepage from './index.html';
 
 const PORT = 1421;
+
+/** Reject `..` traversal in a project-relative path (mirrors the native `resolve_in_root` guard). */
+const safeRel = (rel: string): boolean => rel.length > 0 && !rel.split('/').includes('..');
 
 const fontUnder = (req: Request): string | undefined => {
   const path = decodeURIComponent(new URL(req.url).pathname);
@@ -43,15 +49,37 @@ Bun.serve({
         return new Response('RETRO_PROJECT_DIR not set', { status: 404 });
       }
       const rel = decodeURIComponent(new URL(req.url).pathname).slice('/project/'.length);
-      if (rel.length === 0 || rel.split('/').includes('..')) return new Response('forbidden', { status: 403 });
+      if (!safeRel(rel)) return new Response('forbidden', { status: 403 });
       const abs = `${projectDir}/${rel}`;
       if (req.method === 'PUT') {
         await Bun.write(abs, await req.arrayBuffer());
         return new Response('ok');
       }
+      if (req.method === 'DELETE') {
+        await unlink(abs).catch((e: NodeJS.ErrnoException) => {
+          if (e.code !== 'ENOENT') throw e; // idempotent: a missing file is fine
+        });
+        return new Response('ok');
+      }
       const file = Bun.file(abs);
       if (!(await file.exists())) return new Response('not found', { status: 404 });
       return new Response(file);
+    },
+    // Rename/move a project file (browser fallback for the native project_rename_file).
+    '/project-rename': async (req) => {
+      const projectDir = process.env.RETRO_PROJECT_DIR;
+      if (projectDir === undefined || projectDir.length === 0) {
+        return new Response('RETRO_PROJECT_DIR not set', { status: 404 });
+      }
+      if (req.method !== 'POST') return new Response('method not allowed', { status: 405 });
+      const { from, to } = (await req.json()) as { from?: string; to?: string };
+      if (from === undefined || to === undefined || !safeRel(from) || !safeRel(to)) {
+        return new Response('forbidden', { status: 403 });
+      }
+      const toAbs = `${projectDir}/${to}`;
+      await mkdir(dirname(toAbs), { recursive: true });
+      await fsRename(`${projectDir}/${from}`, toAbs);
+      return new Response('ok');
     },
     // Build a project's user code into a host-resolved ESM bundle (browser path;
     // the Tauri sidecar serves the same artifact natively).

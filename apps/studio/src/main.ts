@@ -5,6 +5,7 @@ import { asAssetIndex, generateAssetGuid, makeHandle } from '@retro-engine/asset
 import { App, AppBundleRegistry, AppTypeRegistry, AssetKinds, AssetSerializers, AssetServer, BUNDLE_ASSET_KIND, Commands, createAsset, EditorGrid, generateMissingSidecars, inState, MATERIAL_ASSET_EXTENSION, MaterialPlugin, promoteAsset, registerAssetKind, ResMut, saveAsset, StandardMaterial } from '@retro-engine/engine';
 import { gltfAssetKindDescriptor } from '@retro-engine/gltf';
 import {
+  type AssetActionTarget,
   type AssetEditAccess,
   type AssetSelection,
   buildOutline,
@@ -67,6 +68,7 @@ import { EditorOnly } from './editor-markers';
 import { studioClassifiers } from './entity-classifiers';
 import { SceneGizmos } from './gizmo-wiring';
 import { assetsPanel } from './assets/assets-panel';
+import { registerBuiltinAssetActions } from './assets/assets-context-menu';
 import { loadAssetsPrefs } from './assets/assets-panel-state';
 import { createModelSubAssetService } from './project/model-subassets';
 import { consolePanel, profilerPanel, systemsPanel } from './panels-dock';
@@ -97,7 +99,7 @@ import { mcpPanel } from './panels-mcp';
 import { createCaptureService, type PanelRect, recordPanelRect } from './screenshot';
 import type { ComposerControl, SaveSceneResult } from '@retro-engine/editor-mcp';
 import type { PanelDef } from '@retro-engine/editor-sdk';
-import type { ProjectIo } from './project/project-io';
+import type { ProjectFileOps, ProjectIo } from './project/project-io';
 
 const LAYOUT_KEY = 'retro.studio.layout';
 
@@ -145,9 +147,17 @@ const modelSubAssets = createModelSubAssetService(app);
 // The project sink for writing assets (set once a project opens); the composer's
 // bundle-save hook writes `.rebundle` files through it.
 let projectSink: AssetSink | null = null;
+// Rename/delete of a project's files (set once a project opens); null with no
+// project open. Separate from the write-only sink (see ProjectFileOps).
+let projectFileOps: ProjectFileOps | null = null;
 // Re-scan the project manifest + browser (assigned once a project opens); null
 // with no project open. Hoisted so asset tooling (extract-copy) can trigger it.
 let reindexProjectAssets: (() => Promise<void>) | null = null;
+// While in the future, the watcher skips reindexing: the studio's own rename/delete
+// mutates project files (+ their .meta) and then reindexes itself, so the resulting
+// watch events must not bounce back as a second reindex mid-operation. A time window
+// (not path matching) reliably covers the watcher debounce + fs-event latency.
+let suppressReindexUntil = 0;
 // Composer favorites/recents persistence — localStorage until a project opens,
 // then rebound to the project's personal preference store (ADR-0091).
 let persistComposerPrefs = (): void => saveComposerPrefs(state.composer);
@@ -332,6 +342,8 @@ const studioMcp = new StudioMcp(mcpLogs);
 (window as unknown as { __studioMcp: StudioMcp }).__studioMcp = studioMcp;
 // Set in the boot tail once pushConsole exists; the MCP panel surfaces actions here.
 let pushConsoleForPanels: (text: string, meta?: string) => void = () => {};
+// Surface a studio-facing error line (set once the console exists in the boot tail).
+let notifyStudioError: (text: string, detail?: string) => void = () => {};
 
 // Offscreen render targets for the Scene (editor) and Game viewports, plus the
 // 3D scene and cameras that render into them.
@@ -453,11 +465,100 @@ const acAssetDeps = (): AcAssetDeps | null =>
           await reindexProjectAssets?.();
         },
       };
-const newAnimationControllerInFolder = (dir: string): void => {
-  const deps = acAssetDeps();
-  if (deps === null) return;
-  void createControllerAsset(deps, dir === '' ? 'assets' : dir, 'New Animation Controller');
+// Split a project-relative path into its directory (with trailing slash), base name,
+// and extension (with leading dot) — the pieces a rename recombines.
+const splitLocation = (location: string): { dir: string; base: string; ext: string } => {
+  const slash = location.lastIndexOf('/');
+  const dir = slash >= 0 ? location.slice(0, slash + 1) : '';
+  const name = location.slice(slash + 1);
+  const dot = name.lastIndexOf('.');
+  return dot > 0 ? { dir, base: name.slice(0, dot), ext: name.slice(dot) } : { dir, base: name, ext: '' };
 };
+
+// Rename an asset's file AND its `.meta` sidecar together (the GUID lives in the
+// sidecar, so it — and every reference to it — survives). Arms the watcher guard so
+// the resulting fs events don't trigger a second reindex mid-rename, then reindexes
+// so the browser + manifest pick up the new location.
+const renameAsset = async (guid: string, newBaseName: string): Promise<void> => {
+  if (projectFileOps === null) return;
+  const server = app.getResource(AssetServer);
+  const location = server?.locationForGuid(guid as AssetGuid);
+  if (server === undefined || location === undefined) return;
+  const { dir, ext } = splitLocation(location);
+  const safe = newBaseName.trim().replace(/[/\\]/g, '-');
+  if (safe.length === 0) return;
+  const newLocation = `${dir}${safe}${ext}`;
+  if (newLocation === location) return; // unchanged
+  suppressReindexUntil = Date.now() + 1500;
+  await projectFileOps.rename(location, newLocation);
+  await projectFileOps.rename(`${location}.meta`, `${newLocation}.meta`);
+  await reindexProjectAssets?.();
+  // Keep an open Animator session pointing at the moved file.
+  if (animatorSession.location === location) animatorSession.location = newLocation;
+};
+
+// Delete an asset: its file + `.meta` sidecar, release its store slot, then reindex
+// so it drops out of the manifest/browser. Clears selection and closes the Animator
+// if either targeted the deleted asset.
+const deleteAsset = async (guid: string): Promise<void> => {
+  if (projectFileOps === null) return;
+  const server = app.getResource(AssetServer);
+  const location = server?.locationForGuid(guid as AssetGuid);
+  if (server === undefined || location === undefined) return;
+  suppressReindexUntil = Date.now() + 1500;
+  await projectFileOps.remove(location);
+  await projectFileOps.remove(`${location}.meta`);
+  server.unloadByGuid(guid as AssetGuid);
+  await reindexProjectAssets?.();
+  if (state.selected === guid) {
+    state.selected = null;
+    state.selectedAsset = null;
+  }
+  if (animatorSession.location === location) {
+    animatorSession.controller = null;
+    animatorSession.guid = null;
+    animatorSession.location = null;
+  }
+};
+
+// Open/activate an asset in its editor: a bundle in the composer, a `.ranimctrl` in
+// the Animator. Shared by double-click (onActivate) and the context-menu Open action.
+const activateAsset = (a: { type: string; guid: string; location: string; name: string }): void => {
+  if (a.type === 'bundle') openBundleForEdit(a);
+  else if (a.location.endsWith('.ranimctrl')) {
+    const deps = acAssetDeps();
+    if (deps !== null) openControllerByGuid(deps, a.guid, a.location);
+  }
+};
+
+// Select the parent source file of a derived child (its GUID is `<parent>#label`).
+const selectParentAsset = (target: AssetActionTarget): void => {
+  const parentGuid = target.guid.split('#')[0] ?? target.guid;
+  const parent = state.browser?.assets.find((a) => a.guid === parentGuid);
+  state.selected = parentGuid;
+  state.selectedAsset =
+    parent !== undefined ? { assetType: parent.type, guid: parent.guid, assetKind: parent.meta ?? parent.type } : null;
+  state.selectedEntity = null;
+};
+
+// Mint a `.ranimctrl` under `folder` with the user-typed base name, then open it.
+// Returns the new GUID (the MCP `asset.create` hook reports it; the UI ignores it).
+const createAnimationControllerAsset = async (baseName: string, folder: string): Promise<string | undefined> => {
+  const deps = acAssetDeps();
+  if (deps === null) return undefined;
+  return createControllerAsset(deps, folder === '' || folder === 'all' ? 'assets' : folder, baseName);
+};
+
+// Register the editor's own asset context-menu actions (Open / Rename / Delete /
+// type-specific / create). A project's editor extension can register more against
+// `editor.assetActions` the same way.
+registerBuiltinAssetActions(editor.assetActions, {
+  activate: activateAsset,
+  selectParent: selectParentAsset,
+  createAnimationController: async (baseName, folder) => {
+    await createAnimationControllerAsset(baseName, folder);
+  },
+});
 
 editor
   .addPanel(cap(hierarchyPanel(state, app, runCommand)))
@@ -470,14 +571,18 @@ editor
     cap(
       assetsPanel(state, {
         subs: modelSubAssets,
-        onActivate: (asset) => {
-          if (asset.type === 'bundle') openBundleForEdit(asset);
-          else if (asset.location.endsWith('.ranimctrl')) {
-            const deps = acAssetDeps();
-            if (deps !== null) openControllerByGuid(deps, asset.guid, asset.location);
-          }
-        },
-        onCreateController: newAnimationControllerInFolder,
+        actions: editor.assetActions,
+        onActivate: activateAsset,
+        renameAsset: (guid, base) =>
+          void renameAsset(guid, base).catch((err: unknown) => {
+            notifyStudioError('Rename failed', err instanceof Error ? err.message : String(err));
+            console.error('[studio] asset rename failed', err);
+          }),
+        deleteAsset: (guid) =>
+          void deleteAsset(guid).catch((err: unknown) => {
+            notifyStudioError('Delete failed', err instanceof Error ? err.message : String(err));
+            console.error('[studio] asset delete failed', err);
+          }),
         runCommand,
       }),
     ),
@@ -622,6 +727,7 @@ void (async (): Promise<void> => {
   };
   // Route the MCP panel's action notices into the studio console now that it exists.
   pushConsoleForPanels = (text, meta): void => pushConsole('cmd', text, meta);
+  notifyStudioError = (text, detail): void => pushConsole('err', text, detail);
   // Lifted so the MCP runtime can read the project IO + save the scene.
   let mcpProjectIo: ProjectIo | null = null;
   let mcpSaveScene: (() => Promise<SaveSceneResult>) | undefined;
@@ -753,6 +859,7 @@ void (async (): Promise<void> => {
     try {
       const io = createProjectIo(platform, projectDir);
       projectSink = io.sink;
+      projectFileOps = io.ops;
       mcpProjectIo = io;
       state.assetSource = io.source;
       const kinds = app.getResource(AssetKinds);
@@ -976,9 +1083,12 @@ void (async (): Promise<void> => {
     let reindexing = false;
     const triggerReindex = (): void => {
       if (reindexProjectAssets === null) return;
+      // The studio's own rename/delete just mutated these files — skip the bounce.
+      if (Date.now() < suppressReindexUntil) return;
       if (reindexTimer !== undefined) clearTimeout(reindexTimer);
       reindexTimer = setTimeout(() => {
         if (reindexing || reindexProjectAssets === null) return;
+        if (Date.now() < suppressReindexUntil) return;
         reindexing = true;
         void reindexProjectAssets()
           .catch((err: unknown) =>
@@ -1092,6 +1202,12 @@ void (async (): Promise<void> => {
       reindexAssets: async () => {
         await reindexProjectAssets?.();
       },
+      // Asset lifecycle for MCP clients — the same studio functions the UI uses, so
+      // watcher-suppression + reindex + session cleanup stay consistent.
+      createAsset: async (kind, name, folder) =>
+        kind === 'AnimationController' ? createAnimationControllerAsset(name, folder) : undefined,
+      renameAsset: (guid, name) => renameAsset(guid, name),
+      deleteAsset: (guid) => deleteAsset(guid),
       ...(mcpSaveScene !== undefined ? { saveScene: mcpSaveScene } : {}),
     })
     .catch((err: unknown) => console.error('[studio] MCP attach failed', err));

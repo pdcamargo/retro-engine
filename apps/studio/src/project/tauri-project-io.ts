@@ -1,5 +1,7 @@
 import type { AssetSink, AssetSource } from '@retro-engine/assets';
 
+import type { ProjectFileOps } from './project-io';
+
 // Large binary assets stream over the asset protocol (native, ranged, no IPC
 // copy); small structured docs read as raw bytes over a command.
 const LARGE_BINARY = /\.(png|jpe?g|webp|ktx2|basis|glb|bin|ogg|mp3|wav|mp4|webm)$/i;
@@ -49,5 +51,23 @@ export class TauriProjectAssetSink implements AssetSink {
   async write(location: string, bytes: Uint8Array): Promise<void> {
     const { invoke } = await import('@tauri-apps/api/core');
     await invoke('project_write_file', bytes, { headers: { 'x-path': encodeURIComponent(location) } });
+  }
+}
+
+/**
+ * Renames and deletes a project's files through root-scoped Rust commands
+ * (`project_rename_file` / `project_delete_file`). Used to move/remove an asset and
+ * its `.meta` sidecar together; the engine's write-only {@link AssetSink} stays
+ * minimal, so these multi-file mutations live here in the studio's IO layer.
+ */
+export class TauriProjectFileOps implements ProjectFileOps {
+  async rename(from: string, to: string): Promise<void> {
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('project_rename_file', { from, to });
+  }
+
+  async remove(location: string): Promise<void> {
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('project_delete_file', { relative: location });
   }
 }

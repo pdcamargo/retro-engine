@@ -100,6 +100,11 @@ export const inspectorPanel = (
         ui.spacing();
 
         if (value === undefined) {
+          const loadErr = server.loadErrorForGuid(assetSel.guid as AssetGuid);
+          if (loadErr !== undefined) {
+            ui.textColored([0.9, 0.42, 0.42, 1], `Failed to load: ${loadErr instanceof Error ? loadErr.message : String(loadErr)}`);
+            return;
+          }
           ui.textDisabled('Loading asset…');
           return;
         }

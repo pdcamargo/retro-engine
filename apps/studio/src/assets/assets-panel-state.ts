@@ -1,4 +1,4 @@
-import type { AssetType } from '@retro-engine/editor-sdk';
+import type { AssetDraft, AssetType } from '@retro-engine/editor-sdk';
 
 import type { AssetZoom } from '../state';
 
@@ -24,6 +24,14 @@ export interface AssetsPanelState {
   multiSelect: Set<string>;
   /** Whether the folder-tree sidebar is hidden (reclaims its width for the grid). */
   treeCollapsed: boolean;
+  /** Active inline create draft (the virtual card), or `null` when not creating. */
+  draft: AssetDraft | null;
+  /** GUID of the asset being inline-renamed, or `null`. Mutually exclusive with {@link draft}. */
+  renaming: string | null;
+  /** The inline create/rename input buffer (only one is active at a time). */
+  editBuffer: string;
+  /** One-shot request to focus the inline input on the next frame. */
+  editFocus: boolean;
 }
 
 /** Build the panel's initial state. */
@@ -36,6 +44,10 @@ export const createAssetsPanelState = (): AssetsPanelState => ({
   expandedAssets: new Set(),
   multiSelect: new Set(),
   treeCollapsed: false,
+  draft: null,
+  renaming: null,
+  editBuffer: '',
+  editFocus: false,
 });
 
 const ZOOM_KEY = 'retro-studio.assets.zoom';

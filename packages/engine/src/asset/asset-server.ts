@@ -112,6 +112,11 @@ export class AssetServer {
   >();
   private completed: CompletedLoad[] = [];
   private failures: AssetLoadFailure[] = [];
+  // Sticky per-GUID load errors. A failed load leaves its reserved handle in place
+  // (a repeat `loadByGuid` returns it and starts no new IO), so the value never
+  // arrives — indistinguishable from "still loading" without this. Retained
+  // separately from the drained `failures` queue; cleared on a later success/unload.
+  private readonly loadErrors = new Map<AssetGuid, unknown>();
   private readonly inflight = new Set<Promise<void>>();
   private manifest?: AssetManifest;
   private readonly guidToHandle = new Map<
@@ -360,6 +365,15 @@ export class AssetServer {
   }
 
   /**
+   * The error from the most recent failed load of `guid`, or `undefined` if it
+   * loaded successfully or is still loading. Lets tooling distinguish a genuine
+   * load failure (e.g. an unsupported asset format) from an in-flight load.
+   */
+  loadErrorForGuid(guid: AssetGuid): unknown | undefined {
+    return this.loadErrors.get(guid);
+  }
+
+  /**
    * Drop the asset behind `guid` from its store and forget its handle, so a later
    * {@link AssetServer.loadByGuid} re-reads it. Removing the value queues the
    * store's `removed` event, releasing any prepared GPU resources. No-op if the
@@ -367,6 +381,7 @@ export class AssetServer {
    * scene held that the incoming one does not reference.
    */
   unloadByGuid(guid: AssetGuid): void {
+    this.loadErrors.delete(guid);
     const cached = this.guidToHandle.get(guid);
     if (cached === undefined) return;
     cached.store.remove(cached.handle);
@@ -476,8 +491,10 @@ export class AssetServer {
       // drain commits it in a single PreUpdate pass, queuing every `added` event
       // in the same frame, before extraction reads any of them.
       this.completed.push(...labeled, { store, handle, value });
+      if (handle.guid !== undefined) this.loadErrors.delete(handle.guid);
     } catch (error) {
       this.failures.push({ path, handle, error });
+      if (handle.guid !== undefined) this.loadErrors.set(handle.guid, error);
     }
   }
 }

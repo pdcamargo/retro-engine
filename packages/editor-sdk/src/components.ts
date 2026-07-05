@@ -5,6 +5,7 @@ import {
   ImGuiColorEditFlags,
   ImGuiComboFlags,
   ImGuiCond,
+  ImGuiPopupFlags,
   ImGuiSelectableFlags,
   ImGuiSliderFlags,
   ImGuiStyleVar,
@@ -180,7 +181,41 @@ export interface MenuEntry {
   readonly separator?: boolean;
   /** Render a section heading instead of an item. */
   readonly heading?: string;
+  /** Nested entries. When set, this entry renders as a submenu instead of a clickable item. */
+  readonly submenu?: readonly MenuEntry[] | undefined;
   readonly onClick?: () => void;
+}
+
+/**
+ * Render a flat list of {@link MenuEntry} into the current menu/popup: separators,
+ * section headings, nested submenus, and clickable items. `idPrefix` disambiguates
+ * the ImGui ids so the same labels can appear in more than one menu. Shared by the
+ * context menus here and the menu bar in the editor shell.
+ */
+export const renderMenuEntries = (entries: readonly MenuEntry[], idPrefix: string): void => {
+  for (const [i, e] of entries.entries()) {
+    if (e.separator === true) {
+      ImGui.Separator();
+      continue;
+    }
+    if (e.heading !== undefined) {
+      ImGui.SeparatorText(e.heading);
+      continue;
+    }
+    if (e.submenu !== undefined) {
+      if (ImGui.BeginMenu(`${e.label ?? ''}##${idPrefix}-${i}`, e.disabled !== true)) {
+        renderMenuEntries(e.submenu, `${idPrefix}-${i}`);
+        ImGui.EndMenu();
+      }
+      continue;
+    }
+    const p = getActivePalette();
+    if (e.danger === true) ImGui.PushStyleColor(ImGuiCol.Text, srgbU32(p.red400));
+    if (ImGui.MenuItem(`${e.label ?? ''}##${idPrefix}-${i}`, e.shortcut, e.checked ?? false, e.disabled !== true)) {
+      e.onClick?.();
+    }
+    if (e.danger === true) ImGui.PopStyleColor(1);
+  }
 }
 
 const heightOf = (size: keyof typeof ControlHeight | undefined): number => ControlHeight[size ?? 'md'];
@@ -255,6 +290,12 @@ export interface Widgets {
 
   /** Open a right-click context menu anchored to the last item. */
   contextMenu(id: string, entries: readonly MenuEntry[]): void;
+  /**
+   * Open a right-click context menu over the current window's empty space — the
+   * background menu. Opens only when not hovering an item, so per-item
+   * {@link Widgets.contextMenu} calls still win over a card / row.
+   */
+  contextMenuWindow(id: string, entries: readonly MenuEntry[]): void;
   /** A dropdown button (label + chevron) that opens a popup running `body` on click. */
   dropdown(id: string, label: string, icon: IconName | undefined, body: () => void): void;
 
@@ -726,23 +767,16 @@ export const widgets: Widgets = {
 
   contextMenu(id: string, entries: readonly MenuEntry[]): void {
     if (!ImGui.BeginPopupContextItem(`ctx-${id}`)) return;
-    for (const [i, e] of entries.entries()) {
-      if (e.separator === true) {
-        ImGui.Separator();
-        continue;
-      }
-      if (e.heading !== undefined) {
-        ImGui.SeparatorText(e.heading);
-        continue;
-      }
-      const p = getActivePalette();
-      if (e.danger === true) ImGui.PushStyleColor(ImGuiCol.Text, srgbU32(p.red400));
-      const label = e.label ?? '';
-      if (ImGui.MenuItem(`${label}##ctx-${id}-${i}`, e.shortcut, e.checked ?? false, e.disabled !== true)) {
-        e.onClick?.();
-      }
-      if (e.danger === true) ImGui.PopStyleColor(1);
+    renderMenuEntries(entries, `ctx-${id}`);
+    ImGui.EndPopup();
+  },
+
+  contextMenuWindow(id: string, entries: readonly MenuEntry[]): void {
+    // NoOpenOverItems: right-clicking a card opens its own item menu, not this one.
+    if (!ImGui.BeginPopupContextWindow(`ctxw-${id}`, ImGuiPopupFlags.MouseButtonRight | ImGuiPopupFlags.NoOpenOverItems)) {
+      return;
     }
+    renderMenuEntries(entries, `ctxw-${id}`);
     ImGui.EndPopup();
   },
 

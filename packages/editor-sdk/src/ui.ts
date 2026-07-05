@@ -359,9 +359,11 @@ export const Keys = {
   Delete: 522,
   Backspace: 523,
   Space: 524,
+  Enter: 525,
   Escape: 526,
   A: 546,
   F: 551,
+  F2: 573,
 } as const;
 
 const colored = (color: Rgba, value: string): void => {

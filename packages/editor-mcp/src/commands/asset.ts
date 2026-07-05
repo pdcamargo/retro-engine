@@ -109,4 +109,77 @@ export const assetCommands: readonly CommandDef[] = [
       return { guid, kind, saved, location };
     },
   }),
+  defineCommand({
+    name: 'asset.create',
+    title: 'Create asset',
+    description:
+      'Create a new authored asset on disk (e.g. an AnimationController) named `name` under `folder`, load it, and return its GUID. Fails for a kind the studio cannot create.',
+    domain: 'asset',
+    mutating: true,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        kind: { type: 'string', description: 'the asset kind, e.g. AnimationController' },
+        name: { type: 'string', description: 'the file base name (no extension)' },
+        folder: { type: 'string', description: "project-relative folder; defaults to 'assets'" },
+      },
+      required: ['kind', 'name'],
+    },
+    handler: async (ctx, args) => {
+      const r = asRecord(args);
+      const kind = reqString(r, 'kind');
+      const name = reqString(r, 'name');
+      const folder = typeof r.folder === 'string' && r.folder.length > 0 ? r.folder : 'assets';
+      if (ctx.createAsset === undefined) throw new Error('mcp: asset creation is not available (no project open)');
+      const guid = await ctx.createAsset(kind, name, folder);
+      if (guid === undefined) throw new Error(`mcp: cannot create an asset of kind '${kind}'`);
+      const location = ctx.assetServer?.locationForGuid(guid as AssetGuid);
+      return { guid, kind, location };
+    },
+  }),
+  defineCommand({
+    name: 'asset.rename',
+    title: 'Rename asset',
+    description:
+      "Rename an asset's file and its `.meta` sidecar to a new base name (no extension). The GUID and every reference to it are preserved.",
+    domain: 'asset',
+    mutating: true,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        guid: { type: 'string' },
+        name: { type: 'string', description: 'the new base name, without extension' },
+      },
+      required: ['guid', 'name'],
+    },
+    handler: async (ctx, args) => {
+      const r = asRecord(args);
+      const guid = reqString(r, 'guid');
+      const name = reqString(r, 'name');
+      if (ctx.renameAsset === undefined) throw new Error('mcp: asset rename is not available (no project open)');
+      await ctx.renameAsset(guid, name);
+      const location = ctx.assetServer?.locationForGuid(guid as AssetGuid);
+      return { guid, name, location };
+    },
+  }),
+  defineCommand({
+    name: 'asset.delete',
+    title: 'Delete asset',
+    description:
+      'Delete an asset: its file, its `.meta` sidecar, and its manifest/registry entry. Any reference to it becomes dangling.',
+    domain: 'asset',
+    mutating: true,
+    inputSchema: {
+      type: 'object',
+      properties: { guid: { type: 'string' } },
+      required: ['guid'],
+    },
+    handler: async (ctx, args) => {
+      const r = asRecord(args);
+      const guid = reqString(r, 'guid');
+      if (ctx.deleteAsset === undefined) throw new Error('mcp: asset delete is not available (no project open)');
+      await ctx.deleteAsset(guid);
+      return { guid, deleted: true };
+    },
+  }),
 ];

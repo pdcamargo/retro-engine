@@ -131,4 +131,20 @@ export interface CommandContext {
    * the browser. Provided by the studio; absent in headless contexts.
    */
   reindexAssets?(): Promise<void>;
+  /**
+   * Create a new authored asset of `kind` named `name` (base name, no extension)
+   * under `folder`, load it, and return its GUID. Provided by the studio; absent in
+   * headless contexts or when the kind is not creatable.
+   */
+  createAsset?(kind: string, name: string, folder: string): Promise<string | undefined>;
+  /**
+   * Rename an asset's file and its `.meta` sidecar to `newBaseName`. The GUID (and
+   * every reference to it) is preserved. Provided by the studio.
+   */
+  renameAsset?(guid: string, newBaseName: string): Promise<void>;
+  /**
+   * Delete an asset: its file, its `.meta` sidecar, and its manifest/registry entry.
+   * References to it become dangling. Provided by the studio.
+   */
+  deleteAsset?(guid: string): Promise<void>;
 }

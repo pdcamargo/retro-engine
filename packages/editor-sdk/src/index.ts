@@ -1,6 +1,7 @@
 export { applyTheme } from './apply-theme';
 export {
   ASSET_TYPES,
+  type AssetCardEditing,
   type AssetCardOptions,
   type AssetCardResult,
   type AssetGroupOptions,
@@ -99,6 +100,15 @@ export {
   AssetEditorRegistry,
   createAssetEditorRegistry,
 } from './asset-editor/registry';
+export {
+  type AssetAction,
+  type AssetActionContext,
+  type AssetActionHost,
+  AssetActionRegistry,
+  type AssetActionTarget,
+  type AssetDraft,
+  createAssetActionRegistry,
+} from './asset-actions/registry';
 export { renderComponentBody, type RenderComponentBodyRequest } from './inspector/inspector-body';
 export { type PropertyFieldRequest, renderPropertyField } from './inspector/property-field';
 export { type ChildRequest, type PropertyContext, type PropertyRenderer } from './inspector/property-types';

@@ -1,10 +1,11 @@
 import { ImGui, ImGuiCol, ImGuiCond } from '@mori2003/jsimgui';
 
 import type { MenuEntry, Widgets } from './components';
-import { widgets } from './components';
+import { renderMenuEntries, widgets } from './components';
 import { Draw } from './draw';
 import { buildDefaultLayout, type DockSlot, DockNodeId, type LayoutDims, nodeForSlot } from './editor-layout';
 import { drawIcon } from './icon-shapes';
+import { type AssetActionRegistry, createAssetActionRegistry } from './asset-actions/registry';
 import { type AssetEditorRegistry, createAssetEditorRegistry } from './asset-editor/registry';
 import { createInspectorRegistry, type InspectorRegistry } from './inspector/inspector-registry';
 import { drawPixelText, pixelTextWidth } from './pixel-font';
@@ -91,24 +92,6 @@ interface PanelState {
 
 const ctx: EditorContext = { ui, widgets };
 
-const renderMenuEntries = (entries: readonly MenuEntry[]): void => {
-  for (const [i, e] of entries.entries()) {
-    if (e.separator === true) {
-      ImGui.Separator();
-      continue;
-    }
-    if (e.heading !== undefined) {
-      ImGui.SeparatorText(e.heading);
-      continue;
-    }
-    const p = getActivePalette();
-    if (e.danger === true) ImGui.PushStyleColor(ImGuiCol.Text, srgbU32(p.red400));
-    const label = `${e.label ?? ''}##menu-${i}`;
-    if (ImGui.MenuItem(label, e.shortcut, e.checked ?? false, e.disabled !== true)) e.onClick?.();
-    if (e.danger === true) ImGui.PopStyleColor(1);
-  }
-};
-
 /**
  * The editor shell: a scalable, registry-driven composition of a menu bar, a
  * toolbar, a dockable panel workspace, and a status bar. Register panels by path
@@ -142,6 +125,14 @@ export class Editor {
    * registration.
    */
   readonly assetEditors: AssetEditorRegistry = createAssetEditorRegistry();
+
+  /**
+   * The asset context-menu extension surface: register actions the asset browser
+   * shows on a right-click — scoped to a specific asset type/kind, all assets, or
+   * the panel's empty space (create actions). Seeded empty; the studio (and an end
+   * user's project) register their own.
+   */
+  readonly assetActions: AssetActionRegistry = createAssetActionRegistry();
 
   constructor(options: EditorOptions = {}) {
     this.options = options;
@@ -250,12 +241,12 @@ export class Editor {
     ui.sameLine(0, 12);
     for (const menu of this.menus) {
       if (ImGui.BeginMenu(menu.label)) {
-        renderMenuEntries(menu.items());
+        renderMenuEntries(menu.items(), `menu-${menu.id}`);
         ImGui.EndMenu();
       }
     }
     if (this.options.windowMenu !== false && ImGui.BeginMenu('Window')) {
-      renderMenuEntries(this.windowMenuEntries());
+      renderMenuEntries(this.windowMenuEntries(), 'window-menu');
       ImGui.EndMenu();
     }
     // Branch indicator, right-aligned (git glyph vertically centered + text).

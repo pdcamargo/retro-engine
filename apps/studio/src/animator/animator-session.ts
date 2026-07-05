@@ -4,12 +4,7 @@
 // regenerates the document from it (folding in the saved layout) after any
 // structural change. Mirrors the graph-demo's host/view ownership.
 
-import {
-  AnimationClips,
-  AnimationController,
-  type ControllerState,
-  type Motion,
-} from '@retro-engine/engine';
+import { AnimationController } from '@retro-engine/engine';
 import {
   type EdgeId,
   type GraphEnvironment,
@@ -157,61 +152,10 @@ export const openController = (
   rebuildSession(session);
 };
 
-// A stand-in controller resembling the handoff's "Base Locomotion" so the canvas
-// renders the full visual language before the on-disk open/create flow lands.
-// Clip handles are reserved by GUID only — the codec reads motion structure, not
-// clip data — so no real clips are needed.
-const sampleController = (): AnimationController => {
-  const clips = new AnimationClips();
-  const clip = (guid: string): Motion => ({ kind: 'clip', clip: clips.reserveHandle(guid as never) });
-  const speedTree = (dir: string): Motion => ({
-    kind: 'blend1d',
-    parameter: 'speed',
-    children: [
-      { motion: clip(`idle_${dir}`), threshold: 0 },
-      { motion: clip(`walk_${dir}`), threshold: 2 },
-      { motion: clip(`run_${dir}`), threshold: 5 },
-    ],
-  });
-  const locomotion: Motion = {
-    kind: 'blend2d',
-    mode: 'freeformDirectional',
-    parameterX: 'moveX',
-    parameterY: 'moveY',
-    children: ['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw'].map((d, i) => ({
-      motion: speedTree(d),
-      x: Math.sin((i / 8) * Math.PI * 2),
-      y: Math.cos((i / 8) * Math.PI * 2),
-    })),
-  };
-  const states: ControllerState[] = [
-    { name: 'Idle', motion: clip('idle') },
-    { name: 'Locomotion', motion: locomotion },
-    { name: 'Jump', motion: clip('jump') },
-    { name: 'Land', motion: clip('land') },
-  ];
-  return new AnimationController(
-    [
-      { name: 'speed', type: 'float', default: 0 },
-      { name: 'moveX', type: 'float', default: 0 },
-      { name: 'moveY', type: 'float', default: 0 },
-      { name: 'grounded', type: 'bool', default: 1 },
-      { name: 'jump', type: 'trigger', default: 0 },
-    ],
-    states,
-    [
-      { from: 0, to: 1, conditions: [{ parameter: 'speed', op: 'gt', value: 0.1 }], duration: 0.15, hasExitTime: false, exitTime: 0 },
-      { from: 1, to: 0, conditions: [{ parameter: 'speed', op: 'lt', value: 0.1 }], duration: 0.15, hasExitTime: false, exitTime: 0 },
-      { from: -1, to: 2, conditions: [{ parameter: 'jump', op: 'trigger', value: 0 }], duration: 0.1, hasExitTime: false, exitTime: 0 },
-      { from: 2, to: 3, conditions: [], duration: 0.1, hasExitTime: true, exitTime: 0.8 },
-      { from: 3, to: 0, conditions: [], duration: 0.2, hasExitTime: true, exitTime: 0.9 },
-    ],
-    0,
-    'Base Locomotion',
-  );
-};
-
-/** Create an Animator session, seeded with a sample controller for verification. */
+/**
+ * Create an empty Animator session. No controller is open until one is opened from
+ * the asset browser or created there — the panel shows a "No controller open" state.
+ */
 export const createAnimatorSession = (): AnimatorSession => {
   const env = createAnimatorEnvironment();
   const session: AnimatorSession = {
@@ -235,6 +179,5 @@ export const createAnimatorSession = (): AnimatorSession => {
     renameBuffer: '',
     renameFocus: false,
   };
-  openController(session, sampleController(), 'sample-base-locomotion', null);
   return session;
 };
