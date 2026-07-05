@@ -263,15 +263,17 @@ const pushMenuStyle = (): void => {
 };
 
 /**
- * Render menu entries, then floor the popup width so short menus don't collapse
- * to a cramped sliver. The width spacer is a zero-height dummy whose leading row
- * spacing is removed, so it adds no gap — the bottom padding stays even with the top.
+ * Render menu entries with a floored popup width so short menus don't collapse to
+ * a cramped sliver. A zero-height spacer of the minimum width widens the content
+ * box, then the cursor rewinds so the entries render from the top over it — this
+ * adds no row, so the top and bottom padding stay even. (A trailing spacer would
+ * sit below the last item's row spacing and push the bottom padding out.)
  */
 const renderMenuBody = (entries: readonly MenuEntry[], idPrefix: string): void => {
-  renderMenuEntries(entries, idPrefix);
-  ImGui.PushStyleVarImVec2(ImGuiStyleVar.ItemSpacing, new ImVec2(0, 0));
+  const [x0, y0] = ui.cursorScreenPos();
   ImGui.Dummy(new ImVec2(MENU_MIN_WIDTH, 0));
-  ImGui.PopStyleVar();
+  ui.setCursorScreenPos([x0, y0]);
+  renderMenuEntries(entries, idPrefix);
 };
 
 const heightOf = (size: keyof typeof ControlHeight | undefined): number => ControlHeight[size ?? 'md'];
