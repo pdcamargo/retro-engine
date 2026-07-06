@@ -307,3 +307,22 @@ work (gamepad-in-action-map, touch gestures, studio binding editor) moved to **P
 Next P0 target: **Audio (core)**.
 
 ---
+
+## 🟡 Engine text (MSDF) — Phase 1 shipped (data + layout engine, pure)
+
+The MSDF text system's algorithmic core landed under `packages/engine/src/text/`:
+`MsdfFont`/`parseMsdfFont` (parses `msdf-atlas-gen` JSON, throws on malformed) and
+`layoutText`/`measureText` (advances, kerning, `\n`, greedy word wrap at `maxWidth`,
+left/center/right alignment, top-left-origin atlas UVs). **Pure logic — no GPU, no
+component yet**, so verified by unit tests only (no MCP/editor path exists at this phase).
+
+- **HOW to test:** `bun test packages/engine/src/text/` — 19 tests cover parsing,
+  whitespace glyphs, kerning, wrapping/overflow, alignment, newlines, top/bottom atlas
+  y-origin, and measure↔layout agreement.
+- **Not yet visible in the studio.** Rendering (a `Font` asset kind + `.meta`, the
+  `Text2d` component, the MSDF shader, glyph-quad batching through the 2D pipeline, and a
+  `?mode=text` sample) is Phase 2 — that's when there'll be an on-screen thing to look at.
+- Roadmap: `docs/roadmap/text-rendering.md`; decision: ADR-0149. MASTER-ROADMAP item
+  marked 🟡 (box stays unchecked until Phase 2 renders text).
+
+---

@@ -97,12 +97,16 @@ foundation.**
 
 ## Renderer
 
-- [ ] **Engine text rendering (MSDF)** — ❌ game-facing text (only the ImGui editor overlay exists today).
+- [ ] **Engine text rendering (MSDF)** — 🟡 Phase 1 shipped: pure font data + layout engine
+      (`MsdfFont`/`parseMsdfFont`, `layoutText`/`measureText` — advances, kerning, `\n`, greedy wrap,
+      alignment, top-left UVs) under `packages/engine/src/text/`, fully unit-tested. Remaining:
+      Phase 2 rendering (`Font` asset kind + `.meta`, `Text2d` component, MSDF shader, glyph-quad
+      batching through the 2D pipeline, sample) + Phase 3 world-space `Text` / UI measure wiring.
       _AC:_ MSDF glyph atlas (generated via msdfgen, loaded as an asset) + runtime glyph-quad batching
       through the 2D pipeline; `Text`/`Text2d` components; font asset kind + `.meta`; layout
       (line-break/wrap/alignment); glyph metrics exposed to the UI layout measure callback; crisp at any
       scale/rotation; a sample draws multi-line styled text. (Required by in-game UI.)
-      _Links:_ new — folds into [ui-system.md](ui-system.md)
+      _Links:_ [text-rendering.md](text-rendering.md) · [ADR-0149](../adr/ADR-0149-engine-text-msdf.md) · folds into [ui-system.md](ui-system.md)
 
 ## Editor / Studio
 

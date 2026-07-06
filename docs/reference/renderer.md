@@ -109,8 +109,11 @@ no clustered lighting, no bloom/DoF/SSR/volumetrics/atmospheric sky, and no engi
 
 - ✅ **Sprites** (`engine/src/sprite/`, ADR-0031/0032/0033/0034/0036) — sprite component + pipeline,
   **Z-aware batching**, instanced buffers, **texture atlas layout**, **atlas animation**, **9-slice**.
-- ❌ **Engine-facing text** — no glyph/font-atlas/MSDF/text subsystem. On-screen text today is only the
-  ImGui editor overlay (editor UI, not an engine feature). A game-facing text renderer does not exist.
+- 🟡 **Engine-facing text (MSDF)** (`engine/src/text/`, ADR-0149) — Phase 1 shipped: pure font data +
+  layout engine (`MsdfFont`/`parseMsdfFont`; `layoutText`/`measureText` — advances, kerning, `\n`, greedy
+  wrap, alignment, top-left atlas UVs), fully unit-tested. Not yet rendered: no `Font` asset kind, `Text2d`
+  component, MSDF shader, or glyph-quad batching yet (Phase 2). On-screen text today is still only the
+  ImGui editor overlay (editor UI, not an engine feature).
 - ✅ **glTF/GLB import** (`packages/gltf`, ADR-0057/0059) — GLB+glTF parse, scene instantiation, animation
   mapping, image decode, auto-retarget on import. (See [`assets.md`](assets.md).)
 - ✅ **GPU skinning & morph** — see [`animation.md`](animation.md) (ADR-0114/0115/0129).

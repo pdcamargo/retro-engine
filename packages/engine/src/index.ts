@@ -653,6 +653,19 @@ export {
   TextureSlicer,
 } from './sprite';
 export type {
+  AtlasYOrigin,
+  FontMetrics,
+  GlyphMetrics,
+  GlyphRect,
+  MsdfFontJson,
+  PositionedGlyph,
+  TextAlign,
+  TextLayout,
+  TextLayoutOptions,
+  TextMeasure,
+} from './text';
+export { kerningKey, layoutText, measureText, MsdfFont, parseMsdfFont } from './text';
+export type {
   AmbientLight2dOptions,
   DirectionalLight2dOptions,
   Light2dBatch,
