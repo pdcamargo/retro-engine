@@ -448,3 +448,26 @@ entity's `ComputedLayout` with accumulated absolute coordinates. `UiViewport` (r
 - Roadmap: `docs/roadmap/ui-system.md` (Phases 1a+1b done). ADR-0150. MASTER-ROADMAP 🟡.
 
 ---
+
+## 🟡 Web export — Phase 1 shipped (.rpak asset package format)
+
+New package `@retro-engine/build` with the deployable asset-delivery format (the foundation
+the web target streams from). `.rpak` v1: magic+version header → JSON TOC (guid/offset/length/
+codec/uncompressedLength/hash) → concatenated per-entry blobs. `writeRpak` (build-time, gzip
+via Web Streams with a node:zlib fallback, FNV-1a content hashes), `RpakReader` (in-memory,
+by GUID), `RangeRpakReader` (lazy — open() reads only header+TOC, each read() fetches only
+that asset's byte range via an injected RangeFetch → HTTP-Range streaming), and the
+`ExportTarget`/`ExportRegistry` interface. Reader layer is browser-safe.
+
+- **HOW to test:** `bun test packages/build/` — 13 tests: write→read round-trip (none + gzip
+  codecs), magic/version validation, duplicate-GUID + missing-GUID rejection, gzip actually
+  compresses + round-trips, corrupt-blob integrity failure, and a RangeRpakReader test proving
+  open() does exactly header+TOC fetches and read() fetches only one entry's range (never the
+  whole archive). Bench: `bun run --cwd packages/build bench`.
+- **This is a fully headless, self-contained P0 slice** (no GPU/studio needed). Remaining for
+  the Web export item: the Bun bundler for user code + the web adapter (emit index.html +
+  engine + user bundle + write the project's assets into a .rpak) + a real project exporting
+  and running in a browser — those need a browser to fully confirm.
+- Roadmap: `docs/roadmap/web-build-target.md`. Decision: ADR-0151. MASTER-ROADMAP 🟡.
+
+---

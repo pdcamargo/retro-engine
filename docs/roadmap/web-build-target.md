@@ -1,7 +1,18 @@
 # Web Build Target
 
 - **Created:** 2026-05-21
-- **Status:** Planning
+- **Status:** In progress (`.rpak` format shipped 2026-07-06)
+- **ADR:** [ADR-0151](../adr/ADR-0151-web-export-and-rpak.md)
+
+## Delivery format — `.rpak` (✅ 2026-07-06)
+
+Shipped in `@retro-engine/build` (ADR-0151): the `.rpak` v1 archive (magic +
+version → JSON TOC → per-entry blobs), `writeRpak` (build-time, gzip via Web
+Streams + `node:zlib` fallback, FNV-1a integrity), `RpakReader` (in-memory), and
+`RangeRpakReader` (lazy GUID-addressed reads over an injected byte-range fetch —
+the basis for HTTP-Range streaming). Plus the `ExportTarget`/`ExportRegistry`
+interface. Remaining below: the Bun bundler for user code + the web adapter that
+emits a static site and writes the project's assets into a `.rpak`.
 
 ## Goal
 

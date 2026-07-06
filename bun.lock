@@ -78,6 +78,10 @@
         "@retro-engine/reflect": "workspace:*",
       },
     },
+    "packages/build": {
+      "name": "@retro-engine/build",
+      "version": "0.0.0",
+    },
     "packages/create-project": {
       "name": "@retro-engine/create-project",
       "version": "0.0.0",
@@ -378,6 +382,8 @@
     "@retro-engine/assets": ["@retro-engine/assets@workspace:packages/assets"],
 
     "@retro-engine/audio": ["@retro-engine/audio@workspace:packages/audio"],
+
+    "@retro-engine/build": ["@retro-engine/build@workspace:packages/build"],
 
     "@retro-engine/create-project": ["@retro-engine/create-project@workspace:packages/create-project"],
 

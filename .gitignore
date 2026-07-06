@@ -4,6 +4,11 @@ node_modules/
 # Build outputs
 dist/
 build/
+# @retro-engine/build is a source package, not a build-output dir — track its
+# source while keeping its own generated output ignored.
+!packages/build/
+packages/build/dist/
+packages/build/node_modules/
 .turbo/
 *.tsbuildinfo
 
