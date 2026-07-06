@@ -349,3 +349,26 @@ only (no MCP path until Phase 2b draws pixels).
   Decision: ADR-0149. MASTER-ROADMAP item stays 🟡 until Phase 2b renders text.
 
 ---
+
+## 🟡 Engine text (MSDF) — Phase 2b shipped (glyph render pipeline)
+
+`TextPlugin` now actually renders `Text2d`. Added the `retro_engine::text` MSDF shader
+(median-of-RGB distance + screen-px-range AA), `TextPipeline` (specialized on render-target
+shape, always alpha-blended), `TextInstanceBuffer`, `packGlyphInstance` (block-local y-down
+glyph → world-space quad honoring the entity transform + pivot, per-glyph atlas UV +
+`unitRange`), and the `text-prepare` (after `image-prepare`) + `text-queue` render systems
+(one instanced transparent draw per text entity).
+
+- **HOW to test now:** `bun test packages/engine/src/text/` — 39 tests, incl. a
+  capturing-renderer integration test asserting the transparent2d pass gets one instanced
+  draw per text entity, correct instance counts (1 per visible glyph), per-entity batching,
+  the atlas bound at `@group(1)`, and skip behavior (no font / whitespace-only → no draw).
+  Bench: `bun run --cwd packages/engine bench --filter "text prepare"` (~65µs / 400 glyphs).
+- **Still not visible on screen** — no committed font atlas yet, and `TextPlugin` isn't
+  added by any sample/studio scene. Phase 2c commits a real `msdf-atlas-gen` font (.font +
+  .png), adds a `?mode=text` playground scene, and wires TextPlugin alongside SpritePlugin —
+  that's when there's an actual on-window screenshot to verify via the studio MCP.
+- Roadmap: `docs/roadmap/text-rendering.md` (Phase 2 → 2a/2b done, 2c next). ADR-0149.
+  MASTER-ROADMAP stays 🟡 until text is drawn on screen and MCP-verified.
+
+---

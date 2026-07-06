@@ -26,6 +26,7 @@ import './sprite-slice.bench';
 import './atlas-sync.bench';
 import './atlas-animation.bench';
 import './material2d-prepare.bench';
+import './text-prepare.bench';
 import './mesh-instancing.bench';
 import './retained-instance-prepare.bench';
 import './event-driven-cull-prepare.bench';

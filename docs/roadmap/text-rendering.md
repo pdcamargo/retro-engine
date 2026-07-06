@@ -34,13 +34,24 @@ an MSDF shader. Required by the in-game UI system.
   Not yet in the default plugin set — wired when the render path lands.
 - Unit-tested: importer (fake decoder/ctx), Text2d defaults + scene round-trip.
 
-**Phase 2b — Glyph render pipeline (next)**
+**Phase 2b — Glyph render pipeline ✅ (2026-07-06)**
 
-- MSDF WGSL shader (median-of-RGB, screen-px-range AA) + glyph-quad batching
-  through the 2D pipeline; text-prepare/queue systems; add `TextPlugin` to the
-  default set.
-- Playground `?mode=text` draws multi-line styled text; a default font atlas is
-  committed for samples/tests. Verify visually via the studio MCP.
+- `retro_engine::text` MSDF WGSL shader (median-of-RGB, screen-px-range AA).
+- `TextPipeline` (specialized on render-target shape, always alpha-blended),
+  `TextInstanceBuffer`, `TextPreparedBatches`, `packGlyphInstance` (world-space
+  quad + per-glyph UV + `unitRange`).
+- `text-prepare` (after `image-prepare`) + `text-queue` systems: lay out visible
+  text, pack glyph quads in one upload, queue one transparent instanced draw per
+  entity. Bench: `text-prepare.bench.ts` (layout + pack, ~65µs / 400 glyphs).
+- Verified end-to-end via the capturing renderer (transparent-pass draws,
+  per-entity batching, instance counts, atlas bind group).
+
+**Phase 2c — Sample + studio wiring (next)**
+
+- Commit a real `msdf-atlas-gen` font (`.font` + `.png`) for samples/tests.
+- Playground `?mode=text` draws multi-line styled text; wire `TextPlugin`
+  alongside `SpritePlugin` where the studio/sample opens 2D scenes. Verify
+  visually via the studio MCP (screenshots) once reconnected.
 
 ### Phase 3 — Depth
 

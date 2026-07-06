@@ -109,12 +109,14 @@ no clustered lighting, no bloom/DoF/SSR/volumetrics/atmospheric sky, and no engi
 
 - ✅ **Sprites** (`engine/src/sprite/`, ADR-0031/0032/0033/0034/0036) — sprite component + pipeline,
   **Z-aware batching**, instanced buffers, **texture atlas layout**, **atlas animation**, **9-slice**.
-- 🟡 **Engine-facing text (MSDF)** (`engine/src/text/`, ADR-0149) — Phases 1 + 2a shipped: pure font data
-  + layout engine (`MsdfFont`/`parseMsdfFont`; `layoutText`/`measureText` — advances, kerning, `\n`, greedy
-  wrap, alignment, top-left atlas UVs), plus the `Font` asset + `.font` loader (linear atlas sub-asset),
-  the `Text2d` component (reflection round-trips), and `TextPlugin`. All unit-tested. Not yet rendered: no
-  MSDF shader or glyph-quad batching yet, and `TextPlugin` is not in the default set (Phase 2b). On-screen
-  text today is still only the ImGui editor overlay (editor UI, not an engine feature).
+- 🟡 **Engine-facing text (MSDF)** (`engine/src/text/`, ADR-0149) — Phases 1–2b shipped: font data +
+  layout engine (`MsdfFont`/`parseMsdfFont`; `layoutText`/`measureText`), the `Font` asset + `.font` loader
+  (linear atlas sub-asset), the `Text2d` component (reflection round-trips), and a full **MSDF glyph render
+  pipeline** — `retro_engine::text` shader (median-of-RGB, screen-px-range AA), `TextPipeline` /
+  `TextInstanceBuffer`, `packGlyphInstance`, and `text-prepare`/`text-queue` systems that draw `Text2d`
+  through the transparent 2D phase (one instanced draw per entity). Verified end-to-end via the capturing
+  renderer; benched (`text-prepare.bench.ts`). Remaining (Phase 2c): a committed `msdf-atlas-gen` sample
+  font + `?mode=text` playground scene + studio wiring for on-window visual confirmation.
 - ✅ **glTF/GLB import** (`packages/gltf`, ADR-0057/0059) — GLB+glTF parse, scene instantiation, animation
   mapping, image decode, auto-retarget on import. (See [`assets.md`](assets.md).)
 - ✅ **GPU skinning & morph** — see [`animation.md`](animation.md) (ADR-0114/0115/0129).
