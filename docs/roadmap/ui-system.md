@@ -80,9 +80,15 @@ and a HUD (text + bars) from ECS components + `.rss`, with gamepad navigation.
 
 ### Phase 4 — Widgets + interaction
 
-- Headless widgets (panel/label/button/image first; then toggle/slider/
-  scrollview/text-input/dropdown/tabs) emitting `Message<T>`; picking/focus
-  routing; a HUD/menu sample.
+- **Phase 4a — picking + interaction state ✅ (2026-07-06).** `Interactable`
+  marker + `UiInteraction` state (`none`/`hovered`/`pressed`) + `UiClicked`
+  message; `pickTopmost` hit-test (front-most by paint order) + `updateUiInteraction`
+  state machine; `UiInteractionPlugin` runs it in `preUpdate` after input
+  (`@retro-engine/input`). Verified in a real browser (a clickable button +
+  live click counter in the sample-game export). Bench: `ui-picking`.
+- Remaining (4b+): headless widget components (label/button/toggle/slider/
+  scrollview/text-input/dropdown/tabs) with `Message<T>`; keyboard/gamepad focus
+  routing; a HUD/menu sample scene.
 
 ### Later (P1+)
 

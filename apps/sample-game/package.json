@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@retro-engine/engine": "workspace:*",
+    "@retro-engine/input": "workspace:*",
     "@retro-engine/math": "workspace:*",
     "@retro-engine/project": "workspace:*",
     "@retro-engine/runtime-web": "workspace:*",

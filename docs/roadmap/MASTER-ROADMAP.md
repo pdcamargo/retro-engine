@@ -96,8 +96,12 @@ foundation.**
       `UiRenderPlugin` draws `backgroundColor` quads (`UiPassNode`) **and in-UI text** (`UiText` glyphs via a
       screen-space MSDF pipeline, `UiTextPassNode`) through once-per-frame overlay passes (`loadOp:'load'`),
       verified in a real browser (a HUD panel with colored boxes + crisp labels in the sample-game export,
-      ADR-0154). Remaining: UI **borders + corner radius** + z-index/clipping + per-line text alignment;
-      `.rss` combinators/`--vars`/inheritance + layout-pass wiring (3b); **widgets** (4). (ADR-0150/0154.)
+      ADR-0154). Plus **Phase 4a: pointer interaction** — `Interactable`/`UiInteraction`/`UiClicked` +
+      picking (`pickTopmost`) + `UiInteractionPlugin` (reads `@retro-engine/input`), verified in a real
+      browser (a clickable button + live click counter in the sample-game export). Remaining: UI **borders +
+      corner radius** + z-index/clipping + per-line text alignment; `.rss` combinators/`--vars`/inheritance +
+      layout-pass wiring (3b); **widgets** (4b — label/button/slider components + focus routing + a menu
+      sample). (ADR-0150/0154.)
       _AC:_ `UiNode` + derived `ComputedLayout` (not serialized) reusing `Parent`/`Children`; a pure-TS
       **flexbox** `LayoutEngine` behind an interface, with a text-measure callback; a `.rss` (USS-subset)
       parser + style-resolution system matching type / `.class` / `#name` / **state-marker** selectors

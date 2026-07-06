@@ -41,6 +41,7 @@
       "version": "0.1.0",
       "dependencies": {
         "@retro-engine/engine": "workspace:*",
+        "@retro-engine/input": "workspace:*",
         "@retro-engine/math": "workspace:*",
         "@retro-engine/project": "workspace:*",
         "@retro-engine/runtime-web": "workspace:*",
@@ -306,6 +307,7 @@
       "dependencies": {
         "@retro-engine/ecs": "workspace:*",
         "@retro-engine/engine": "workspace:*",
+        "@retro-engine/input": "workspace:*",
         "@retro-engine/math": "workspace:*",
         "@retro-engine/reflect": "workspace:*",
         "@retro-engine/renderer-core": "workspace:*",

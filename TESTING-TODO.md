@@ -639,3 +639,29 @@ pass) draws the batches with per-atlas bind groups. `UiText.color` added.
 - Roadmap: `docs/roadmap/ui-system.md` (Phase 2b ✅). ADR-0150/0154. MASTER-ROADMAP UI item 🟡.
 
 ---
+
+## ✅ In-game UI — Phase 4a: pointer interaction (VERIFIED via browser)
+
+UI nodes respond to the pointer — the foundation for buttons/menus. `Interactable` marker
+(opts a node into picking; auto-attaches UiNode/ComputedLayout/UiInteraction), `UiInteraction`
+state (`none`/`hovered`/`pressed`, derived), `UiClicked` message (press-begins-and-releases on
+the same node). `pickTopmost` hit-tests front-most by paint order; `updateUiInteraction` is the
+per-frame hover/press/click state machine; `UiInteractionPlugin` runs it in preUpdate after the
+input update, reading CursorPosition + MouseButtonInput (`@retro-engine/input` is now a ui dep).
+Headless/no-input → no-op.
+
+- **Verified end-to-end (Playwright, real browser):** the `sample-game` export now has a centered
+  "CLICK ME" button that tints on hover/press and a "CLICKS: N" label that increments per click.
+  Drove real DOM mousedown/mouseup at the button center via the input backend → picking →
+  UiClicked → counter: fresh load = 0, one click → 1, next click → 2 (exact, no spurious counts).
+- **Automated:** 69 UI tests (pickTopmost + full hover/press/click state machine incl. release-
+  outside + cursor-absent); `ui-picking` bench; full repo gate green. Changeset added.
+- **HOW to test:** export the sample, serve, open in a WebGPU browser → move over the centered
+  "CLICK ME" (it lightens), click it (counter increments; darkens while held).
+- **Not done (UI P0 stays unchecked):** widget components (button/label/slider) + keyboard/gamepad
+  focus routing + a menu sample (4b); borders/radius; `.rss` runtime wiring (3b). Logged in MASTER-ROADMAP.
+- **Minor API friction noted:** the resolved `UiStyle` is fully readonly, so runtime style changes
+  (e.g. hover tint) need a cast; consider a mutable style-patch helper. (Follow-up, not blocking.)
+- Roadmap: `docs/roadmap/ui-system.md` (Phase 4a ✅). ADR-0150/0154. MASTER-ROADMAP UI item 🟡.
+
+---

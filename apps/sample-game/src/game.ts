@@ -1,10 +1,11 @@
-import { quat, vec2, vec3, vec4 } from '@retro-engine/math';
+import { quat, type Vec4, vec2, vec3, vec4 } from '@retro-engine/math';
 import type { App, PluginObject } from '@retro-engine/engine';
 import {
   Camera2d,
   ClearColorConfig,
   Commands,
   installDefaultFont,
+  MessageReader,
   Query,
   ResMut,
   Text2d,
@@ -12,13 +13,36 @@ import {
   Time,
   Transform,
 } from '@retro-engine/engine';
+import { InputPlugin } from '@retro-engine/input';
 import { defineProject } from '@retro-engine/project';
-import { UiNode, UiPlugin, UiRenderPlugin, UiText } from '@retro-engine/ui';
+import {
+  Interactable,
+  UiClicked,
+  UiInteraction,
+  UiNode,
+  UiPlugin,
+  UiRenderPlugin,
+  UiInteractionPlugin,
+  UiText,
+} from '@retro-engine/ui';
 
 /** Marker: rotate this entity about its Z axis each frame. */
 class Spin {
   constructor(public readonly speed: number = 0.8) {}
 }
+
+/** Marker: the clickable button node. */
+class ClickButton {}
+
+/** State + marker: the label node showing the click count. */
+class ClickCounter {
+  count = 0;
+}
+
+/** Set a UI node's background at runtime (the resolved style is otherwise readonly). */
+const setBackground = (node: UiNode, color: Vec4): void => {
+  (node.style as { backgroundColor: Vec4 }).backgroundColor = color;
+};
 
 /**
  * The whole sample game: a 2D camera, a title, a HUD line, and a spinning label,
@@ -35,7 +59,13 @@ class HelloTextPlugin implements PluginObject {
     app.addPlugin(new TextPlugin());
     app.addPlugin(new UiPlugin());
     app.addPlugin(new UiRenderPlugin());
+    app.addPlugin(new InputPlugin());
+    app.addPlugin(new UiInteractionPlugin());
     const font = installDefaultFont(app);
+
+    const IDLE = vec4.create(0.24, 0.28, 0.42, 1);
+    const HOVER = vec4.create(0.34, 0.4, 0.6, 1);
+    const PRESSED = vec4.create(0.16, 0.19, 0.3, 1);
 
     app.addSystem(
       'startup',
@@ -123,6 +153,38 @@ class HelloTextPlugin implements PluginObject {
       { label: 'hello-ui-setup' },
     );
 
+    // A centered, clickable button + a click counter label — the interaction demo.
+    app.addSystem(
+      'startup',
+      [Commands],
+      (cmd) => {
+        cmd
+          .spawn(
+            new UiNode({
+              flexDirection: 'column',
+              justifyContent: 'center',
+              alignItems: 'center',
+              gap: 16,
+              flexGrow: 1,
+            }),
+          )
+          .withChildren((root) => {
+            root.spawn(
+              new UiNode({ padding: { left: 6, top: 4 } }),
+              new UiText({ text: 'CLICKS: 0', font, fontSize: 30, color: vec4.create(0.9, 0.9, 1, 1) }),
+              new ClickCounter(),
+            );
+            root.spawn(
+              new UiNode({ width: 260, height: 72, padding: { left: 22, top: 22 }, backgroundColor: IDLE }),
+              new UiText({ text: 'CLICK ME', font, fontSize: 28, color: vec4.create(1, 1, 1, 1) }),
+              new Interactable(),
+              new ClickButton(),
+            );
+          });
+      },
+      { label: 'click-demo-setup' },
+    );
+
     app.addSystem(
       'update',
       [Query([Transform, Spin]), ResMut(Time)],
@@ -136,6 +198,41 @@ class HelloTextPlugin implements PluginObject {
         }
       },
       { label: 'hello-text-spin' },
+    );
+
+    // Tint the button by its interaction state.
+    app.addSystem(
+      'update',
+      [Query([UiNode, UiInteraction, ClickButton])],
+      (buttons) => {
+        for (const row of buttons.entries()) {
+          const node = row[1] as UiNode;
+          const state = (row[2] as UiInteraction).state;
+          setBackground(node, state === 'pressed' ? PRESSED : state === 'hovered' ? HOVER : IDLE);
+        }
+      },
+      { label: 'click-demo-tint' },
+    );
+
+    // Count clicks and update the counter label + a window probe.
+    app.addSystem(
+      'update',
+      [MessageReader(UiClicked), Query([UiText, ClickCounter])],
+      (clicks, counters) => {
+        let n = 0;
+        for (const _ of clicks) n += 1;
+        if (n === 0) return;
+        for (const row of counters.entries()) {
+          const text = row[1] as UiText;
+          const counter = row[2] as ClickCounter;
+          counter.count += n;
+          text.text = `CLICKS: ${counter.count}`;
+          if (typeof window !== 'undefined') {
+            (window as unknown as { __game: { clicks: number } }).__game = { clicks: counter.count };
+          }
+        }
+      },
+      { label: 'click-demo-count' },
     );
   }
 }
