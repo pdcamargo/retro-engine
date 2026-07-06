@@ -131,6 +131,40 @@ describe('RapierBackend — character controller', () => {
   });
 });
 
+describe('RapierBackend — joints', () => {
+  it('a fixed joint holds a dynamic body against gravity', async () => {
+    const backend = createRapierBackend();
+    await backend.init();
+    backend.setGravity('2d', [0, -9.81]);
+    // Static anchor at (0,5); dynamic body 2 units below at (0,3).
+    backend.upsertBody(e(1), { ...box([0, 5]), bodyType: 'static' });
+    backend.upsertBody(e(2), box([0, 3]));
+    // Fixed joint: pin the body's centre to a point 2 below the anchor's centre
+    // (= the body's start), so the joint holds it exactly in place.
+    backend.upsertJoint(e(2), {
+      dimension: '2d',
+      target: e(1),
+      type: 'fixed',
+      localAnchorA: [0, 0],
+      localAnchorB: [0, -2],
+      axis: [1, 0],
+    });
+
+    const startY = backend.readBody(e(2))!.translation[1]!;
+    for (let i = 0; i < 240; i += 1) backend.step(1 / 60);
+    const endY = backend.readBody(e(2))!.translation[1]!;
+    // Without the joint it would free-fall well below 0; the joint holds it.
+    expect(Math.abs(endY - startY)).toBeLessThan(0.6);
+    expect(endY).toBeGreaterThan(2); // nowhere near free-fall
+
+    // Removing the joint lets it fall again.
+    backend.removeJoint(e(2));
+    for (let i = 0; i < 240; i += 1) backend.step(1 / 60);
+    expect(backend.readBody(e(2))!.translation[1]!).toBeLessThan(endY - 1);
+    backend.destroy();
+  });
+});
+
 describe('RapierBackend — real simulation', () => {
   it('a dynamic box falls under gravity and lands on a static floor', async () => {
     const backend = createRapierBackend();

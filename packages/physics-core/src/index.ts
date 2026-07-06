@@ -6,26 +6,29 @@ export type {
   CharacterConfig,
   CharacterMovement,
   ColliderDesc,
+  JointDesc,
   PhysicsBackend,
   RaycastHit,
   RaycastQuery,
 } from './backend';
 export { CollisionEvent } from './backend';
-export type { ColliderShape2d, RigidBodyType } from './components-2d';
+export type { ColliderShape2d, Joint2dType, RigidBodyType } from './components-2d';
 export {
   AngularVelocity2d,
   CharacterController2d,
   Collider2d,
   ExternalForce2d,
+  Joint2d,
   LinearVelocity2d,
   RigidBody2d,
 } from './components-2d';
-export type { ColliderShape3d } from './components-3d';
+export type { ColliderShape3d, Joint3dType } from './components-3d';
 export {
   AngularVelocity3d,
   CharacterController3d,
   Collider3d,
   ExternalForce3d,
+  Joint3d,
   LinearVelocity3d,
   RigidBody3d,
 } from './components-3d';

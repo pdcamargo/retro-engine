@@ -142,16 +142,15 @@ These do not exist in the runtime and are the reason a complete game can't ship 
   Remaining are P1/P2: mixer buses, spatial panning, studio audio preview. → roadmap/audio.md
 - ❌/🟡 **Windowing** — only a raw canvas + `ResizeObserver` + surface configure on the App. No `Window`
   resource, monitor/cursor/fullscreen control, multi-window, or window events.
-- 🟡 **Physics** — `@retro-engine/physics-core` (ADR-0148) ships the contract + data: `PhysicsBackend`
-  interface + `PhysicsCapabilities` + `NullPhysicsBackend`; Avian-shaped `2d`/`3d` components
+- ✅ **Physics** — `@retro-engine/physics-core` + `@retro-engine/physics-rapier` (ADR-0148). Contract
+  (`PhysicsBackend` + `PhysicsCapabilities` + `NullPhysicsBackend`); Avian-shaped `2d`/`3d` components
   (`RigidBody`, `Collider`, `LinearVelocity`, `AngularVelocity`, `ExternalForce`, `Restitution`/`Friction`/
-  `GravityScale`/`Sensor`), reflection-registered; a `Gravity` resource; and `PhysicsPlugin` running a
-  fixed-timestep Sync→Step→Writeback bridge. `@retro-engine/physics-rapier` (`createRapierBackend`) is the
-  **2D + 3D** backend over `@dimforge/rapier2d-compat` + `rapier3d-compat` — real dynamics, entity↔body
-  maps, raycast, collision-event drain — verified headless (2D and 3D boxes fall and land, independently).
-  Collision start/stop events are surfaced to ECS as a `CollisionEvent` message (`MessageReader`), and a
-  kinematic **character controller** (`CharacterController2d`/`3d`, collide-and-slide + grounded, 2D+3D) is
-  wired through the bridge — verified headless. Remaining: joints. → roadmap/physics.md
+  `GravityScale`/`Sensor`, `CharacterController`, `Joint`), reflection-registered; `Gravity`/`Physics`
+  resources; `PhysicsPlugin` fixed-timestep Sync→Step→Writeback bridge. The **Rapier 2D+3D** backend
+  (`createRapierBackend`) gives real dynamics, raycasts, collision events (→ ECS `CollisionEvent` message),
+  a kinematic **character controller** (collide-and-slide + grounded), and **joints** (fixed/revolute/
+  prismatic/spherical) — all verified by deterministic headless tests. Studio integration (collider
+  gizmos, debug draw, inspector) is the P1/P2 remainder. → roadmap/physics.md
 
 ## Planned architecture — physics package (not built yet)
 

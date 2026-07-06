@@ -100,6 +100,22 @@ export interface CharacterMovement {
 }
 
 /**
+ * A backend-agnostic joint description, assembled by the bridge from a
+ * `Joint2d` / `Joint3d` component. `owner` is the entity carrying the joint
+ * (body A); `target` is the other body (body B). Anchors are in each body's
+ * local space; `axis` is used by `revolute` (3D) / `prismatic`.
+ */
+export interface JointDesc {
+  readonly dimension: PhysicsDimension;
+  readonly target: Entity;
+  /** `'fixed'` / `'revolute'` / `'prismatic'` (2D) or those + `'spherical'` (3D). */
+  readonly type: string;
+  readonly localAnchorA: readonly number[];
+  readonly localAnchorB: readonly number[];
+  readonly axis: readonly number[];
+}
+
+/**
  * The physics solver seam. Implemented by a concrete backend (e.g.
  * `@retro-engine/physics-rapier`) and injected into `PhysicsPlugin`. Speaks only
  * in `Entity` ids and plain data — never ECS query or math types — so a backend
@@ -133,6 +149,13 @@ export interface PhysicsBackend {
    * entity has no body/collider or the backend has no character controller.
    */
   moveCharacter(entity: Entity, config: CharacterConfig, desired: readonly number[]): CharacterMovement | null;
+  /**
+   * Create the joint owned by `owner` (idempotent — a no-op if it already
+   * exists). Requires both bodies (`owner` and `desc.target`) to exist.
+   */
+  upsertJoint(owner: Entity, desc: JointDesc): void;
+  /** Remove the joint owned by `owner`, if any. */
+  removeJoint(owner: Entity): void;
   /** Release all backend resources. */
   destroy(): void;
 }

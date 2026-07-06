@@ -1,3 +1,4 @@
+import type { Entity } from '@retro-engine/ecs';
 import type { Vec3 } from '@retro-engine/math';
 import { vec3 } from '@retro-engine/math';
 
@@ -138,5 +139,38 @@ export class CharacterController3d {
     this.autostepHeight = options.autostepHeight ?? 0;
     this.autostepMinWidth = options.autostepMinWidth ?? 0;
     this.snapToGroundDistance = options.snapToGroundDistance ?? 0;
+  }
+}
+
+/** The kind of a 3D {@link Joint3d} constraint. */
+export type Joint3dType = 'fixed' | 'spherical' | 'revolute' | 'prismatic';
+
+/**
+ * A constraint joining this entity's body to another body (`target`). `fixed`
+ * locks their relative transform; `spherical` pins a point (ball joint);
+ * `revolute` rotates about `axis`; `prismatic` slides along `axis`. Anchors are
+ * in each body's local space. Reflection-registered; serializes with the scene.
+ */
+export class Joint3d {
+  /** The other body this joint connects to. */
+  target: Entity;
+  jointType: Joint3dType;
+  /** Anchor point on this body (local space). */
+  localAnchorA: Vec3;
+  /** Anchor point on the target body (local space). */
+  localAnchorB: Vec3;
+  /** Rotation/sliding axis for `revolute` / `prismatic` (ignored otherwise). */
+  axis: Vec3;
+
+  constructor(
+    target: Entity = 0 as Entity,
+    jointType: Joint3dType = 'spherical',
+    options: { localAnchorA?: Vec3; localAnchorB?: Vec3; axis?: Vec3 } = {},
+  ) {
+    this.target = target;
+    this.jointType = jointType;
+    this.localAnchorA = options.localAnchorA ?? vec3.create(0, 0, 0);
+    this.localAnchorB = options.localAnchorB ?? vec3.create(0, 0, 0);
+    this.axis = options.axis ?? vec3.create(1, 0, 0);
   }
 }

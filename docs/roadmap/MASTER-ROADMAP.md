@@ -43,9 +43,10 @@ not a capability ceiling).
 
 ## North star
 
-The renderer and ECS are deep, but **you cannot ship a complete game yet**: input and audio now
-exist (`@retro-engine/input` ✅, `@retro-engine/audio` ✅), but there is still no engine text,
-in-game UI, physics, or game export. **P0 is exactly that shippable-game foundation.**
+The renderer and ECS are deep. Input, audio, and physics now exist (`@retro-engine/input` ✅,
+`@retro-engine/audio` ✅, `@retro-engine/physics-core`/`-rapier` ✅), but you still can't ship a
+complete game: no engine text, in-game UI, or game export yet. **P0 is exactly that shippable-game
+foundation.**
 
 ---
 
@@ -72,19 +73,16 @@ in-game UI, physics, or game export. **P0 is exactly that shippable-game foundat
       _AC:_ AudioClip importer/kind/.meta ✅; one-shot + looping ✅; `AudioSource`/`AudioListener` ✅;
       reflection schemas ✅; entity-driven SFX+music sample ✅. (Mixer buses → P1.)
       _Links:_ [audio.md](audio.md)
-- [ ] **Physics** — 🟡 `@retro-engine/physics-core` + `@retro-engine/physics-rapier` (ADR-0148).
-      **Phases 1–2 shipped:** the contract + Avian-shaped `2d`/`3d` components (reflection-registered) +
-      `Gravity`/`Physics` resources + fixed-timestep Sync→Step→Writeback `PhysicsPlugin` (Phase 1); the
-      **Rapier 2D backend** (`createRapierBackend` over `@dimforge/rapier2d-compat` — entity↔body maps,
-      async wasm gate, upsert/step/readBody/remove, gravity/gravity-scale/external-force/kinematic, raycast,
-      collision-event drain), verified by deterministic headless tests. **Now dimension-aware:** the
-      backend runs both `rapier2d-compat` + `rapier3d-compat` (2D and 3D bodies simulate independently,
-      3D verified headless too). Playground `?mode=physics` demo (boxes fall + stack, Space drops more).
-      **Collision events** are surfaced to ECS (`CollisionEvent` message). A kinematic **character
-      controller** (`CharacterController2d`/`3d`, collide-and-slide, grounded, 2D+3D) is verified headless.
-      **Remaining (Phase 3):** joints (fixed/revolute/…).
+- [x] **Physics** — ✅ `@retro-engine/physics-core` + `@retro-engine/physics-rapier` (ADR-0148).
+      Contract + Avian-shaped `2d`/`3d` components (reflection-registered) + `Gravity`/`Physics` resources +
+      fixed-timestep Sync→Step→Writeback `PhysicsPlugin`; the **Rapier 2D + 3D backend** (`createRapierBackend`
+      over `rapier2d/3d-compat` — entity↔body maps, async wasm gate, gravity/gravity-scale/external-force/
+      kinematic, raycast); **collision events** → ECS (`CollisionEvent` message); a kinematic **character
+      controller** (collide-and-slide, grounded); and **joints** (`Joint2d`/`Joint3d`: fixed/revolute/
+      prismatic/spherical). All verified by deterministic headless tests. Playground `?mode=physics` demo:
+      boxes fall + stack, Space drops more, and a character walks among them.
       _AC:_ contract + components + reflection ✅; fixed-timestep bridge ✅; rapier 2D+3D + real sim ✅;
-      falling demo ✅; ECS collision events ✅; character controller ✅; joints ☐.
+      falling demo ✅; ECS collision events ✅; character controller ✅; joints ✅. (Studio integration → P1/P2.)
       _Links:_ [physics.md](physics.md)
 - [ ] **In-game UI (core) — "Retro CSS"** — ❌ `packages/ui`: retained ECS UI (Unity-UITK model + Bevy
       `UiSurface` mechanism).
@@ -193,6 +191,9 @@ in-game UI, physics, or game export. **P0 is exactly that shippable-game foundat
 
 ## Editor / Studio
 
+- [ ] **Physics studio integration** — collider gizmos, a physics debug-draw toggle (wireframe of
+      colliders/contacts), and inspector polish for the physics components. Physics Phase 4 (ADR-0148).
+      _Links:_ [physics.md](physics.md)
 - [ ] **Multi-select + multi-object editing** — rubber-band select; multi-target gizmo + inspector
       (the gizmo core already supports N targets).
 - [ ] **Scene file actions** — New / Open / Save-As (wire the dead menu items).

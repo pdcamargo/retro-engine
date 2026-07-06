@@ -1,3 +1,4 @@
+import type { Entity } from '@retro-engine/ecs';
 import type { Vec2 } from '@retro-engine/math';
 import { vec2 } from '@retro-engine/math';
 
@@ -153,5 +154,38 @@ export class CharacterController2d {
     this.autostepHeight = options.autostepHeight ?? 0;
     this.autostepMinWidth = options.autostepMinWidth ?? 0;
     this.snapToGroundDistance = options.snapToGroundDistance ?? 0;
+  }
+}
+
+/** The kind of a 2D {@link Joint2d} constraint. */
+export type Joint2dType = 'fixed' | 'revolute' | 'prismatic';
+
+/**
+ * A constraint joining this entity's body to another body (`target`). `fixed`
+ * locks their relative transform; `revolute` pins a point (free rotation);
+ * `prismatic` allows sliding along `axis`. Anchors are in each body's local
+ * space. Reflection-registered; serializes with the scene.
+ */
+export class Joint2d {
+  /** The other body this joint connects to. */
+  target: Entity;
+  jointType: Joint2dType;
+  /** Anchor point on this body (local space). */
+  localAnchorA: Vec2;
+  /** Anchor point on the target body (local space). */
+  localAnchorB: Vec2;
+  /** Sliding axis for `prismatic` (ignored otherwise). */
+  axis: Vec2;
+
+  constructor(
+    target: Entity = 0 as Entity,
+    jointType: Joint2dType = 'revolute',
+    options: { localAnchorA?: Vec2; localAnchorB?: Vec2; axis?: Vec2 } = {},
+  ) {
+    this.target = target;
+    this.jointType = jointType;
+    this.localAnchorA = options.localAnchorA ?? vec2.create(0, 0);
+    this.localAnchorB = options.localAnchorB ?? vec2.create(0, 0);
+    this.axis = options.axis ?? vec2.create(1, 0);
   }
 }

@@ -2,6 +2,7 @@ import RAPIER from '@dimforge/rapier3d-compat';
 import type {
   ColliderDesc,
   EventQueue,
+  ImpulseJoint,
   KinematicCharacterController,
   RigidBody,
   RigidBodyDesc,
@@ -14,6 +15,7 @@ import type {
   CharacterConfig,
   CharacterMovement,
   CollisionEvent,
+  JointDesc,
   RaycastHit,
   RaycastQuery,
 } from '@retro-engine/physics-core';
@@ -31,6 +33,7 @@ export class Rapier3dWorld {
   private readonly bodies = new Map<Entity, RigidBody>();
   private readonly colliderEntity = new Map<number, Entity>();
   private readonly controllers = new Map<Entity, KinematicCharacterController>();
+  private readonly joints = new Map<Entity, { joint: ImpulseJoint; target: Entity }>();
   private readonly gravity = { x: 0, y: -9.81, z: 0 };
   private drained: CollisionEvent[] = [];
 
@@ -88,6 +91,42 @@ export class Rapier3dWorld {
       this.world.removeCharacterController(controller);
       this.controllers.delete(entity);
     }
+    for (const [owner, rec] of this.joints) {
+      if (owner === entity || rec.target === entity) this.joints.delete(owner);
+    }
+  }
+
+  upsertJoint(owner: Entity, desc: JointDesc): void {
+    if (this.world === null || this.joints.has(owner)) return;
+    const bodyA = this.bodies.get(owner);
+    const bodyB = this.bodies.get(desc.target);
+    if (bodyA === undefined || bodyB === undefined) return;
+    const a1 = { x: desc.localAnchorA[0] ?? 0, y: desc.localAnchorA[1] ?? 0, z: desc.localAnchorA[2] ?? 0 };
+    const a2 = { x: desc.localAnchorB[0] ?? 0, y: desc.localAnchorB[1] ?? 0, z: desc.localAnchorB[2] ?? 0 };
+    const axis = { x: desc.axis[0] ?? 1, y: desc.axis[1] ?? 0, z: desc.axis[2] ?? 0 };
+    let data;
+    switch (desc.type) {
+      case 'fixed':
+        data = RAPIER.JointData.fixed(a1, { x: 0, y: 0, z: 0, w: 1 }, a2, { x: 0, y: 0, z: 0, w: 1 });
+        break;
+      case 'revolute':
+        data = RAPIER.JointData.revolute(a1, a2, axis);
+        break;
+      case 'prismatic':
+        data = RAPIER.JointData.prismatic(a1, a2, axis);
+        break;
+      default:
+        data = RAPIER.JointData.spherical(a1, a2);
+    }
+    const joint = this.world.createImpulseJoint(data, bodyA, bodyB, true);
+    this.joints.set(owner, { joint, target: desc.target });
+  }
+
+  removeJoint(owner: Entity): void {
+    const rec = this.joints.get(owner);
+    if (rec === undefined || this.world === null) return;
+    this.world.removeImpulseJoint(rec.joint, true);
+    this.joints.delete(owner);
   }
 
   moveCharacter(entity: Entity, config: CharacterConfig, desired: readonly number[]): CharacterMovement | null {
@@ -167,6 +206,7 @@ export class Rapier3dWorld {
     this.bodies.clear();
     this.colliderEntity.clear();
     this.controllers.clear();
+    this.joints.clear();
     this.isReady = false;
   }
 

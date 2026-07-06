@@ -1,7 +1,8 @@
 # Physics System
 
 - **Created:** 2026-07-06
-- **Status:** In progress (Phases 1–2 + 3D backend shipped 2026-07-06)
+- **Status:** ✅ Core complete (Phases 1–3 shipped 2026-07-06). Studio integration
+  (Phase 4) remains as P1/P2.
 - **ADR:** [ADR-0148](../adr/ADR-0148-physics-architecture.md)
 
 ## Goal
@@ -46,8 +47,13 @@ wasm is opt-in.
   (offset, slope limits, autostep, snap-to-ground, `desiredTranslation` in /
   `grounded` out) over Rapier's `KinematicCharacterController` (per-entity, 2D+3D).
   Verified headless (character walks a floor + stays grounded; blocked by a wall).
-- **Remaining:** joints (fixed/revolute/…); a playground/studio demo with a moving
-  character (2D `?mode=physics` demo exists for falling bodies).
+- **Joints ✅ (2026-07-06):** `Joint2d` (fixed/revolute/prismatic) + `Joint3d`
+  (+spherical) components over Rapier `ImpulseJoint`; verified headless (a fixed
+  joint holds a body against gravity; removing it lets it fall).
+- **Demo ✅:** playground `?mode=physics` — falling/stacking boxes + an input-driven
+  character (kinematic body + character controller) walking among them.
+- **Phase 3 complete.** Only Phase 4 (studio integration: collider gizmos, debug
+  draw, inspector) remains, tracked as P1/P2.
 
 ### Phase 4 — Studio integration (P1/P2)
 

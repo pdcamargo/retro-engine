@@ -42,5 +42,7 @@ export class NullPhysicsBackend implements PhysicsBackend {
   moveCharacter(): CharacterMovement | null {
     return null;
   }
+  upsertJoint(): void {}
+  removeJoint(): void {}
   destroy(): void {}
 }

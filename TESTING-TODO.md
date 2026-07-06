@@ -221,6 +221,31 @@ a manual confirmation before their backlog/roadmap entries are considered closed
 
 ---
 
+## Physics — joints · `physics-core` + `physics-rapier` · ADR-0148
+
+- **What changed:** `Joint2d` (fixed/revolute/prismatic) + `Joint3d` (+spherical) components (target
+  entity, local anchors, axis; reflection-registered) + `PhysicsBackend.upsertJoint`/`removeJoint`
+  over Rapier `ImpulseJoint`. The bridge creates joints once both bodies exist, removes on component
+  removal / body despawn. `capabilities.joints = true`.
+- **Automated (REAL):** headless test — a fixed joint holds a dynamic body against gravity; removing
+  the joint lets it fall. 9 rapier tests green; full gate green.
+- **HOW to test (in a game / studio):** attach `new Joint2d(otherEntity, 'fixed', { localAnchorB: [...] })`
+  to a body; the two bodies stay constrained. (Manual visual demo pending studio physics gizmos.)
+
+---
+
+## ✅ P0 Physics item COMPLETE — box checked in MASTER-ROADMAP
+
+The **Physics** P0 item is fully done: `physics-core` contract + Avian components (reflection) +
+`physics-rapier` **2D & 3D** backend with real dynamics, collision events → ECS, a kinematic
+character controller, and joints — all with deterministic headless tests. Playground `?mode=physics`
+demos falling/stacking boxes + a walking character (Space drops more; A/D or arrows move the character).
+Reference tag ✅. Studio integration (collider gizmos / debug draw / inspector) moved to P1.
+**Three P0 items now complete: Input, Audio, Physics.** Next P0: Engine text (MSDF) or the two
+stabilization bug fixes.
+
+---
+
 ## ✅ P0 Audio item COMPLETE — box checked in MASTER-ROADMAP
 
 The **Audio (core)** P0 item is fully done (HAL + Web Audio backend + `AudioClip` +

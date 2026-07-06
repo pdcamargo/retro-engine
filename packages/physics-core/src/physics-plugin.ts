@@ -11,6 +11,7 @@ import {
   CharacterController2d,
   Collider2d,
   ExternalForce2d,
+  Joint2d,
   LinearVelocity2d,
   RigidBody2d,
 } from './components-2d';
@@ -19,6 +20,7 @@ import {
   CharacterController3d,
   Collider3d,
   ExternalForce3d,
+  Joint3d,
   LinearVelocity3d,
   RigidBody3d,
 } from './components-3d';
@@ -82,8 +84,22 @@ export class PhysicsPlugin implements PluginObject {
         MessageWriter(CollisionEvent),
         Query([CharacterController2d]),
         Query([CharacterController3d]),
+        RemovedComponents(Joint2d),
+        RemovedComponents(Joint3d),
       ],
-      (gravity, time, bodies2d, bodies3d, removed2d, removed3d, collisions, chars2d, chars3d) => {
+      (
+        gravity,
+        time,
+        bodies2d,
+        bodies3d,
+        removed2d,
+        removed3d,
+        collisions,
+        chars2d,
+        chars3d,
+        removedJoints2d,
+        removedJoints3d,
+      ) => {
         if (!backend.ready()) return;
         backend.setGravity('2d', [gravity.gravity2d[0] ?? 0, gravity.gravity2d[1] ?? 0]);
         backend.setGravity('3d', [
@@ -126,6 +142,8 @@ export class PhysicsPlugin implements PluginObject {
         }
         for (const entity of removed2d) backend.removeBody(entity);
         for (const entity of removed3d) backend.removeBody(entity);
+        for (const entity of removedJoints2d) backend.removeJoint(entity);
+        for (const entity of removedJoints3d) backend.removeJoint(entity);
 
         // Character controllers: move by the collision-corrected amount (after
         // the bodies are synced, before the step). Overrides the kinematic body's
@@ -165,6 +183,32 @@ export class PhysicsPlugin implements PluginObject {
           );
           if (result !== null) cc.grounded = result.grounded;
           vec3.set(0, 0, 0, cc.desiredTranslation);
+        }
+
+        // Joints: create once both bodies exist (idempotent). Read directly from
+        // the world — no change detection needed since upsertJoint is a no-op
+        // once the joint exists.
+        for (const [entity, joint] of app.world.query([Joint2d]).entries()) {
+          if (!app.world.hasEntity(joint.target)) continue;
+          backend.upsertJoint(entity, {
+            dimension: '2d',
+            target: joint.target,
+            type: joint.jointType,
+            localAnchorA: [joint.localAnchorA[0] ?? 0, joint.localAnchorA[1] ?? 0],
+            localAnchorB: [joint.localAnchorB[0] ?? 0, joint.localAnchorB[1] ?? 0],
+            axis: [joint.axis[0] ?? 1, joint.axis[1] ?? 0],
+          });
+        }
+        for (const [entity, joint] of app.world.query([Joint3d]).entries()) {
+          if (!app.world.hasEntity(joint.target)) continue;
+          backend.upsertJoint(entity, {
+            dimension: '3d',
+            target: joint.target,
+            type: joint.jointType,
+            localAnchorA: [joint.localAnchorA[0] ?? 0, joint.localAnchorA[1] ?? 0, joint.localAnchorA[2] ?? 0],
+            localAnchorB: [joint.localAnchorB[0] ?? 0, joint.localAnchorB[1] ?? 0, joint.localAnchorB[2] ?? 0],
+            axis: [joint.axis[0] ?? 1, joint.axis[1] ?? 0, joint.axis[2] ?? 0],
+          });
         }
 
         // Step.
@@ -271,6 +315,29 @@ export class PhysicsPlugin implements PluginObject {
         grounded: t.boolean.skip(),
       },
       { name: 'CharacterController3d', make: () => new CharacterController3d() },
+    );
+
+    app.registerComponent(
+      Joint2d,
+      {
+        target: t.entity(),
+        jointType: t.enum('fixed', 'revolute', 'prismatic'),
+        localAnchorA: t.vec2,
+        localAnchorB: t.vec2,
+        axis: t.vec2,
+      },
+      { name: 'Joint2d', make: () => new Joint2d() },
+    );
+    app.registerComponent(
+      Joint3d,
+      {
+        target: t.entity(),
+        jointType: t.enum('fixed', 'spherical', 'revolute', 'prismatic'),
+        localAnchorA: t.vec3,
+        localAnchorB: t.vec3,
+        axis: t.vec3,
+      },
+      { name: 'Joint3d', make: () => new Joint3d() },
     );
   }
 }

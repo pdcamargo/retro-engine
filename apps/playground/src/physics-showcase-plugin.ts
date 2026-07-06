@@ -1,8 +1,9 @@
 // Device check for @retro-engine/physics-core + physics-rapier (ADR-0148): 2D
 // rigid-body dynamics via the Rapier backend. A static floor holds a stack of
-// dynamic boxes that fall under gravity; Space drops a new box from the top.
-// Units are pixels (gravity −980 px/s²) so the scene reads at the 2D camera's
-// default scale. State is published to `window.__physics`.
+// dynamic boxes that fall under gravity; Space drops a new box from the top; and
+// a green **character** (kinematic body + character controller) walks with A/D or
+// arrow keys, colliding with the boxes and floor. Units are pixels (gravity
+// −980 px/s²). State is published to `window.__physics`.
 //
 // Open with `?mode=physics`. (Physics steps in the fixed timestep once the Rapier
 // wasm finishes loading — the boxes start falling a frame or two after load.)
@@ -21,6 +22,7 @@ import {
 } from '@retro-engine/engine';
 import type { CommandsHandle } from '@retro-engine/engine';
 import {
+  CharacterController2d,
   Collider2d,
   Gravity,
   Physics,
@@ -33,11 +35,14 @@ import { InputPlugin, KeyboardInput } from '@retro-engine/input';
 
 /** Marker for a falling box. */
 class BoxTag {}
+/** Marker for the input-driven character. */
+class PlayerTag {}
 
 interface PhysicsProbe {
   ready: boolean;
   boxes: number;
   lowestY: number;
+  playerGrounded: boolean;
 }
 
 declare global {
@@ -90,6 +95,15 @@ export const physicsShowcasePlugin = (app: App): void => {
       spawnBox(cmd, (i - 2) * 45, 100 + i * 55, i);
       spawnCount += 1;
     }
+    // An input-driven character (kinematic body + character controller).
+    cmd.spawn(
+      new Sprite({ color: vec4.create(0.5, 1, 0.6, 1), customSize: vec2.create(36, 60) }),
+      new Transform(vec3.create(-320, -150, 0)),
+      RigidBody2d.kinematic(),
+      Collider2d.rectangle(18, 30),
+      new CharacterController2d({ snapToGroundDistance: 20, autostepHeight: 12, autostepMinWidth: 6 }),
+      new PlayerTag(),
+    );
   });
 
   app.addSystem('update', [Commands, Res(KeyboardInput)], (cmd, keys) => {
@@ -99,17 +113,43 @@ export const physicsShowcasePlugin = (app: App): void => {
     }
   });
 
-  app.addSystem('last', [Res(Physics), Query([Transform], { with: [BoxTag] })], (physics, boxes) => {
-    let lowest = Number.POSITIVE_INFINITY;
-    let count = 0;
-    for (const [transform] of boxes) {
-      count += 1;
-      lowest = Math.min(lowest, transform.translation[1] ?? 0);
-    }
-    window.__physics = {
-      ready: physics.ready(),
-      boxes: count,
-      lowestY: Number.isFinite(lowest) ? Math.round(lowest) : 0,
-    };
-  });
+  // Drive the character: horizontal from A/D or arrows, plus a constant downward
+  // pull so the controller keeps it on the ground. Runs after the raw input
+  // update ('input') so key state is fresh; consumed by the fixed-step physics.
+  app.addSystem(
+    'preUpdate',
+    [Res(KeyboardInput), Query([CharacterController2d], { with: [PlayerTag] })],
+    (keys, players) => {
+      let dx = 0;
+      if (keys.anyPressed(['KeyA', 'ArrowLeft'])) dx -= 1;
+      if (keys.anyPressed(['KeyD', 'ArrowRight'])) dx += 1;
+      for (const [cc] of players) vec2.set(dx * 6, -12, cc.desiredTranslation);
+    },
+    { after: ['input'] },
+  );
+
+  app.addSystem(
+    'last',
+    [
+      Res(Physics),
+      Query([Transform], { with: [BoxTag] }),
+      Query([CharacterController2d], { with: [PlayerTag] }),
+    ],
+    (physics, boxes, players) => {
+      let lowest = Number.POSITIVE_INFINITY;
+      let count = 0;
+      for (const [transform] of boxes) {
+        count += 1;
+        lowest = Math.min(lowest, transform.translation[1] ?? 0);
+      }
+      let playerGrounded = false;
+      for (const [cc] of players) playerGrounded = cc.grounded;
+      window.__physics = {
+        ready: physics.ready(),
+        boxes: count,
+        lowestY: Number.isFinite(lowest) ? Math.round(lowest) : 0,
+        playerGrounded,
+      };
+    },
+  );
 };

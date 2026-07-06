@@ -2,6 +2,7 @@ import RAPIER from '@dimforge/rapier2d-compat';
 import type {
   ColliderDesc,
   EventQueue,
+  ImpulseJoint,
   KinematicCharacterController,
   RigidBody,
   RigidBodyDesc,
@@ -14,6 +15,7 @@ import type {
   CharacterConfig,
   CharacterMovement,
   CollisionEvent,
+  JointDesc,
   RaycastHit,
   RaycastQuery,
 } from '@retro-engine/physics-core';
@@ -30,6 +32,7 @@ export class Rapier2dWorld {
   private readonly bodies = new Map<Entity, RigidBody>();
   private readonly colliderEntity = new Map<number, Entity>();
   private readonly controllers = new Map<Entity, KinematicCharacterController>();
+  private readonly joints = new Map<Entity, { joint: ImpulseJoint; target: Entity }>();
   private readonly gravity = { x: 0, y: -9.81 };
   private drained: CollisionEvent[] = [];
 
@@ -81,6 +84,40 @@ export class Rapier2dWorld {
       this.world.removeCharacterController(controller);
       this.controllers.delete(entity);
     }
+    // Rapier auto-removes joints attached to a removed body, so just drop the
+    // map entries (calling removeImpulseJoint again would double-free).
+    for (const [owner, rec] of this.joints) {
+      if (owner === entity || rec.target === entity) this.joints.delete(owner);
+    }
+  }
+
+  upsertJoint(owner: Entity, desc: JointDesc): void {
+    if (this.world === null || this.joints.has(owner)) return;
+    const bodyA = this.bodies.get(owner);
+    const bodyB = this.bodies.get(desc.target);
+    if (bodyA === undefined || bodyB === undefined) return;
+    const a1 = { x: desc.localAnchorA[0] ?? 0, y: desc.localAnchorA[1] ?? 0 };
+    const a2 = { x: desc.localAnchorB[0] ?? 0, y: desc.localAnchorB[1] ?? 0 };
+    let data;
+    switch (desc.type) {
+      case 'fixed':
+        data = RAPIER.JointData.fixed(a1, 0, a2, 0);
+        break;
+      case 'prismatic':
+        data = RAPIER.JointData.prismatic(a1, a2, { x: desc.axis[0] ?? 1, y: desc.axis[1] ?? 0 });
+        break;
+      default:
+        data = RAPIER.JointData.revolute(a1, a2);
+    }
+    const joint = this.world.createImpulseJoint(data, bodyA, bodyB, true);
+    this.joints.set(owner, { joint, target: desc.target });
+  }
+
+  removeJoint(owner: Entity): void {
+    const rec = this.joints.get(owner);
+    if (rec === undefined || this.world === null) return;
+    this.world.removeImpulseJoint(rec.joint, true);
+    this.joints.delete(owner);
   }
 
   moveCharacter(entity: Entity, config: CharacterConfig, desired: readonly number[]): CharacterMovement | null {
@@ -154,6 +191,7 @@ export class Rapier2dWorld {
     this.bodies.clear();
     this.colliderEntity.clear();
     this.controllers.clear();
+    this.joints.clear();
     this.isReady = false;
   }
 

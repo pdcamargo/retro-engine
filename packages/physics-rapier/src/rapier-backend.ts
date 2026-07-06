@@ -5,6 +5,7 @@ import type {
   CharacterConfig,
   CharacterMovement,
   CollisionEvent,
+  JointDesc,
   PhysicsBackend,
   PhysicsCapabilities,
   PhysicsDimension,
@@ -87,6 +88,17 @@ class RapierBackend implements PhysicsBackend {
     return config.dimension === '2d'
       ? this.world2d.moveCharacter(entity, config, desired)
       : this.world3d.moveCharacter(entity, config, desired);
+  }
+
+  upsertJoint(owner: Entity, desc: JointDesc): void {
+    if (desc.dimension === '2d') this.world2d.upsertJoint(owner, desc);
+    else this.world3d.upsertJoint(owner, desc);
+  }
+
+  removeJoint(owner: Entity): void {
+    // The owner lives in one world; removing from both is safe (no-ops if absent).
+    this.world2d.removeJoint(owner);
+    this.world3d.removeJoint(owner);
   }
 
   destroy(): void {
