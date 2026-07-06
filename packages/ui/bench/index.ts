@@ -11,6 +11,7 @@ import { run } from 'mitata';
 
 import './flex-layout.bench';
 import './ui-quad-pack.bench';
+import './ui-text-pack.bench';
 
 interface NormalizedBench {
   readonly key: string;

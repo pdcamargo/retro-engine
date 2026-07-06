@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 
+import { packUiGlyph, UI_GLYPH_FLOAT_COUNT } from './ui-glyph-instance';
 import { packUiColor, packUiQuad, UI_INSTANCE_FLOAT_COUNT } from './ui-instance';
 import { computeClipRect } from './ui-prepare';
 
@@ -54,5 +55,23 @@ describe('packUiQuad', () => {
     expect(u32[9]).toBe(color);
     // First slot untouched.
     expect(f32[0]).toBe(0);
+  });
+});
+
+describe('packUiGlyph', () => {
+  it('writes clip rect, uv rect, unitRange, then color', () => {
+    const buffer = new ArrayBuffer(UI_GLYPH_FLOAT_COUNT * 4);
+    const f32 = new Float32Array(buffer);
+    const u32 = new Uint32Array(buffer);
+    const color = packUiColor(1, 1, 1, 1);
+
+    packUiGlyph(-1, 1, -0.5, 0.5, 0.1, 0.2, 0.3, 0.4, 0.01, 0.02, color, f32, u32, 0);
+
+    expect(Array.from(f32.subarray(0, 4))).toEqual([-1, 1, -0.5, 0.5]);
+    expect(f32[4]).toBeCloseTo(0.1, 6);
+    expect(f32[7]).toBeCloseTo(0.4, 6);
+    expect(f32[8]).toBeCloseTo(0.01, 6);
+    expect(f32[9]).toBeCloseTo(0.02, 6);
+    expect(u32[10]).toBe(color);
   });
 });

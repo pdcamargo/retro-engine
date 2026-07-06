@@ -56,9 +56,15 @@ and a HUD (text + bars) from ECS components + `.rss`, with gamepad navigation.
   / `packUiQuad`. Painted in the layout's depth-first `ComputedLayout.order` so
   children draw over their parent. Verified in a real browser via the
   `sample-game` web export (nested flex HUD panel). Bench: `ui-quad-pack`.
-- Remaining (2b+): borders + corner radius; in-UI **text** via the ADR-0149
-  glyph path; clipping/overflow; explicit z-index; a UI-specific camera/scaling
-  mode (fixed logical resolution + letterbox).
+- **Phase 2b — in-UI text ✅ (2026-07-06, ADR-0154).** `UiText` glyphs draw via a
+  screen-space MSDF pipeline (`UiTextPipeline`, reusing `Font.layout` + the font
+  atlas), positioned at the node's content-box origin, in a second overlay node
+  (`UiTextPassNode`) ordered after the quad pass. `UiText.color`, `packUiGlyph`,
+  per-atlas batching. Verified in a real browser (HUD labels in the sample-game
+  export). Bench: `ui-text-pack`.
+- Remaining (2c+): borders + corner radius; per-line text alignment within a
+  node; clipping/overflow; explicit z-index + interleaved text/quad ordering; a
+  UI-specific camera/scaling mode (fixed logical resolution + letterbox).
 
 ### Phase 3 — Retro CSS (`.rss`) 🟡 (parser + cascade shipped 2026-07-06)
 

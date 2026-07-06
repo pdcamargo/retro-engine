@@ -13,7 +13,7 @@ import {
   Transform,
 } from '@retro-engine/engine';
 import { defineProject } from '@retro-engine/project';
-import { UiNode, UiPlugin, UiRenderPlugin } from '@retro-engine/ui';
+import { UiNode, UiPlugin, UiRenderPlugin, UiText } from '@retro-engine/ui';
 
 /** Marker: rotate this entity about its Z axis each frame. */
 class Spin {
@@ -109,8 +109,14 @@ class HelloTextPlugin implements PluginObject {
                 }),
               )
               .withChildren((panel) => {
-                panel.spawn(new UiNode({ height: 36, backgroundColor: vec4.create(0.95, 0.55, 0.2, 1) }));
-                panel.spawn(new UiNode({ flexGrow: 1, backgroundColor: vec4.create(0.2, 0.6, 0.35, 0.95) }));
+                panel.spawn(
+                  new UiNode({ height: 40, padding: { left: 10, top: 8 }, backgroundColor: vec4.create(0.95, 0.55, 0.2, 1) }),
+                  new UiText({ text: 'STATUS', font, fontSize: 22, color: vec4.create(0.08, 0.06, 0.04, 1) }),
+                );
+                panel.spawn(
+                  new UiNode({ flexGrow: 1, padding: { left: 10, top: 10 }, backgroundColor: vec4.create(0.2, 0.6, 0.35, 0.95) }),
+                  new UiText({ text: 'HP 100  MP 42', font, fontSize: 26, color: vec4.create(1, 1, 1, 1) }),
+                );
               });
           });
       },

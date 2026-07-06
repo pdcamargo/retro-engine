@@ -41,3 +41,10 @@ export {
   UI_INSTANCE_FLOAT_COUNT,
 } from './render/ui-instance';
 export { UI_QUAD_WGSL } from './render/ui-quad.wgsl';
+export type { UiGlyphBatch } from './render/ui-text-pipeline';
+export { UiTextPipeline } from './render/ui-text-pipeline';
+export { makeUiTextPassNode, UiTextPassLabel } from './render/ui-text-pass-node';
+export type { UiTextQuery } from './render/ui-text-prepare';
+export { prepareUiText } from './render/ui-text-prepare';
+export { packUiGlyph, UI_GLYPH_BYTE_SIZE, UI_GLYPH_FLOAT_COUNT } from './render/ui-glyph-instance';
+export { UI_TEXT_WGSL } from './render/ui-text.wgsl';

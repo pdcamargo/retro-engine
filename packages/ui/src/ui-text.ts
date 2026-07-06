@@ -1,4 +1,5 @@
 import type { Font, Handle } from '@retro-engine/engine';
+import { type Vec4, vec4 } from '@retro-engine/math';
 
 import { UiNode } from './ui-node';
 
@@ -17,6 +18,8 @@ export interface UiTextOptions {
    * own line height scaled to {@link fontSize}.
    */
   lineHeight?: number;
+  /** Glyph fill color, linear RGBA in `[0, 1]`. Default opaque white. */
+  color?: Vec4;
 }
 
 /**
@@ -39,6 +42,8 @@ export class UiText {
   letterSpacing: number;
   /** Distance between baselines in pixels, or `undefined` for the font default. */
   lineHeight: number | undefined;
+  /** Glyph fill color, linear RGBA in `[0, 1]`. */
+  color: Vec4;
 
   constructor(options: UiTextOptions = {}) {
     this.text = options.text ?? '';
@@ -46,6 +51,7 @@ export class UiText {
     this.fontSize = options.fontSize ?? 16;
     this.letterSpacing = options.letterSpacing ?? 0;
     this.lineHeight = options.lineHeight;
+    this.color = options.color ?? vec4.create(1, 1, 1, 1);
   }
 
   /** A text node is a UI node too — adding `UiText` auto-attaches a {@link UiNode}. */

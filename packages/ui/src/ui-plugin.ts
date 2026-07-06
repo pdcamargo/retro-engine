@@ -93,6 +93,7 @@ export const uiTextSchema: Schema<UiText> = {
   fontSize: t.number,
   letterSpacing: t.number,
   lineHeight: t.number.optional(),
+  color: t.vec4,
 };
 
 type UiNodeQuery = QueryHandle<readonly [typeof UiNode]>;

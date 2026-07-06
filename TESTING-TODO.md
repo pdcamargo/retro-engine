@@ -614,3 +614,28 @@ children draw over their (possibly translucent) parent.
 - Roadmap: `docs/roadmap/ui-system.md` (Phase 2a ✅). ADR-0150/0154. MASTER-ROADMAP UI item 🟡.
 
 ---
+
+## ✅ In-game UI — Phase 2b: in-UI text rendering (VERIFIED via browser)
+
+`UiText` nodes now draw glyphs on screen, positioned within the node's content box and
+composited over UI backgrounds. New `UiTextPipeline` — a screen-space MSDF glyph pipeline
+(ADR-0154) reusing the engine's glyph layout (`Font.layout`) + font atlas (unit quad +
+per-instance clip rect + atlas UV + unitRange + unorm8x4 color; median-of-RGB coverage with
+fwidth AA). `prepareUiText` lays out each label, places glyphs at the content origin, maps to
+clip space, packs grouped per atlas. `UiTextPassNode` (a second overlay node after the quad
+pass) draws the batches with per-atlas bind groups. `UiText.color` added.
+
+- **Verified end-to-end (Playwright, real browser):** the `sample-game` export HUD panel now
+  shows "STATUS" (dark on the orange title bar) + "HP 100  MP 42" (white on the green content
+  area), crisp, inside their content boxes, layered over the quads — confirms glyph pipeline,
+  content-box positioning, per-node color, and pass ordering (text over backgrounds).
+- **Automated:** 61 UI tests (+ packUiGlyph); `ui-text-pack` bench (1024 glyphs ~3.4µs); full
+  repo gate green (lint/typecheck/test/build/bench). Changeset added.
+- **HOW to test:** same as 2a (`retro build` the sample, serve, open) → HUD panel bottom-right
+  now has text labels.
+- **Not done (UI P0 stays unchecked):** borders + corner radius; per-line text alignment;
+  z-index/clipping + interleaved text-vs-later-panel ordering; `.rss` runtime wiring (3b);
+  **widgets** (4 — button/label/slider + picking/focus + a menu sample). Logged in MASTER-ROADMAP.
+- Roadmap: `docs/roadmap/ui-system.md` (Phase 2b ✅). ADR-0150/0154. MASTER-ROADMAP UI item 🟡.
+
+---
