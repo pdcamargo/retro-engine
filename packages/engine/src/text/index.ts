@@ -30,6 +30,11 @@ export {
   TEXT_INSTANCE_BYTE_SIZE,
   TEXT_INSTANCE_FLOAT_COUNT,
 } from './text-glyph-instance';
+export {
+  packGlyphInstance3d,
+  TEXT3D_INSTANCE_BYTE_SIZE,
+  TEXT3D_INSTANCE_FLOAT_COUNT,
+} from './text-glyph-instance-3d';
 export { TextInstanceBuffer } from './text-instance-buffer';
 export type { TextKey } from './text-pipeline';
 export { TextPipeline } from './text-pipeline';

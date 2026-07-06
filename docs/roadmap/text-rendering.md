@@ -71,8 +71,17 @@ an MSDF shader. Required by the in-game UI system.
   build a `MeasureFunc` from `Font.measure`, attached to leaf text nodes by
   `UiPlugin` so flexbox sizes a node to its text (wrapping to the offered
   width). Headless — 53 UI tests.
-- Remaining: world-space `Text` (3D); rich text runs / per-run styling; RTL/bidi
-  (later).
+- 🟡 **World-space `Text` (3D) — promoted (ADR-0155), phased:**
+  - ✅ **Phase 3a (2026-07-06):** `packGlyphInstance3d` + `TEXT3D_INSTANCE_*`
+    (`text-glyph-instance-3d.ts`) — the CPU packer that transforms a laid-out glyph
+    + a 3D `GlobalTransform` world matrix into a 68-byte world-space quad instance
+    (`center.xyz` + `basisX.xyz` + `basisY.xyz` + uv + unitRange + tint). Unit-tested
+    (identity / z-translation / Y-rotation prove the third dimension).
+  - **Phase 3b (next):** `Text` component (reflection-registered) + `text-3d.wgsl`
+    + a depth-specialized `Text3dPipeline` + `prepareText3d`/`queueText3d` into
+    `ViewPhases3d.transparent` + `TextPlugin` wiring; browser-verified via a 3D
+    camera + a `Text` occluded by a mesh in the sample export. (Oriented first;
+    billboard flag + rich-text runs / RTL/bidi are later follow-ups.)
 
 ### On-screen confirmation (✅ 2026-07-06)
 

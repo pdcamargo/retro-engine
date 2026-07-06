@@ -144,8 +144,11 @@ foundation.**
       capturing-renderer integration + benched. **On-screen confirmation done** — the `sample-game` web
       export renders crisp MSDF text in a real browser (Playwright, see web-build-target.md). **`measureText`
       now wired into the UI layout measure callback** (`@retro-engine/ui` `UiText` + `makeTextMeasure`).
-      Remaining before check-off: Phase 3 world-space `Text` (3D) + rich-text runs. Optional: true-MSDF atlas
-      via `msdf-atlas-gen` (the `.font` importer already loads one).
+      Remaining before check-off: world-space `Text` (3D) — **promoted (ADR-0155)**, phased: **Phase 3a
+      shipped** (`packGlyphInstance3d` + `TEXT3D_INSTANCE_*`, the 68-byte 3D glyph packer, unit-tested);
+      **Phase 3b** (the `Text` component + depth-specialized pipeline + `ViewPhases3d.transparent` queue +
+      browser verify) is next. (Rich-text runs is a non-AC follow-up.) Optional: true-MSDF atlas via
+      `msdf-atlas-gen` (the `.font` importer already loads one).
       _AC:_ MSDF glyph atlas (generated via msdfgen, loaded as an asset) + runtime glyph-quad batching
       through the 2D pipeline; `Text`/`Text2d` components; font asset kind + `.meta`; layout
       (line-break/wrap/alignment); glyph metrics exposed to the UI layout measure callback; crisp at any

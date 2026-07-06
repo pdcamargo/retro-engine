@@ -958,3 +958,25 @@ Custom properties now inherit down the UI tree (CSS-like), closing the **last UI
   I'll check it off.** Non-AC polish (corner radius, z-index/clipping, combinators, more widgets) is P1/P2.
 
 ---
+
+## 🟡 Text — world-space 3D `Text` promoted (ADR-0155) + phase 3a glyph packer (unit-verified)
+
+The last Text P0 acceptance criterion is world-space `Text` (3D). It's a deep renderer slice (3D
+pipeline + depth + a 3D verification scene), so I **promoted it** per CLAUDE.md §2/§8 and shipped the
+tested mathematical core this iteration; the render path lands next.
+
+- **New:** `ADR-0155` (world-space 3D text renders through the Core3d transparent phase — reuse
+  `ViewPhases3d.transparent`, oriented-by-`GlobalTransform`, depth-test/no-write, 68-byte instance) +
+  a phased plan in `roadmap/text-rendering.md`. **Phase 3a shipped:** `packGlyphInstance3d` +
+  `TEXT3D_INSTANCE_*` (`packages/engine/src/text/text-glyph-instance-3d.ts`) — the CPU packer that maps a
+  laid-out glyph + a 3D world matrix into a world-space quad instance (center/basisX/basisY all 3D).
+- **Verified:** unit tests only (`text-glyph-instance-3d.test.ts`, 4 tests — identity, z-translation, and
+  a Y-rotation prove the 3rd dimension). No MCP/browser path yet (the packer has no renderer consumer
+  until 3b). Full repo gate green (1946 tests). Changeset added. **This is a building block, not a
+  user-visible feature yet — nothing to click-test.**
+- **Next iteration (Phase 3b):** `Text` component (reflection-registered) + `text-3d.wgsl` +
+  depth-specialized `Text3dPipeline` + `prepareText3d`/`queueText3d` into `ViewPhases3d.transparent` +
+  `TextPlugin` wiring, then browser-verify via a 3D camera + a `Text` occluded by a mesh in the sample.
+- MASTER-ROADMAP Text item: unchanged box (still 🟡 — 3b + browser verify remain before check-off).
+
+---
