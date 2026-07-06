@@ -471,3 +471,23 @@ that asset's byte range via an injected RangeFetch → HTTP-Range streaming), an
 - Roadmap: `docs/roadmap/web-build-target.md`. Decision: ADR-0151. MASTER-ROADMAP 🟡.
 
 ---
+
+## 🟡 Web export — Phase 2 shipped (web adapter: bundler + index.html + .rpak)
+
+`@retro-engine/build` now turns a project into a deployable static site.
+`bundleUserCode` (typed Bun-bundler wrapper — browser/ESM, externals/minify/sourcemap),
+`emitIndexHtml` (pure boot page: full-viewport canvas + module script + optional .rpak
+preload), and `WebExportTarget` (the 'web' ExportTarget: bundle the entry → write bundle +
+index.html → pack assets into assets.rpak → return the file list).
+
+- **HOW to test:** `bun test packages/build/` — 19 tests. Phase 2: bundleUserCode bundles a
+  browser ESM fixture leaving externals bare; WebExportTarget exports a fixture end-to-end
+  (asserts index.html + main.js + assets.rpak on disk, index.html references both, and the
+  packed .rpak reads back through RpakReader); no-assets case skips the archive + preload.
+- **Remaining for the Web export P0 check-off** (not headlessly verifiable here): a `retro
+  build --target web` CLI, the studio "Build → Web" menu, and the actual in-browser run of a
+  real exported project (needs a WebGPU browser). The pipeline that PRODUCES the artifact is
+  done + verified; the "it runs in a browser" proof needs eyes on a browser.
+- Roadmap: `docs/roadmap/web-build-target.md`. Decision: ADR-0151. MASTER-ROADMAP 🟡.
+
+---

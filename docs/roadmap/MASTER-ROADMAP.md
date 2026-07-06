@@ -126,12 +126,13 @@ foundation.**
 
 ## Platform / Tooling
 
-- [ ] **Export — Web target + `.rpak` foundation** — 🟡 `@retro-engine/build` scaffolded; **Phase 1
-      shipped**: the `.rpak` v1 format — `writeRpak` (gzip via Web Streams + `node:zlib` fallback, FNV-1a
-      integrity), `RpakReader` (in-memory), `RangeRpakReader` (lazy GUID-addressed reads over an injected
-      byte-range fetch → HTTP-Range streaming), and the `ExportTarget`/`ExportRegistry` interface. 13 tests,
-      fully headless, reader browser-safe. Remaining: Bun bundler for user code + the web adapter (static
-      site + `.rpak`) + a real project exporting/running. (ADR-0151.)
+- [ ] **Export — Web target + `.rpak` foundation** — 🟡 `@retro-engine/build`; **Phases 1+2 shipped**:
+      the `.rpak` v1 format (`writeRpak` gzip+integrity, `RpakReader`, `RangeRpakReader` HTTP-Range
+      streaming), the `ExportTarget`/`ExportRegistry` interface, and the **web adapter** — `bundleUserCode`
+      (Bun bundler, browser/ESM, externals/minify/sourcemap), `emitIndexHtml`, and `WebExportTarget` (bundle
+      + index.html + packed `.rpak`). 19 tests, fully headless (fixture exports end-to-end, `.rpak` reads
+      back). Remaining before check-off: the `retro build` CLI + studio "Build → Web" menu + the in-browser
+      run proof (a real project exports and runs). (ADR-0151.)
       _AC:_ `packages/build` (Bun/Node-only) with an `ExportTarget` interface + registry and a shared Bun
       bundler for user code (engine externalized appropriately); a **web adapter** emitting a static site
       (engine + user bundle + `.rpak`) that runs in a browser; a **`.rpak` writer** (magic+version header →

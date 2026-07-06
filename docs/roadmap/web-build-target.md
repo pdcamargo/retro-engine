@@ -11,8 +11,14 @@ version → JSON TOC → per-entry blobs), `writeRpak` (build-time, gzip via Web
 Streams + `node:zlib` fallback, FNV-1a integrity), `RpakReader` (in-memory), and
 `RangeRpakReader` (lazy GUID-addressed reads over an injected byte-range fetch —
 the basis for HTTP-Range streaming). Plus the `ExportTarget`/`ExportRegistry`
-interface. Remaining below: the Bun bundler for user code + the web adapter that
-emits a static site and writes the project's assets into a `.rpak`.
+interface.
+
+## Web adapter (✅ 2026-07-06)
+
+`bundleUserCode` (Bun bundler wrapper — browser/ESM, externals/minify/sourcemap),
+`emitIndexHtml` (pure boot page), and `WebExportTarget` (bundle + `index.html` +
+packed `.rpak`). Verified end-to-end headlessly. Remaining below: the CLI, the
+studio menu, and the in-browser run proof.
 
 ## Goal
 
