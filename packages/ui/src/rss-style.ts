@@ -117,7 +117,7 @@ export const resolveUiStyles = (
 ): void => {
   // Sheet `--vars` seed the theme; the UiTheme resource overrides them (runtime
   // re-theming). Merged once per pass, shared by every node's `var()` resolution.
-  const vars = { ...collectThemeVars(sheet.rules), ...(theme?.vars ?? {}) };
+  const vars = { ...collectThemeVars(sheet.rules), ...theme?.vars };
   for (const row of nodes.entries()) {
     const entity = row[0] as Entity;
     const node = row[1] as UiNode;
