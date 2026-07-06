@@ -10,8 +10,8 @@ The genuinely production-shaped areas are the **MCP surface (66 tools)**, the **
 **hierarchy editing**, **prefab authoring**, the **animation-controller editor**, the **graph-editor
 toolkit**, and the **standalone project open/build/index/hot-reload** system. The weak/illusory areas:
 material editing (reflection fields only), most asset-browser context actions (stubs), Project Settings
-(renders but never saves), play controls (Step is dead), rendered thumbnails (disabled), a band of
-drawn-but-dead menu chrome, and **single-select everywhere**. There is **no game export/ship pipeline**.
+(renders but never saves), rendered thumbnails (disabled), a band of drawn-but-dead menu chrome, and
+**single-select everywhere**. There is **no game export/ship pipeline**.
 
 ---
 
@@ -68,11 +68,14 @@ drawn-but-dead menu chrome, and **single-select everywhere**. There is **no game
 
 ## Play, history, prefabs, animator, graph
 
-- 🟡 **Play/pause/stop** (ADR-0087) — `SimState` (Edit/Play/Paused); toolbar Play↔Stop and Pause work;
-  user systems gated behind Play; MCP `studio.play/pause/stop` work. ✅ **World snapshot/restore on
-  play** now wired (`installPlayModeSnapshot`) + MCP-verified: Stop reverts authored edits with no
-  glTF-rig duplication (composition-aware capture); selection clears on restore. 🔩 **Step is dead**
-  everywhere; true selection survival + inspector-during-play remain (roadmap/play-mode.md).
+- 🟡 **Play/pause/stop/step** (ADR-0087) — `SimState` (Edit/Play/Paused); toolbar Play↔Stop, Pause, and
+  Step work; user systems gated behind Play; MCP `studio.play/pause/stop/step`. ✅ **World snapshot/restore
+  on play** wired (`installPlayModeSnapshot`) + MCP-verified: Stop reverts authored edits with no
+  glTF-rig duplication (composition-aware capture); selection clears on restore. ✅ **Step** (`installSimStep`,
+  gate `inState(Play).or(simStepActive())`) advances gameplay exactly one frame while paused without
+  leaving the paused state — MCP-verified (froze a gameplay `Health` regen, then stepped it +1/frame,
+  linearly; `simState` stayed `Paused`). 🟡 true selection survival + inspector-during-play remain
+  (roadmap/play-mode.md).
 - ✅ **Undo/redo history** (`editor-sdk/src/edit/history.ts`, ADR-0082/0083) — capacity 200; setField/
   add/remove component/addBundle/custom/batch; history panel timeline + click-to-jump; Ctrl+Z/Y/Shift+Z;
   dirty tracking; MCP `history.*`.
@@ -92,9 +95,9 @@ drawn-but-dead menu chrome, and **single-select everywhere**. There is **no game
 
 ## MCP surface (the strongest area)
 
-- ✅ **66 tools** (ADR-0109) — studio ⇄ localhost WebSocket relay ⇄ stdio MCP server; tools sourced live
+- ✅ **67 tools** (ADR-0109) — studio ⇄ localhost WebSocket relay ⇄ stdio MCP server; tools sourced live
   from the studio catalog so new commands surface automatically. All mutating commands route through the
-  same History + audit path as the UI. Groups: studio (7, incl. gated `studio.eval`), selection (4),
+  same History + audit path as the UI. Groups: studio (8, incl. `studio.step` and gated `studio.eval`), selection (4),
   hierarchy (2), entity (7), component (4), asset (6), prefab/material (3), scene (3), history (4),
   renderer (2), logs (1), panels (4), composer (3), screenshot (3), graph (11), relay-static (2).
 - 🟡 **Planned expansion** (roadmap/studio-mcp.md) — `assets.import`, `animController.*`,
@@ -120,8 +123,8 @@ drawn-but-dead menu chrome, and **single-select everywhere**. There is **no game
   backlog/editor-human-readable-settings.md). No global application Preferences window (theme exists in
   code, no switcher).
 - 🔩 **Drawn-but-dead chrome** (`chrome.ts`) — File ▸ New Scene / Open Scene… / Save As…; Edit ▸ Cut/Copy/
-  Paste; Run ▸ Play/Pause/Step (toolbar Play/Pause work; Step doesn't); Help ▸ Documentation/About;
-  toolbar Layout + Step; hardcoded status strings.
+  Paste; the Run **menu** items (the toolbar Play/Pause/**Step** all work); Help ▸ Documentation/About;
+  toolbar Layout; hardcoded status strings.
 
 ---
 

@@ -807,3 +807,34 @@ passes the App's `CompositionRegistry` (entities-only, per ADR-0152). Selection 
 - Roadmap: `play-mode.md` + MASTER-ROADMAP Play-mode item + `reference/studio-editor.md` updated. ADR-0152.
 
 ---
+
+## ✅ Play mode — Step: advance one frame while paused (VERIFIED via studio MCP)
+
+The dead ▶⏭ toolbar Step button now works, and there's a new `studio.step` MCP command.
+Stepping advances gameplay **exactly one frame while `Paused`, without leaving the paused state**.
+
+- **Design:** new `SimStep` resource + `installSimStep(app)` (`@retro-engine/editor-sdk`,
+  `sim-step.ts`) run a `'first'`-stage system that opens a one-frame `active` window when a step is
+  queued. The studio composes the project play gate as `inState(SimState.Play).or(simStepActive())`
+  (`main.ts`), so gameplay runs while playing *or* for one stepped frame. `requestSimStep` is a
+  no-op unless paused (meaningless in Edit / already-running Play). Because `SimState` never changes
+  during a step, `state.playing`/`paused` mirrors and the inspector's play-mode behavior don't churn.
+- **Verified end-to-end (studio + retro-studio MCP, real `retro-game-sample`):** brought up
+  `bun tauri dev`, `studio_play` → `studio_pause`, `component_set Health.current = 40`. Confirmed
+  Health stayed **40 across many frames while paused** (gameplay frozen). Then `studio_step` → **41**;
+  read again (no step) → still **41** (the step was exactly one frame); two more steps → **42 → 43**
+  (linear, regen is +1/frame). `simState` stayed **"Paused"** throughout (no flicker). `studio_step`
+  in Edit returned `{stepped:false}` (guard works). Stop still restored Health 43→110 (snapshot intact).
+- **Automated:** `packages/editor-sdk/src/sim-step.test.ts` (2 frame-driven tests, App+`advanceFrame`):
+  freezes while paused, advances exactly one frame per step, stays frozen after, no-op unless paused,
+  and in Play a step adds no extra frame. Full repo gate green (typecheck/lint/test). Changeset added.
+- **HOW to test:** open the studio, press Play, then Pause. Change a gameplay-driven value (or set
+  `Health.current` low) → it stays put. Click the ⏭ Step button (or run `studio.step`) → gameplay
+  advances one frame each click.
+- **New gap logged** (MASTER-ROADMAP + play-mode.md): fixed-timestep + Step — a stepped frame could
+  run *accumulated* `fixedUpdate` steps as a catch-up burst (mirrors ordinary pause→resume); latent
+  today (sample has no `fixedUpdate` gameplay). Fix later by freezing the fixed accumulator while not playing.
+- Docs: `reference/studio-editor.md` (Step ✅, MCP 66→67 tools), `roadmap/play-mode.md` (Step ✅),
+  MASTER-ROADMAP Play-mode AC (Step ✅; inspector-during-play + selection-survival still ❌).
+
+---

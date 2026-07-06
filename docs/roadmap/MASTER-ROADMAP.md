@@ -142,11 +142,14 @@ foundation.**
       the studio's play/stop; a Play→edit→Stop cycle reverts an authored field (Health 150→110) with the
       entity count unchanged (77→77, no glTF-rig duplication). Needed a **composition-aware capture fix**
       (`SerializeOptions.composition`) so restore doesn't re-instantiate glTF subtrees. Selection is cleared
-      on restore. Remaining: true selection *survival* + inspector-during-play + **Step** (advance one frame
-      while Paused — the toolbar button is still inert).
-      _AC:_ snapshot the authored scene on Play (serialize world), restore it exactly on Stop (no leaked
-      play-time edits); **Step** advances exactly one frame while paused (wire the dead Run-menu/toolbar
-      buttons); systems gate correctly by `SimState`; inspector shows live values during play.
+      on restore. **Step shipped + MCP-verified** — `SimStep`/`installSimStep` + gate
+      `inState(Play).or(simStepActive())`, wired to the toolbar Step button + `studio.step` MCP; advances
+      gameplay exactly one frame while paused without leaving `Paused` (verified: a paused `Health` regen
+      froze, then stepped +1/frame linearly). Remaining: true selection *survival* + inspector-during-play
+      (+ a fixed-timestep follow-up, see play-mode.md).
+      _AC:_ snapshot the authored scene on Play (serialize world) ✅, restore it exactly on Stop (no leaked
+      play-time edits) ✅; **Step** advances exactly one frame while paused ✅; systems gate correctly by
+      `SimState` ✅; inspector shows live values during play ❌.
       _Links:_ [play-mode.md](play-mode.md) · [`../backlog/studio-playmode-snapshot-restore.md`](../backlog/studio-playmode-snapshot-restore.md)
 
 ## Platform / Tooling

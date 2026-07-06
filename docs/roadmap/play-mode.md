@@ -31,8 +31,20 @@ Snapshot/restore core + gating policy shipped 2026-07-06 (ADR-0152). See below.
   **Remaining:** true selection *survival* (remap via a persistent identity, not
   the compact snapshot ids) + inspector-during-play.
 
-- **Step.** Wire the toolbar Step button (▶⏭, currently inert) to advance exactly
-  one frame while Paused. Not yet exposed as an MCP command either.
+- **Step.** ✅ **Shipped + MCP-verified (2026-07-06).** `SimStep` resource +
+  `installSimStep` (`@retro-engine/editor-sdk`) open a one-frame `active` window
+  in the `'first'` stage; the studio composes the play gate as
+  `inState(SimState.Play).or(simStepActive())`, so a queued step runs gameplay for
+  exactly one frame **without leaving `Paused`** (no `state.playing`/inspector
+  churn). Wired to the toolbar Step button + the `studio.step` MCP command;
+  `requestSimStep` is a no-op unless paused. Verified live: a paused gameplay
+  `Health` regen stayed frozen across many frames, then advanced +1/frame per
+  step, linearly (41→42→43), with `simState` staying `Paused`.
+  - **Follow-up (fixed timestep).** The gate opens variable-`update` gameplay for
+    one frame. A stepped frame could also run *accumulated* `fixedUpdate` steps as
+    a catch-up burst if the fixed accumulator advanced while paused (mirrors
+    ordinary pause→resume). Latent today (the sample has no `fixedUpdate`
+    gameplay); revisit by freezing the fixed accumulator while not playing.
 
 - **Inspector behavior while playing.** Today the inspector goes read-only in Play
   (a mirror of `state.playing`); revisit once gating + snapshot exist (live-edit of

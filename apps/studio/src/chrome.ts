@@ -9,6 +9,7 @@ import {
   type InspectorRegistry,
   type MenuDef,
   requestSimState,
+  requestSimStep,
   type Rgba,
   SimState,
   srgbU32,
@@ -119,7 +120,7 @@ export const menus = (state: StudioState, history: History, actions: MenuActions
     items: () => [
       { label: state.playing ? 'Stop' : 'Play', icon: state.playing ? 'square' : 'play', shortcut: 'Ctrl+P' },
       { label: 'Pause', icon: 'pause', disabled: !state.playing },
-      { label: 'Step', icon: 'skip-forward', disabled: !state.playing },
+      { label: 'Step', icon: 'skip-forward', disabled: !state.paused },
     ],
   },
   {
@@ -229,7 +230,10 @@ export const toolbar = (state: StudioState, editor: Editor, app: App): ToolbarDe
       togglePause(app);
     }
     ui.sameLine(0, TOOL_GAP);
-    widgets.iconButton('step', 'skip-forward', { tooltip: 'Step', size: 'sm' });
+    // Step advances one frame; only meaningful while paused (requestSimStep also self-guards).
+    if (widgets.iconButton('step', 'skip-forward', { tooltip: 'Step one frame (while paused)', size: 'sm' }) && state.paused) {
+      requestSimStep(app);
+    }
 
     // Right: layout + settings.
     ui.sameLine();

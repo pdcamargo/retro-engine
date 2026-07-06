@@ -1,4 +1,4 @@
-import { requestSimState, SimState } from '@retro-engine/editor-sdk';
+import { requestSimState, requestSimStep, SimState } from '@retro-engine/editor-sdk';
 
 import { asRecord, optNumber, reqString } from '../args';
 import { type CommandDef, defineCommand } from '../registry';
@@ -73,6 +73,18 @@ export const studioCommands: readonly CommandDef[] = [
     handler: (ctx) => {
       requestSimState(ctx.app, SimState.Edit);
       return { simState: 'Edit' };
+    },
+  }),
+  defineCommand({
+    name: 'studio.step',
+    title: 'Step one frame',
+    description: 'Advance the simulation exactly one frame while paused. No-op unless paused.',
+    domain: 'studio',
+    mutating: false,
+    inputSchema: { type: 'object', properties: {} },
+    handler: (ctx) => {
+      requestSimStep(ctx.app);
+      return { stepped: ctx.state.paused };
     },
   }),
   defineCommand({

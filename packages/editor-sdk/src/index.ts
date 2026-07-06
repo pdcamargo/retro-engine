@@ -183,6 +183,7 @@ export {
 export { uiOverlayPlugin, UiOverlayPlugin } from './plugin';
 export type { UiLayoutOptions, UiOverlayOptions } from './plugin';
 export { currentSimState, initSimState, requestSimState, SimState } from './sim-state';
+export { installSimStep, requestSimStep, SimStep, simStepActive } from './sim-step';
 export type { EntityFilter, PlayModeSnapshotOptions } from './play-snapshot';
 export {
   capturePlaySnapshot,

@@ -15,10 +15,12 @@ import {
   History,
   initSimState,
   installPlayModeSnapshot,
+  installSimStep,
   isDockingEnabled,
   listComponents,
   saveLayout,
   SimState,
+  simStepActive,
   ui,
   uiOverlayPlugin,
   widgets,
@@ -137,6 +139,10 @@ const app = new App({
 });
 // Engine-backed play state (Edit/Play/Paused) the toolbar drives and panels reflect.
 initSimState(app);
+// Play-mode "Step": advance one frame while Paused. The gate below is
+// `inState(Play).or(simStepActive())`, so a queued step opens gameplay for a
+// single frame without ever leaving the paused state.
+installSimStep(app);
 splash.step({ glyph: '▸', message: 'mounting ecs world', result: 'ok', tone: 'accent' });
 
 const scene = createScene();
@@ -820,7 +826,7 @@ void (async (): Promise<void> => {
     try {
       const project = await buildProjectModule(createProjectBuilder(), projectDir);
       // Gate the project's gameplay systems behind Play, so they don't run while editing.
-      applyProject(app, project, inState(SimState.Play));
+      applyProject(app, project, inState(SimState.Play).or(simStepActive()));
       // Code-derived index: the project's systems/components/resources/editors,
       // beyond the engine + editor baseline captured above.
       projectCodeIndex = buildCodeIndex(app, editor.inspector, baseline);
@@ -1039,7 +1045,7 @@ void (async (): Promise<void> => {
             builder: createProjectBuilder(),
             projectDir,
             baseline,
-            playGate: inState(SimState.Play),
+            playGate: inState(SimState.Play).or(simStepActive()),
             isEditorEntity: (e) => app.world.has(e, EditorOnly),
           });
           if (result.ok) {
