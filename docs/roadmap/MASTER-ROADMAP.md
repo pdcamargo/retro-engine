@@ -97,13 +97,15 @@ foundation.**
 
 ## Renderer
 
-- [ ] **Engine text rendering (MSDF)** — 🟡 Phases 1–2b shipped under `packages/engine/src/text/`:
-      `MsdfFont`/`parseMsdfFont`, `layoutText`/`measureText`, `Font` asset + `.font` loader (linear atlas
-      sub-asset), `Text2d` (reflection round-trips), and the full MSDF glyph render pipeline (shader +
-      `TextPipeline`/`TextInstanceBuffer`/`packGlyphInstance` + `text-prepare`/`text-queue` systems drawing
-      through the transparent 2D phase). Unit-tested + capturing-renderer integration + benched. Remaining:
-      Phase 2c (committed msdf-atlas-gen sample font + `?mode=text` scene + studio wiring for visual MCP
-      confirmation) + Phase 3 (world-space `Text`, UI measure wiring).
+- [ ] **Engine text rendering (MSDF)** — 🟡 Phases 1–2c shipped under `packages/engine/src/text/`:
+      `MsdfFont`/`parseMsdfFont`, `layoutText`/`measureText`, `Font` asset + `.font` loader, `Text2d`
+      (reflection round-trips), full glyph render pipeline (shader + `TextPipeline`/`TextInstanceBuffer`/
+      `packGlyphInstance` + `text-prepare`/`text-queue` through the transparent 2D phase), a built-in
+      pure-JS SDF default font (`installDefaultFont`), and a `?mode=text` playground sample. Unit-tested +
+      capturing-renderer integration + benched. Remaining before check-off: on-screen visual confirmation
+      (studio MCP was down this session — open `?mode=text` / a studio project with TextPlugin) + Phase 3
+      (world-space `Text`, wire `measureText` into the UI measure callback). Optional: true-MSDF atlas via
+      `msdf-atlas-gen` (the `.font` importer already loads one).
       _AC:_ MSDF glyph atlas (generated via msdfgen, loaded as an asset) + runtime glyph-quad batching
       through the 2D pipeline; `Text`/`Text2d` components; font asset kind + `.meta`; layout
       (line-break/wrap/alignment); glyph metrics exposed to the UI layout measure callback; crisp at any

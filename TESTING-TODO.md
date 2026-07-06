@@ -372,3 +372,35 @@ glyph → world-space quad honoring the entity transform + pivot, per-glyph atla
   MASTER-ROADMAP stays 🟡 until text is drawn on screen and MCP-verified.
 
 ---
+
+## 🟡 Engine text (MSDF) — Phase 2c shipped (built-in SDF default font + ?mode=text sample)
+
+No native `msdf-atlas-gen` is installed and headless bun can't rasterize system fonts, so
+rather than block, I shipped a **pure-JS SDF font generator** (`generateSdfFont`) and a
+**built-in default font** (`installDefaultFont`) — monoline stroke glyphs (uppercase, digits,
+punctuation; lowercase aliased to uppercase) rasterized to a single-channel SDF the
+median-of-RGB shader consumes unchanged. Zero external deps, zero committed binaries. Added a
+`?mode=text` playground scene (title / multi-line / wrapped / right-aligned HUD / spinner).
+
+- **HOW to test (headless):** `bun test packages/engine/src/text/` — 47 tests incl. SDF
+  gradient/metrics/atlas checks and a capturing-renderer test drawing "HELLO" with the built-in
+  font (5 instances).
+- **HOW to test (visual — needs a WebGPU browser):** run the playground and open
+  `?mode=text` → five text blocks in different sizes/colors/alignments + a spinning "SPIN!".
+  Confirm glyphs are crisp when the window is resized/zoomed (SDF scale-independence) and the
+  spinner's glyphs rotate with the entity.
+- **Studio:** 2D render plugins are project-declared (like SpritePlugin), so open a studio
+  project that adds `TextPlugin` + a `Text2d` entity to see text in the editor. Couldn't
+  MCP-verify this session (studio relay disconnected — `studio_connected` = false).
+- Roadmap: `docs/roadmap/text-rendering.md` (Phases 1–2c done). ADR-0149. MASTER-ROADMAP item
+  stays 🟡 until visual confirmation + Phase 3 (world-space Text). A true multi-channel MSDF
+  atlas via `msdf-atlas-gen` is an optional tooling upgrade — the `.font` importer already
+  loads one; the built-in SDF font is the no-tooling default.
+
+### Tooling note (not a hard blocker)
+`msdf-atlas-gen` / `msdfgen` are not installed on this machine (checked `which` + brew + npm).
+The engine ships a pure-JS SDF font instead, so text works without them. Installing
+`msdf-atlas-gen` later would enable authoring true multi-channel MSDF fonts (sharper corners)
+that load through the existing `.font` importer.
+
+---

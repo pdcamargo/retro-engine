@@ -660,6 +660,9 @@ export type {
   GlyphRect,
   MsdfFontJson,
   PositionedGlyph,
+  SdfFontOptions,
+  StrokeGlyph,
+  StrokeSegment,
   Text2dOptions,
   TextAlign,
   TextBatch,
@@ -670,8 +673,12 @@ export type {
 } from './text';
 export {
   createFontImporter,
+  DEFAULT_FONT_OPTIONS,
   Font,
   Fonts,
+  generateDefaultFontAtlas,
+  generateSdfFont,
+  installDefaultFont,
   kerningKey,
   layoutText,
   measureText,

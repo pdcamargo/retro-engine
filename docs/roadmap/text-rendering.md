@@ -46,12 +46,23 @@ an MSDF shader. Required by the in-game UI system.
 - Verified end-to-end via the capturing renderer (transparent-pass draws,
   per-entity batching, instance counts, atlas bind group).
 
-**Phase 2c — Sample + studio wiring (next)**
+**Phase 2c — Built-in default font + sample ✅ (2026-07-06)**
 
-- Commit a real `msdf-atlas-gen` font (`.font` + `.png`) for samples/tests.
-- Playground `?mode=text` draws multi-line styled text; wire `TextPlugin`
-  alongside `SpritePlugin` where the studio/sample opens 2D scenes. Verify
-  visually via the studio MCP (screenshots) once reconnected.
+- No native `msdf-atlas-gen` and no headless rasterizer available → shipped a
+  **pure-JS SDF font generator** (`generateSdfFont`) + a **built-in default font**
+  (`generateDefaultFontAtlas` / `installDefaultFont`): monoline stroke glyphs
+  (uppercase, digits, punctuation; lowercase aliased) rasterized to a
+  single-channel SDF atlas the median-of-RGB shader consumes unchanged. Crisp,
+  scalable, zero external deps or committed binaries. Unit-tested (SDF gradient,
+  metrics, atlas) + capturing-renderer draw test.
+- Playground `?mode=text` draws title / multi-line / wrapped / right-aligned HUD
+  / spinning `Text2d` using the built-in font.
+- Studio wiring: 2D render plugins are project-declared (like `SpritePlugin`), so
+  a project using text adds `TextPlugin` — no studio-host change needed.
+- **Pending only:** on-screen visual confirmation (studio MCP is down this
+  session; open playground `?mode=text` or a studio project with `TextPlugin`).
+  A true multi-channel MSDF atlas via `msdf-atlas-gen` remains a tooling upgrade
+  (the `.font` importer already loads one) — the built-in SDF font is the default.
 
 ### Phase 3 — Depth
 

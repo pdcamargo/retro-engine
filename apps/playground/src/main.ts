@@ -28,6 +28,7 @@ import { sliceShowcasePlugin } from './slice-showcase-plugin';
 import { spriteShowcasePlugin } from './sprite-showcase-plugin';
 import { stressShowcasePlugin } from './stress-showcase-plugin';
 import { taaShowcasePlugin } from './taa-showcase-plugin';
+import { textShowcasePlugin } from './text-showcase-plugin';
 
 const canvas = document.getElementById('playground-canvas');
 if (!(canvas instanceof HTMLCanvasElement)) {
@@ -39,6 +40,8 @@ if (!(canvas instanceof HTMLCanvasElement)) {
 //   `?mode=atlas`   → Phase 8.2 texture-atlas showcase (ADR-0032).
 //   `?mode=sprites` → Phase 8.1 sprite pipeline showcase (ADR-0031).
 //   `?mode=shapes`  → Phase 8.7 Material2d showcase (ADR-0035).
+//   `?mode=text`    → engine MSDF text (ADR-0149): multi-line / wrapped / aligned
+//                     Text2d using the built-in SDF default font, plus a spinner.
 //   `?mode=stress`  → mixed-load FPS harness (size=small|medium|large).
 //   `?mode=lights`  → Phase 9 2D lighting showcase: point/spot/ambient lights,
 //                     composite modes, shadow occluders, and (with `&normals=1`)
@@ -103,6 +106,8 @@ const showcase =
     ? inputShowcasePlugin
     : mode === 'audio'
     ? audioShowcasePlugin
+    : mode === 'text'
+    ? textShowcasePlugin
     : mode === 'physics'
     ? physicsShowcasePlugin
     : mode === 'slice'

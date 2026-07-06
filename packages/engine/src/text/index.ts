@@ -34,3 +34,10 @@ export { TextInstanceBuffer } from './text-instance-buffer';
 export type { TextKey } from './text-pipeline';
 export { TextPipeline } from './text-pipeline';
 export { TEXT_WGSL } from './text.wgsl';
+export type { SdfFontOptions, StrokeGlyph, StrokeSegment } from './sdf-generator';
+export { generateSdfFont } from './sdf-generator';
+export {
+  DEFAULT_FONT_OPTIONS,
+  generateDefaultFontAtlas,
+  installDefaultFont,
+} from './default-font';

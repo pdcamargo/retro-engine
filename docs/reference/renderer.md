@@ -109,14 +109,15 @@ no clustered lighting, no bloom/DoF/SSR/volumetrics/atmospheric sky, and no engi
 
 - ✅ **Sprites** (`engine/src/sprite/`, ADR-0031/0032/0033/0034/0036) — sprite component + pipeline,
   **Z-aware batching**, instanced buffers, **texture atlas layout**, **atlas animation**, **9-slice**.
-- 🟡 **Engine-facing text (MSDF)** (`engine/src/text/`, ADR-0149) — Phases 1–2b shipped: font data +
+- 🟡 **Engine-facing text (MSDF/SDF)** (`engine/src/text/`, ADR-0149) — Phases 1–2c shipped: font data +
   layout engine (`MsdfFont`/`parseMsdfFont`; `layoutText`/`measureText`), the `Font` asset + `.font` loader
-  (linear atlas sub-asset), the `Text2d` component (reflection round-trips), and a full **MSDF glyph render
-  pipeline** — `retro_engine::text` shader (median-of-RGB, screen-px-range AA), `TextPipeline` /
-  `TextInstanceBuffer`, `packGlyphInstance`, and `text-prepare`/`text-queue` systems that draw `Text2d`
-  through the transparent 2D phase (one instanced draw per entity). Verified end-to-end via the capturing
-  renderer; benched (`text-prepare.bench.ts`). Remaining (Phase 2c): a committed `msdf-atlas-gen` sample
-  font + `?mode=text` playground scene + studio wiring for on-window visual confirmation.
+  (linear atlas sub-asset), the `Text2d` component (reflection round-trips), a full **glyph render
+  pipeline** (`retro_engine::text` median-of-RGB shader, `TextPipeline`/`TextInstanceBuffer`,
+  `packGlyphInstance`, `text-prepare`/`text-queue` drawing through the transparent 2D phase), plus a
+  **built-in pure-JS SDF default font** (`generateSdfFont` / `installDefaultFont`) and a `?mode=text`
+  playground sample. Verified end-to-end via the capturing renderer; benched. Remaining: on-screen visual
+  confirmation (studio MCP), world-space `Text` (Phase 3), and an optional true-MSDF atlas via
+  `msdf-atlas-gen` (the `.font` importer already loads one).
 - ✅ **glTF/GLB import** (`packages/gltf`, ADR-0057/0059) — GLB+glTF parse, scene instantiation, animation
   mapping, image decode, auto-retarget on import. (See [`assets.md`](assets.md).)
 - ✅ **GPU skinning & morph** — see [`animation.md`](animation.md) (ADR-0114/0115/0129).
