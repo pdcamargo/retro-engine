@@ -203,12 +203,21 @@ const mapDeclarations = (props: Record<string, string>): UiStyleInit => {
       case 'border-color': { const c = parseColor(value); if (c !== undefined) init.borderColor = c; break; }
       case 'border-width': init.borderWidth = edges(value); break;
       case 'border': {
-        // `<width> <style> <color>` in any order; the style keyword (e.g. `solid`) is ignored.
-        for (const token of value.split(/\s+/)) {
-          const c = parseColor(token);
-          if (c !== undefined) { init.borderColor = c; continue; }
+        // `<width> <style> <color>` in any order; the style keyword (e.g. `solid`)
+        // is ignored. Pull a functional/hex color out first (it can contain the
+        // spaces `rgb(r, g, b)` uses), then read the width from a numeric token.
+        const funcColor = /rgba?\([^)]*\)|#[0-9a-fA-F]{3,8}/.exec(value)?.[0];
+        const rest = funcColor !== undefined ? value.replace(funcColor, ' ') : value;
+        let color = funcColor !== undefined ? parseColor(funcColor) : undefined;
+        for (const token of rest.split(/\s+/)) {
+          if (token === '') continue;
+          if (color === undefined) {
+            const named = parseColor(token);
+            if (named !== undefined) { color = named; continue; }
+          }
           if (/^[\d.]/.test(token)) init.borderWidth = len(token);
         }
+        if (color !== undefined) init.borderColor = color;
         break;
       }
       default: break; // unknown property — ignored (forward-compatible)
@@ -221,16 +230,58 @@ const mapDeclarations = (props: Record<string, string>): UiStyleInit => {
 };
 
 /**
+ * Collect every custom-property (`--name`) declaration across the sheet into a
+ * flat variable map — a global theme. Later declarations win (source order).
+ * Per-node scoping / inheritance is not modeled: a `--var` declared anywhere is
+ * visible everywhere, which suits a global palette (override it per-run via a
+ * theme map merged on top).
+ */
+export const collectThemeVars = (rules: readonly RssRule[]): Record<string, string> => {
+  const vars: Record<string, string> = {};
+  for (const rule of rules) {
+    for (const decl of rule.declarations) {
+      if (decl.property.startsWith('--')) vars[decl.property] = decl.value.trim();
+    }
+  }
+  return vars;
+};
+
+const VAR_REF = /var\(\s*(--[\w-]+)\s*(?:,\s*([^)]*))?\)/g;
+
+/**
+ * Substitute `var(--name)` / `var(--name, fallback)` references in a declaration
+ * value using `vars`. An unknown variable resolves to its fallback (or an empty
+ * string). Fallbacks are simple values — a `var()` nested inside another `var()`
+ * fallback is not resolved.
+ */
+export const substituteVars = (value: string, vars: Record<string, string>): string => {
+  if (!value.includes('var(')) return value;
+  return value.replace(VAR_REF, (_match, name: string, fallback?: string) => {
+    const resolved = vars[name];
+    if (resolved !== undefined) return resolved;
+    return fallback !== undefined ? fallback.trim() : '';
+  });
+};
+
+/**
  * Resolve a node's final {@link UiStyle} from a parsed stylesheet: cascade the
- * matching rules, map the winning declarations onto style fields, and merge any
- * `inline` overrides on top (inline wins, as in USS). Unknown properties are
- * ignored. `--var`/`var()`, inheritance, and combinators are not resolved yet.
+ * matching rules, substitute `var()` references against `vars` (the sheet's own
+ * custom properties when omitted), map the winning declarations onto style
+ * fields, and merge any `inline` overrides on top (inline wins, as in USS).
+ * Unknown properties are ignored. Inheritance and combinators are not resolved yet.
  */
 export const resolveUiStyle = (
   rules: readonly RssRule[],
   node: StyleNode,
   inline?: UiStyleInit,
+  vars?: Record<string, string>,
 ): UiStyle => {
-  const mapped = mapDeclarations(resolveDeclarations(rules, node));
+  const varMap = vars ?? collectThemeVars(rules);
+  const resolved = resolveDeclarations(rules, node);
+  const substituted: Record<string, string> = {};
+  for (const [property, value] of Object.entries(resolved)) {
+    substituted[property] = substituteVars(value, varMap);
+  }
+  const mapped = mapDeclarations(substituted);
   return makeStyle(inline !== undefined ? { ...mapped, ...inline } : mapped);
 };

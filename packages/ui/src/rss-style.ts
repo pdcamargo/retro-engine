@@ -5,7 +5,7 @@ import { type Schema, t } from '@retro-engine/reflect';
 import { Disabled } from './interaction/ui-button';
 import { UiInteraction } from './interaction/ui-interaction';
 import { parseRss, type RssRule } from './rss-parser';
-import { resolveUiStyle, type StyleNode } from './rss-resolve';
+import { collectThemeVars, resolveUiStyle, type StyleNode } from './rss-resolve';
 import { UiNode } from './ui-node';
 
 /**
@@ -53,6 +53,16 @@ export const uiClassSchema: Schema<UiClass> = {
 };
 
 /**
+ * Overrides for `.rss` custom properties (`--name`), merged on top of the ones
+ * declared in the active {@link UiStyleSheet}. Setting a var here re-themes every
+ * `var(--name)` usage at runtime (e.g. flip an accent color from game code).
+ * Runtime configuration, so it is not reflection-registered.
+ */
+export class UiTheme {
+  constructor(public vars: Record<string, string> = {}) {}
+}
+
+/**
  * Parse `rss` source and make it the active {@link UiStyleSheet}, replacing any
  * rules already set. Inserts the resource if the {@link import('./ui-plugin').UiPlugin}
  * has not (e.g. called before `build`).
@@ -62,6 +72,16 @@ export const setUiStyleSheet = (app: App, rss: string): void => {
   const sheet = app.getResource(UiStyleSheet);
   if (sheet !== undefined) sheet.rules = rules;
   else app.insertResource(new UiStyleSheet(rules));
+};
+
+/**
+ * Merge `vars` into the {@link UiTheme} resource (creating it if needed), so
+ * `var(--name)` references re-resolve to the new values on the next layout pass.
+ */
+export const setUiThemeVars = (app: App, vars: Record<string, string>): void => {
+  const theme = app.getResource(UiTheme);
+  if (theme !== undefined) theme.vars = { ...theme.vars, ...vars };
+  else app.insertResource(new UiTheme({ ...vars }));
 };
 
 /**
@@ -89,7 +109,15 @@ type UiClassQuery = QueryHandle<readonly [typeof UiNode, typeof UiClass]>;
  * node's {@link UiNode}. Runs every frame (before layout) so pseudo-class state
  * changes — hover, press, disable — reflow immediately.
  */
-export const resolveUiStyles = (world: World, nodes: UiClassQuery, sheet: UiStyleSheet): void => {
+export const resolveUiStyles = (
+  world: World,
+  nodes: UiClassQuery,
+  sheet: UiStyleSheet,
+  theme?: UiTheme,
+): void => {
+  // Sheet `--vars` seed the theme; the UiTheme resource overrides them (runtime
+  // re-theming). Merged once per pass, shared by every node's `var()` resolution.
+  const vars = { ...collectThemeVars(sheet.rules), ...(theme?.vars ?? {}) };
   for (const row of nodes.entries()) {
     const entity = row[0] as Entity;
     const node = row[1] as UiNode;
@@ -100,6 +128,6 @@ export const resolveUiStyles = (world: World, nodes: UiClassQuery, sheet: UiStyl
       ...(cls.type !== '' ? { type: cls.type } : {}),
       ...(cls.name !== '' ? { name: cls.name } : {}),
     };
-    node.style = resolveUiStyle(sheet.rules, styleNode);
+    node.style = resolveUiStyle(sheet.rules, styleNode, undefined, vars);
   }
 };

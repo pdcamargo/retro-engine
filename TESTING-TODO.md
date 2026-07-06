@@ -868,3 +868,31 @@ stylesheet styles live nodes each frame, including pseudo-class states.
   and a `.rss` asset kind remain.)
 
 ---
+
+## ✅ In-game UI — `.rss` custom properties (`--vars` / `var()`) + runtime theme (VERIFIED via browser export)
+
+Extends "Retro CSS" with CSS custom properties and a runtime-overridable theme — closes the
+`--vars via a theme resource` UI acceptance-criterion.
+
+- **New in `@retro-engine/ui`:** `collectThemeVars(rules)` (gather `--name` declarations into a flat
+  theme, later-wins) + `substituteVars(value, vars)` (`var(--name)` / `var(--name, fallback)`);
+  `resolveUiStyle` gained a `vars` arg (substitutes before mapping; auto-collects sheet vars when
+  none passed). New `UiTheme` resource + `setUiThemeVars(app, vars)` — overrides merged over the
+  sheet's `--vars`, re-themed live by the `'ui-style'` system each pass. Also fixed the `border`
+  shorthand to accept functional colors (`rgb(r, g, b)` with internal spaces), not just hex.
+- **Verified end-to-end in a real browser** (`apps/sample-game` export → Playwright): the sample
+  `.rss` now defines `:root { --accent … --alt … --hot … }` and the chips fill via `var(--accent)` /
+  `var(--alt)`. Read back: plain chip = `rgb(40,120,210)`, alt chip = `rgb(240,150,40)`. Then called
+  `window.__setAccent('rgb(0,200,0)')` (→ `setUiThemeVars`) → the accent chips recolored to
+  `rgb(0,200,0)` within a frame, while the `.alt` chip (uses `var(--alt)`) stayed orange — proving
+  runtime re-theming is targeted per-variable.
+- **Automated:** `packages/ui/src/rss-style.test.ts` (now 14 tests: + var collection/substitution,
+  sheet-var resolution, theme override, functional-color border) + updated `rss-style` bench (vars).
+  Full repo gate green (1940 tests). Changeset added.
+- **HOW to test:** `cd apps/sample-game && bun run build:web`, serve `dist/web`, open in a browser →
+  blue + orange + blue chips top-left; in the console run `window.__setAccent('rgb(0,200,0)')` → the
+  first and third chips turn green, the middle (alt) stays orange.
+- Docs: `roadmap/ui-system.md` Phase 3c ✅, MASTER-ROADMAP UI item (AC `--vars` ✅; remaining widget
+  gap = **image** + `.rss` inheritance). UI item stays unchecked.
+
+---

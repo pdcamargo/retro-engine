@@ -90,10 +90,19 @@ and a HUD (text + bars) from ECS components + `.rss`, with gamepad navigation.
   browser (sample-game export): `.chip` → blue, `.chip.alt` compound override →
   orange, and a `.chip:hovered` rule flips a chip to red on live pointer hover.
   Bench: `rss-style`.
-- Remaining: descendant/child **combinators**, `--var`/`var()` custom properties
-  (theme resource) + **inheritance**, per-node **inline overrides** merged over the
-  sheet, and a `.rss` **asset kind** (load the sheet from a project file, not just a
-  source string). `focused`/`checked` states await focus/checkbox widgets.
+- ✅ **Phase 3c — custom properties (`--vars` / `var()`) + theme (2026-07-06).**
+  `collectThemeVars` gathers every `--name` declaration into a flat theme;
+  `substituteVars` resolves `var(--name)` / `var(--name, fallback)` in declaration
+  values (`resolveUiStyle` gained a `vars` arg). A `UiTheme` resource
+  (`setUiThemeVars(app, …)`) overrides the sheet's vars, so `var()` usages re-theme
+  live. The `border` shorthand now also handles functional colors (`rgb(r, g, b)`
+  with internal spaces). Verified in a browser (sample-game export): chips fill via
+  `var(--accent)`/`var(--alt)`, and overriding `--accent` at runtime recolors the
+  `--accent` chips green while the `--alt` chip is unaffected.
+- Remaining: descendant/child **combinators**, per-node scoped vars + **inheritance**,
+  per-node **inline overrides** merged over the sheet, and a `.rss` **asset kind**
+  (load the sheet from a project file, not just a source string). `focused`/`checked`
+  states await focus/checkbox widgets.
 
 ### Phase 4 — Widgets + interaction
 

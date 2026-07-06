@@ -28,13 +28,23 @@ export { runUiLayout, UiLayout, uiNodeSchema, UiPlugin, uiTextSchema, UiViewport
 export type { RssDeclaration, RssRule, RssSelector } from './rss-parser';
 export { parseRss, parseSelector } from './rss-parser';
 export type { StyleNode } from './rss-resolve';
-export { matches, parseColor, resolveDeclarations, resolveUiStyle, specificity } from './rss-resolve';
+export {
+  collectThemeVars,
+  matches,
+  parseColor,
+  resolveDeclarations,
+  resolveUiStyle,
+  specificity,
+  substituteVars,
+} from './rss-resolve';
 export {
   resolveUiStyles,
   setUiStyleSheet,
+  setUiThemeVars,
   UiClass,
   uiClassSchema,
   UiStyleSheet,
+  UiTheme,
 } from './rss-style';
 export { UiRenderPlugin } from './render/ui-render-plugin';
 export { UiPipeline } from './render/ui-pipeline';

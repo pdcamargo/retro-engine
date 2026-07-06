@@ -23,6 +23,7 @@ import {
   Disabled,
   Interactable,
   setUiStyleSheet,
+  setUiThemeVars,
   UiButton,
   UiClass,
   UiClicked,
@@ -51,15 +52,22 @@ class CreditsLabel {}
 
 /**
  * A `.rss` (USS-subset) stylesheet driving the top-left chip strip at runtime:
- * a `#name` root, a base `.chip` rule, a `.chip.alt` compound override, and a
- * `.chip:hovered` pseudo-class rule — the end-to-end proof that the parsed
- * stylesheet cascades onto live `UiClass` nodes (and reacts to hover state).
+ * `:root` custom properties (`--vars`) referenced via `var()`, a base `.chip`
+ * rule, a `.chip.alt` compound override, and a `.chip:hovered` pseudo-class rule
+ * — the end-to-end proof that the parsed stylesheet cascades onto live `UiClass`
+ * nodes, resolves variables, and reacts to hover state.
  */
 const SAMPLE_RSS = `
+  :root {
+    --accent: rgb(40, 120, 210);
+    --alt: rgb(240, 150, 40);
+    --hot: rgb(240, 60, 60);
+    --chip-border: rgb(200, 220, 255);
+  }
   #rss-panel { flex-direction: row; justify-content: flex-start; align-items: flex-start; padding: 16; gap: 12; flex-grow: 1; }
-  .chip { width: 96; height: 64; border: 3 solid rgb(200, 220, 255); background-color: rgb(40, 120, 210); }
-  .chip.alt { background-color: rgb(240, 150, 40); }
-  .chip:hovered { background-color: rgb(240, 60, 60); }
+  .chip { width: 96; height: 64; border: 3 solid var(--chip-border); background-color: var(--accent); }
+  .chip.alt { background-color: var(--alt); }
+  .chip:hovered { background-color: var(--hot); }
 `;
 
 /** Merge a patch into the `window.__game` probe (shared across demo systems). */
@@ -92,6 +100,13 @@ class HelloTextPlugin implements PluginObject {
     // `UiClass` selectors and get their whole style (size, border, fill, hover)
     // from this sheet at runtime.
     setUiStyleSheet(app, SAMPLE_RSS);
+
+    // Expose runtime re-theming for verification: overriding `--accent` recolors
+    // every `var(--accent)` usage on the next layout pass.
+    if (typeof window !== 'undefined') {
+      (window as unknown as { __setAccent: (c: string) => void }).__setAccent = (c) =>
+        setUiThemeVars(app, { '--accent': c });
+    }
 
     // Load a packed asset from the exported `.rpak` (present only when run from a
     // web export, where bootWebGame wires the RpakAssetSource + manifest). A tiny

@@ -5,7 +5,7 @@ import { FieldType, type Schema, t } from '@retro-engine/reflect';
 
 import { FlexLayoutEngine } from './flex-layout';
 import type { LayoutEngine, LayoutNode, LayoutResult } from './layout-engine';
-import { resolveUiStyles, UiClass, uiClassSchema, UiStyleSheet } from './rss-style';
+import { resolveUiStyles, UiClass, uiClassSchema, UiStyleSheet, UiTheme } from './rss-style';
 import { makeTextMeasure } from './text-measure';
 import { ComputedLayout, UiNode } from './ui-node';
 import type { UiStyle } from './ui-style';
@@ -121,6 +121,7 @@ export class UiPlugin implements PluginObject {
     if (app.getResource(UiViewport) === undefined) app.insertResource(new UiViewport());
     if (app.getResource(UiLayout) === undefined) app.insertResource(new UiLayout());
     if (app.getResource(UiStyleSheet) === undefined) app.insertResource(new UiStyleSheet());
+    if (app.getResource(UiTheme) === undefined) app.insertResource(new UiTheme());
 
     app.registerComponent(UiNode, uiNodeSchema, { name: 'UiNode', make: () => new UiNode() });
     app.registerComponent(UiText, uiTextSchema, { name: 'UiText', make: () => new UiText() });
@@ -130,9 +131,14 @@ export class UiPlugin implements PluginObject {
     // paint (and any pseudo-class state change) is in place for the same frame.
     app.addSystem(
       'postUpdate',
-      [Query([UiNode, UiClass]), Res(UiStyleSheet)],
-      (nodes, sheet) => {
-        resolveUiStyles(app.world, nodes as unknown as Parameters<typeof resolveUiStyles>[1], sheet as UiStyleSheet);
+      [Query([UiNode, UiClass]), Res(UiStyleSheet), Res(UiTheme)],
+      (nodes, sheet, theme) => {
+        resolveUiStyles(
+          app.world,
+          nodes as unknown as Parameters<typeof resolveUiStyles>[1],
+          sheet as UiStyleSheet,
+          theme as UiTheme,
+        );
       },
       { label: 'ui-style' },
     );

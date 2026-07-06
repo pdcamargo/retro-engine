@@ -12,20 +12,25 @@
 import { bench, summary } from 'mitata';
 
 import { parseRss } from '../src/rss-parser';
-import { resolveUiStyle, type StyleNode } from '../src/rss-resolve';
+import { collectThemeVars, resolveUiStyle, type StyleNode } from '../src/rss-resolve';
 
 const RULES = parseRss(`
+  :root { --panel-bg: #14161f; --cell-bg: #1c2230; --accent: #ff8c1a; --border: #556; }
   * { margin: 0; }
-  Panel { flex-direction: column; padding: 8; gap: 4; background-color: #14161f; }
+  Panel { flex-direction: column; padding: 8; gap: 4; background-color: var(--panel-bg); }
   .row { flex-direction: row; gap: 6; height: 28; }
-  .cell { flex-grow: 1; min-width: 40; padding: 4; background-color: #1c2230; }
+  .cell { flex-grow: 1; min-width: 40; padding: 4; background-color: var(--cell-bg); }
   .cell:hovered { background-color: #2a3550; }
   .cell:pressed { background-color: #3a4a70; }
   .cell:disabled { background-color: #101216; }
   .label { flex-grow: 1; padding-left: 6; }
-  .badge { width: 48; height: 20; border: 2 solid #556; background-color: #ff8c1a; }
+  .badge { width: 48; height: 20; border: 2 solid var(--border); background-color: var(--accent); }
   #hud-root { width: 1280; height: 720; padding: 16; }
 `);
+
+// The style system collects the theme vars once per pass and reuses them across
+// nodes; the bench mirrors that (pre-collected, passed into every resolve).
+const VARS = collectThemeVars(RULES);
 
 // One frame's worth of nodes: a root, rows, and a grid of cells in varied states.
 const ROWS = 24;
@@ -41,6 +46,6 @@ for (let r = 0; r < ROWS; r++) {
 
 summary(() => {
   bench(`resolveUiStyle: ${NODES.length} nodes × ${RULES.length} rules (one frame)`, () => {
-    for (const node of NODES) resolveUiStyle(RULES, node);
+    for (const node of NODES) resolveUiStyle(RULES, node, undefined, VARS);
   });
 });

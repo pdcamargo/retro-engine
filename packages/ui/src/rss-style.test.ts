@@ -5,8 +5,8 @@ import { World } from '@retro-engine/ecs';
 import { Disabled } from './interaction/ui-button';
 import { UiInteraction } from './interaction/ui-interaction';
 import { parseRss } from './rss-parser';
-import { parseColor, resolveUiStyle } from './rss-resolve';
-import { resolveUiStyles, UiClass, UiStyleSheet } from './rss-style';
+import { collectThemeVars, parseColor, resolveUiStyle, substituteVars } from './rss-resolve';
+import { resolveUiStyles, UiClass, UiStyleSheet, UiTheme } from './rss-style';
 import { UiNode } from './ui-node';
 
 const rgba = (v: { [i: number]: number } | undefined): number[] =>
@@ -67,6 +67,13 @@ describe('resolveUiStyle — paint properties', () => {
     expect(style.borderWidth).toEqual({ left: 3, right: 3, top: 3, bottom: 3 });
     expectColor(style.borderColor, [0, 0, 1, 1]);
   });
+
+  it('parses the `border` shorthand with a functional color (internal spaces)', () => {
+    const rules = parseRss('.b { border: 2 solid rgb(200, 220, 255); }');
+    const style = resolveUiStyle(rules, { classes: ['b'], states: [] });
+    expect(style.borderWidth).toEqual({ left: 2, right: 2, top: 2, bottom: 2 });
+    expectColor(style.borderColor, [200 / 255, 220 / 255, 1, 1]);
+  });
 });
 
 describe('resolveUiStyles — ECS integration', () => {
@@ -125,5 +132,49 @@ describe('resolveUiStyles — ECS integration', () => {
     const style = world.getComponent(e, UiNode)!.style;
     expect(style.backgroundColor).toBeUndefined();
     expect(style.width).toBeUndefined();
+  });
+});
+
+describe('custom properties (--vars / var())', () => {
+  it('collects --vars across the sheet, last-wins', () => {
+    const vars = collectThemeVars(
+      parseRss(':root { --accent: #ff0000; --gap: 8; } .x { --accent: #00ff00; }'),
+    );
+    expect(vars['--gap']).toBe('8');
+    expect(vars['--accent']).toBe('#00ff00'); // later declaration wins
+  });
+
+  it('substitutes var() with a value or fallback', () => {
+    const vars = { '--accent': 'rgb(10, 20, 30)' };
+    expect(substituteVars('var(--accent)', vars)).toBe('rgb(10, 20, 30)');
+    expect(substituteVars('var(--missing, 12)', vars)).toBe('12');
+    expect(substituteVars('var(--missing)', vars)).toBe('');
+    expect(substituteVars('16', vars)).toBe('16'); // no var() → untouched
+  });
+
+  it('resolveUiStyle applies sheet --vars in declaration values', () => {
+    const rules = parseRss(`
+      :root { --accent: #ff0000; --pad: 10; }
+      .card { background-color: var(--accent); padding: var(--pad); width: var(--w, 64); }
+    `);
+    const style = resolveUiStyle(rules, { classes: ['card'], states: [] });
+    expectColor(style.backgroundColor, [1, 0, 0, 1]);
+    expect(style.padding).toEqual({ left: 10, right: 10, top: 10, bottom: 10 });
+    expect(style.width).toBe(64); // fallback used (no --w)
+  });
+
+  it('a UiTheme resource overrides sheet --vars at runtime', () => {
+    const themed = new UiStyleSheet(
+      parseRss(':root { --accent: #ff0000; } .card { background-color: var(--accent); }'),
+    );
+    const world = new World();
+    const e = world.spawn(new UiNode(), new UiClass({ classes: ['card'] }));
+
+    resolveUiStyles(world, world.query([UiNode, UiClass]), themed);
+    expectColor(world.getComponent(e, UiNode)!.style.backgroundColor, [1, 0, 0, 1]);
+
+    // Override the accent via the theme resource → re-resolves to the new value.
+    resolveUiStyles(world, world.query([UiNode, UiClass]), themed, new UiTheme({ '--accent': '#0000ff' }));
+    expectColor(world.getComponent(e, UiNode)!.style.backgroundColor, [0, 0, 1, 1]);
   });
 });
