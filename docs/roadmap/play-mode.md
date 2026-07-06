@@ -6,21 +6,24 @@ left is making play mode *do* something: run gameplay only while playing, and
 return the scene to its pre-play state on stop. Deferred because there's no user
 gameplay code loaded in the studio yet, and snapshot/restore is its own slice.
 
+Snapshot/restore core + gating policy shipped 2026-07-06 (ADR-0152). See below.
+
 ## Work items (promote to `backlog/` when picked up)
 
-- **System gating by `SimState`.** Decide and implement the policy for which
-  systems run in each state. Options: explicit `runIf: inState(SimState.Play)` on
-  gameplay systems; an implicit rule keyed on `origin: 'user'` (engine/editor always
-  run, user systems only in Play/Paused); or a per-system opt-in flag. `Paused`
-  should freeze gameplay while keeping editor + render systems live. Needs a
-  decision ADR.
+- **System gating by `SimState`.** ✅ Policy decided (ADR-0152): user project
+  systems run only `inState(SimState.Play)`; engine + editor systems always run;
+  `Paused` = "not Play" so gameplay freezes while editor + render stay live.
 
-- **World snapshot on Play.** Serialize the editable world (or clone it) when
-  entering Play, so edits made while playing are transient.
+- **World snapshot on Play.** ✅ `captureSnapshot`/`capturePlaySnapshot`
+  (`@retro-engine/editor-sdk`) serialize the authored entities (excluding editor
+  infra via a `keep` filter) when leaving Edit.
 
-- **Restore on Stop.** Re-apply the snapshot when returning to Edit, discarding
-  play-time mutations. Interacts with the reflection/serialization path
-  (ADR-0060/0061) and edit history (ADR-0082).
+- **Restore on Stop.** ✅ `restoreSnapshot`/`restorePlaySnapshot` despawn authored
+  entities + respawn the snapshot on entering Edit; `installPlayModeSnapshot`
+  wires both to the `SimState` transitions and forwards the id-remap map.
+  Entity-only revert in v1 (resources persist). Renderer-free, unit-tested.
+  **Remaining:** wire into the studio toolbar + remap selection via the id map +
+  inspector-during-play — MCP-verified.
 
 - **Step.** Wire the toolbar Step button to advance exactly one (fixed?) frame
   while Paused.

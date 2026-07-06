@@ -183,6 +183,15 @@ export {
 export { uiOverlayPlugin, UiOverlayPlugin } from './plugin';
 export type { UiLayoutOptions, UiOverlayOptions } from './plugin';
 export { currentSimState, initSimState, requestSimState, SimState } from './sim-state';
+export type { EntityFilter, PlayModeSnapshotOptions } from './play-snapshot';
+export {
+  capturePlaySnapshot,
+  captureSnapshot,
+  installPlayModeSnapshot,
+  PlaySnapshotStore,
+  restorePlaySnapshot,
+  restoreSnapshot,
+} from './play-snapshot';
 export { resolveTheme } from './theme';
 export { defaultTokens, FontScale } from './tokens';
 export type { RetroPalette, ThemeMetrics, ThemeTokens } from './tokens';

@@ -118,7 +118,12 @@ foundation.**
 
 ## Editor / Studio
 
-- [ ] **Play mode (snapshot / restore / step)** — 🟡 `SimState` exists; no snapshot, Step is dead.
+- [ ] **Play mode (snapshot / restore / step)** — 🟡 `SimState` + **snapshot/restore core shipped**
+      (`@retro-engine/editor-sdk`, ADR-0152): `captureSnapshot`/`restoreSnapshot` (World-level, renderer-free,
+      excludes editor infra via a `keep` filter, returns the id-remap map) + `installPlayModeSnapshot`
+      (capture on `onExit(Edit)`, restore on `onEnter(Edit)`). Gating policy formalized (user systems run
+      only `inState(Play)`). 4 tests. Remaining: studio toolbar wiring + selection remap + inspector +
+      **Step** (advance one frame while Paused) — MCP-verified.
       _AC:_ snapshot the authored scene on Play (serialize world), restore it exactly on Stop (no leaked
       play-time edits); **Step** advances exactly one frame while paused (wire the dead Run-menu/toolbar
       buttons); systems gate correctly by `SimState`; inspector shows live values during play.

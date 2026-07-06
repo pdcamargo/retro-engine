@@ -491,3 +491,28 @@ index.html → pack assets into assets.rpak → return the file list).
 - Roadmap: `docs/roadmap/web-build-target.md`. Decision: ADR-0151. MASTER-ROADMAP 🟡.
 
 ---
+
+## 🟡 Play mode — snapshot/restore core shipped (editor-sdk)
+
+Play mode's revert mechanism now exists in `@retro-engine/editor-sdk` (ADR-0152).
+`captureSnapshot(world, registry, keep)` serializes the authored entities (excluding
+editor-infra via the `keep` filter); `restoreSnapshot(...)` despawns current authored
+entities and respawns the snapshot, returning the snapshot-id → new-Entity map. App
+conveniences (`capturePlaySnapshot`/`restorePlaySnapshot` via serializeWorld/spawnScene)
+and `installPlayModeSnapshot(app, { keep, onRestore })` wire capture to `onExit(SimState.Edit)`
+and restore to `onEnter(SimState.Edit)`. Gating policy formalized: user systems run only
+`inState(Play)`. Entity-only revert in v1 (resources persist).
+
+- **HOW to test:** `bun test packages/editor-sdk/src/play-snapshot.test.ts` — 4 tests
+  (World-level, no renderer): capture excludes editor-tagged entities; restore reverts
+  play-time edits/spawns/despawns exactly; editor-infra entities survive untouched;
+  idempotent across repeated capture/restore cycles.
+- **Not yet wired into the studio.** Remaining (needs the studio + MCP to verify): call
+  `installPlayModeSnapshot(app, { keep: e => !world.has(e, EditorOnly), onRestore: remapSelection })`
+  in the studio boot; remap `state.selectedEntity` through the returned id map; make the
+  inspector reflect the restored state; and wire the toolbar **Step** button (advance one
+  frame while Paused). Backlog `docs/backlog/studio-playmode-snapshot-restore.md` kept until
+  the studio integration is confirmed via MCP.
+- Roadmap: `docs/roadmap/play-mode.md`. Decision: ADR-0152. MASTER-ROADMAP 🟡.
+
+---
