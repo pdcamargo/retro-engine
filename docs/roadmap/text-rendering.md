@@ -22,13 +22,25 @@ an MSDF shader. Required by the in-game UI system.
 
 ### Phase 2 — Rendering
 
-- `Font` asset kind + importer (JSON + sibling atlas `.png` → `Image`); `.meta`.
-- `Text2d` component (text, font handle, size, color, align, maxWidth),
-  reflection-registered.
+**Phase 2a — Font asset + component (data/asset side) ✅ (2026-07-06)**
+
+- `Font` asset (parsed `MsdfFont` + atlas `Handle<Image>`) + `Fonts` store.
+- `createFontImporter` — parses a `.font` descriptor (msdf-atlas-gen JSON),
+  decodes the companion atlas into a **linear** image sub-asset (sibling
+  `<base>.png` by default, or a top-level `"image"` override).
+- `Text2d` component (text, font, size, tint, align, lineHeight, maxWidth,
+  letterSpacing, pivot), reflection-registered (round-trips through a scene).
+- `TextPlugin` (Fonts store + `.font` asset kind + loader + Text2d schema).
+  Not yet in the default plugin set — wired when the render path lands.
+- Unit-tested: importer (fake decoder/ctx), Text2d defaults + scene round-trip.
+
+**Phase 2b — Glyph render pipeline (next)**
+
 - MSDF WGSL shader (median-of-RGB, screen-px-range AA) + glyph-quad batching
-  through the 2D pipeline; `TextPlugin`.
+  through the 2D pipeline; text-prepare/queue systems; add `TextPlugin` to the
+  default set.
 - Playground `?mode=text` draws multi-line styled text; a default font atlas is
-  committed for samples/tests.
+  committed for samples/tests. Verify visually via the studio MCP.
 
 ### Phase 3 — Depth
 

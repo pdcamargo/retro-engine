@@ -659,12 +659,24 @@ export type {
   GlyphRect,
   MsdfFontJson,
   PositionedGlyph,
+  Text2dOptions,
   TextAlign,
   TextLayout,
   TextLayoutOptions,
   TextMeasure,
 } from './text';
-export { kerningKey, layoutText, measureText, MsdfFont, parseMsdfFont } from './text';
+export {
+  createFontImporter,
+  Font,
+  Fonts,
+  kerningKey,
+  layoutText,
+  measureText,
+  MsdfFont,
+  parseMsdfFont,
+  Text2d,
+  TextPlugin,
+} from './text';
 export type {
   AmbientLight2dOptions,
   DirectionalLight2dOptions,

@@ -18,6 +18,8 @@ export const ASSET_TYPE = {
   image: 'Image',
   /** `TextureAtlasLayouts` store, used by `TextureAtlas.layout`. */
   textureAtlasLayout: 'TextureAtlasLayout',
+  /** `Fonts` store, used by `Text2d.font`. */
+  font: 'Font',
 } as const;
 
 /**

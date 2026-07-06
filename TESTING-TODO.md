@@ -326,3 +326,26 @@ component yet**, so verified by unit tests only (no MCP/editor path exists at th
   marked 🟡 (box stays unchecked until Phase 2 renders text).
 
 ---
+
+## 🟡 Engine text (MSDF) — Phase 2a shipped (Font asset + Text2d component)
+
+The asset + component layer of MSDF text landed under `packages/engine/src/text/`:
+`Font` (parsed `MsdfFont` + atlas `Handle<Image>`), `Fonts` store, `createFontImporter`
+(parses a `.font` msdf-atlas-gen descriptor, decodes its companion atlas into a **linear**
+image sub-asset — sibling `<base>.png` by default, or a top-level `"image"` override),
+the `Text2d` component (text/font/size/color/align/lineHeight/maxWidth/letterSpacing/anchor,
+reflection-registered), and `TextPlugin`. **Still no rendering** — no MSDF shader/batching
+yet, and `TextPlugin` is deliberately not in the default plugin set. Verified by unit tests
+only (no MCP path until Phase 2b draws pixels).
+
+- **HOW to test:** `bun test packages/engine/src/text/` — 29 tests: importer (fake
+  decoder + fake load-context; linear atlas, sibling derivation, `"image"` override,
+  missing-sibling + malformed rejection), Text2d defaults, and a full scene
+  serialize→deserialize round-trip of every Text2d field incl. the font handle GUID.
+- **Not yet visible in the studio.** Phase 2b (MSDF WGSL shader, glyph-quad batching
+  through the 2D pipeline, `?mode=text` sample, wiring TextPlugin into DefaultPlugins) is
+  the next slice — that's when there's an on-screen thing to screenshot.
+- Roadmap: `docs/roadmap/text-rendering.md` (Phase 2 split into 2a done / 2b next).
+  Decision: ADR-0149. MASTER-ROADMAP item stays 🟡 until Phase 2b renders text.
+
+---

@@ -97,11 +97,12 @@ foundation.**
 
 ## Renderer
 
-- [ ] **Engine text rendering (MSDF)** — 🟡 Phase 1 shipped: pure font data + layout engine
-      (`MsdfFont`/`parseMsdfFont`, `layoutText`/`measureText` — advances, kerning, `\n`, greedy wrap,
-      alignment, top-left UVs) under `packages/engine/src/text/`, fully unit-tested. Remaining:
-      Phase 2 rendering (`Font` asset kind + `.meta`, `Text2d` component, MSDF shader, glyph-quad
-      batching through the 2D pipeline, sample) + Phase 3 world-space `Text` / UI measure wiring.
+- [ ] **Engine text rendering (MSDF)** — 🟡 Phase 1 (layout engine) + Phase 2a (Font asset + Text2d
+      component) shipped under `packages/engine/src/text/`, fully unit-tested: `MsdfFont`/`parseMsdfFont`,
+      `layoutText`/`measureText`, `Font` asset + `.font` loader (linear atlas sub-asset), `Text2d`
+      (reflection round-trips), `TextPlugin`. Remaining: Phase 2b render pipeline (MSDF shader +
+      glyph-quad batching through the 2D pipeline, add TextPlugin to default set, sample) + Phase 3
+      world-space `Text` / UI measure wiring.
       _AC:_ MSDF glyph atlas (generated via msdfgen, loaded as an asset) + runtime glyph-quad batching
       through the 2D pipeline; `Text`/`Text2d` components; font asset kind + `.meta`; layout
       (line-break/wrap/alignment); glyph metrics exposed to the UI layout measure callback; crisp at any
