@@ -88,8 +88,11 @@ foundation.**
       **flexbox `LayoutEngine`** (`FlexLayoutEngine` — §9.7 grow/shrink with min/max freezing, justify/align,
       gap, padding/margin, absolute insets) behind a swappable interface + text-measure callback, plus
       `UiNode` (reflection-registered) / `ComputedLayout` (derived) + a `UiPlugin` `postUpdate` layout system
-      that mirrors `Parent`/`Children` → runs the engine → writes absolute geometry. 29 tests + bench,
-      headless. Remaining: 2D rendering (2), `.rss` styling (3), widgets (4). (ADR-0150.)
+      that mirrors `Parent`/`Children` → runs the engine → writes absolute geometry; plus the **`.rss`
+      (USS-subset) parser + style resolution** (`parseRss`/`resolveUiStyle` — compound selectors, specificity
+      cascade, declaration→`UiStyle` mapping, verified end-to-end against the layout engine). Headless.
+      Remaining: 2D rendering (2), `.rss` combinators/`--vars`/inheritance + layout-pass wiring (3b),
+      widgets (4). (ADR-0150.)
       _AC:_ `UiNode` + derived `ComputedLayout` (not serialized) reusing `Parent`/`Children`; a pure-TS
       **flexbox** `LayoutEngine` behind an interface, with a text-measure callback; a `.rss` (USS-subset)
       parser + style-resolution system matching type / `.class` / `#name` / **state-marker** selectors

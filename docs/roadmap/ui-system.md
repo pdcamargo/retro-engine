@@ -42,11 +42,17 @@ and a HUD (text + bars) from ECS components + `.rss`, with gamepad navigation.
 - UI draws through the 2D pipeline: background quads + borders (a UI material)
   and text via the ADR-0149 glyph path; a UI camera / screen-space pass; z-order.
 
-### Phase 3 — Retro CSS (`.rss`)
+### Phase 3 — Retro CSS (`.rss`) 🟡 (parser + cascade shipped 2026-07-06)
 
-- USS-subset parser + style-resolution system: type / `.class` / `#name` /
-  state-marker selectors, cascade + inheritance, `--vars` via a theme resource,
-  pseudo-class markers (`Hovered`/`Focused`/`Pressed`/`Disabled`/`Checked`).
+- ✅ `parseRss` (comments, comma lists, compound type/`#name`/`.class`/`:state`/`*`
+  selectors) + `matches`/`specificity` + `resolveDeclarations` (specificity →
+  source-order cascade) + `resolveUiStyle` (declaration → `UiStyle` mapping:
+  flex/box-model/alignment, `px`/`auto`, `padding`/`margin` shorthands, inline
+  overrides). Pure, verified end-to-end against the layout engine.
+- Remaining: descendant/child **combinators**, `--var`/`var()` custom properties
+  (theme resource) + **inheritance**, and wiring resolution into the `UiPlugin`
+  layout pass (a `Stylesheet` resource + `.rss` asset kind) with state-marker
+  components (`Hovered`/`Focused`/`Pressed`/`Disabled`/`Checked`).
 
 ### Phase 4 — Widgets + interaction
 

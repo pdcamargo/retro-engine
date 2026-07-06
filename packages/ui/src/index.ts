@@ -22,3 +22,7 @@ export type {
 export { FlexLayoutEngine } from './flex-layout';
 export { ComputedLayout, UiNode } from './ui-node';
 export { runUiLayout, UiLayout, UiPlugin, UiViewport } from './ui-plugin';
+export type { RssDeclaration, RssRule, RssSelector } from './rss-parser';
+export { parseRss, parseSelector } from './rss-parser';
+export type { StyleNode } from './rss-resolve';
+export { matches, resolveDeclarations, resolveUiStyle, specificity } from './rss-resolve';

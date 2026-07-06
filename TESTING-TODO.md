@@ -516,3 +516,22 @@ and restore to `onEnter(SimState.Edit)`. Gating policy formalized: user systems 
 - Roadmap: `docs/roadmap/play-mode.md`. Decision: ADR-0152. MASTER-ROADMAP 🟡.
 
 ---
+
+## 🟡 In-game UI — Phase 3 (.rss parser + style resolution) shipped
+
+`@retro-engine/ui` can now author styling as a `.rss` (USS/CSS-subset) stylesheet resolved to
+`UiStyle`. `parseRss` (comments, comma lists, compound type/`#name`/`.class`/`:state`/`*`
+selectors) + `matches`/`specificity` + `resolveDeclarations` (specificity → source-order
+cascade) + `resolveUiStyle` (declaration→UiStyle: flex/box-model/alignment, px/auto lengths,
+padding/margin shorthands, inline overrides win). Pure + headless.
+
+- **HOW to test:** `bun test packages/ui/` — 41 tests. Phase 3: selector parsing, specificity
+  ordering, cascade (higher specificity wins; ties → later rule), declaration mapping + edge
+  shorthands, inline overrides, and an end-to-end parse→resolve→layout assertion.
+- **Not yet wired into the runtime.** Remaining (3b): descendant/child combinators, `--var`/
+  `var()` custom properties + inheritance, and wiring resolution into the `UiPlugin` layout
+  pass (a `.rss` asset kind + `Stylesheet` resource + state-marker components). Rendering (2)
+  + widgets (4) still pending; both need the studio/GPU to see on screen.
+- Roadmap: `docs/roadmap/ui-system.md` (Phase 3 🟡). ADR-0150. MASTER-ROADMAP 🟡.
+
+---
