@@ -838,3 +838,33 @@ Stepping advances gameplay **exactly one frame while `Paused`, without leaving t
   MASTER-ROADMAP Play-mode AC (Step ✅; inspector-during-play + selection-survival still ❌).
 
 ---
+
+## ✅ In-game UI — `.rss` runtime style wiring ("Retro CSS") (VERIFIED via browser export)
+
+The `.rss` parser + cascade existed but weren't applied to the running UI. Now a parsed
+stylesheet styles live nodes each frame, including pseudo-class states.
+
+- **New in `@retro-engine/ui`:** `resolveUiStyle` now maps paint props
+  (`background-color`/`border-color`/`border-width` + `border` shorthand) via a CSS
+  `parseColor` (hex 3/4/6/8-digit, `rgb()`/`rgba()`, named → `[0,1]` `Vec4`). A `UiStyleSheet`
+  resource holds active rules (`setUiStyleSheet(app, rss)`); a `UiClass` component
+  (reflection-registered: `classes`/`name`/`type`) is a node's selector identity; a `postUpdate`
+  `'ui-style'` system (before `'ui-layout'`) resolves each `UiClass` node's style from the sheet
+  every frame, deriving states — `hovered`/`pressed` from `UiInteraction`, `disabled` from the
+  `Disabled` marker. Nodes without a `UiClass` are untouched (keep authored style).
+- **Verified end-to-end in a real browser** (`apps/sample-game` web export → Playwright): added a
+  top-left chip strip styled ONLY by `.rss` (no inline UiStyle) + a probe reporting each chip's
+  resolved fill. Read back: `.chip` → `rgb(40,120,210)`, `.chip.alt` (compound selector) →
+  `rgb(240,150,40)` (beat the base rule), chips sized/bordered from the sheet. Then dispatched a
+  `mousemove` over the interactive `.chip.hot` chip → its resolved fill flipped to `rgb(240,60,60)`
+  (the `.chip:hovered` rule) within a frame — proving live state-driven re-resolution.
+- **Automated:** `packages/ui/src/rss-style.test.ts` (9 tests: color parsing, paint mapping,
+  ECS resolution, `:hovered`/`:disabled` states, `#name`/type selectors, unmatched → default) +
+  `packages/ui/bench/rss-style.bench.ts`. Full repo gate green (1935 tests). Changeset added.
+- **HOW to test:** `cd apps/sample-game && bun run build:web`, serve `dist/web`, open in a browser
+  → three chips top-left (blue, orange, blue); hover the third → it turns red.
+- Docs: `roadmap/ui-system.md` Phase 3b ✅, MASTER-ROADMAP In-game UI item prose. (UI item stays
+  unchecked — corner-radius/z-index/clipping, more widgets (4c), combinators/`--vars`/inheritance,
+  and a `.rss` asset kind remain.)
+
+---

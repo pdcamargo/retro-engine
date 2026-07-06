@@ -1,3 +1,5 @@
+import { type Vec4, vec4 } from '@retro-engine/math';
+
 import type { RssRule, RssSelector } from './rss-parser';
 import {
   type AlignItems,
@@ -82,6 +84,71 @@ const edges = (value: string): Partial<Edges> => {
   return { top, right, bottom, left };
 };
 
+const clamp01 = (n: number): number => (n < 0 ? 0 : n > 1 ? 1 : n);
+
+/** CSS-accurate values for the small set of named colors `.rss` accepts. */
+const NAMED_COLORS: Record<string, readonly [number, number, number, number]> = {
+  transparent: [0, 0, 0, 0],
+  black: [0, 0, 0, 1],
+  white: [1, 1, 1, 1],
+  gray: [128 / 255, 128 / 255, 128 / 255, 1],
+  grey: [128 / 255, 128 / 255, 128 / 255, 1],
+  red: [1, 0, 0, 1],
+  green: [0, 128 / 255, 0, 1],
+  lime: [0, 1, 0, 1],
+  blue: [0, 0, 1, 1],
+  yellow: [1, 1, 0, 1],
+  cyan: [0, 1, 1, 1],
+  magenta: [1, 0, 1, 1],
+};
+
+const parseHexColor = (hex: string): Vec4 | undefined => {
+  let h = hex.slice(1).trim();
+  if (h.length === 3 || h.length === 4) h = [...h].map((c) => c + c).join('');
+  if (h.length !== 6 && h.length !== 8) return undefined;
+  const byte = (i: number): number => Number.parseInt(h.slice(i, i + 2), 16) / 255;
+  const r = byte(0);
+  const g = byte(2);
+  const b = byte(4);
+  const a = h.length === 8 ? byte(6) : 1;
+  if ([r, g, b, a].some((n) => !Number.isFinite(n))) return undefined;
+  return vec4.create(r, g, b, a);
+};
+
+const parseFuncColor = (value: string): Vec4 | undefined => {
+  const inner = /^rgba?\(([^)]+)\)$/i.exec(value)?.[1];
+  if (inner === undefined) return undefined;
+  const parts = inner.split(/[,/\s]+/).filter((p) => p.length > 0);
+  if (parts.length < 3) return undefined;
+  // Channels are 0–255 (or %); alpha is 0–1 (or %).
+  const chan = (s: string): number =>
+    s.endsWith('%') ? clamp01(Number.parseFloat(s) / 100) : clamp01(Number.parseFloat(s) / 255);
+  const alpha = (s: string): number =>
+    s.endsWith('%') ? clamp01(Number.parseFloat(s) / 100) : clamp01(Number.parseFloat(s));
+  const r = chan(parts[0]!);
+  const g = chan(parts[1]!);
+  const b = chan(parts[2]!);
+  const a = parts[3] !== undefined ? alpha(parts[3]) : 1;
+  if ([r, g, b, a].some((n) => !Number.isFinite(n))) return undefined;
+  return vec4.create(r, g, b, a);
+};
+
+/**
+ * Parse a CSS color — `#rgb`/`#rgba`/`#rrggbb`/`#rrggbbaa`, `rgb()`/`rgba()`, or a
+ * named color — into an RGBA {@link Vec4} with channels in `[0, 1]`. Returns
+ * `undefined` for an unrecognized value. Channels are stored as authored (the
+ * same convention as a hand-set `UiStyle.backgroundColor`); no gamma conversion
+ * is applied.
+ */
+export const parseColor = (raw: string): Vec4 | undefined => {
+  const value = raw.trim().toLowerCase();
+  const named = NAMED_COLORS[value];
+  if (named !== undefined) return vec4.create(named[0], named[1], named[2], named[3]);
+  if (value.startsWith('#')) return parseHexColor(value);
+  if (value.startsWith('rgb')) return parseFuncColor(value);
+  return undefined;
+};
+
 /** Mutable accumulator for per-side edge declarations (`Edges` is readonly). */
 type MutableEdges = { left?: number; right?: number; top?: number; bottom?: number };
 
@@ -132,6 +199,18 @@ const mapDeclarations = (props: Record<string, string>): UiStyleInit => {
       case 'margin-right': margin.right = len(value); hasMargin = true; break;
       case 'margin-top': margin.top = len(value); hasMargin = true; break;
       case 'margin-bottom': margin.bottom = len(value); hasMargin = true; break;
+      case 'background-color': { const c = parseColor(value); if (c !== undefined) init.backgroundColor = c; break; }
+      case 'border-color': { const c = parseColor(value); if (c !== undefined) init.borderColor = c; break; }
+      case 'border-width': init.borderWidth = edges(value); break;
+      case 'border': {
+        // `<width> <style> <color>` in any order; the style keyword (e.g. `solid`) is ignored.
+        for (const token of value.split(/\s+/)) {
+          const c = parseColor(token);
+          if (c !== undefined) { init.borderColor = c; continue; }
+          if (/^[\d.]/.test(token)) init.borderWidth = len(token);
+        }
+        break;
+      }
       default: break; // unknown property — ignored (forward-compatible)
     }
   }

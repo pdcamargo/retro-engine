@@ -28,7 +28,14 @@ export { runUiLayout, UiLayout, uiNodeSchema, UiPlugin, uiTextSchema, UiViewport
 export type { RssDeclaration, RssRule, RssSelector } from './rss-parser';
 export { parseRss, parseSelector } from './rss-parser';
 export type { StyleNode } from './rss-resolve';
-export { matches, resolveDeclarations, resolveUiStyle, specificity } from './rss-resolve';
+export { matches, parseColor, resolveDeclarations, resolveUiStyle, specificity } from './rss-resolve';
+export {
+  resolveUiStyles,
+  setUiStyleSheet,
+  UiClass,
+  uiClassSchema,
+  UiStyleSheet,
+} from './rss-style';
 export { UiRenderPlugin } from './render/ui-render-plugin';
 export { UiPipeline } from './render/ui-pipeline';
 export { makeUiPassNode, UiPassLabel } from './render/ui-pass-node';

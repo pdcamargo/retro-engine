@@ -13,6 +13,7 @@ import './flex-layout.bench';
 import './ui-quad-pack.bench';
 import './ui-text-pack.bench';
 import './ui-picking.bench';
+import './rss-style.bench';
 
 interface NormalizedBench {
   readonly key: string;

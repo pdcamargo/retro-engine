@@ -102,9 +102,14 @@ foundation.**
       `UiButton` widget** (built-in hover/press/disabled tinting) + `Disabled` marker + `setUiBackground`,
       verified via a working 3-button main menu (one disabled) in the sample-game export. Plus **Phase 2c:
       node borders** (`UiStyle.borderWidth`/`borderColor` → inset edge quads, verified via outlined panel +
-      buttons). Remaining: UI **corner radius** + z-index/clipping + per-line text alignment; `.rss`
-      combinators/`--vars`/inheritance + layout-pass wiring (3b); **more widgets** (label/toggle/slider/
-      text-input) + focus/spatial nav (4c). (ADR-0150/0154.)
+      buttons). Plus **Phase 3b: `.rss` runtime wiring** — a `UiStyleSheet` resource (`setUiStyleSheet`) +
+      `UiClass` component (selector identity) + a `postUpdate` `'ui-style'` system that resolves every
+      `UiClass` node's `UiStyle` from the sheet each frame (paint props now mapped via a CSS `parseColor`),
+      deriving `:hovered`/`:pressed`/`:disabled` states live; verified in a browser (sample-game export:
+      `.chip` blue, `.chip.alt` compound → orange, `.chip:hovered` → red on live hover). Remaining: UI
+      **corner radius** + z-index/clipping + per-line text alignment; `.rss` combinators/`--vars`/inheritance
+      + inline overrides + a `.rss` asset kind; **more widgets** (label/toggle/slider/text-input) +
+      focus/spatial nav (4c). (ADR-0150/0154.)
       _AC:_ `UiNode` + derived `ComputedLayout` (not serialized) reusing `Parent`/`Children`; a pure-TS
       **flexbox** `LayoutEngine` behind an interface, with a text-measure callback; a `.rss` (USS-subset)
       parser + style-resolution system matching type / `.class` / `#name` / **state-marker** selectors

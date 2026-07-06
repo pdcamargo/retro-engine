@@ -77,10 +77,23 @@ and a HUD (text + bars) from ECS components + `.rss`, with gamepad navigation.
   source-order cascade) + `resolveUiStyle` (declaration → `UiStyle` mapping:
   flex/box-model/alignment, `px`/`auto`, `padding`/`margin` shorthands, inline
   overrides). Pure, verified end-to-end against the layout engine.
+- ✅ **Phase 3b — runtime wiring (2026-07-06).** `resolveUiStyle` now also maps the
+  **paint** properties (`background-color`/`border-color`/`border-width` + the
+  `border` shorthand) via a CSS color parser (`parseColor`: `#rgb`/`#rgba`/`#rrggbb`/
+  `#rrggbbaa`, `rgb()`/`rgba()`, named colors → `[0,1]` `Vec4`). A `UiStyleSheet`
+  resource holds the active parsed rules (`setUiStyleSheet(app, rss)`); a `UiClass`
+  component (reflection-registered: `classes`/`name`/`type`) gives a node its
+  selector identity; and a `postUpdate` `'ui-style'` system (before `'ui-layout'`)
+  resolves every `UiClass` node's `UiStyle` from the sheet each frame — deriving
+  pseudo-class **states** (`hovered`/`pressed` from `UiInteraction`, `disabled` from
+  the `Disabled` marker) so hover/press/disable reflow live. Verified in a real
+  browser (sample-game export): `.chip` → blue, `.chip.alt` compound override →
+  orange, and a `.chip:hovered` rule flips a chip to red on live pointer hover.
+  Bench: `rss-style`.
 - Remaining: descendant/child **combinators**, `--var`/`var()` custom properties
-  (theme resource) + **inheritance**, and wiring resolution into the `UiPlugin`
-  layout pass (a `Stylesheet` resource + `.rss` asset kind) with state-marker
-  components (`Hovered`/`Focused`/`Pressed`/`Disabled`/`Checked`).
+  (theme resource) + **inheritance**, per-node **inline overrides** merged over the
+  sheet, and a `.rss` **asset kind** (load the sheet from a project file, not just a
+  source string). `focused`/`checked` states await focus/checkbox widgets.
 
 ### Phase 4 — Widgets + interaction
 

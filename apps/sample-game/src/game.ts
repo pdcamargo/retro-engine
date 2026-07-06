@@ -21,7 +21,10 @@ import { defineProject } from '@retro-engine/project';
 import {
   ComputedLayout,
   Disabled,
+  Interactable,
+  setUiStyleSheet,
   UiButton,
+  UiClass,
   UiClicked,
   UiNode,
   UiPlugin,
@@ -45,6 +48,19 @@ class MenuLast {}
 
 /** Marker: the label reflecting a packed asset loaded from the exported `.rpak`. */
 class CreditsLabel {}
+
+/**
+ * A `.rss` (USS-subset) stylesheet driving the top-left chip strip at runtime:
+ * a `#name` root, a base `.chip` rule, a `.chip.alt` compound override, and a
+ * `.chip:hovered` pseudo-class rule — the end-to-end proof that the parsed
+ * stylesheet cascades onto live `UiClass` nodes (and reacts to hover state).
+ */
+const SAMPLE_RSS = `
+  #rss-panel { flex-direction: row; justify-content: flex-start; align-items: flex-start; padding: 16; gap: 12; flex-grow: 1; }
+  .chip { width: 96; height: 64; border: 3 solid rgb(200, 220, 255); background-color: rgb(40, 120, 210); }
+  .chip.alt { background-color: rgb(240, 150, 40); }
+  .chip:hovered { background-color: rgb(240, 60, 60); }
+`;
 
 /** Merge a patch into the `window.__game` probe (shared across demo systems). */
 const setGameProbe = (patch: Record<string, unknown>): void => {
@@ -71,6 +87,11 @@ class HelloTextPlugin implements PluginObject {
     app.addPlugin(new InputPlugin());
     app.addPlugin(new UiInteractionPlugin());
     const font = installDefaultFont(app);
+
+    // Make the sample `.rss` the active stylesheet — chips below carry only
+    // `UiClass` selectors and get their whole style (size, border, fill, hover)
+    // from this sheet at runtime.
+    setUiStyleSheet(app, SAMPLE_RSS);
 
     // Load a packed asset from the exported `.rpak` (present only when run from a
     // web export, where bootWebGame wires the RpakAssetSource + manifest). A tiny
@@ -234,6 +255,50 @@ class HelloTextPlugin implements PluginObject {
           });
       },
       { label: 'menu-setup' },
+    );
+
+    // A top-left strip of chips styled entirely by `.rss` (no inline UiStyle):
+    // one plain, one `.alt` (compound-selector override), one interactive whose
+    // fill flips to the `:hovered` rule when the pointer is over it.
+    app.addSystem(
+      'startup',
+      [Commands],
+      (cmd) => {
+        cmd
+          .spawn(new UiNode(), new UiClass({ name: 'rss-panel' }))
+          .withChildren((root) => {
+            root.spawn(new UiNode(), new UiClass({ classes: ['chip'] }));
+            root.spawn(new UiNode(), new UiClass({ classes: ['chip', 'alt'] }));
+            root.spawn(new UiNode(), new UiClass({ classes: ['chip', 'hot'] }), new Interactable());
+          });
+      },
+      { label: 'rss-chips-setup' },
+    );
+
+    // Report each `.rss` chip's resolved fill + screen center to a probe, so a
+    // browser test can confirm the stylesheet drives paint and reacts to hover.
+    app.addSystem(
+      'update',
+      [Query([UiNode, UiClass, ComputedLayout])],
+      (chips) => {
+        if (typeof window === 'undefined') return;
+        const out: { classes: string[]; bg: number[] | null; cx: number; cy: number }[] = [];
+        for (const row of chips.entries()) {
+          const cls = row[2] as UiClass;
+          if (!cls.classes.includes('chip')) continue;
+          const style = (row[1] as UiNode).style;
+          const layout = row[3] as ComputedLayout;
+          const bg = style.backgroundColor;
+          out.push({
+            classes: cls.classes,
+            bg: bg !== undefined ? [bg[0]!, bg[1]!, bg[2]!, bg[3]!] : null,
+            cx: Math.round(layout.x + layout.width / 2),
+            cy: Math.round(layout.y + layout.height / 2),
+          });
+        }
+        (window as unknown as { __rss: unknown }).__rss = { chips: out };
+      },
+      { label: 'rss-report' },
     );
 
     app.addSystem(
