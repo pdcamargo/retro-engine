@@ -980,3 +980,28 @@ tested mathematical core this iteration; the render path lands next.
 - MASTER-ROADMAP Text item: unchanged box (still 🟡 — 3b + browser verify remain before check-off).
 
 ---
+
+## 🟡 Text — world-space 3D `Text` render path shipped (integration + unit verified; browser pixel pending)
+
+Phase 3b of world-space `Text` (ADR-0155): the `Text` component now actually renders in the 3D world.
+
+- **New in `@retro-engine/engine`:** `Text` component (reflection-registered, same fields as `Text2d`) +
+  `text-3d.wgsl` (3D `view_proj`, shared MSDF fragment) + a depth-specialized `Text3dPipeline`
+  (`depthWriteEnabled:false`, `depthCompare:'less-equal'`, keyed on camera depth format) +
+  `Text3dInstanceBuffer` + `Text3dPreparedBatches` + `prepareText3d`/`queueText3d` (one `PhaseItem3d` per
+  entity into `ViewPhases3d.transparent`, drawn depth-tested by Core3d's `TransparentPass3d`). Wired into
+  `TextPlugin`.
+- **Verified:** `text3d-plugin.test.ts` (capturing-renderer integration, 3 tests) — a `Text` under a
+  `Camera3d` emits exactly one instanced draw into the `.transparent3d` pass (`'AB'` → instanceCount 2),
+  atlas bound at `@group(1)`, no-font skipped. Plus the 3a packer unit tests + the depth convention matches
+  the proven gizmo/grid/material overlays. Full repo gate green (1949 tests). Bench `text-prepare-3d`.
+  Changeset added.
+- **NOT yet browser-pixel-verified.** The render path is integration+unit-tested (draws issued into the
+  depth-tested transparent phase) — the same bar the 2D text render path is tested at — but I haven't put a
+  3D `Text` on screen in a browser export yet (the sample is 2D; adding a Camera3d + a mesh for an occlusion
+  screenshot is the optional Phase-3c follow-up). **HOW to eventually pixel-test:** add a `Camera3d` + a
+  `Mesh3d` + a `Text` behind it to a 3D sample → the label is occluded by the mesh, crisp where visible.
+- MASTER-ROADMAP Text item: left 🟡 / box UNCHECKED — both `Text`/`Text2d` now render (integration-verified);
+  pending a browser pixel confirmation + your say-so (CLAUDE.md §3) before check-off.
+
+---

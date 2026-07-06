@@ -9,20 +9,27 @@ import { RenderImages } from '../image/image-plugin';
 import type { App } from '../index';
 import type { PluginObject } from '../plugin';
 import { ViewPhases2d } from '../render-graph/phase-2d';
+import { ViewPhases3d } from '../render-graph/phase-3d';
 import { RenderSet } from '../render-set';
 import { ShaderRegistry } from '../shader/shader-registry';
 import { Extract, Query, Res, ResMut } from '../system-param';
 import { GlobalTransform } from '../transform';
 import { ViewVisibility } from '../visibility/visibility';
 
+import { TEXT3D_WGSL } from './text-3d.wgsl';
 import type { Font } from './font-asset';
 import { createFontImporter } from './font-importer';
 import { Fonts } from './fonts';
 import { TextPreparedBatches } from './text-batch';
+import { Text3dPreparedBatches } from './text-batch-3d';
 import { TextInstanceBuffer } from './text-instance-buffer';
+import { Text3dInstanceBuffer } from './text-instance-buffer-3d';
 import { TextPipeline } from './text-pipeline';
+import { Text3dPipeline } from './text-pipeline-3d';
 import { prepareText, queueText, type TextQuery } from './text-render';
+import { prepareText3d, queueText3d, type Text3dQuery } from './text-render-3d';
 import { TEXT_WGSL } from './text.wgsl';
+import { Text } from './text3d';
 import { Text2d } from './text2d';
 
 /**
@@ -97,6 +104,24 @@ export class TextPlugin implements PluginObject {
       { name: 'Text2d', make: () => new Text2d() },
     );
 
+    // World-space (3D) text — same authored fields as Text2d; the difference is
+    // the render path (3D camera + depth), not the data.
+    app.registerComponent(
+      Text,
+      {
+        text: t.string,
+        font: t.handle<Font>(ASSET_TYPE.font).optional(),
+        fontSize: t.number,
+        color: t.vec4,
+        align: t.enum('left', 'center', 'right'),
+        lineHeight: t.number.optional(),
+        maxWidth: t.number.optional(),
+        letterSpacing: t.number,
+        anchor: t.vec2,
+      },
+      { name: 'Text', make: () => new Text() },
+    );
+
     // ---- Render layer ----
     const registry = app.getResource(ShaderRegistry);
     if (registry === undefined) {
@@ -162,6 +187,63 @@ export class TextPlugin implements PluginObject {
         );
       },
       { set: RenderSet.Queue, label: 'text-queue', after: ['text-prepare'] },
+    );
+
+    // ---- World-space (3D) text render layer ----
+    if (!registry.has('retro_engine::text3d')) {
+      registry.register('retro_engine::text3d', TEXT3D_WGSL);
+    }
+    if (app.getResource(Text3dPipeline) === undefined) app.insertResource(new Text3dPipeline());
+    if (app.getResource(Text3dInstanceBuffer) === undefined) app.insertResource(new Text3dInstanceBuffer());
+    if (app.getResource(Text3dPreparedBatches) === undefined) app.insertResource(new Text3dPreparedBatches());
+    if (app.getResource(ViewPhases3d) === undefined) app.insertResource(new ViewPhases3d());
+
+    app.addSystem(
+      'render',
+      [
+        Extract(Query([Text, GlobalTransform, ViewVisibility])),
+        Res(Fonts),
+        Res(RenderImages),
+        ResMut(Text3dInstanceBuffer),
+        ResMut(Text3dPreparedBatches),
+      ],
+      (texts, fontStore, renderImages, instanceBuffer, prepared) => {
+        (prepared as Text3dPreparedBatches).batches.length = 0;
+        (instanceBuffer as Text3dInstanceBuffer).count = 0;
+        prepareText3d(
+          app,
+          texts as unknown as Text3dQuery,
+          fontStore as Fonts,
+          renderImages as RenderImages,
+          instanceBuffer as Text3dInstanceBuffer,
+          prepared as Text3dPreparedBatches,
+        );
+      },
+      { set: RenderSet.Prepare, label: 'text3d-prepare', after: ['image-prepare'] },
+    );
+
+    app.addSystem(
+      'render',
+      [
+        Res(SortedCameras),
+        Res(RenderImages),
+        ResMut(Text3dPipeline),
+        ResMut(Text3dInstanceBuffer),
+        ResMut(Text3dPreparedBatches),
+        ResMut(ViewPhases3d),
+      ],
+      (cameras, renderImages, pipeline, instanceBuffer, prepared, phases) => {
+        queueText3d(
+          app,
+          cameras as unknown as SortedCameras,
+          renderImages as RenderImages,
+          pipeline as Text3dPipeline,
+          instanceBuffer as Text3dInstanceBuffer,
+          prepared as Text3dPreparedBatches,
+          phases as ViewPhases3d,
+        );
+      },
+      { set: RenderSet.Queue, label: 'text3d-queue', after: ['text3d-prepare'] },
     );
   }
 }

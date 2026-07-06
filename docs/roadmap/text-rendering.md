@@ -77,11 +77,19 @@ an MSDF shader. Required by the in-game UI system.
     + a 3D `GlobalTransform` world matrix into a 68-byte world-space quad instance
     (`center.xyz` + `basisX.xyz` + `basisY.xyz` + uv + unitRange + tint). Unit-tested
     (identity / z-translation / Y-rotation prove the third dimension).
-  - **Phase 3b (next):** `Text` component (reflection-registered) + `text-3d.wgsl`
-    + a depth-specialized `Text3dPipeline` + `prepareText3d`/`queueText3d` into
-    `ViewPhases3d.transparent` + `TextPlugin` wiring; browser-verified via a 3D
-    camera + a `Text` occluded by a mesh in the sample export. (Oriented first;
-    billboard flag + rich-text runs / RTL/bidi are later follow-ups.)
+  - ✅ **Phase 3b — render path (2026-07-06):** the `Text` component
+    (reflection-registered), `text-3d.wgsl` (3D `view_proj`, shared MSDF fragment),
+    a depth-specialized `Text3dPipeline` (`depthWriteEnabled:false`,
+    `depthCompare:'less-equal'`, keyed on the camera depth format), a
+    `Text3dInstanceBuffer` + `Text3dPreparedBatches`, and `prepareText3d`/
+    `queueText3d` queuing one `PhaseItem3d` per entity into
+    `ViewPhases3d.transparent` (drawn depth-tested by the Core3d `TransparentPass3d`
+    node). Wired into `TextPlugin`. **Integration-verified** via a capturing-renderer
+    test (`text3d-plugin.test.ts`): a `Text` under a `Camera3d` emits one instanced
+    draw into the `.transparent3d` pass (2 glyphs → instanceCount 2), atlas bound at
+    `@group(1)`; no-font skipped. Bench: `text-prepare-3d`.
+  - **Remaining (3c, optional):** browser **pixel** confirmation (a 3D scene showing
+    a `Text` occluded by a mesh) + a `billboard` flag; rich-text runs / RTL/bidi later.
 
 ### On-screen confirmation (✅ 2026-07-06)
 

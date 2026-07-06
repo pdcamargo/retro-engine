@@ -144,11 +144,14 @@ foundation.**
       capturing-renderer integration + benched. **On-screen confirmation done** — the `sample-game` web
       export renders crisp MSDF text in a real browser (Playwright, see web-build-target.md). **`measureText`
       now wired into the UI layout measure callback** (`@retro-engine/ui` `UiText` + `makeTextMeasure`).
-      Remaining before check-off: world-space `Text` (3D) — **promoted (ADR-0155)**, phased: **Phase 3a
-      shipped** (`packGlyphInstance3d` + `TEXT3D_INSTANCE_*`, the 68-byte 3D glyph packer, unit-tested);
-      **Phase 3b** (the `Text` component + depth-specialized pipeline + `ViewPhases3d.transparent` queue +
-      browser verify) is next. (Rich-text runs is a non-AC follow-up.) Optional: true-MSDF atlas via
-      `msdf-atlas-gen` (the `.font` importer already loads one).
+      World-space `Text` (3D) — **promoted (ADR-0155)**, render path **shipped**: **3a** (`packGlyphInstance3d`,
+      unit-tested) + **3b** (the reflection-registered `Text` component + `text-3d.wgsl` + depth-specialized
+      `Text3dPipeline` + `prepareText3d`/`queueText3d` into `ViewPhases3d.transparent`, drawn depth-tested by
+      Core3d's `TransparentPass3d`). **Integration-verified** (`text3d-plugin.test.ts`: a `Text` under a
+      `Camera3d` emits one `.transparent3d` instanced draw, 2 glyphs → instanceCount 2). Both `Text`/`Text2d`
+      now render. Remaining before check-off: a **browser pixel** confirmation of 3D text (a `Text` occluded
+      by a mesh) — integration+unit-tested so far, not yet pixel-verified. (Rich-text runs is a non-AC
+      follow-up.) Optional: true-MSDF atlas via `msdf-atlas-gen` (the `.font` importer already loads one).
       _AC:_ MSDF glyph atlas (generated via msdfgen, loaded as an asset) + runtime glyph-quad batching
       through the 2D pipeline; `Text`/`Text2d` components; font asset kind + `.meta`; layout
       (line-break/wrap/alignment); glyph metrics exposed to the UI layout measure callback; crisp at any
