@@ -92,8 +92,11 @@ foundation.**
       (USS-subset) parser + style resolution** (`parseRss`/`resolveUiStyle` — compound selectors, specificity
       cascade, declaration→`UiStyle` mapping, verified end-to-end against the layout engine). Headless. Plus
       **Phase 1c: `UiText` content component + `makeTextMeasure`** — the ADR-0149 `measureText` bridge, so a
-      leaf text node sizes to its text through flexbox (53 UI tests). Remaining: 2D rendering (2), `.rss`
-      combinators/`--vars`/inheritance + layout-pass wiring (3b), widgets (4). (ADR-0150.)
+      leaf text node sizes to its text through flexbox. Plus **Phase 2a: screen-space rendering** —
+      `UiRenderPlugin` draws `backgroundColor` quads via a once-per-frame overlay pass (`UiPassNode`,
+      `loadOp:'load'`), verified in a real browser (nested flex HUD in the sample-game export, ADR-0154).
+      Remaining: UI **borders + in-UI text** (2b, via the glyph path) + z-index/clipping; `.rss`
+      combinators/`--vars`/inheritance + layout-pass wiring (3b); widgets (4). (ADR-0150/0154.)
       _AC:_ `UiNode` + derived `ComputedLayout` (not serialized) reusing `Parent`/`Children`; a pure-TS
       **flexbox** `LayoutEngine` behind an interface, with a text-measure callback; a `.rss` (USS-subset)
       parser + style-resolution system matching type / `.class` / `#name` / **state-marker** selectors

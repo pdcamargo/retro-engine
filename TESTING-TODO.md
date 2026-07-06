@@ -588,3 +588,29 @@ is the ADR-0149 `measureText` measure-callback wiring the UI layout was waiting 
   bridge ✅). ADR-0149/0150. MASTER-ROADMAP UI + Text items updated.
 
 ---
+
+## ✅ In-game UI — Phase 2a: screen-space rendering (VERIFIED via browser)
+
+In-game UI now renders on screen. New `UiRenderPlugin` (`@retro-engine/ui`, ADR-0154)
+composites `UiNode` `backgroundColor` fills over the rendered scene via a once-per-frame
+screen-space overlay render-graph node (`UiPassNode`, `loadOp:'load'`, ordered after the
+camera driver — owns its own encoder, draws camera-free clip-space quads). `UiStyle` gains
+`backgroundColor` (Vec4); `UiPipeline` is an alpha-blended quad pipeline with no bind groups
+(clip mapping done on CPU). Nodes paint in the layout's depth-first `ComputedLayout.order` so
+children draw over their (possibly translucent) parent.
+
+- **Verified end-to-end (Playwright, real browser):** the `sample-game` web export now draws
+  a bottom-right flex HUD panel — a translucent panel containing an orange title bar (fixed
+  height) + a green content area (flexGrow) — correctly nested and composited over the text
+  scene. Confirms overlay pass, flex layout → clip quads, alpha blend, nesting order, and
+  screen-space anchoring.
+- **Automated:** 60 UI tests (computeClipRect/packUiColor/packUiQuad + existing); `ui-quad-pack`
+  bench (512 nodes ~1.6µs); full repo gate green (lint/typecheck/test/build/bench). Changeset added.
+- **HOW to test:** `bun run packages/build/src/cli.ts --project apps/sample-game --out /tmp/dw`
+  then serve `/tmp/dw` and open in a WebGPU browser → HUD panel bottom-right over the text.
+- **Not done (UI P0 stays unchecked):** borders + corner radius; **in-UI text** (2b, via the
+  ADR-0149 glyph path — the measure bridge exists but text isn't drawn inside UI yet); z-index/
+  clipping; `.rss` runtime wiring (3b); widgets (4). Logged in MASTER-ROADMAP.
+- Roadmap: `docs/roadmap/ui-system.md` (Phase 2a ✅). ADR-0150/0154. MASTER-ROADMAP UI item 🟡.
+
+---

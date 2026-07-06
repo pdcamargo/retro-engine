@@ -1,3 +1,5 @@
+import type { Vec4 } from '@retro-engine/math';
+
 /** Direction the main axis runs; cross axis is perpendicular. Mirrors CSS. */
 export type FlexDirection = 'row' | 'row-reverse' | 'column' | 'column-reverse';
 
@@ -69,6 +71,12 @@ export interface UiStyle {
   readonly right: Dimension;
   readonly top: Dimension;
   readonly bottom: Dimension;
+  /**
+   * Solid fill drawn behind the node's border box, as linear RGBA in `[0, 1]`.
+   * `undefined` (the default) draws no background. A paint property — ignored by
+   * layout, consumed by the UI render layer.
+   */
+  readonly backgroundColor: Vec4 | undefined;
 }
 
 const ZERO_EDGES: Edges = { left: 0, right: 0, top: 0, bottom: 0 };
@@ -96,6 +104,7 @@ export const defaultUiStyle = (): UiStyle => ({
   right: undefined,
   top: undefined,
   bottom: undefined,
+  backgroundColor: undefined,
 });
 
 /** Authoring shorthand: a scalar (all four sides) or partial per-side edges. */

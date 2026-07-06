@@ -48,8 +48,17 @@ and a HUD (text + bars) from ECS components + `.rss`, with gamepad navigation.
 
 ### Phase 2 — Rendering
 
-- UI draws through the 2D pipeline: background quads + borders (a UI material)
-  and text via the ADR-0149 glyph path; a UI camera / screen-space pass; z-order.
+- **Phase 2a — background quads ✅ (2026-07-06, ADR-0154).** `UiRenderPlugin`
+  composites `UiNode` `backgroundColor` fills over the scene via a once-per-frame
+  screen-space overlay render-graph node (`UiPassNode`, `loadOp: 'load'`, after
+  the camera driver). `UiStyle.backgroundColor`, `UiPipeline` (camera-free
+  alpha-blended quads; CPU clip-space mapping, no bind groups), `computeClipRect`
+  / `packUiQuad`. Painted in the layout's depth-first `ComputedLayout.order` so
+  children draw over their parent. Verified in a real browser via the
+  `sample-game` web export (nested flex HUD panel). Bench: `ui-quad-pack`.
+- Remaining (2b+): borders + corner radius; in-UI **text** via the ADR-0149
+  glyph path; clipping/overflow; explicit z-index; a UI-specific camera/scaling
+  mode (fixed logical resolution + letterbox).
 
 ### Phase 3 — Retro CSS (`.rss`) 🟡 (parser + cascade shipped 2026-07-06)
 

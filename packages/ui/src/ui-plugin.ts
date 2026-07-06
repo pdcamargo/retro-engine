@@ -77,6 +77,7 @@ export const uiNodeSchema: Schema<UiNode> = {
     right: t.number.optional(),
     top: t.number.optional(),
     bottom: t.number.optional(),
+    backgroundColor: t.vec4.optional(),
   }) as unknown as FieldType<UiStyle>,
 };
 
@@ -153,12 +154,13 @@ export const runUiLayout = (
   for (const row of nodes.entries()) uiSet.add(row[0] as Entity);
   if (uiSet.size === 0) return;
 
+  const order = { n: 0 };
   for (const entity of uiSet) {
     const parent = world.getComponent(entity, Parent);
     if (parent !== undefined && uiSet.has(parent.entity)) continue; // not a root
     const tree = buildLayoutNode(world, entity, uiSet, fonts);
     const result = engine.compute(tree, { width: viewport.width, height: viewport.height });
-    writeLayout(world, result, 0, 0);
+    writeLayout(world, result, 0, 0, order);
   }
 };
 
@@ -192,8 +194,18 @@ const buildLayoutNode = (
   };
 };
 
-/** Write a result subtree into each entity's `ComputedLayout` (absolute coords). */
-const writeLayout = (world: World, result: LayoutResult, originX: number, originY: number): void => {
+/**
+ * Write a result subtree into each entity's `ComputedLayout` (absolute coords),
+ * stamping a depth-first `order` (parent before its children) so the render
+ * layer can paint back-to-front by nesting.
+ */
+const writeLayout = (
+  world: World,
+  result: LayoutResult,
+  originX: number,
+  originY: number,
+  order: { n: number },
+): void => {
   const entity = result.key as Entity;
   const absX = originX + result.rect.x;
   const absY = originY + result.rect.y;
@@ -205,7 +217,9 @@ const writeLayout = (world: World, result: LayoutResult, originX: number, origin
     layout.height = result.rect.height;
     layout.contentWidth = result.contentWidth;
     layout.contentHeight = result.contentHeight;
+    layout.order = order.n;
     world.markChanged(entity, ComputedLayout);
   }
-  for (const child of result.children) writeLayout(world, child, absX, absY);
+  order.n += 1;
+  for (const child of result.children) writeLayout(world, child, absX, absY, order);
 };

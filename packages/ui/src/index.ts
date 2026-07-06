@@ -29,3 +29,15 @@ export type { RssDeclaration, RssRule, RssSelector } from './rss-parser';
 export { parseRss, parseSelector } from './rss-parser';
 export type { StyleNode } from './rss-resolve';
 export { matches, resolveDeclarations, resolveUiStyle, specificity } from './rss-resolve';
+export { UiRenderPlugin } from './render/ui-render-plugin';
+export { UiPipeline } from './render/ui-pipeline';
+export { makeUiPassNode, UiPassLabel } from './render/ui-pass-node';
+export type { ClipRect, UiQuadQuery } from './render/ui-prepare';
+export { computeClipRect, prepareUiQuads } from './render/ui-prepare';
+export {
+  packUiColor,
+  packUiQuad,
+  UI_INSTANCE_BYTE_SIZE,
+  UI_INSTANCE_FLOAT_COUNT,
+} from './render/ui-instance';
+export { UI_QUAD_WGSL } from './render/ui-quad.wgsl';

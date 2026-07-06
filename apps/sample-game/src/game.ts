@@ -13,6 +13,7 @@ import {
   Transform,
 } from '@retro-engine/engine';
 import { defineProject } from '@retro-engine/project';
+import { UiNode, UiPlugin, UiRenderPlugin } from '@retro-engine/ui';
 
 /** Marker: rotate this entity about its Z axis each frame. */
 class Spin {
@@ -32,6 +33,8 @@ class HelloTextPlugin implements PluginObject {
 
   build(app: App): void {
     app.addPlugin(new TextPlugin());
+    app.addPlugin(new UiPlugin());
+    app.addPlugin(new UiRenderPlugin());
     const font = installDefaultFont(app);
 
     app.addSystem(
@@ -74,6 +77,44 @@ class HelloTextPlugin implements PluginObject {
         );
       },
       { label: 'hello-text-setup' },
+    );
+
+    // A bottom-right HUD panel built from flex UI nodes with background fills,
+    // composited over the scene by the screen-space UI overlay pass.
+    app.addSystem(
+      'startup',
+      [Commands],
+      (cmd) => {
+        cmd
+          .spawn(
+            new UiNode({
+              width: undefined,
+              flexDirection: 'column',
+              justifyContent: 'flex-end',
+              alignItems: 'flex-end',
+              padding: 24,
+              flexGrow: 1,
+            }),
+          )
+          .withChildren((root) => {
+            root
+              .spawn(
+                new UiNode({
+                  width: 320,
+                  height: 160,
+                  flexDirection: 'column',
+                  padding: 12,
+                  gap: 8,
+                  backgroundColor: vec4.create(0.12, 0.14, 0.2, 0.85),
+                }),
+              )
+              .withChildren((panel) => {
+                panel.spawn(new UiNode({ height: 36, backgroundColor: vec4.create(0.95, 0.55, 0.2, 1) }));
+                panel.spawn(new UiNode({ flexGrow: 1, backgroundColor: vec4.create(0.2, 0.6, 0.35, 0.95) }));
+              });
+          });
+      },
+      { label: 'hello-ui-setup' },
     );
 
     app.addSystem(

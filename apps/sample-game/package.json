@@ -13,7 +13,8 @@
     "@retro-engine/engine": "workspace:*",
     "@retro-engine/math": "workspace:*",
     "@retro-engine/project": "workspace:*",
-    "@retro-engine/runtime-web": "workspace:*"
+    "@retro-engine/runtime-web": "workspace:*",
+    "@retro-engine/ui": "workspace:*"
   },
   "devDependencies": {
     "@retro-engine/tsconfig": "workspace:*"

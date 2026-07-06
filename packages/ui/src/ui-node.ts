@@ -18,6 +18,12 @@ export class ComputedLayout {
     public height = 0,
     public contentWidth = 0,
     public contentHeight = 0,
+    /**
+     * Depth-first paint order stamped by the layout pass: a parent is always
+     * lower than its children, so drawing ascending yields correct
+     * back-to-front nesting (children paint over their parent's background).
+     */
+    public order = 0,
   ) {}
 }
 
