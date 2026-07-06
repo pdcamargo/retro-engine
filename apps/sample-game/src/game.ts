@@ -50,7 +50,7 @@ class CreditsLabel {}
 const setGameProbe = (patch: Record<string, unknown>): void => {
   if (typeof window === 'undefined') return;
   const w = window as unknown as { __game?: Record<string, unknown> };
-  w.__game = { ...(w.__game ?? {}), ...patch };
+  w.__game = { ...w.__game, ...patch };
 };
 
 /**
