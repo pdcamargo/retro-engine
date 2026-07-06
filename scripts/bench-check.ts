@@ -43,6 +43,7 @@ const PACKAGES: readonly BenchPackage[] = [
   { name: '@retro-engine/ecs', dir: 'packages/ecs' },
   { name: '@retro-engine/engine', dir: 'packages/engine' },
   { name: '@retro-engine/gltf', dir: 'packages/gltf' },
+  { name: '@retro-engine/input', dir: 'packages/input' },
 ];
 
 const REPO_ROOT = resolve(import.meta.dirname, '..');

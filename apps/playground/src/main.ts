@@ -7,6 +7,7 @@ import { atlasShowcasePlugin } from './atlas-showcase-plugin';
 import { compositionShowcasePlugin } from './composition-showcase-plugin';
 import { gltfShowcasePlugin } from './gltf-showcase-plugin';
 import { imguiShowcasePlugin } from './imgui-showcase-plugin';
+import { inputShowcasePlugin } from './input-showcase-plugin';
 import { lightsShowcasePlugin } from './lights-showcase-plugin';
 import { litShowcasePlugin } from './lit-showcase-plugin';
 import { LoggingPlugin } from './logging-plugin';
@@ -96,6 +97,8 @@ const mode = new URLSearchParams(window.location.search).get('mode');
 const showcase =
   mode === 'imgui'
     ? imguiShowcasePlugin
+    : mode === 'input'
+    ? inputShowcasePlugin
     : mode === 'slice'
     ? sliceShowcasePlugin
     : mode === 'atlas'

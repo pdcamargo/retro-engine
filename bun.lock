@@ -23,6 +23,7 @@
         "@retro-engine/editor-sdk": "workspace:*",
         "@retro-engine/engine": "workspace:*",
         "@retro-engine/gltf": "workspace:*",
+        "@retro-engine/input": "workspace:*",
         "@retro-engine/math": "workspace:*",
         "@retro-engine/reflect": "workspace:*",
         "@retro-engine/renderer-core": "workspace:*",
@@ -142,6 +143,13 @@
       "dependencies": {
         "@retro-engine/editor-sdk": "workspace:*",
         "@retro-engine/math": "workspace:*",
+      },
+    },
+    "packages/input": {
+      "name": "@retro-engine/input",
+      "version": "0.0.0",
+      "dependencies": {
+        "@retro-engine/engine": "workspace:*",
       },
     },
     "packages/math": {
@@ -338,6 +346,8 @@
     "@retro-engine/gltf": ["@retro-engine/gltf@workspace:packages/gltf"],
 
     "@retro-engine/graph-editor": ["@retro-engine/graph-editor@workspace:packages/graph-editor"],
+
+    "@retro-engine/input": ["@retro-engine/input@workspace:packages/input"],
 
     "@retro-engine/math": ["@retro-engine/math@workspace:packages/math"],
 
@@ -764,6 +774,8 @@
     "@manypkg/get-packages/@changesets/types": ["@changesets/types@4.1.0", "", {}, "sha512-LDQvVDv5Kb50ny2s25Fhm3d9QSZimsoUGBsUioj6MC3qbMUCuC8GPIvk/M6IvXx3lYhAs0lwWUQLb+VIEUCECw=="],
 
     "@manypkg/get-packages/fs-extra": ["fs-extra@8.1.0", "", { "dependencies": { "graceful-fs": "^4.2.0", "jsonfile": "^4.0.0", "universalify": "^0.1.0" } }, "sha512-yhlQgA6mnOJUKOsRUFsgJdQCvkKhcz8tlZG5HBQfReYZy46OwLcY+Zia0mtdHsOo9y/hP+CxMN0TU9QxoOtG4g=="],
+
+    "@retro-engine/playground/@webgpu/types": ["@webgpu/types@0.1.71", "", {}, "sha512-mMy8/ODcKhab808co15eW+yN+HgXoQxRQHTiBV9Mrvl1r0ufnid7YOcI+gi4eUWSWl9ezD6TW2KXccrL8HCh2A=="],
 
     "@retro-engine/renderer-webgpu/@webgpu/types": ["@webgpu/types@0.1.71", "", {}, "sha512-mMy8/ODcKhab808co15eW+yN+HgXoQxRQHTiBV9Mrvl1r0ufnid7YOcI+gi4eUWSWl9ezD6TW2KXccrL8HCh2A=="],
 

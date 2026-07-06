@@ -126,8 +126,10 @@ holes are the **runtime pillars a game needs**: input, audio, windowing, physics
 These do not exist in the runtime and are the reason a complete game can't ship yet. All are P0/P1 in
 [`../roadmap/MASTER-ROADMAP.md`](../roadmap/MASTER-ROADMAP.md).
 
-- ❌ **Input** — no keyboard/mouse/pointer/gamepad/touch in `packages/engine` or `packages/ecs`. No
-  `ButtonInput`/`Axis` resources. (The editor packages have their own input handling.)
+- 🟡 **Input** — `@retro-engine/input` (ADR-0144) ships keyboard + mouse: `ButtonInput<T>` / `Axis<T>`
+  primitives, `KeyboardInput` / `MouseButtonInput` / `MouseMotion` / `MouseScroll` / `CursorPosition`
+  resources, an `InputBackend` HAL (`DomInputBackend` + headless), and `InputPlugin` (opt-in, headless-safe).
+  Gamepad, touch, the action map (+ reflection), and studio binding editor are the remaining phases.
   → roadmap/input-system.md
 - ❌ **Audio** — no `AudioContext`/`AudioSource`/clip decoding of any kind. → roadmap/audio.md
 - ❌/🟡 **Windowing** — only a raw canvas + `ResizeObserver` + surface configure on the App. No `Window`

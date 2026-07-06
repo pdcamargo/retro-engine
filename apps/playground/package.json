@@ -16,6 +16,7 @@
     "@retro-engine/editor-sdk": "workspace:*",
     "@retro-engine/engine": "workspace:*",
     "@retro-engine/gltf": "workspace:*",
+    "@retro-engine/input": "workspace:*",
     "@retro-engine/math": "workspace:*",
     "@retro-engine/reflect": "workspace:*",
     "@retro-engine/renderer-core": "workspace:*",
