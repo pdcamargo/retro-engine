@@ -20,10 +20,12 @@ export type AlignSelf = 'auto' | AlignItems;
 export type PositionType = 'relative' | 'absolute';
 
 /**
- * A length: a finite number of logical pixels, or `'auto'` (content-derived on a
- * size, flexible/ignored on an inset). Percentages are not supported yet.
+ * A length: a finite number of logical pixels, or `undefined` — **auto**
+ * (content-derived on a size; ignored on an inset). `undefined` is used rather
+ * than the CSS keyword `'auto'` so the value reflects/serializes cleanly as an
+ * optional number. Percentages are not supported yet.
  */
-export type Dimension = number | 'auto';
+export type Dimension = number | undefined;
 
 /** Four-sided lengths in logical pixels (padding / margin). */
 export interface Edges {
@@ -53,9 +55,11 @@ export interface UiStyle {
   readonly width: Dimension;
   readonly height: Dimension;
   readonly minWidth: number;
-  readonly maxWidth: number;
+  /** Upper bound in pixels; `undefined` means no maximum. */
+  readonly maxWidth: number | undefined;
   readonly minHeight: number;
-  readonly maxHeight: number;
+  /** Upper bound in pixels; `undefined` means no maximum. */
+  readonly maxHeight: number | undefined;
   readonly padding: Edges;
   readonly margin: Edges;
   /** Space between adjacent in-flow children along the main axis, in pixels. */
@@ -77,21 +81,21 @@ export const defaultUiStyle = (): UiStyle => ({
   alignSelf: 'auto',
   flexGrow: 0,
   flexShrink: 1,
-  flexBasis: 'auto',
-  width: 'auto',
-  height: 'auto',
+  flexBasis: undefined,
+  width: undefined,
+  height: undefined,
   minWidth: 0,
-  maxWidth: Number.POSITIVE_INFINITY,
+  maxWidth: undefined,
   minHeight: 0,
-  maxHeight: Number.POSITIVE_INFINITY,
+  maxHeight: undefined,
   padding: ZERO_EDGES,
   margin: ZERO_EDGES,
   gap: 0,
   position: 'relative',
-  left: 'auto',
-  right: 'auto',
-  top: 'auto',
-  bottom: 'auto',
+  left: undefined,
+  right: undefined,
+  top: undefined,
+  bottom: undefined,
 });
 
 /** Authoring shorthand: a scalar (all four sides) or partial per-side edges. */

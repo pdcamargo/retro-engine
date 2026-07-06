@@ -426,3 +426,25 @@ padding/margin, `position: absolute` insets) with a text-measure callback hook, 
   renders styled widgets on screen).
 
 ---
+
+## 🟡 In-game UI — Phase 1b shipped (UiNode/ComputedLayout + UiPlugin layout system)
+
+The flexbox engine now runs from the ECS. Added `UiNode` (authored `UiStyle`,
+reflection-registered — auto/no-max encoded as omitted `undefined`, so it round-trips),
+`ComputedLayout` (derived absolute screen-space rect, not serialized, auto-attached via
+required components), and `UiPlugin` — a `postUpdate` `ui-layout` system that mirrors the
+`Parent`/`Children` hierarchy into a LayoutNode tree, runs the engine, and writes each
+entity's `ComputedLayout` with accumulated absolute coordinates. `UiViewport` (root size) +
+`UiLayout` (swappable engine) resources.
+
+- **HOW to test:** `bun test packages/ui/` — 29 tests. Phase 1b covers: ComputedLayout
+  auto-attach, a flex-row hierarchy → absolute rects, auto-root fills viewport, ancestor
+  offset accumulation (nested padding), a UiNode under a non-UI parent treated as a root,
+  and a full UiNode reflection round-trip of every authored style field.
+- **Still not on screen.** Phase 2 renders the computed boxes (quads + borders + ADR-0149
+  glyphs) through the 2D pipeline and wires `measureText` for text content nodes; Phase 3 is
+  `.rss` styling; Phase 4 widgets. So nothing to screenshot yet — layout is verified purely
+  in the ECS.
+- Roadmap: `docs/roadmap/ui-system.md` (Phases 1a+1b done). ADR-0150. MASTER-ROADMAP 🟡.
+
+---

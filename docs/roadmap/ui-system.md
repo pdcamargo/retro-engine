@@ -26,12 +26,16 @@ and a HUD (text + bars) from ECS components + `.rss`, with gamepad navigation.
   `align-items`/`align-self`, `gap`, padding, margin, `position: absolute`
   insets. `UiStyle` + `makeStyle`. Pure TS, no ECS/GPU; 21 unit tests + bench.
 
-### Phase 1b — Components + layout system (next)
+### Phase 1b — Components + layout system ✅ (2026-07-06)
 
-- `UiNode` (authored `UiStyle`, reflection-registered) + derived `ComputedLayout`
-  (rect; **not serialized**). `UiPlugin`: walk `Parent`/`Children` → `LayoutNode`
-  tree → run engine (text-measure callback = ADR-0149 `measureText`) → write
-  `ComputedLayout`. Tested via a headless App (spawn tree → assert layout).
+- `UiNode` (authored `UiStyle`, reflection-registered; `undefined` = auto/no-max
+  so it serializes cleanly) + derived `ComputedLayout` (absolute rect; **not
+  serialized**, auto-attached). `UiPlugin`: `postUpdate` `ui-layout` system walks
+  `Parent`/`Children` → `LayoutNode` tree → runs the engine → writes
+  `ComputedLayout` with accumulated absolute coords. `UiViewport` (root size) +
+  `UiLayout` (swappable engine) resources. Verified on a bare ECS `World` +
+  reflection round-trip (29 UI tests total). Text-measure wiring (ADR-0149
+  `measureText`) lands with the text-content node in Phase 2.
 
 ### Phase 2 — Rendering
 

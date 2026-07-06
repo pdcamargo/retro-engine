@@ -13,7 +13,10 @@ const node = (
 ): LayoutNode => ({ style: makeStyle(style), children, ...extra });
 
 const rects = (root: LayoutNode) => {
-  const r = engine.compute(root, { width: root.style.width === 'auto' ? 1000 : root.style.width, height: root.style.height === 'auto' ? 1000 : root.style.height });
+  const r = engine.compute(root, {
+    width: root.style.width ?? 1000,
+    height: root.style.height ?? 1000,
+  });
   return r.children.map((c) => c.rect);
 };
 

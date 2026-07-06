@@ -6,7 +6,8 @@ import type {
 } from './layout-engine';
 import { type AlignItems, isReverse, isRow, type UiStyle } from './ui-style';
 
-const clamp = (v: number, min: number, max: number): number => Math.min(Math.max(v, min), max);
+const clamp = (v: number, min: number, max: number | undefined): number =>
+  Math.min(Math.max(v, min), max ?? Number.POSITIVE_INFINITY);
 
 interface Size {
   width: number;
@@ -19,7 +20,7 @@ interface FlexItem {
   mainMargin: number;
   crossMargin: number;
   minMain: number;
-  maxMain: number;
+  maxMain: number | undefined;
   grow: number;
   shrink: number;
   baseSize: number;
@@ -44,11 +45,11 @@ export class FlexLayoutEngine implements LayoutEngine {
   compute(root: LayoutNode, available: AvailableSpace): LayoutResult {
     const s = root.style;
     const width =
-      s.width !== 'auto'
+      s.width !== undefined
         ? clamp(s.width, s.minWidth, s.maxWidth)
         : clamp(available.width, s.minWidth, s.maxWidth);
     const height =
-      s.height !== 'auto'
+      s.height !== undefined
         ? clamp(s.height, s.minHeight, s.maxHeight)
         : clamp(available.height, s.minHeight, s.maxHeight);
     return layoutNode(root, width, height);
@@ -58,8 +59,8 @@ export class FlexLayoutEngine implements LayoutEngine {
 /** Border-box intrinsic size of a node given available space on each axis. */
 function measureNode(node: LayoutNode, availWidth: number, availHeight: number): Size {
   const s = node.style;
-  const explicitW = s.width !== 'auto' ? clamp(s.width, s.minWidth, s.maxWidth) : undefined;
-  const explicitH = s.height !== 'auto' ? clamp(s.height, s.minHeight, s.maxHeight) : undefined;
+  const explicitW = s.width !== undefined ? clamp(s.width, s.minWidth, s.maxWidth) : undefined;
+  const explicitH = s.height !== undefined ? clamp(s.height, s.minHeight, s.maxHeight) : undefined;
   if (explicitW !== undefined && explicitH !== undefined) {
     return { width: explicitW, height: explicitH };
   }
@@ -190,8 +191,8 @@ function layoutNode(node: LayoutNode, width: number, height: number): LayoutResu
     const maxMain = row ? cs.maxWidth : cs.maxHeight;
     const mainSizeProp = row ? cs.width : cs.height;
     let baseSize: number;
-    if (cs.flexBasis !== 'auto') baseSize = cs.flexBasis;
-    else if (mainSizeProp !== 'auto') baseSize = mainSizeProp;
+    if (cs.flexBasis !== undefined) baseSize = cs.flexBasis;
+    else if (mainSizeProp !== undefined) baseSize = mainSizeProp;
     else {
       const m = measureNode(child, innerMain, innerCross);
       baseSize = row ? m.width : m.height;
@@ -223,7 +224,7 @@ function layoutNode(node: LayoutNode, width: number, height: number): LayoutResu
     const minCross = row ? cs.minHeight : cs.minWidth;
     const maxCross = row ? cs.maxHeight : cs.maxWidth;
     it.align = cs.alignSelf === 'auto' ? s.alignItems : cs.alignSelf;
-    if (crossSizeProp !== 'auto') {
+    if (crossSizeProp !== undefined) {
       it.crossSize = clamp(crossSizeProp, minCross, maxCross);
     } else if (it.align === 'stretch') {
       it.crossSize = clamp(Math.max(0, innerCross - it.crossMargin), minCross, maxCross);
@@ -317,20 +318,20 @@ function layoutAbsolute(
 ): LayoutResult {
   const cs = child.style;
   const m = measureNode(child, contentW, contentH);
-  let w = cs.width !== 'auto' ? clamp(cs.width, cs.minWidth, cs.maxWidth) : m.width;
-  let h = cs.height !== 'auto' ? clamp(cs.height, cs.minHeight, cs.maxHeight) : m.height;
-  if (cs.width === 'auto' && cs.left !== 'auto' && cs.right !== 'auto') {
+  let w = cs.width !== undefined ? clamp(cs.width, cs.minWidth, cs.maxWidth) : m.width;
+  let h = cs.height !== undefined ? clamp(cs.height, cs.minHeight, cs.maxHeight) : m.height;
+  if (cs.width === undefined && cs.left !== undefined && cs.right !== undefined) {
     w = clamp(Math.max(0, contentW - cs.left - cs.right), cs.minWidth, cs.maxWidth);
   }
-  if (cs.height === 'auto' && cs.top !== 'auto' && cs.bottom !== 'auto') {
+  if (cs.height === undefined && cs.top !== undefined && cs.bottom !== undefined) {
     h = clamp(Math.max(0, contentH - cs.top - cs.bottom), cs.minHeight, cs.maxHeight);
   }
   let x = parent.padding.left;
   let y = parent.padding.top;
-  if (cs.left !== 'auto') x = parent.padding.left + cs.left;
-  else if (cs.right !== 'auto') x = parent.padding.left + contentW - cs.right - w;
-  if (cs.top !== 'auto') y = parent.padding.top + cs.top;
-  else if (cs.bottom !== 'auto') y = parent.padding.top + contentH - cs.bottom - h;
+  if (cs.left !== undefined) x = parent.padding.left + cs.left;
+  else if (cs.right !== undefined) x = parent.padding.left + contentW - cs.right - w;
+  if (cs.top !== undefined) y = parent.padding.top + cs.top;
+  else if (cs.bottom !== undefined) y = parent.padding.top + contentH - cs.bottom - h;
   return offsetResult(layoutNode(child, w, h), x, y);
 }
 

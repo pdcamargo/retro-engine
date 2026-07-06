@@ -33,5 +33,10 @@
     "lint": "oxlint .",
     "test": "bun test",
     "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@retro-engine/ecs": "workspace:*",
+    "@retro-engine/engine": "workspace:*",
+    "@retro-engine/reflect": "workspace:*"
   }
 }

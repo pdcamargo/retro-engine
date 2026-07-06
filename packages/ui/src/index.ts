@@ -20,3 +20,5 @@ export type {
   MeasureFunc,
 } from './layout-engine';
 export { FlexLayoutEngine } from './flex-layout';
+export { ComputedLayout, UiNode } from './ui-node';
+export { runUiLayout, UiLayout, UiPlugin, UiViewport } from './ui-plugin';
