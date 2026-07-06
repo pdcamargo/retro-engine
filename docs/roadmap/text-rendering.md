@@ -88,8 +88,17 @@ an MSDF shader. Required by the in-game UI system.
     test (`text3d-plugin.test.ts`): a `Text` under a `Camera3d` emits one instanced
     draw into the `.transparent3d` pass (2 glyphs → instanceCount 2), atlas bound at
     `@group(1)`; no-font skipped. Bench: `text-prepare-3d`.
-  - **Remaining (3c, optional):** browser **pixel** confirmation (a 3D scene showing
-    a `Text` occluded by a mesh) + a `billboard` flag; rich-text runs / RTL/bidi later.
+  - ✅ **Phase 3c — browser pixel confirmation (2026-07-06):** playground
+    `?mode=text3d` (a `Text` on the XY plane + an opaque cube occluder under a
+    `Camera3d`) renders crisp world-space MSDF text through the perspective camera,
+    with the nearer cube correctly **occluding** the glyphs behind it (Playwright
+    screenshot + `window.__text3d.instances === 7`). This exposed + fixed a latent
+    engine bug — `TransparentPass3dNode` set `depthReadOnly` **and** depth
+    load/store ops, which WebGPU rejects (invalid command buffer) — so the whole
+    3D transparent phase was broken for its first consumer (renderer-core
+    `DepthStencilAttachment` ops made optional; webgpu encoder omits them when
+    read-only; the node builds a read-only depth attachment). Remaining: a
+    `billboard` flag; rich-text runs / RTL/bidi later.
 
 ### On-screen confirmation (✅ 2026-07-06)
 

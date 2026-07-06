@@ -1005,3 +1005,30 @@ Phase 3b of world-space `Text` (ADR-0155): the `Text` component now actually ren
   pending a browser pixel confirmation + your say-so (CLAUDE.md §3) before check-off.
 
 ---
+
+## ✅ Text — world-space 3D `Text` browser pixel-verified + a real depth bug fixed (VERIFIED via Playwright)
+
+Finished the 3D-text story with on-screen pixel proof — and the browser check caught a latent engine bug
+that the integration test could not.
+
+- **Verified end-to-end in a real browser** (playground `?mode=text3d` → Playwright): added a
+  `text3d-showcase-plugin` (a `Text` on the XY plane + an opaque unlit cube occluder under a `Camera3d`).
+  Screenshot shows crisp yellow MSDF "WORLD 3D" in perspective, with the nearer cube **occluding** the
+  glyphs behind it (depth-test works). Probe `window.__text3d.instances === 7` (7 non-space glyphs packed).
+- **Bug found + fixed** (the reason it was black at first): `TransparentPass3dNode` set `depthReadOnly:true`
+  **and** `depthLoadOp:'load'`/`depthStoreOp:'discard'` — WebGPU rejects that combo, so it produced an
+  invalid command buffer and dropped every frame with a transparent 3D draw. Latent because nothing used
+  the 3D transparent phase until 3D text became its first consumer. Fix: renderer-core
+  `DepthStencilAttachment` load/store ops made optional; webgpu encoder omits them when read-only; the node
+  builds a read-only depth attachment. **The capturing-renderer integration test did NOT catch this (it
+  doesn't run WebGPU validation) — browser verification did.**
+- **Automated:** full repo gate green (1949 tests, build 26 tasks). Changeset added (renderer-core +
+  renderer-webgpu + engine patch).
+- **HOW to test:** `cd apps/playground && bun --hot dev-server.ts`, open `http://localhost:5173/?mode=text3d`
+  in a WebGPU browser → "WORLD 3D" in 3D, a rotating blue cube occluding the middle glyphs.
+- **>>> Text P0 item: all AC now met** — MSDF atlas ✅ / 2D+3D glyph batching ✅ / `Text`+`Text2d` ✅ (both
+  pixel-verified) / font asset+`.meta` ✅ / layout ✅ / UI measure bridge ✅ / crisp at any scale ✅ / sample
+  draws styled text ✅. MASTER-ROADMAP box left UNCHECKED per CLAUDE.md §3 — **please confirm to check off.**
+  (Rich-text runs + a billboard flag are non-AC follow-ups.)
+
+---

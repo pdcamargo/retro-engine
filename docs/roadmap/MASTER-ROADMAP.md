@@ -148,10 +148,13 @@ foundation.**
       unit-tested) + **3b** (the reflection-registered `Text` component + `text-3d.wgsl` + depth-specialized
       `Text3dPipeline` + `prepareText3d`/`queueText3d` into `ViewPhases3d.transparent`, drawn depth-tested by
       Core3d's `TransparentPass3d`). **Integration-verified** (`text3d-plugin.test.ts`: a `Text` under a
-      `Camera3d` emits one `.transparent3d` instanced draw, 2 glyphs → instanceCount 2). Both `Text`/`Text2d`
-      now render. Remaining before check-off: a **browser pixel** confirmation of 3D text (a `Text` occluded
-      by a mesh) — integration+unit-tested so far, not yet pixel-verified. (Rich-text runs is a non-AC
-      follow-up.) Optional: true-MSDF atlas via `msdf-atlas-gen` (the `.font` importer already loads one).
+      `Camera3d` emits one `.transparent3d` instanced draw, 2 glyphs → instanceCount 2). **Browser
+      pixel-verified** (playground `?mode=text3d`): crisp world-space MSDF text under a perspective camera,
+      correctly occluded by a nearer cube — which exposed + fixed a latent engine bug (the 3D transparent
+      pass used an invalid `depthReadOnly` + load/store combo, breaking the whole phase for its first
+      consumer). Both `Text`/`Text2d` now render + are pixel-verified. **All AC met** — ready to check off
+      pending user confirmation (CLAUDE.md §3). (Rich-text runs + a billboard flag are non-AC follow-ups.)
+      Optional: true-MSDF atlas via `msdf-atlas-gen` (the `.font` importer already loads one).
       _AC:_ MSDF glyph atlas (generated via msdfgen, loaded as an asset) + runtime glyph-quad batching
       through the 2D pipeline; `Text`/`Text2d` components; font asset kind + `.meta`; layout
       (line-break/wrap/alignment); glyph metrics exposed to the UI layout measure callback; crisp at any

@@ -108,9 +108,15 @@ export interface DepthStencilAttachment {
   view: TextureView;
   /** Initial depth value when `depthLoadOp === 'clear'`. Defaults to 1.0. */
   depthClearValue?: number;
-  depthLoadOp: 'load' | 'clear';
-  depthStoreOp: 'store' | 'discard';
-  /** When the attached view also has a stencil aspect that the pipeline doesn't use. */
+  /** Depth load op. Required unless `depthReadOnly` is set (they are mutually exclusive). */
+  depthLoadOp?: 'load' | 'clear';
+  /** Depth store op. Required unless `depthReadOnly` is set (they are mutually exclusive). */
+  depthStoreOp?: 'store' | 'discard';
+  /**
+   * Depth is read-only for the pass — the existing depth gates fragments but is
+   * never written. Mutually exclusive with `depthLoadOp`/`depthStoreOp`: WebGPU
+   * forbids setting either when this is true.
+   */
   depthReadOnly?: boolean;
   /** Initial stencil value when `stencilLoadOp === 'clear'`. Defaults to 0. */
   stencilClearValue?: number;

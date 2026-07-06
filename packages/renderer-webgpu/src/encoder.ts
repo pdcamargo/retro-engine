@@ -55,9 +55,10 @@ export const makeCommandEncoder = (encoder: GPUCommandEncoder): CommandEncoder =
 const toDepthStencilAttachment = (att: DepthStencilAttachment): GPURenderPassDepthStencilAttachment => {
   const out: GPURenderPassDepthStencilAttachment = {
     view: (att.view as InternalTextureView)[GPU_VIEW],
-    depthLoadOp: att.depthLoadOp,
-    depthStoreOp: att.depthStoreOp,
   };
+  // Omitted together when the attachment is depth-read-only (WebGPU forbids ops then).
+  if (att.depthLoadOp !== undefined) out.depthLoadOp = att.depthLoadOp;
+  if (att.depthStoreOp !== undefined) out.depthStoreOp = att.depthStoreOp;
   if (att.depthClearValue !== undefined) out.depthClearValue = att.depthClearValue;
   if (att.depthReadOnly !== undefined) out.depthReadOnly = att.depthReadOnly;
   if (att.stencilClearValue !== undefined) out.stencilClearValue = att.stencilClearValue;

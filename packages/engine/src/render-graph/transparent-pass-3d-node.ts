@@ -66,10 +66,12 @@ export const TransparentPass3dNode: ViewNode = {
       colorAttachments: [colorAttachment],
     };
     if (view.depth) {
+      // Read-only: the opaque pass's depth gates transparent fragments (pipelines
+      // carry `depthWriteEnabled: false`), and nothing writes here. WebGPU forbids
+      // `depthLoadOp`/`depthStoreOp` when `depthReadOnly` is set — the existing
+      // depth is loaded implicitly and never stored.
       const depthAttachment: DepthStencilAttachment = {
         view: view.depth.view,
-        depthLoadOp: 'load',
-        depthStoreOp: 'discard',
         depthReadOnly: true,
       };
       passDesc.depthStencilAttachment = depthAttachment;
