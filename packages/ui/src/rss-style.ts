@@ -1,11 +1,11 @@
 import type { Entity, Query as QueryHandle, World } from '@retro-engine/ecs';
-import type { App } from '@retro-engine/engine';
+import { type App, Children, Parent } from '@retro-engine/engine';
 import { type Schema, t } from '@retro-engine/reflect';
 
 import { Disabled } from './interaction/ui-button';
 import { UiInteraction } from './interaction/ui-interaction';
 import { parseRss, type RssRule } from './rss-parser';
-import { collectThemeVars, resolveUiStyle, type StyleNode } from './rss-resolve';
+import { collectGlobalVars, resolveNodeVars, resolveUiStyle, type StyleNode } from './rss-resolve';
 import { UiNode } from './ui-node';
 
 /**
@@ -100,34 +100,61 @@ const deriveStates = (world: World, entity: Entity): string[] => {
   return states;
 };
 
-type UiClassQuery = QueryHandle<readonly [typeof UiNode, typeof UiClass]>;
+/** Build a node's `.rss` matching identity from its {@link UiClass} + live states. */
+const buildStyleNode = (world: World, entity: Entity, cls: UiClass): StyleNode => ({
+  classes: cls.classes,
+  states: deriveStates(world, entity),
+  ...(cls.type !== '' ? { type: cls.type } : {}),
+  ...(cls.name !== '' ? { name: cls.name } : {}),
+});
+
+type UiNodeQuery = QueryHandle<readonly [typeof UiNode]>;
 
 /**
- * Resolve and apply the active stylesheet to every {@link UiClass} node: build
- * each node's {@link StyleNode} identity (type / name / classes + live states),
- * cascade the sheet's rules onto it, and write the resulting style into the
- * node's {@link UiNode}. Runs every frame (before layout) so pseudo-class state
+ * Resolve and apply the active stylesheet to every {@link UiClass} node, walking
+ * the UI hierarchy so custom properties **inherit**: each node starts from the
+ * global (`*` / `:root`) variables plus any its ancestors declared, and a
+ * matching element selector's `--vars` override those within its subtree. A node
+ * without a {@link UiClass} keeps its authored style but still passes inherited
+ * vars to its children. The `UiTheme` resource overrides all vars at resolve time
+ * (runtime re-theming). Runs every frame (before layout) so pseudo-class state
  * changes — hover, press, disable — reflow immediately.
  */
 export const resolveUiStyles = (
   world: World,
-  nodes: UiClassQuery,
+  nodes: UiNodeQuery,
   sheet: UiStyleSheet,
   theme?: UiTheme,
 ): void => {
-  // Sheet `--vars` seed the theme; the UiTheme resource overrides them (runtime
-  // re-theming). Merged once per pass, shared by every node's `var()` resolution.
-  const vars = { ...collectThemeVars(sheet.rules), ...theme?.vars };
-  for (const row of nodes.entries()) {
-    const entity = row[0] as Entity;
-    const node = row[1] as UiNode;
-    const cls = row[2] as UiClass;
-    const styleNode: StyleNode = {
-      classes: cls.classes,
-      states: deriveStates(world, entity),
-      ...(cls.type !== '' ? { type: cls.type } : {}),
-      ...(cls.name !== '' ? { name: cls.name } : {}),
-    };
-    node.style = resolveUiStyle(sheet.rules, styleNode, undefined, vars);
+  const uiSet = new Set<Entity>();
+  for (const row of nodes.entries()) uiSet.add(row[0] as Entity);
+  if (uiSet.size === 0) return;
+
+  const rules = sheet.rules;
+  // The theme resource acts like a runtime `:root` override: it seeds the global
+  // base, and a matching ancestor's element-scoped `--vars` still override it
+  // within their subtree (so scoped vars survive re-theming).
+  const base = theme?.vars !== undefined ? { ...collectGlobalVars(rules), ...theme.vars } : collectGlobalVars(rules);
+
+  const walk = (entity: Entity, inherited: Record<string, string>): void => {
+    let merged = inherited;
+    const cls = world.getComponent(entity, UiClass);
+    if (cls !== undefined) {
+      const styleNode = buildStyleNode(world, entity, cls);
+      const own = resolveNodeVars(rules, styleNode);
+      if (Object.keys(own).length > 0) merged = { ...inherited, ...own };
+      const node = world.getComponent(entity, UiNode);
+      if (node !== undefined) node.style = resolveUiStyle(rules, styleNode, undefined, merged);
+    }
+    const children = world.getComponent(entity, Children);
+    if (children !== undefined) {
+      for (const child of children.entities) if (uiSet.has(child)) walk(child, merged);
+    }
+  };
+
+  for (const entity of uiSet) {
+    const parent = world.getComponent(entity, Parent);
+    if (parent !== undefined && uiSet.has(parent.entity)) continue; // laid out by its parent's walk
+    walk(entity, base);
   }
 };

@@ -99,10 +99,18 @@ and a HUD (text + bars) from ECS components + `.rss`, with gamepad navigation.
   with internal spaces). Verified in a browser (sample-game export): chips fill via
   `var(--accent)`/`var(--alt)`, and overriding `--accent` at runtime recolors the
   `--accent` chips green while the `--alt` chip is unaffected.
-- Remaining: descendant/child **combinators**, per-node scoped vars + **inheritance**,
-  per-node **inline overrides** merged over the sheet, and a `.rss` **asset kind**
-  (load the sheet from a project file, not just a source string). `focused`/`checked`
-  states await focus/checkbox widgets.
+- ✅ **Phase 3d — custom-property inheritance (2026-07-06).** Resolution now walks
+  the UI hierarchy (`resolveUiStyles` over `Parent`/`Children`): `*`/`:root` vars
+  (`collectGlobalVars`) form a global base, an element selector's `--vars`
+  (`resolveNodeVars`) inherit down + override within that node's subtree, and the
+  `UiTheme` override seeds the base (so scoped vars survive re-theming). Verified in
+  a browser (sample-game export): a `.chip` inside a `.themed` container inherits the
+  container's green `--accent` while sibling chips stay the global blue — and after a
+  runtime `--accent` re-theme the flat chips recolor but the `.themed` chip stays green.
+- Remaining (non-AC): descendant/child **combinators**, per-node **inline overrides**
+  merged over the sheet, and a `.rss` **asset kind** (load the sheet from a project
+  file, not just a source string). `focused`/`checked` states await focus/checkbox
+  widgets.
 
 ### Phase 4 — Widgets + interaction
 

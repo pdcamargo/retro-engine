@@ -72,6 +72,7 @@ const SAMPLE_RSS = `
   .chip { width: 96; height: 64; border: 3 solid var(--chip-border); background-color: var(--accent); }
   .chip.alt { background-color: var(--alt); }
   .chip:hovered { background-color: var(--hot); }
+  .themed { --accent: rgb(30, 200, 90); }
 `;
 
 /** Merge a patch into the `window.__game` probe (shared across demo systems). */
@@ -305,6 +306,13 @@ class HelloTextPlugin implements PluginObject {
             root.spawn(new UiNode(), new UiClass({ classes: ['chip', 'hot'] }), new Interactable());
             // A `.chip`-sized node whose fill is a textured UiImage (the checker).
             root.spawn(new UiNode(), new UiClass({ classes: ['chip', 'pic'] }), new UiImage({ image: checker }));
+            // A `.themed` container overrides `--accent` for its subtree — the
+            // chip inside inherits green while the chips above stay `--accent` blue.
+            root
+              .spawn(new UiNode(), new UiClass({ classes: ['themed'] }))
+              .withChildren((themed) => {
+                themed.spawn(new UiNode(), new UiClass({ classes: ['chip', 'nested'] }));
+              });
           });
       },
       { label: 'rss-chips-setup' },

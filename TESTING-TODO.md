@@ -932,3 +932,29 @@ Adds the `image` minimal widget (panel/label/button/**image** — the last widge
   `bun run packages/studio-mcp-server/src/cli.ts`) — a session-level MCP connection the harness owns.
 
 ---
+
+## ✅ In-game UI — `.rss` custom-property inheritance → UI P0 AC FULLY MET (VERIFIED via browser export)
+
+Custom properties now inherit down the UI tree (CSS-like), closing the **last UI acceptance-criterion**.
+
+- **New in `@retro-engine/ui`:** `resolveUiStyles` now walks `Parent`/`Children` instead of resolving
+  each node flat. `*`/`:root` vars (`collectGlobalVars`) are a global base; an element selector's `--vars`
+  (`resolveNodeVars`) inherit down to a matching node's descendants and override within that subtree; the
+  `UiTheme` override seeds the base (so scoped vars survive re-theming). Nodes without a `UiClass` still
+  pass inherited vars to children.
+- **Verified end-to-end in a real browser** (`apps/sample-game` export → Playwright): added a `.themed`
+  container (`--accent: rgb(30,200,90)`) wrapping a `.chip`. Read back: the nested chip = `rgb(30,200,90)`
+  (green, inherited) while sibling chips = `rgb(40,120,210)` (global blue). Then `window.__setAccent(
+  'rgb(200,0,200)')` → the flat chips became purple but the nested chip **stayed green** (subtree override
+  survives the runtime theme) — exactly correct scoping.
+- **Automated:** `rss-style.test.ts` (now 15 tests: + a tree inheritance/override test). Full repo gate
+  green (1942 tests). Changeset added.
+- **HOW to test:** `cd apps/sample-game && bun run build:web`, serve `dist/web`, open in a browser → the
+  top-left strip's last chip (inside `.themed`) is green; the first is blue. In the console run
+  `window.__setAccent('rgb(200,0,200)')` → the blue chips turn purple, the green (themed) chip stays green.
+- **>>> UI P0 item: ALL acceptance criteria now met** (flexbox ✅ / `.rss` cascade+inheritance ✅ /
+  pseudo-class states ✅ / `--vars` theme ✅ / 2D-pipeline render ✅ / panel+label+button+image widgets ✅ /
+  HUD styled by `.rss` ✅). Left the MASTER-ROADMAP box UNCHECKED per CLAUDE.md §3 — **please confirm and
+  I'll check it off.** Non-AC polish (corner radius, z-index/clipping, combinators, more widgets) is P1/P2.
+
+---

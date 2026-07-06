@@ -144,7 +144,7 @@ export class UiPlugin implements PluginObject {
     // paint (and any pseudo-class state change) is in place for the same frame.
     app.addSystem(
       'postUpdate',
-      [Query([UiNode, UiClass]), Res(UiStyleSheet), Res(UiTheme)],
+      [Query([UiNode]), Res(UiStyleSheet), Res(UiTheme)],
       (nodes, sheet, theme) => {
         resolveUiStyles(
           app.world,

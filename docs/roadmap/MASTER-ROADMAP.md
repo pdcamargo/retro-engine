@@ -115,15 +115,23 @@ foundation.**
       asset kind; **more widgets** (toggle/slider/text-input) + focus/spatial nav (4c). Plus **image
       widget** ✅ — `UiImage` (image handle + tint + UV) + a screen-space textured pipeline mirroring the
       MSDF text path (`UiImagePipeline`/`prepareUiImages`/`makeUiImagePassNode`, ordered quad → image →
-      text); verified in a browser (a 2×2 checkerboard chip drew, `imageInstances === 1`). (ADR-0150/0154.)
+      text); verified in a browser (a 2×2 checkerboard chip drew, `imageInstances === 1`). Plus **`.rss`
+      custom-property inheritance** ✅ — resolution walks `Parent`/`Children`: `*`/`:root` vars are a global
+      base, an element selector's `--vars` inherit down + override within its subtree, and the `UiTheme`
+      override survives scoped vars; verified in a browser (a chip inside a `.themed` container inherits its
+      green `--accent` while siblings stay global blue, and stays green after a runtime re-theme).
+      **All acceptance criteria are now met** — ready to check off pending user confirmation (CLAUDE.md §3).
+      (ADR-0150/0154.)
       _AC:_ `UiNode` + derived `ComputedLayout` (not serialized) reusing `Parent`/`Children`; a pure-TS
       **flexbox** `LayoutEngine` behind an interface, with a text-measure callback; a `.rss` (USS-subset)
       parser + style-resolution system matching type / `.class` / `#name` / **state-marker** selectors
-      with cascade + inheritance; pseudo-class markers (`Hovered`/`Focused`/`Pressed`/`Disabled`/`Checked`);
+      with cascade ✅ + inheritance ✅; pseudo-class markers (`Hovered`/`Focused`/`Pressed`/`Disabled`/`Checked`) ✅;
       `--vars` via a theme resource ✅; render through the 2D pipeline (quads + MSDF glyphs) ✅; minimal
       widgets (panel ✅ / label ✅ / button ✅ / image ✅); a HUD scene laid out with flex and styled by
       `.rss` ✅. (Grid, virtualized list/tree, data binding, spatial nav → P1.) Depends on **Text rendering**
-      below. **Closest AC gap: `.rss` inheritance** (cascade ✅, inheritance ❌) — the only remaining AC item.
+      below. **All AC met** — ready to check off pending user confirmation (CLAUDE.md §3). Non-AC polish
+      remaining (→ P1/P2): corner radius, z-index/clipping, `.rss` combinators + inline overrides + asset
+      kind, more interactive widgets (toggle/slider/text-input), spatial nav.
       _Links:_ [ui-system.md](ui-system.md)
 
 ## Renderer

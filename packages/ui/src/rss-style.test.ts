@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 
 import { World } from '@retro-engine/ecs';
+import { Children, Parent } from '@retro-engine/engine';
 
 import { Disabled } from './interaction/ui-button';
 import { UiInteraction } from './interaction/ui-interaction';
@@ -94,25 +95,25 @@ describe('resolveUiStyles — ECS integration', () => {
     const world = new World();
     const e = world.spawn(new UiNode(), new UiClass({ classes: ['box'] }));
 
-    resolveUiStyles(world, world.query([UiNode, UiClass]), sheet);
+    resolveUiStyles(world, world.query([UiNode]), sheet);
     expect(world.getComponent(e, UiNode)!.style.width).toBe(80);
     expectColor(bgColor(world, e), [16 / 255, 16 / 255, 16 / 255, 1]);
 
     // Hover → the :hovered rule wins.
     world.entity(e).insert(new UiInteraction('hovered'));
-    resolveUiStyles(world, world.query([UiNode, UiClass]), sheet);
+    resolveUiStyles(world, world.query([UiNode]), sheet);
     expectColor(bgColor(world, e), [1, 0, 0, 1]);
 
     // Remove hover → back to the base rule (style is re-resolved from scratch each pass).
     world.getComponent(e, UiInteraction)!.state = 'none';
-    resolveUiStyles(world, world.query([UiNode, UiClass]), sheet);
+    resolveUiStyles(world, world.query([UiNode]), sheet);
     expectColor(bgColor(world, e), [16 / 255, 16 / 255, 16 / 255, 1]);
   });
 
   it('applies the :disabled state from the Disabled marker', () => {
     const world = new World();
     const e = world.spawn(new UiNode(), new UiClass({ classes: ['box'] }), new Disabled());
-    resolveUiStyles(world, world.query([UiNode, UiClass]), sheet);
+    resolveUiStyles(world, world.query([UiNode]), sheet);
     expectColor(bgColor(world, e), [128 / 255, 128 / 255, 128 / 255, 1]);
   });
 
@@ -120,7 +121,7 @@ describe('resolveUiStyles — ECS integration', () => {
     const world = new World();
     const named = world.spawn(new UiNode(), new UiClass({ name: 'hud' }));
     const typed = world.spawn(new UiNode(), new UiClass({ type: 'Panel' }));
-    resolveUiStyles(world, world.query([UiNode, UiClass]), sheet);
+    resolveUiStyles(world, world.query([UiNode]), sheet);
     expect(world.getComponent(named, UiNode)!.style.width).toBe(200);
     expect(world.getComponent(typed, UiNode)!.style.gap).toBe(5);
   });
@@ -128,7 +129,7 @@ describe('resolveUiStyles — ECS integration', () => {
   it('leaves an unmatched node at default style', () => {
     const world = new World();
     const e = world.spawn(new UiNode(), new UiClass({ classes: ['nope'] }));
-    resolveUiStyles(world, world.query([UiNode, UiClass]), sheet);
+    resolveUiStyles(world, world.query([UiNode]), sheet);
     const style = world.getComponent(e, UiNode)!.style;
     expect(style.backgroundColor).toBeUndefined();
     expect(style.width).toBeUndefined();
@@ -170,11 +171,32 @@ describe('custom properties (--vars / var())', () => {
     const world = new World();
     const e = world.spawn(new UiNode(), new UiClass({ classes: ['card'] }));
 
-    resolveUiStyles(world, world.query([UiNode, UiClass]), themed);
+    resolveUiStyles(world, world.query([UiNode]), themed);
     expectColor(world.getComponent(e, UiNode)!.style.backgroundColor, [1, 0, 0, 1]);
 
     // Override the accent via the theme resource → re-resolves to the new value.
-    resolveUiStyles(world, world.query([UiNode, UiClass]), themed, new UiTheme({ '--accent': '#0000ff' }));
+    resolveUiStyles(world, world.query([UiNode]), themed, new UiTheme({ '--accent': '#0000ff' }));
     expectColor(world.getComponent(e, UiNode)!.style.backgroundColor, [0, 0, 1, 1]);
+  });
+
+  it('inherits custom properties down the tree; an ancestor selector overrides its subtree', () => {
+    const sheet = new UiStyleSheet(
+      parseRss(`
+        :root { --accent: #ff0000; }
+        .themed { --accent: #00ff00; }
+        .chip { background-color: var(--accent); }
+      `),
+    );
+    const world = new World();
+    // A `.chip` outside any `.themed` subtree → the global (:root) accent (red).
+    const outside = world.spawn(new UiNode(), new UiClass({ classes: ['chip'] }));
+    // A `.chip` nested under a `.themed` container → inherits the overridden accent (green).
+    const container = world.spawn(new UiNode(), new UiClass({ classes: ['themed'] }));
+    const inside = world.spawn(new UiNode(), new UiClass({ classes: ['chip'] }), new Parent(container));
+    world.entity(container).insert(new Children([inside]));
+
+    resolveUiStyles(world, world.query([UiNode]), sheet);
+    expectColor(world.getComponent(outside, UiNode)!.style.backgroundColor, [1, 0, 0, 1]);
+    expectColor(world.getComponent(inside, UiNode)!.style.backgroundColor, [0, 1, 0, 1]);
   });
 });

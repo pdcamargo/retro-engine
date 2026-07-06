@@ -31,10 +31,12 @@ export type { RssDeclaration, RssRule, RssSelector } from './rss-parser';
 export { parseRss, parseSelector } from './rss-parser';
 export type { StyleNode } from './rss-resolve';
 export {
+  collectGlobalVars,
   collectThemeVars,
   matches,
   parseColor,
   resolveDeclarations,
+  resolveNodeVars,
   resolveUiStyle,
   specificity,
   substituteVars,

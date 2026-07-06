@@ -246,6 +246,57 @@ export const collectThemeVars = (rules: readonly RssRule[]): Record<string, stri
   return vars;
 };
 
+/**
+ * Whether a selector is a *global* variable source — `*` (universal) or `:root`.
+ * Custom properties declared on these apply to every node; those on element
+ * selectors (`.class` / `#name` / type) are subtree-scoped (see
+ * {@link resolveNodeVars}).
+ */
+const isGlobalVarSelector = (selector: RssSelector): boolean =>
+  selector.universal ||
+  (selector.type === undefined &&
+    selector.name === undefined &&
+    selector.classes.length === 0 &&
+    selector.states.length === 1 &&
+    selector.states[0] === 'root');
+
+/**
+ * Collect the *global* custom properties — those declared on `*` / `:root` — into
+ * a flat map (later declarations win). These form the inherited base every node
+ * starts from; a matching ancestor can override them for its subtree.
+ */
+export const collectGlobalVars = (rules: readonly RssRule[]): Record<string, string> => {
+  const vars: Record<string, string> = {};
+  for (const rule of rules) {
+    if (!isGlobalVarSelector(rule.selector)) continue;
+    for (const decl of rule.declarations) {
+      if (decl.property.startsWith('--')) vars[decl.property] = decl.value.trim();
+    }
+  }
+  return vars;
+};
+
+/**
+ * The *element-scoped* custom properties `node` itself declares — the `--name`
+ * declarations from matching non-global rules, cascaded (specificity then source
+ * order). These override inherited values within the node's subtree.
+ */
+export const resolveNodeVars = (rules: readonly RssRule[], node: StyleNode): Record<string, string> => {
+  const matched = rules.filter((rule) => !isGlobalVarSelector(rule.selector) && matches(rule.selector, node));
+  matched.sort((a, b) => {
+    const sa = specificity(a.selector);
+    const sb = specificity(b.selector);
+    return (sa[0] - sb[0]) || (sa[1] - sb[1]) || (sa[2] - sb[2]) || a.order - b.order;
+  });
+  const vars: Record<string, string> = {};
+  for (const rule of matched) {
+    for (const decl of rule.declarations) {
+      if (decl.property.startsWith('--')) vars[decl.property] = decl.value.trim();
+    }
+  }
+  return vars;
+};
+
 const VAR_REF = /var\(\s*(--[\w-]+)\s*(?:,\s*([^)]*))?\)/g;
 
 /**
