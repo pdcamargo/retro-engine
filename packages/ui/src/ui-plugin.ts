@@ -1,12 +1,14 @@
 import type { Entity, Query as QueryHandle, World } from '@retro-engine/ecs';
-import type { App, PluginObject } from '@retro-engine/engine';
-import { Children, Parent, Query, Res } from '@retro-engine/engine';
+import type { App, Font, Fonts, PluginObject } from '@retro-engine/engine';
+import { ASSET_TYPE, Children, Fonts as FontsResource, Parent, Query, Res } from '@retro-engine/engine';
 import { FieldType, type Schema, t } from '@retro-engine/reflect';
 
 import { FlexLayoutEngine } from './flex-layout';
 import type { LayoutEngine, LayoutNode, LayoutResult } from './layout-engine';
+import { makeTextMeasure } from './text-measure';
 import { ComputedLayout, UiNode } from './ui-node';
 import type { UiStyle } from './ui-style';
+import { UiText } from './ui-text';
 
 /**
  * Available space for UI roots, in logical pixels. A UI root with no explicit
@@ -78,6 +80,20 @@ export const uiNodeSchema: Schema<UiNode> = {
   }) as unknown as FieldType<UiStyle>,
 };
 
+/**
+ * Reflection schema for {@link UiText}: the authored string plus the font and
+ * metrics that size it. `font` is optional (a text node with no font is not
+ * intrinsically sized); `lineHeight` is optional (font default). Visual styling
+ * is applied by the render layer and not carried here, so nothing else persists.
+ */
+export const uiTextSchema: Schema<UiText> = {
+  text: t.string,
+  font: t.handle<Font>(ASSET_TYPE.font).optional(),
+  fontSize: t.number,
+  letterSpacing: t.number,
+  lineHeight: t.number.optional(),
+};
+
 type UiNodeQuery = QueryHandle<readonly [typeof UiNode]>;
 
 /**
@@ -101,6 +117,7 @@ export class UiPlugin implements PluginObject {
     if (app.getResource(UiLayout) === undefined) app.insertResource(new UiLayout());
 
     app.registerComponent(UiNode, uiNodeSchema, { name: 'UiNode', make: () => new UiNode() });
+    app.registerComponent(UiText, uiTextSchema, { name: 'UiText', make: () => new UiText() });
 
     app.addSystem(
       'postUpdate',
@@ -111,6 +128,8 @@ export class UiPlugin implements PluginObject {
           nodes as unknown as UiNodeQuery,
           viewport as UiViewport,
           (layout as UiLayout).engine,
+          // Text sizing needs the font store; absent (no TextPlugin) → nodes size by style alone.
+          app.getResource(FontsResource),
         );
       },
       { label: 'ui-layout' },
@@ -128,6 +147,7 @@ export const runUiLayout = (
   nodes: UiNodeQuery,
   viewport: UiViewport,
   engine: LayoutEngine,
+  fonts?: Fonts,
 ): void => {
   const uiSet = new Set<Entity>();
   for (const row of nodes.entries()) uiSet.add(row[0] as Entity);
@@ -136,23 +156,40 @@ export const runUiLayout = (
   for (const entity of uiSet) {
     const parent = world.getComponent(entity, Parent);
     if (parent !== undefined && uiSet.has(parent.entity)) continue; // not a root
-    const tree = buildLayoutNode(world, entity, uiSet);
+    const tree = buildLayoutNode(world, entity, uiSet, fonts);
     const result = engine.compute(tree, { width: viewport.width, height: viewport.height });
     writeLayout(world, result, 0, 0);
   }
 };
 
-/** Build a {@link LayoutNode} from an entity's `UiNode` + its `UiNode` children. */
-const buildLayoutNode = (world: World, entity: Entity, uiSet: Set<Entity>): LayoutNode => {
+/**
+ * Build a {@link LayoutNode} from an entity's `UiNode` + its `UiNode` children.
+ * A node carrying a {@link UiText} (with `fonts` available) also gets an
+ * intrinsic text {@link MeasureFunc}, which the flex engine uses when the node
+ * has no in-flow children.
+ */
+const buildLayoutNode = (
+  world: World,
+  entity: Entity,
+  uiSet: Set<Entity>,
+  fonts: Fonts | undefined,
+): LayoutNode => {
   const node = world.getComponent(entity, UiNode);
   const children = world.getComponent(entity, Children);
   const kids: LayoutNode[] = [];
   if (children !== undefined) {
     for (const child of children.entities) {
-      if (uiSet.has(child)) kids.push(buildLayoutNode(world, child, uiSet));
+      if (uiSet.has(child)) kids.push(buildLayoutNode(world, child, uiSet, fonts));
     }
   }
-  return { style: node!.style, children: kids, key: entity };
+  const uiText = fonts !== undefined ? world.getComponent(entity, UiText) : undefined;
+  const measure = uiText !== undefined ? makeTextMeasure(uiText, fonts!) : undefined;
+  return {
+    style: node!.style,
+    children: kids,
+    key: entity,
+    ...(measure !== undefined ? { measure } : {}),
+  };
 };
 
 /** Write a result subtree into each entity's `ComputedLayout` (absolute coords). */

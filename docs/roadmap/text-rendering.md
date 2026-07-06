@@ -66,8 +66,22 @@ an MSDF shader. Required by the in-game UI system.
 
 ### Phase 3 — Depth
 
-- World-space `Text` (3D); rich text runs / per-run styling; wire `measureText`
-  into the in-game UI layout measure callback; RTL/bidi (later).
+- ✅ **`measureText` wired into the in-game UI layout measure callback**
+  (2026-07-06): `@retro-engine/ui`'s `UiText` component + `makeTextMeasure`
+  build a `MeasureFunc` from `Font.measure`, attached to leaf text nodes by
+  `UiPlugin` so flexbox sizes a node to its text (wrapping to the offered
+  width). Headless — 53 UI tests.
+- Remaining: world-space `Text` (3D); rich text runs / per-run styling; RTL/bidi
+  (later).
+
+### On-screen confirmation (✅ 2026-07-06)
+
+The Phase 2c pending item — real on-screen confirmation — is satisfied: the
+`@retro-engine/sample-game` web export (built-in default font) **renders crisp
+MSDF text in a real browser**, verified via Playwright (see
+[web-build-target.md](web-build-target.md)). The built-in SDF default font is the
+default path; a true multi-channel MSDF atlas via `msdf-atlas-gen` remains an
+optional tooling upgrade (the `.font` importer already loads one).
 
 ## Open questions (resolved / remaining)
 

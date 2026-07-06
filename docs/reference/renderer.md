@@ -115,9 +115,10 @@ no clustered lighting, no bloom/DoF/SSR/volumetrics/atmospheric sky, and no engi
   pipeline** (`retro_engine::text` median-of-RGB shader, `TextPipeline`/`TextInstanceBuffer`,
   `packGlyphInstance`, `text-prepare`/`text-queue` drawing through the transparent 2D phase), plus a
   **built-in pure-JS SDF default font** (`generateSdfFont` / `installDefaultFont`) and a `?mode=text`
-  playground sample. Verified end-to-end via the capturing renderer; benched. Remaining: on-screen visual
-  confirmation (studio MCP), world-space `Text` (Phase 3), and an optional true-MSDF atlas via
-  `msdf-atlas-gen` (the `.font` importer already loads one).
+  playground sample. Verified end-to-end via the capturing renderer; benched. **On-screen confirmed** — the
+  `sample-game` web export renders crisp MSDF text in a real browser (Playwright). `measureText` is now
+  wired into the in-game UI layout (`@retro-engine/ui` `UiText`/`makeTextMeasure`). Remaining: world-space
+  `Text` (Phase 3) + an optional true-MSDF atlas via `msdf-atlas-gen` (the `.font` importer already loads one).
 - ✅ **glTF/GLB import** (`packages/gltf`, ADR-0057/0059) — GLB+glTF parse, scene instantiation, animation
   mapping, image decode, auto-retarget on import. (See [`assets.md`](assets.md).)
 - ✅ **GPU skinning & morph** — see [`animation.md`](animation.md) (ADR-0114/0115/0129).

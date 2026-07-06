@@ -34,8 +34,17 @@ and a HUD (text + bars) from ECS components + `.rss`, with gamepad navigation.
   `Parent`/`Children` → `LayoutNode` tree → runs the engine → writes
   `ComputedLayout` with accumulated absolute coords. `UiViewport` (root size) +
   `UiLayout` (swappable engine) resources. Verified on a bare ECS `World` +
-  reflection round-trip (29 UI tests total). Text-measure wiring (ADR-0149
-  `measureText`) lands with the text-content node in Phase 2.
+  reflection round-trip (29 UI tests total).
+
+### Phase 1c — Text content + measure bridge ✅ (2026-07-06)
+
+- `UiText` (authored, reflection-registered: `text`, `font`, `fontSize`,
+  `letterSpacing`, `lineHeight`; requires `UiNode`) + `makeTextMeasure` build the
+  intrinsic `MeasureFunc` from the engine text layer (`Font.measure`, ADR-0149),
+  which `UiPlugin` attaches to leaf text nodes so flexbox sizes a node to its
+  text (wrapping to the offered width). Graceful when no `Fonts` store is present
+  (nodes size by style). This is the ADR-0149 `measureText` measure-callback
+  wiring the layout system was waiting on. 53 UI tests.
 
 ### Phase 2 — Rendering
 

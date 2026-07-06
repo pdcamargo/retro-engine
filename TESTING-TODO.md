@@ -563,3 +563,28 @@ boots the game; `parseProjectDescriptor` (in `@retro-engine/project`) reads `pro
 - Roadmap: `docs/roadmap/web-build-target.md`. ADRs 0151 + 0153. MASTER-ROADMAP Export item 🟡.
 
 ---
+
+## 🟡 In-game UI — Phase 1c: UiText + measureText bridge (unit-tested)
+
+`@retro-engine/ui` can now size a UI node to its text. New `UiText` component (authored,
+reflection-registered: text/font/fontSize/letterSpacing/lineHeight; requires `UiNode`) +
+`makeTextMeasure(uiText, fonts)` builds the flex `MeasureFunc` from the engine text layer
+(`Font.measure`, ADR-0149). `UiPlugin` threads the `Fonts` store into the layout pass and
+attaches the measure func to leaf text nodes, so flexbox sizes text intrinsically (wrapping
+to the offered width). Graceful when no `Fonts` store is present (nodes size by style). This
+is the ADR-0149 `measureText` measure-callback wiring the UI layout was waiting on.
+
+- **Automated:** 53 UI tests (was 41) — UiText defaults/overrides/reflection round-trip,
+  makeTextMeasure guards (empty/no-font/unloaded) + option passing (fontSize/letterSpacing
+  always; lineHeight/maxWidth conditional) + result mapping, and two integration tests (a
+  UiText leaf sizes to its measured text in a flex row; stays style-sized with no font store).
+  Full repo gate green (lint/typecheck/test/build/bench). Changeset added.
+- **Why no MCP verification:** UI still has no on-screen rendering (Phase 2) — layout/measure
+  is headless. It'll be visually verifiable once UI Phase 2 rendering lands (drivable via the
+  same sample-game web-export → Playwright path used for text).
+- **HOW to test:** `bun test packages/ui/`. Behavior: a `UiText` on a `UiNode` leaf gets an
+  intrinsic size from its font so a flex container lays it out like a real label.
+- Roadmap: `docs/roadmap/ui-system.md` (Phase 1c ✅) + `text-rendering.md` (Phase 3 measure
+  bridge ✅). ADR-0149/0150. MASTER-ROADMAP UI + Text items updated.
+
+---

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test';
 
 import type { Entity } from '@retro-engine/ecs';
 import { World } from '@retro-engine/ecs';
+import type { Font, Fonts, Handle } from '@retro-engine/engine';
 import { Children, Parent } from '@retro-engine/engine';
 import {
   type DecodeEnv,
@@ -14,6 +15,7 @@ import {
 import { FlexLayoutEngine } from './flex-layout';
 import { ComputedLayout, UiNode } from './ui-node';
 import { runUiLayout, uiNodeSchema, UiViewport } from './ui-plugin';
+import { UiText } from './ui-text';
 
 const engine = new FlexLayoutEngine();
 const layout = (world: World, viewport = new UiViewport(1280, 720)) =>
@@ -88,6 +90,47 @@ describe('runUiLayout (ECS layout system)', () => {
   it('does nothing when there are no UI nodes', () => {
     const world = new World();
     expect(() => layout(world)).not.toThrow();
+  });
+
+  it('sizes a UiText leaf to its measured text via the font store', () => {
+    // A font store + font that report a fixed 123×45 block for any text.
+    const fontHandle = {} as Handle<Font>;
+    const fakeFont = { measure: () => ({ width: 123, height: 45, lineCount: 1 }) } as unknown as Font;
+    const fakeFonts = { get: () => fakeFont } as unknown as Fonts;
+
+    const world = new World();
+    // flex-start on the cross axis so the leaf's height is its measured height,
+    // not stretched to the row.
+    const root = world.spawn(
+      new UiNode({ width: 400, height: 100, flexDirection: 'row', alignItems: 'flex-start' }),
+    );
+    const child = world.spawn(new UiNode({}), new UiText({ text: 'hi', font: fontHandle }), new Parent(root));
+    world.entity(root).insert(new Children([child]));
+
+    runUiLayout(world, world.query([UiNode]), new UiViewport(1280, 720), engine, fakeFonts);
+
+    const c = cl(world, child);
+    expect([c.width, c.height]).toEqual([123, 45]);
+  });
+
+  it('leaves a UiText node style-sized when no font store is provided', () => {
+    const fontHandle = {} as Handle<Font>;
+    const world = new World();
+    const root = world.spawn(
+      new UiNode({ width: 400, height: 100, flexDirection: 'row', alignItems: 'flex-start' }),
+    );
+    const child = world.spawn(
+      new UiNode({ width: 60, height: 20 }),
+      new UiText({ text: 'hi', font: fontHandle }),
+      new Parent(root),
+    );
+    world.entity(root).insert(new Children([child]));
+
+    // No fonts arg → no measure func attached; the node keeps its explicit size.
+    layout(world);
+
+    const c = cl(world, child);
+    expect([c.width, c.height]).toEqual([60, 20]);
   });
 });
 

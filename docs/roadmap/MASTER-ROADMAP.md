@@ -90,9 +90,10 @@ foundation.**
       `UiNode` (reflection-registered) / `ComputedLayout` (derived) + a `UiPlugin` `postUpdate` layout system
       that mirrors `Parent`/`Children` → runs the engine → writes absolute geometry; plus the **`.rss`
       (USS-subset) parser + style resolution** (`parseRss`/`resolveUiStyle` — compound selectors, specificity
-      cascade, declaration→`UiStyle` mapping, verified end-to-end against the layout engine). Headless.
-      Remaining: 2D rendering (2), `.rss` combinators/`--vars`/inheritance + layout-pass wiring (3b),
-      widgets (4). (ADR-0150.)
+      cascade, declaration→`UiStyle` mapping, verified end-to-end against the layout engine). Headless. Plus
+      **Phase 1c: `UiText` content component + `makeTextMeasure`** — the ADR-0149 `measureText` bridge, so a
+      leaf text node sizes to its text through flexbox (53 UI tests). Remaining: 2D rendering (2), `.rss`
+      combinators/`--vars`/inheritance + layout-pass wiring (3b), widgets (4). (ADR-0150.)
       _AC:_ `UiNode` + derived `ComputedLayout` (not serialized) reusing `Parent`/`Children`; a pure-TS
       **flexbox** `LayoutEngine` behind an interface, with a text-measure callback; a `.rss` (USS-subset)
       parser + style-resolution system matching type / `.class` / `#name` / **state-marker** selectors
@@ -109,10 +110,11 @@ foundation.**
       (reflection round-trips), full glyph render pipeline (shader + `TextPipeline`/`TextInstanceBuffer`/
       `packGlyphInstance` + `text-prepare`/`text-queue` through the transparent 2D phase), a built-in
       pure-JS SDF default font (`installDefaultFont`), and a `?mode=text` playground sample. Unit-tested +
-      capturing-renderer integration + benched. Remaining before check-off: on-screen visual confirmation
-      (studio MCP was down this session — open `?mode=text` / a studio project with TextPlugin) + Phase 3
-      (world-space `Text`, wire `measureText` into the UI measure callback). Optional: true-MSDF atlas via
-      `msdf-atlas-gen` (the `.font` importer already loads one).
+      capturing-renderer integration + benched. **On-screen confirmation done** — the `sample-game` web
+      export renders crisp MSDF text in a real browser (Playwright, see web-build-target.md). **`measureText`
+      now wired into the UI layout measure callback** (`@retro-engine/ui` `UiText` + `makeTextMeasure`).
+      Remaining before check-off: Phase 3 world-space `Text` (3D) + rich-text runs. Optional: true-MSDF atlas
+      via `msdf-atlas-gen` (the `.font` importer already loads one).
       _AC:_ MSDF glyph atlas (generated via msdfgen, loaded as an asset) + runtime glyph-quad batching
       through the 2D pipeline; `Text`/`Text2d` components; font asset kind + `.meta`; layout
       (line-break/wrap/alignment); glyph metrics exposed to the UI layout measure callback; crisp at any
