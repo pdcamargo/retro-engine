@@ -84,8 +84,11 @@ foundation.**
       _AC:_ contract + components + reflection ✅; fixed-timestep bridge ✅; rapier 2D+3D + real sim ✅;
       falling demo ✅; ECS collision events ✅; character controller ✅; joints ✅. (Studio integration → P1/P2.)
       _Links:_ [physics.md](physics.md)
-- [ ] **In-game UI (core) — "Retro CSS"** — ❌ `packages/ui`: retained ECS UI (Unity-UITK model + Bevy
-      `UiSurface` mechanism).
+- [ ] **In-game UI (core) — "Retro CSS"** — 🟡 `@retro-engine/ui` scaffolded; **Phase 1a shipped**: the
+      pure-TS **flexbox `LayoutEngine`** (`FlexLayoutEngine` — §9.7 grow/shrink with min/max freezing,
+      justify/align, gap, padding/margin, absolute insets) behind a swappable interface with a text-measure
+      callback, `UiStyle`/`makeStyle`. 21 unit tests + bench, headless. Remaining: `UiNode`/`ComputedLayout`
+      + `UiPlugin` layout system (1b), 2D rendering (2), `.rss` styling (3), widgets (4). (ADR-0150.)
       _AC:_ `UiNode` + derived `ComputedLayout` (not serialized) reusing `Parent`/`Children`; a pure-TS
       **flexbox** `LayoutEngine` behind an interface, with a text-measure callback; a `.rss` (USS-subset)
       parser + style-resolution system matching type / `.class` / `#name` / **state-marker** selectors

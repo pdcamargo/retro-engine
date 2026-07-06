@@ -46,6 +46,7 @@ const PACKAGES: readonly BenchPackage[] = [
   { name: '@retro-engine/input', dir: 'packages/input' },
   { name: '@retro-engine/audio', dir: 'packages/audio' },
   { name: '@retro-engine/physics-core', dir: 'packages/physics-core' },
+  { name: '@retro-engine/ui', dir: 'packages/ui' },
 ];
 
 const REPO_ROOT = resolve(import.meta.dirname, '..');

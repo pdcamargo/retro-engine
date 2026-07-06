@@ -404,3 +404,25 @@ The engine ships a pure-JS SDF font instead, so text works without them. Install
 that load through the existing `.font` importer.
 
 ---
+
+## 🟡 In-game UI (Retro CSS) — Phase 1a shipped (flexbox LayoutEngine)
+
+New package `@retro-engine/ui` with the pure layout foundation: a `LayoutEngine` interface
++ `FlexLayoutEngine` — single-line CSS flexbox (main-axis grow/shrink with min/max clamping +
+iterative freezing per §9.7, `justify-content`, `align-items`/`align-self`, `gap`,
+padding/margin, `position: absolute` insets) with a text-measure callback hook, plus
+`UiStyle`/`makeStyle`. Pure TS, no ECS/GPU.
+
+- **HOW to test:** `bun test packages/ui/` — 21 tests (row/column, grow/shrink + min clamp,
+  all justify-content modes, align stretch/center/end + align-self, gap, padding/margin,
+  row-reverse, measure callback, absolute insets incl. left+right stretch, nested trees).
+  Bench: `bun run --cwd packages/ui bench` (~51µs for a 271-node grid).
+- **Not yet in the ECS or on screen.** Phase 1b adds `UiNode`/`ComputedLayout` + a `UiPlugin`
+  layout system (walk hierarchy → run engine → write layout); Phase 2 renders through the 2D
+  pipeline (quads + ADR-0149 glyphs); Phase 3 `.rss` styling; Phase 4 widgets. So nothing to
+  screenshot yet — the layout math is verified purely.
+- Roadmap: `docs/roadmap/ui-system.md` (rewritten to the retained-ECS + flexbox + `.rss`
+  model). Decision: ADR-0150. MASTER-ROADMAP item is 🟡 (box stays unchecked until the UI
+  renders styled widgets on screen).
+
+---
