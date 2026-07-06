@@ -2,6 +2,7 @@ import type { Entity, World } from '@retro-engine/ecs';
 import {
   type App,
   AppTypeRegistry,
+  CompositionRegistry,
   type DeserializeOptions,
   deserializeScene,
   type SceneData,
@@ -22,8 +23,8 @@ export type EntityFilter = (entity: Entity) => boolean;
 /**
  * Serialize the entities passing `keep` (the authored scene) into a snapshot,
  * excluding editor-infra entities. Operates on a bare {@link World} so it needs
- * no App or renderer. Entity-only — registered resources are not captured (see
- * ADR-0152: play mode reverts entities, not resources).
+ * no App or renderer. Entity-only — registered resources are not captured, so
+ * play mode reverts entities, not resources.
  */
 export const captureSnapshot = (
   world: World,
@@ -50,9 +51,20 @@ export const restoreSnapshot = (
 
 const registryOf = (app: App): TypeRegistry => app.getResource(AppTypeRegistry)!.registry;
 
-/** {@link captureSnapshot} against an App's world + registry. */
-export const capturePlaySnapshot = (app: App, keep: EntityFilter): SceneData =>
-  captureSnapshot(app.world, registryOf(app), keep);
+/**
+ * Capture an App's authored scene, composition-aware: derived subtrees (glTF
+ * instantiated nodes, nested-scene instances) are summarized to their authored
+ * root via the App's {@link CompositionRegistry}, so a re-instantiating root is
+ * not duplicated when {@link restorePlaySnapshot}'s `spawnScene` re-runs it.
+ * Entity-only — registered resources are not captured or reverted.
+ */
+export const capturePlaySnapshot = (app: App, keep: EntityFilter): SceneData => {
+  const composition = app.getResource(CompositionRegistry);
+  return serializeWorld(app.world, registryOf(app), {
+    filter: keep,
+    ...(composition !== undefined ? { composition } : {}),
+  });
+};
 
 /**
  * Revert an App to `snapshot`: despawn authored entities, then `spawnScene` the

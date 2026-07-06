@@ -138,8 +138,12 @@ foundation.**
       (`@retro-engine/editor-sdk`, ADR-0152): `captureSnapshot`/`restoreSnapshot` (World-level, renderer-free,
       excludes editor infra via a `keep` filter, returns the id-remap map) + `installPlayModeSnapshot`
       (capture on `onExit(Edit)`, restore on `onEnter(Edit)`). Gating policy formalized (user systems run
-      only `inState(Play)`). 4 tests. Remaining: studio toolbar wiring + selection remap + inspector +
-      **Step** (advance one frame while Paused) — MCP-verified.
+      only `inState(Play)`). **Now wired into the studio + MCP-verified** — `installPlayModeSnapshot` runs on
+      the studio's play/stop; a Play→edit→Stop cycle reverts an authored field (Health 150→110) with the
+      entity count unchanged (77→77, no glTF-rig duplication). Needed a **composition-aware capture fix**
+      (`SerializeOptions.composition`) so restore doesn't re-instantiate glTF subtrees. Selection is cleared
+      on restore. Remaining: true selection *survival* + inspector-during-play + **Step** (advance one frame
+      while Paused — the toolbar button is still inert).
       _AC:_ snapshot the authored scene on Play (serialize world), restore it exactly on Stop (no leaked
       play-time edits); **Step** advances exactly one frame while paused (wire the dead Run-menu/toolbar
       buttons); systems gate correctly by `SimState`; inspector shows live values during play.

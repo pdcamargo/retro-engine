@@ -779,3 +779,31 @@ showing "CREDITS: LOADED" and setting `window.__game.credits`.
 - Roadmap: `web-build-target.md` (asset phase C ✅). MASTER-ROADMAP Export item 🟡 (studio menu remains).
 
 ---
+
+## ✅ Play mode — snapshot/restore wired into the studio (VERIFIED via studio MCP)
+
+The studio's Play→Stop now reverts the scene. `installPlayModeSnapshot` is installed in
+`apps/studio/src/main.ts` (`keep = !EditorOnly`): Play captures the authored scene, Stop despawns
+authored entities + respawns the snapshot. Fixed a real bug found via MCP: `capturePlaySnapshot`
+was capturing glTF-instantiated children verbatim, so restore's `spawnScene` re-instantiated them
+→ every Play/Stop **doubled** a model's node tree. Now composition-aware: engine
+`SerializeOptions.composition` → `serializeWorld` → `collectComposition`; `capturePlaySnapshot`
+passes the App's `CompositionRegistry` (entities-only, per ADR-0152). Selection clears on restore.
+
+- **Verified end-to-end (studio + retro-studio MCP, real `retro-game-sample` project):** brought up
+  `bun tauri dev` (Rust pre-built → ~6s), drove `studio_play` → `component_set Health.current`
+  → `studio_stop`. Before the fix: Stop left Health at 150 (not reverted) AND the hierarchy had TWO
+  `Armature`/`Character_*` subtrees. After the fix: Hero's Health reverts 150→110, and a play/stop
+  cycle keeps the entity count at 77→77 (no duplication) — screenshots `playmode-before/after`.
+- **Automated:** engine (37 scene tests) + editor-sdk (64 tests) green; full repo gate green. Changeset added.
+- **HOW to test:** open the studio on a project with a glTF model, select an entity, press Play,
+  change a field, press Stop → the field reverts and the model isn't duplicated.
+- **Backlog LEFT (not deleted):** `docs/backlog/studio-playmode-snapshot-restore.md` — acceptance
+  criterion "selection *survives* the round-trip" is only partially met (selection is safely CLEARED,
+  not remapped to a persistent identity). Also **Step** (advance one frame while Paused — the ▶⏭
+  toolbar button is still inert) + inspector-during-play remain. Please confirm before I delete it.
+- **Separately confirmed the P1 bug** `studio-mcp-component-set-entity-and-vec3`: `component_set`
+  on a vec3 field (`Transform.translation = [5,5,5]`) corrupted it to `[]` live — reproduced via MCP.
+- Roadmap: `play-mode.md` + MASTER-ROADMAP Play-mode item + `reference/studio-editor.md` updated. ADR-0152.
+
+---

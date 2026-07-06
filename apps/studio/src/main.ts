@@ -14,6 +14,7 @@ import {
   type FontSpec,
   History,
   initSimState,
+  installPlayModeSnapshot,
   isDockingEnabled,
   listComponents,
   saveLayout,
@@ -140,6 +141,19 @@ splash.step({ glyph: '▸', message: 'mounting ecs world', result: 'ok', tone: '
 
 const scene = createScene();
 const state = createState(scene);
+// Play mode is a sandbox: snapshot the authored scene on Play, restore it on Stop
+// so play-time edits (and gameplay mutations) never leak back into the project.
+// Authored = everything not tagged EditorOnly (gizmos, editor cameras, previews).
+installPlayModeSnapshot(app, {
+  keep: (e) => !app.world.has(e, EditorOnly),
+  onRestore: () => {
+    // Restore despawns + respawns authored entities with fresh ids, so any
+    // selected authored entity no longer exists. Clear the selection rather than
+    // risk a dangling or mis-mapped id. (True selection survival — keyed on a
+    // persistent identity — is a follow-up.)
+    if (state.selectedEntity !== null) state.selectedEntity = null;
+  },
+});
 loadComposerPrefs(state.composer); // localStorage seed; a project rebinds this below
 loadAssetsPrefs(state.assets); // persisted zoom + type filter (best-effort)
 const modelSubAssets = createModelSubAssetService(app);

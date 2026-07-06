@@ -69,8 +69,10 @@ drawn-but-dead menu chrome, and **single-select everywhere**. There is **no game
 ## Play, history, prefabs, animator, graph
 
 - 🟡 **Play/pause/stop** (ADR-0087) — `SimState` (Edit/Play/Paused); toolbar Play↔Stop and Pause work;
-  user systems gated behind Play; MCP `studio.play/pause/stop` work. 🔩 **Step is dead** everywhere; no
-  world snapshot/restore on play (backlog/studio-playmode-snapshot-restore.md, roadmap/play-mode.md).
+  user systems gated behind Play; MCP `studio.play/pause/stop` work. ✅ **World snapshot/restore on
+  play** now wired (`installPlayModeSnapshot`) + MCP-verified: Stop reverts authored edits with no
+  glTF-rig duplication (composition-aware capture); selection clears on restore. 🔩 **Step is dead**
+  everywhere; true selection survival + inspector-during-play remain (roadmap/play-mode.md).
 - ✅ **Undo/redo history** (`editor-sdk/src/edit/history.ts`, ADR-0082/0083) — capacity 200; setField/
   add/remove component/addBundle/custom/batch; history panel timeline + click-to-jump; Ctrl+Z/Y/Shift+Z;
   dirty tracking; MCP `history.*`.

@@ -107,6 +107,15 @@ export interface SerializeOptions {
    * snapshot keeps the user scene and drops the editor's own infra entities.
    */
   filter?(entity: Entity): boolean;
+  /**
+   * Composition providers used to summarize derived subtrees (glTF-instantiated
+   * nodes, nested-scene instances) into their authored root instead of emitting
+   * the generated children verbatim. {@link serializeScene} passes the App's
+   * registry automatically; a bare {@link serializeWorld} caller (e.g. the
+   * play-mode snapshot) passes it so a re-instantiating root is not duplicated
+   * on restore.
+   */
+  composition?: CompositionRegistry;
 }
 
 const guidRef = (_assetType: string, handle: Handle<unknown>): string | undefined => handle.guid;
@@ -305,7 +314,14 @@ export const serializeWorld = (
   const { env, idOf, live } = buildEncodeEnv(world, registry, opts);
   return {
     version: SCENE_FORMAT_VERSION,
-    entities: serializeEntities(world, registry, env, idOf, live, collectComposition(world)),
+    entities: serializeEntities(
+      world,
+      registry,
+      env,
+      idOf,
+      live,
+      collectComposition(world, opts.composition),
+    ),
   };
 };
 

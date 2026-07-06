@@ -18,15 +18,21 @@ Snapshot/restore core + gating policy shipped 2026-07-06 (ADR-0152). See below.
   (`@retro-engine/editor-sdk`) serialize the authored entities (excluding editor
   infra via a `keep` filter) when leaving Edit.
 
-- **Restore on Stop.** ✅ `restoreSnapshot`/`restorePlaySnapshot` despawn authored
-  entities + respawn the snapshot on entering Edit; `installPlayModeSnapshot`
-  wires both to the `SimState` transitions and forwards the id-remap map.
-  Entity-only revert in v1 (resources persist). Renderer-free, unit-tested.
-  **Remaining:** wire into the studio toolbar + remap selection via the id map +
-  inspector-during-play — MCP-verified.
+- **Restore on Stop.** ✅ **Wired into the studio + MCP-verified (2026-07-06).**
+  `installPlayModeSnapshot` is now installed in the studio (`keep = !EditorOnly`),
+  so Play captures the authored scene and Stop restores it. Verified via the MCP
+  on a real project: a Play→edit→Stop cycle reverts an authored field
+  (`Health` 150→110) and leaves the entity count unchanged (77→77) — the glTF
+  character rig is no longer duplicated. That last part needed a fix:
+  `capturePlaySnapshot` was capturing glTF-instantiated children verbatim (then
+  restore re-instantiated them); it is now **composition-aware** (`SerializeOptions.composition`
+  → `serializeWorld` → `collectComposition`), staying entity-only. Selection is
+  **cleared** on restore (safe — the selected authored entity is despawned).
+  **Remaining:** true selection *survival* (remap via a persistent identity, not
+  the compact snapshot ids) + inspector-during-play.
 
-- **Step.** Wire the toolbar Step button to advance exactly one (fixed?) frame
-  while Paused.
+- **Step.** Wire the toolbar Step button (▶⏭, currently inert) to advance exactly
+  one frame while Paused. Not yet exposed as an MCP command either.
 
 - **Inspector behavior while playing.** Today the inspector goes read-only in Play
   (a mirror of `state.playing`); revisit once gating + snapshot exist (live-edit of
