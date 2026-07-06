@@ -126,13 +126,14 @@ holes are the **runtime pillars a game needs**: input, audio, windowing, physics
 These do not exist in the runtime and are the reason a complete game can't ship yet. All are P0/P1 in
 [`../roadmap/MASTER-ROADMAP.md`](../roadmap/MASTER-ROADMAP.md).
 
-- 🟡 **Input** — `@retro-engine/input` (ADR-0144/0145/0146) ships keyboard + mouse + action map +
-  gamepad: `ButtonInput<T>` / `Axis<T>` primitives, `KeyboardInput` / `MouseButtonInput` / `MouseMotion` /
-  `MouseScroll` / `CursorPosition` resources, an `InputBackend` HAL (`DomInputBackend` + headless),
-  `InputPlugin` (opt-in, headless-safe), a component-based `ActionMap` (reflection-registered) + derived
-  `ActionState` with composite axes / virtual D-pads, and a poll-based `Gamepads` resource
-  (`GamepadSource` + Standard-Gamepad mapping + dead zones + connect/disconnect). Touch, the studio
-  binding editor, and gamepad-in-action-map are the remaining phases. → roadmap/input-system.md
+- ✅ **Input** — `@retro-engine/input` (ADR-0144/0145/0146): keyboard + mouse + action map + gamepad +
+  touch. `ButtonInput<T>` / `Axis<T>` primitives; `KeyboardInput` / `MouseButtonInput` / `MouseMotion` /
+  `MouseScroll` / `CursorPosition` resources; an `InputBackend` HAL (`DomInputBackend` + headless);
+  `InputPlugin` (opt-in, headless-safe); a component-based `ActionMap` (reflection-registered) + derived
+  `ActionState` with composite axes / virtual D-pads; a poll-based `Gamepads` resource (`GamepadSource` +
+  Standard-Gamepad mapping + dead zones + connect/disconnect); and a `Touches` resource (active touch
+  points with a per-frame lifecycle). Remaining are P1 niceties: gamepad-in-action-map, touch gesture
+  recognizers, and a studio binding editor. → roadmap/input-system.md
 - ❌ **Audio** — no `AudioContext`/`AudioSource`/clip decoding of any kind. → roadmap/audio.md
 - ❌/🟡 **Windowing** — only a raw canvas + `ResizeObserver` + surface configure on the App. No `Window`
   resource, monitor/cursor/fullscreen control, multi-window, or window events.

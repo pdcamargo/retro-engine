@@ -3,7 +3,8 @@
 // "player" quad; the `Reset` button snaps it to the origin; `Fire` (left mouse
 // or F) tints it; the mouse wheel scales it via the raw `MouseScroll` resource.
 // A connected gamepad's left stick also moves the player and `South` (A) fires.
-// Press R to rebind `Reset` between Space and Enter at runtime (mutating the
+// Touch points are surfaced too (`window.__input.touches`; try devtools touch
+// emulation). Press R to rebind `Reset` between Space and Enter at runtime (mutating the
 // serialized `ActionMap`). Live state is published to `window.__input` so a probe
 // or the dev console can confirm resolution without eyeballing pixels.
 //
@@ -19,6 +20,7 @@ import {
   InputPlugin,
   KeyboardInput,
   MouseScroll,
+  Touches,
   key,
   mouseButton,
 } from '@retro-engine/input';
@@ -38,6 +40,7 @@ interface InputProbe {
   fire: boolean;
   resetKey: string;
   gamepad: { connected: boolean; x: number; y: number; south: boolean };
+  touches: { count: number; x: number; y: number };
 }
 
 declare global {
@@ -84,9 +87,10 @@ export const inputShowcasePlugin = (app: App): void => {
       Res(KeyboardInput),
       Res(MouseScroll),
       Res(Gamepads),
+      Res(Touches),
       Query([Transform, Sprite, ActionState, ActionMap], { with: [Player] }),
     ],
-    (keys, wheel, gamepads, players) => {
+    (keys, wheel, gamepads, touches, players) => {
       // Runtime rebind demo: R toggles the Reset binding by rewriting the map.
       const rebind = keys.justPressed('KeyR');
 
@@ -99,6 +103,7 @@ export const inputShowcasePlugin = (app: App): void => {
       const gx = pad?.axes.getOrZero('LeftStickX') ?? 0;
       const gy = pad?.axes.getOrZero('LeftStickY') ?? 0;
       const gSouth = pad?.buttons.pressed('South') ?? false;
+      const primaryTouch = touches.first();
 
       for (const [transform, sprite, actions, map] of players) {
         if (rebind) {
@@ -138,6 +143,11 @@ export const inputShowcasePlugin = (app: App): void => {
             x: Number(gx.toFixed(2)),
             y: Number(gy.toFixed(2)),
             south: gSouth,
+          },
+          touches: {
+            count: touches.count(),
+            x: Math.round(primaryTouch?.x ?? 0),
+            y: Math.round(primaryTouch?.y ?? 0),
           },
         };
       }

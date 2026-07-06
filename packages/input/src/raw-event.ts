@@ -23,6 +23,14 @@ export type RawInputEvent =
       readonly present: boolean;
     }
   | { readonly kind: 'wheel'; readonly dx: number; readonly dy: number; readonly unit: MouseScrollUnit }
+  /** A touch point began contact (`id` is the platform touch identifier). */
+  | { readonly kind: 'touch-start'; readonly id: number; readonly x: number; readonly y: number }
+  /** A touch point moved. */
+  | { readonly kind: 'touch-move'; readonly id: number; readonly x: number; readonly y: number }
+  /** A touch point lifted normally. */
+  | { readonly kind: 'touch-end'; readonly id: number }
+  /** A touch point was cancelled by the platform (e.g. gesture takeover). */
+  | { readonly kind: 'touch-cancel'; readonly id: number }
   /** Pointer left the target — clear `CursorPosition.present`. */
   | { readonly kind: 'cursor-leave' }
   /** Window/target lost focus — release all held buttons so none get stranded. */

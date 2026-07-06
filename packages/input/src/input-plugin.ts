@@ -19,6 +19,7 @@ import {
   mouseButtonFromIndex,
 } from './mouse';
 import type { InputBackend } from './raw-event';
+import { Touches } from './touch';
 
 /** Options for {@link InputPlugin}. */
 export interface InputPluginOptions {
@@ -92,6 +93,7 @@ export class InputPlugin implements PluginObject {
     app.insertResource(new MouseMotion());
     app.insertResource(new MouseScroll());
     app.insertResource(new CursorPosition());
+    app.insertResource(new Touches());
     app.insertResource(new Gamepads());
 
     this.backend.attach();
@@ -105,9 +107,10 @@ export class InputPlugin implements PluginObject {
         ResMut(MouseMotion),
         ResMut(MouseScroll),
         ResMut(CursorPosition),
+        ResMut(Touches),
       ],
-      (keyboard, mouseButtons, motion, scroll, cursor) => {
-        applyInputFrame(backend, keyboard, mouseButtons, motion, scroll, cursor);
+      (keyboard, mouseButtons, motion, scroll, cursor, touches) => {
+        applyInputFrame(backend, keyboard, mouseButtons, motion, scroll, cursor, touches);
       },
       { name: 'input-update', label: 'input' },
     );
@@ -194,11 +197,13 @@ export const applyInputFrame = (
   motion: MouseMotion,
   scroll: MouseScroll,
   cursor: CursorPosition,
+  touches: Touches,
 ): void => {
   keyboard.clear();
   mouseButtons.clear();
   motion.clear();
   scroll.clear();
+  touches.beginFrame();
 
   for (const ev of backend.drain()) {
     switch (ev.kind) {
@@ -229,6 +234,18 @@ export const applyInputFrame = (
         scroll.x += ev.dx;
         scroll.y += ev.dy;
         scroll.unit = ev.unit;
+        break;
+      case 'touch-start':
+        touches.start(ev.id, ev.x, ev.y);
+        break;
+      case 'touch-move':
+        touches.move(ev.id, ev.x, ev.y);
+        break;
+      case 'touch-end':
+        touches.end(ev.id);
+        break;
+      case 'touch-cancel':
+        touches.cancel(ev.id);
         break;
       case 'cursor-leave':
         cursor.present = false;

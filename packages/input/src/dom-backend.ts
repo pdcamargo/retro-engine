@@ -106,6 +106,44 @@ export class DomInputBackend implements InputBackend {
     this.bind(this.pointerTarget ?? win, 'contextmenu', (e) => {
       if (this.preventDefaults) e.preventDefault();
     });
+
+    const touchTarget = this.pointerTarget ?? win;
+    this.bind(
+      touchTarget,
+      'touchstart',
+      (e) => {
+        const ev = e as TouchEvent;
+        if (this.preventDefaults) ev.preventDefault();
+        for (const touch of Array.from(ev.changedTouches)) {
+          const { x, y } = this.localPoint(touch.clientX, touch.clientY);
+          this.queue.push({ kind: 'touch-start', id: touch.identifier, x, y });
+        }
+      },
+      { passive: !this.preventDefaults },
+    );
+    this.bind(
+      touchTarget,
+      'touchmove',
+      (e) => {
+        const ev = e as TouchEvent;
+        if (this.preventDefaults) ev.preventDefault();
+        for (const touch of Array.from(ev.changedTouches)) {
+          const { x, y } = this.localPoint(touch.clientX, touch.clientY);
+          this.queue.push({ kind: 'touch-move', id: touch.identifier, x, y });
+        }
+      },
+      { passive: !this.preventDefaults },
+    );
+    this.bind(touchTarget, 'touchend', (e) => {
+      for (const touch of Array.from((e as TouchEvent).changedTouches)) {
+        this.queue.push({ kind: 'touch-end', id: touch.identifier });
+      }
+    });
+    this.bind(touchTarget, 'touchcancel', (e) => {
+      for (const touch of Array.from((e as TouchEvent).changedTouches)) {
+        this.queue.push({ kind: 'touch-cancel', id: touch.identifier });
+      }
+    });
   }
 
   detach(): void {
@@ -134,12 +172,16 @@ export class DomInputBackend implements InputBackend {
   }
 
   private localCursor(ev: MouseEvent): { x: number; y: number; present: boolean } {
+    return this.localPoint(ev.clientX, ev.clientY);
+  }
+
+  private localPoint(clientX: number, clientY: number): { x: number; y: number; present: boolean } {
     if (this.pointerTarget === undefined) {
-      return { x: ev.clientX, y: ev.clientY, present: true };
+      return { x: clientX, y: clientY, present: true };
     }
     const rect = this.pointerTarget.getBoundingClientRect();
-    const x = ev.clientX - rect.left;
-    const y = ev.clientY - rect.top;
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
     const present = x >= 0 && y >= 0 && x <= rect.width && y <= rect.height;
     return { x, y, present };
   }

@@ -6,6 +6,7 @@ import { KeyboardInput } from './keyboard';
 import { CursorPosition, MouseButtonInput, MouseMotion, MouseScroll, mouseButtonFromIndex } from './mouse';
 import { applyInputFrame, InputPlugin } from './input-plugin';
 import type { InputBackend, RawInputEvent } from './raw-event';
+import { Touches } from './touch';
 
 /** A backend whose next-drain events are set per frame; drains exactly once. */
 class QueueBackend implements InputBackend {
@@ -29,6 +30,7 @@ interface Frame {
   readonly motion: MouseMotion;
   readonly scroll: MouseScroll;
   readonly cursor: CursorPosition;
+  readonly touches: Touches;
   step(events?: readonly RawInputEvent[]): void;
 }
 
@@ -39,6 +41,7 @@ const makeFrame = (): Frame => {
   const motion = new MouseMotion();
   const scroll = new MouseScroll();
   const cursor = new CursorPosition();
+  const touches = new Touches();
   return {
     backend,
     keyboard,
@@ -46,9 +49,10 @@ const makeFrame = (): Frame => {
     motion,
     scroll,
     cursor,
+    touches,
     step(events: readonly RawInputEvent[] = []) {
       backend.push(events);
-      applyInputFrame(backend, keyboard, mouseButtons, motion, scroll, cursor);
+      applyInputFrame(backend, keyboard, mouseButtons, motion, scroll, cursor, touches);
     },
   };
 };
@@ -152,6 +156,66 @@ describe('applyInputFrame — motion / scroll / cursor', () => {
     expect(f.cursor.present).toBe(false);
     f.step();
     expect(f.scroll.y).toBe(0);
+  });
+});
+
+describe('applyInputFrame — touch', () => {
+  it('start → move → end lifecycle with per-frame deltas and edges', () => {
+    const f = makeFrame();
+    f.step([{ kind: 'touch-start', id: 1, x: 10, y: 20 }]);
+    expect(f.touches.count()).toBe(1);
+    expect(f.touches.justStarted(1)).toBe(true);
+    expect(f.touches.get(1)?.phase).toBe('started');
+
+    // Move accumulates a delta; no longer just-started.
+    f.step([
+      { kind: 'touch-move', id: 1, x: 13, y: 26 },
+      { kind: 'touch-move', id: 1, x: 15, y: 30 },
+    ]);
+    expect(f.touches.justStarted(1)).toBe(false);
+    expect(f.touches.get(1)?.deltaX).toBe(5);
+    expect(f.touches.get(1)?.deltaY).toBe(10);
+    expect(f.touches.get(1)?.phase).toBe('moved');
+    expect(f.touches.get(1)?.startX).toBe(10);
+
+    // No events → stationary, delta zeroed.
+    f.step();
+    expect(f.touches.get(1)?.phase).toBe('stationary');
+    expect(f.touches.get(1)?.deltaX).toBe(0);
+
+    // End → justEnded this frame, dropped next frame.
+    f.step([{ kind: 'touch-end', id: 1 }]);
+    expect(f.touches.justEnded(1)).toBe(true);
+    expect(f.touches.count()).toBe(0);
+    f.step();
+    expect(f.touches.get(1)).toBeUndefined();
+    expect(f.touches.justEnded(1)).toBe(false);
+  });
+
+  it('tracks multiple simultaneous touches; first() is the earliest active', () => {
+    const f = makeFrame();
+    f.step([
+      { kind: 'touch-start', id: 1, x: 0, y: 0 },
+      { kind: 'touch-start', id: 2, x: 100, y: 100 },
+    ]);
+    expect(f.touches.count()).toBe(2);
+    expect(f.touches.first()?.id).toBe(1);
+
+    // End the first → first() falls through to the second.
+    f.step([{ kind: 'touch-end', id: 1 }]);
+    f.step();
+    expect(f.touches.count()).toBe(1);
+    expect(f.touches.first()?.id).toBe(2);
+  });
+
+  it('cancel ends a touch like a lift', () => {
+    const f = makeFrame();
+    f.step([{ kind: 'touch-start', id: 5, x: 1, y: 2 }]);
+    f.step([{ kind: 'touch-cancel', id: 5 }]);
+    expect(f.touches.justEnded(5)).toBe(true);
+    expect(f.touches.get(5)?.phase).toBe('canceled');
+    f.step();
+    expect(f.touches.get(5)).toBeUndefined();
   });
 });
 

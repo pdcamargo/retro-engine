@@ -43,8 +43,9 @@ not a capability ceiling).
 
 ## North star
 
-The renderer and ECS are deep, but **you cannot ship a complete game yet**: no input, audio, engine
-text, in-game UI, physics, or game export. **P0 is exactly that shippable-game foundation.**
+The renderer and ECS are deep, but **you cannot ship a complete game yet**: input now exists
+(`@retro-engine/input` ✅), but there is still no audio, engine text, in-game UI, physics, or game
+export. **P0 is exactly that shippable-game foundation.**
 
 ---
 
@@ -52,18 +53,16 @@ text, in-game UI, physics, or game export. **P0 is exactly that shippable-game f
 
 ## Engine
 
-- [ ] **Input system** — 🟡 `@retro-engine/input` (ADR-0144, ADR-0145, ADR-0146). **Phases 1–3 shipped**
-      (keyboard + mouse + action map + gamepad): `ButtonInput<T>` + `Axis<T>`, `KeyboardInput`/
+- [x] **Input system** — ✅ `@retro-engine/input` (ADR-0144/0145/0146). **Phases 1–4 shipped**
+      (keyboard + mouse + action map + gamepad + touch): `ButtonInput<T>` + `Axis<T>`, `KeyboardInput`/
       `MouseButtonInput`/`MouseMotion`/`MouseScroll`/`CursorPosition`, `InputBackend` HAL
       (`DomInputBackend` + headless), component-based `ActionMap` (reflection-registered) + derived
-      `ActionState`, poll-based `Gamepads` (`GamepadSource` + standard-mapping + dead zones), playground
-      `?mode=input` sample. **Remaining:** touch (Phase 4), studio binding editor (Phase 5).
-      _AC (full):_ pressed / just-pressed / just-released ✅; mouse buttons/motion/wheel/position ✅;
-      gamepad ✅; touch ☐; action-map + reflection ✅; headless-safe ✅; a sample moves an entity ✅.
+      `ActionState`, poll-based `Gamepads` (`GamepadSource` + standard-mapping + dead zones), `Touches`
+      resource, playground `?mode=input` sample.
+      _AC:_ pressed / just-pressed / just-released ✅; mouse buttons/motion/wheel/position ✅;
+      gamepad ✅; touch ✅; action-map + reflection ✅; headless-safe ✅; a sample moves an entity ✅.
+      Optional Phase 5 (studio binding editor) + the two follow-ups below are P1.
       _Links:_ [input-system.md](input-system.md)
-- [ ] **Gamepad bindings in the action map** — extend `ActionBinding` with a `'gamepad'` device +
-      analog-axis sources so gamepad buttons/sticks are rebindable through `ActionMap` (currently gamepad
-      is read directly via the `Gamepads` resource). Follow-up from ADR-0146. _Links:_ [input-system.md](input-system.md)
 - [ ] **Audio (core)** — ❌ Audio HAL + Web Audio backend.
       _AC:_ `AudioClip` importer + asset kind (.wav/.ogg/.mp3) with `.meta`; `AudioSource`
       (play/pause/volume/pitch/loop) + `AudioListener` components; one-shot and looping playback;
@@ -134,6 +133,12 @@ text, in-game UI, physics, or game export. **P0 is exactly that shippable-game f
 
 ## Engine
 
+- [ ] **Input follow-ups** — three additive extensions on the shipped `@retro-engine/input`
+      (ADR-0144/0145/0146): (a) **gamepad bindings in the action map** — an `ActionBinding` `'gamepad'`
+      device + analog-axis sources so gamepad is rebindable through `ActionMap` (currently read directly
+      via `Gamepads`); (b) **touch gesture recognizers** — tap / pan / pinch / swipe on top of `Touches`;
+      (c) **studio binding editor** (Phase 5) — edit the `ActionMap` live + an MCP command.
+      _Links:_ [input-system.md](input-system.md)
 - [ ] **CSS Grid for the UI layout engine** — pure-TS grid behind the `LayoutEngine` interface (Taffy-WASM
       only as a fallback escape hatch). _Links:_ [ui-system.md](ui-system.md)
 - [ ] **In-game UI depth** — virtualized list/tree views, data binding, more widgets

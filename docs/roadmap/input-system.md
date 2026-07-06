@@ -1,7 +1,8 @@
 # Input System
 
 - **Created:** 2026-05-21
-- **Status:** In progress (Phases 1–3 shipped 2026-07-06)
+- **Status:** In progress (Phases 1–4 shipped 2026-07-06; P0 AC met — only the
+  optional studio binding editor / gesture recognizers remain)
 - **ADR:** [ADR-0144](../adr/ADR-0144-input-system-architecture.md) (architecture),
   [ADR-0145](../adr/ADR-0145-input-action-map.md) (action map),
   [ADR-0146](../adr/ADR-0146-gamepad-input.md) (gamepad)
@@ -55,10 +56,16 @@ action-mapping layer on top.
   analog-axis sources) — tracked in MASTER-ROADMAP.
 - Multi-pad → player-entity assignment is left to game code (per-index `GamepadState`).
 
-### Phase 4 — Touch & gestures
+### Phase 4 — Touch ✅ (2026-07-06)
 
-- `Touches` resource (active touch points); tap / pan / pinch / swipe recognizers.
-- Deferred until mobile export is on the table (needs WebGL2 first).
+- `Touches` resource: active `TouchPoint`s (id, position, per-frame delta, phase)
+  with a `ButtonInput`-style lifecycle (`justStarted` / `justEnded`, `iter` /
+  `first` / `count`). Fed through the DOM backend's touch events (touchstart/move/
+  end/cancel), applied in the same `preUpdate` frame step as keyboard/mouse.
+- Playground `?mode=input` surfaces touch count + primary position.
+- **Follow-up (P1):** gesture recognizers (tap / pan / pinch / swipe) on top of
+  `Touches` — tracked in MASTER-ROADMAP. Works in any browser today (touch events
+  don't need WebGL2); mobile *export* still depends on the WebGL2 backend.
 
 ### Phase 5 — Studio integration
 

@@ -78,3 +78,28 @@ a manual confirmation before their backlog/roadmap entries are considered closed
   logged as a new MASTER-ROADMAP item.
 
 ---
+
+## Input system — Phase 4 (touch) · `@retro-engine/input` · ADR-0144
+
+- **What changed:** `Touches` resource of active `TouchPoint`s (id, position,
+  start position, per-frame delta, phase) with a `ButtonInput`-style lifecycle
+  (`justStarted`/`justEnded`, `iter`/`first`/`count`). DOM backend emits
+  touchstart/move/end/cancel; folded into the same `preUpdate` frame step.
+- **Automated:** +3 unit tests (start→move→end lifecycle, multi-touch, cancel) —
+  53 input tests green; touch events added to the `applyInputFrame` bench; full gate green.
+- **Why no MCP verification:** no touch-injection path.
+- **HOW to test (manual):** playground `?mode=input`, open browser devtools and
+  enable **touch/device emulation**, then drag on the canvas — `window.__input.touches`
+  shows `{count, x, y}` for the primary touch. Without a touch device this is covered
+  by the unit tests (a scriptable `QueueBackend` feeds touch events).
+
+---
+
+## ✅ P0 Input item COMPLETE — box checked in MASTER-ROADMAP
+
+The **Input system** P0 item is fully done (keyboard + mouse + action map + gamepad +
+touch; headless-safe; reflection; sample). Reference tag flipped to ✅. Remaining input
+work (gamepad-in-action-map, touch gestures, studio binding editor) moved to **P1**.
+Next P0 target: **Audio (core)**.
+
+---

@@ -16,6 +16,7 @@ import {
 import { KeyboardInput } from '../src/keyboard';
 import { applyInputFrame } from '../src/input-plugin';
 import type { InputBackend, RawInputEvent } from '../src/raw-event';
+import { Touches } from '../src/touch';
 
 // A backend that replays a fixed batch of events on every drain — models a busy
 // frame (several keys held, cursor dragging, wheel spinning) without any DOM.
@@ -31,6 +32,9 @@ const frameEvents = (keys: number): RawInputEvent[] => {
   out.push({ kind: 'mouse-move', x: 100, y: 120, dx: 4, dy: -2, present: true });
   out.push({ kind: 'wheel', dx: 0, dy: 3, unit: 'line' });
   out.push({ kind: 'mouse-down', button: 0 });
+  // A couple of moving touch points (multi-touch drag).
+  out.push({ kind: 'touch-move', id: 0, x: 40, y: 50 });
+  out.push({ kind: 'touch-move', id: 1, x: 200, y: 220 });
   return out;
 };
 
@@ -43,7 +47,8 @@ for (const keys of [1, 8, 32]) {
       const motion = new MouseMotion();
       const scroll = new MouseScroll();
       const cursor = new CursorPosition();
-      yield () => applyInputFrame(backend, keyboard, mouseButtons, motion, scroll, cursor);
+      const touches = new Touches();
+      yield () => applyInputFrame(backend, keyboard, mouseButtons, motion, scroll, cursor, touches);
     });
   });
 }

@@ -11,6 +11,8 @@ export {
   mouseButtonFromIndex,
 } from './mouse';
 export type { InputBackend, RawInputEvent } from './raw-event';
+export type { TouchPhase } from './touch';
+export { TouchPoint, Touches } from './touch';
 export type { ActionKind, ActionSource, BindingRole, InputDevice } from './action-types';
 export { ActionBinding, ActionDef, ActionMap, key, mouseButton } from './action-types';
 export type { Axis2dValue } from './action-state';
