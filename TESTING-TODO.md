@@ -33,3 +33,27 @@ a manual confirmation before their backlog/roadmap entries are considered closed
   Input box left unchecked until the full AC (gamepad/touch/action-map) lands.
 
 ---
+
+## Input system — Phase 2 (action map) · `@retro-engine/input` · ADR-0145
+
+- **What changed:** Component-based action layer (leafwing-shaped). `ActionMap`
+  (authored, reflection-registered, serialized) + `ActionState` (derived,
+  auto-attached, not serialized). Fluent builder (`.button`/`.axis`/`.axis2d`) with
+  `key()`/`mouseButton()` sources; per-frame resolver runs in `preUpdate` after the
+  raw device update. Playground `?mode=input` now drives the sprite through the
+  action map and rebinds `Reset` at runtime.
+- **Automated:** +10 unit tests (builder, resolve semantics for button/axis/axis2d,
+  many-to-many, reflection round-trip via `TypeRegistry`) — 40 input tests green;
+  a `resolveActionState` bench joined the suite; full repo gate green.
+- **Why no MCP verification:** same as Phase 1 — no key-injection path.
+- **HOW to test (manual):** playground `?mode=input`, focus the canvas:
+  - **WASD / arrow keys** move the square (via the `Move` / `MoveArrows` axis2d).
+  - **Space** resets to origin (the `Reset` action). Press **R** to rebind Reset to
+    **Enter** (then Enter resets, Space doesn't); press **R** again to swap back —
+    `window.__input.resetKey` shows the current binding.
+  - **F or left mouse** tints the square (the `Fire` action).
+  - `window.__input` also exposes `{move:{x,y}, fire}` resolved from the action map.
+- **Reflection check:** the `ActionMap` schema round-trips (unit test), so bindings
+  will survive a scene save once the studio persists this component.
+
+---

@@ -150,6 +150,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@retro-engine/engine": "workspace:*",
+        "@retro-engine/reflect": "workspace:*",
       },
     },
     "packages/math": {

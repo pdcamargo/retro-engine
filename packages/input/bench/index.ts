@@ -10,6 +10,7 @@
 import { run } from 'mitata';
 
 import './input.bench';
+import './action-resolve.bench';
 
 interface NormalizedBench {
   readonly key: string;

@@ -35,6 +35,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@retro-engine/engine": "workspace:*"
+    "@retro-engine/engine": "workspace:*",
+    "@retro-engine/reflect": "workspace:*"
   }
 }

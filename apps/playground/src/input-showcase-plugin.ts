@@ -1,29 +1,24 @@
-// Device check for @retro-engine/input Phase 1 (ADR-0144): a keyboard/mouse-
-// driven sprite. WASD / arrow keys move the white "player" quad; Space snaps it
-// back to the origin; holding the left mouse button tints it; the mouse wheel
-// scales it. Live state is published to `window.__input` so a probe (or the dev
-// console) can confirm the resources are updating without eyeballing pixels.
+// Device check for @retro-engine/input (ADR-0144 + ADR-0145): a sprite driven
+// through the action map. The `Move` axis2d (WASD / arrows) moves the white
+// "player" quad; the `Reset` button snaps it to the origin; `Fire` (left mouse
+// or F) tints it; the mouse wheel scales it via the raw `MouseScroll` resource.
+// Press R to rebind `Reset` between Space and Enter at runtime (mutating the
+// serialized `ActionMap`). Live state is published to `window.__input` so a probe
+// or the dev console can confirm resolution without eyeballing pixels.
 //
 // Open with `?mode=input`.
 
 import { vec2, vec3, vec4 } from '@retro-engine/math';
 import type { App } from '@retro-engine/engine';
+import { Camera2d, ClearColorConfig, Commands, Query, Res, Sprite, Transform } from '@retro-engine/engine';
 import {
-  Camera2d,
-  ClearColorConfig,
-  Commands,
-  Query,
-  Res,
-  Sprite,
-  Time,
-  Transform,
-} from '@retro-engine/engine';
-import {
-  CursorPosition,
+  ActionMap,
+  ActionState,
   InputPlugin,
   KeyboardInput,
-  MouseButtonInput,
   MouseScroll,
+  key,
+  mouseButton,
 } from '@retro-engine/input';
 
 /** Marker for the input-driven sprite. */
@@ -37,8 +32,9 @@ interface InputProbe {
   x: number;
   y: number;
   scale: number;
-  pressed: string[];
-  cursor: { x: number; y: number; present: boolean };
+  move: { x: number; y: number };
+  fire: boolean;
+  resetKey: string;
 }
 
 declare global {
@@ -47,8 +43,19 @@ declare global {
   }
 }
 
+const buildMap = (resetKey: 'Space' | 'Enter'): ActionMap =>
+  new ActionMap()
+    .axis2d('Move', { left: key('KeyA'), right: key('KeyD'), up: key('KeyW'), down: key('KeyS') })
+    .axis2d('MoveArrows', {
+      left: key('ArrowLeft'),
+      right: key('ArrowRight'),
+      up: key('ArrowUp'),
+      down: key('ArrowDown'),
+    })
+    .button('Reset', key(resetKey))
+    .button('Fire', key('KeyF'), mouseButton('Left'));
+
 export const inputShowcasePlugin = (app: App): void => {
-  // Attach against the playground canvas so cursor coords are canvas-local.
   const canvas = document.getElementById('playground-canvas');
   app.addPlugin(
     new InputPlugin(canvas instanceof HTMLCanvasElement ? { pointerTarget: canvas } : {}),
@@ -56,59 +63,66 @@ export const inputShowcasePlugin = (app: App): void => {
 
   app.addSystem('startup', [Commands], (cmd) => {
     cmd.spawn(...Camera2d({ clearColor: ClearColorConfig.custom({ r: 0.06, g: 0.07, b: 0.1, a: 1 }) }));
+    // ActionState is auto-attached (Required Component of ActionMap).
     cmd.spawn(
       new Sprite({ color: vec4.create(1, 1, 1, 1), customSize: vec2.create(64, 64) }),
       new Transform(),
       new Player(),
+      buildMap('Space'),
     );
   });
 
   let scale = 1;
+  let resetKey: 'Space' | 'Enter' = 'Space';
 
   app.addSystem(
     'update',
     [
-      Res(Time),
       Res(KeyboardInput),
-      Res(MouseButtonInput),
       Res(MouseScroll),
-      Res(CursorPosition),
-      Query([Transform, Sprite], { with: [Player] }),
+      Query([Transform, Sprite, ActionState, ActionMap], { with: [Player] }),
     ],
-    (time, keys, mouse, wheel, cursor, players) => {
-      const dt = time.virtual.delta;
-      let dx = 0;
-      let dy = 0;
-      if (keys.anyPressed(['KeyA', 'ArrowLeft'])) dx -= 1;
-      if (keys.anyPressed(['KeyD', 'ArrowRight'])) dx += 1;
-      if (keys.anyPressed(['KeyW', 'ArrowUp'])) dy += 1;
-      if (keys.anyPressed(['KeyS', 'ArrowDown'])) dy -= 1;
+    (keys, wheel, players) => {
+      // Runtime rebind demo: R toggles the Reset binding by rewriting the map.
+      const rebind = keys.justPressed('KeyR');
 
-      // Wheel scales the player; clamp to a sane range.
       if (wheel.y !== 0) {
         scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale - Math.sign(wheel.y) * 0.15));
       }
 
-      const held = mouse.pressed('Left');
+      for (const [transform, sprite, actions, map] of players) {
+        if (rebind) {
+          resetKey = resetKey === 'Space' ? 'Enter' : 'Space';
+          const reset = map.get('Reset');
+          if (reset) reset.bindings = buildMap(resetKey).get('Reset')!.bindings;
+        }
 
-      for (const [transform, sprite] of players) {
+        // Sum both D-pads so WASD and arrows both work.
+        const a = actions.axis2d('Move');
+        const b = actions.axis2d('MoveArrows');
+        const dx = Math.max(-1, Math.min(1, a.x + b.x));
+        const dy = Math.max(-1, Math.min(1, a.y + b.y));
+
         const px = transform.translation[0] ?? 0;
         const py = transform.translation[1] ?? 0;
         const pz = transform.translation[2] ?? 0;
-        const nx = keys.justPressed('Space') ? 0 : px + dx * MOVE_SPEED * dt;
-        const ny = keys.justPressed('Space') ? 0 : py + dy * MOVE_SPEED * dt;
+        const doReset = actions.justPressed('Reset');
+        const nx = doReset ? 0 : px + dx * MOVE_SPEED * (1 / 60);
+        const ny = doReset ? 0 : py + dy * MOVE_SPEED * (1 / 60);
         vec3.set(nx, ny, pz, transform.translation);
         vec3.set(scale, scale, 1, transform.scale);
-        // Tint while the left button is held; white otherwise.
-        if (held) vec4.set(0.4, 0.9, 1, 1, sprite.color);
+
+        const fire = actions.pressed('Fire');
+        if (fire) vec4.set(0.4, 0.9, 1, 1, sprite.color);
         else vec4.set(1, 1, 1, 1, sprite.color);
 
         window.__input = {
           x: Math.round(nx),
           y: Math.round(ny),
           scale: Number(scale.toFixed(2)),
-          pressed: [...keys.getPressed()],
-          cursor: { x: Math.round(cursor.x), y: Math.round(cursor.y), present: cursor.present },
+          move: { x: dx, y: dy },
+          fire,
+          resetKey,
         };
       }
     },

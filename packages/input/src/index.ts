@@ -11,6 +11,11 @@ export {
   mouseButtonFromIndex,
 } from './mouse';
 export type { InputBackend, RawInputEvent } from './raw-event';
+export type { ActionKind, ActionSource, BindingRole, InputDevice } from './action-types';
+export { ActionBinding, ActionDef, ActionMap, key, mouseButton } from './action-types';
+export type { Axis2dValue } from './action-state';
+export { ActionState } from './action-state';
+export { resolveActionState } from './action-resolve';
 export type { DomInputBackendOptions } from './dom-backend';
 export { DomInputBackend, HeadlessInputBackend } from './dom-backend';
 export type { InputPluginOptions } from './input-plugin';

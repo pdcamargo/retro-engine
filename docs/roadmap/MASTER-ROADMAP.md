@@ -52,13 +52,14 @@ text, in-game UI, physics, or game export. **P0 is exactly that shippable-game f
 
 ## Engine
 
-- [ ] **Input system** — 🟡 `@retro-engine/input` (ADR-0144). **Phase 1 shipped** (keyboard + mouse):
-      `ButtonInput<T>` + `Axis<T>`, `KeyboardInput`/`MouseButtonInput`/`MouseMotion`/`MouseScroll`/
-      `CursorPosition`, `InputBackend` HAL (`DomInputBackend` + headless), `InputPlugin`, playground
-      `?mode=input` sample. **Remaining:** gamepad (Phase 3), touch (Phase 4), named **action-map**
-      (actions → keys/buttons/axes) with reflection (Phase 2), studio binding editor (Phase 5).
+- [ ] **Input system** — 🟡 `@retro-engine/input` (ADR-0144, ADR-0145). **Phases 1–2 shipped**
+      (keyboard + mouse + action map): `ButtonInput<T>` + `Axis<T>`, `KeyboardInput`/`MouseButtonInput`/
+      `MouseMotion`/`MouseScroll`/`CursorPosition`, `InputBackend` HAL (`DomInputBackend` + headless),
+      component-based `ActionMap` (reflection-registered) + derived `ActionState`, playground
+      `?mode=input` sample (drives an entity through actions + runtime rebind). **Remaining:** gamepad
+      (Phase 3), touch (Phase 4), studio binding editor (Phase 5).
       _AC (full):_ pressed / just-pressed / just-released ✅; mouse buttons/motion/wheel/position ✅;
-      gamepad + touch ☐; action-map + reflection ☐; headless-safe ✅; a sample moves an entity ✅.
+      gamepad + touch ☐; action-map + reflection ✅; headless-safe ✅; a sample moves an entity ✅.
       _Links:_ [input-system.md](input-system.md)
 - [ ] **Audio (core)** — ❌ Audio HAL + Web Audio backend.
       _AC:_ `AudioClip` importer + asset kind (.wav/.ogg/.mp3) with `.meta`; `AudioSource`

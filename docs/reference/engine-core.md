@@ -126,11 +126,12 @@ holes are the **runtime pillars a game needs**: input, audio, windowing, physics
 These do not exist in the runtime and are the reason a complete game can't ship yet. All are P0/P1 in
 [`../roadmap/MASTER-ROADMAP.md`](../roadmap/MASTER-ROADMAP.md).
 
-- 🟡 **Input** — `@retro-engine/input` (ADR-0144) ships keyboard + mouse: `ButtonInput<T>` / `Axis<T>`
-  primitives, `KeyboardInput` / `MouseButtonInput` / `MouseMotion` / `MouseScroll` / `CursorPosition`
-  resources, an `InputBackend` HAL (`DomInputBackend` + headless), and `InputPlugin` (opt-in, headless-safe).
-  Gamepad, touch, the action map (+ reflection), and studio binding editor are the remaining phases.
-  → roadmap/input-system.md
+- 🟡 **Input** — `@retro-engine/input` (ADR-0144, ADR-0145) ships keyboard + mouse + an action map:
+  `ButtonInput<T>` / `Axis<T>` primitives, `KeyboardInput` / `MouseButtonInput` / `MouseMotion` /
+  `MouseScroll` / `CursorPosition` resources, an `InputBackend` HAL (`DomInputBackend` + headless),
+  `InputPlugin` (opt-in, headless-safe), and a component-based `ActionMap` (reflection-registered) +
+  derived `ActionState` with composite axes / virtual D-pads. Gamepad, touch, and the studio binding
+  editor are the remaining phases. → roadmap/input-system.md
 - ❌ **Audio** — no `AudioContext`/`AudioSource`/clip decoding of any kind. → roadmap/audio.md
 - ❌/🟡 **Windowing** — only a raw canvas + `ResizeObserver` + surface configure on the App. No `Window`
   resource, monitor/cursor/fullscreen control, multi-window, or window events.

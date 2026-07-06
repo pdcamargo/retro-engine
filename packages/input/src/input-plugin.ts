@@ -1,6 +1,10 @@
 import type { App, PluginObject } from '@retro-engine/engine';
-import { ResMut } from '@retro-engine/engine';
+import { Query, Res, ResMut } from '@retro-engine/engine';
+import { t } from '@retro-engine/reflect';
 
+import { resolveActionState } from './action-resolve';
+import { ActionState } from './action-state';
+import { ActionBinding, ActionDef, ActionMap } from './action-types';
 import { DomInputBackend, HeadlessInputBackend } from './dom-backend';
 import type { DomInputBackendOptions } from './dom-backend';
 import { KeyboardInput } from './keyboard';
@@ -94,6 +98,45 @@ export class InputPlugin implements PluginObject {
         applyInputFrame(backend, keyboard, mouseButtons, motion, scroll, cursor);
       },
       { name: 'input-update', label: 'input' },
+    );
+
+    // Action map (ADR-0145). Value types first, then the authored component;
+    // ActionState is derived, so it is never registered.
+    app.registerType(
+      ActionBinding,
+      {
+        role: t.enum('trigger', 'positiveX', 'negativeX', 'positiveY', 'negativeY'),
+        device: t.enum('key', 'mouse'),
+        code: t.string,
+      },
+      { name: 'ActionBinding', make: () => new ActionBinding() },
+    );
+    app.registerType(
+      ActionDef,
+      {
+        name: t.string,
+        kind: t.enum('button', 'axis', 'axis2d'),
+        bindings: t.array(t.type(ActionBinding)),
+      },
+      { name: 'ActionDef', make: () => new ActionDef() },
+    );
+    app.registerComponent(
+      ActionMap,
+      { defs: t.array(t.type(ActionDef)) },
+      { name: 'ActionMap' },
+    );
+
+    // Resolve each entity's ActionState from its ActionMap, after the raw
+    // device update this frame so the action layer reads fresh input.
+    app.addSystem(
+      'preUpdate',
+      [Query([ActionMap, ActionState]), Res(KeyboardInput), Res(MouseButtonInput)],
+      (rows, keyboard, mouseButtons) => {
+        for (const [map, state] of rows) {
+          resolveActionState(map, state, keyboard, mouseButtons);
+        }
+      },
+      { name: 'action-update', after: ['input'] },
     );
   }
 

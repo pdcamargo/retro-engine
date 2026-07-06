@@ -1,8 +1,9 @@
 # Input System
 
 - **Created:** 2026-05-21
-- **Status:** In progress (Phase 1 shipped 2026-07-06)
-- **ADR:** [ADR-0144](../adr/ADR-0144-input-system-architecture.md)
+- **Status:** In progress (Phases 1–2 shipped 2026-07-06)
+- **ADR:** [ADR-0144](../adr/ADR-0144-input-system-architecture.md) (architecture),
+  [ADR-0145](../adr/ADR-0145-input-action-map.md) (action map)
 
 ## Goal
 
@@ -25,13 +26,18 @@ action-mapping layer on top.
   focus-loss releases held buttons.
 - Tests, a per-frame bench, a playground `?mode=input` sample.
 
-### Phase 2 — Action map + reflection
+### Phase 2 — Action map + reflection ✅ (2026-07-06)
 
-- Named actions (`Jump`, `MoveX`) mapped to keys / mouse buttons / axes, resolvable
-  at runtime. Composite axes (e.g. A/D → −1/+1) and 2D vectors (WASD → dir).
-- `ActionMap` authored resource **with a reflection schema** (serialized), registered
-  by `InputPlugin`. `Actions` runtime resource surfacing per-action button/axis state.
-- Sample rebinds an action and drives an entity through the action layer.
+- Named actions mapped to keys / mouse buttons, resolvable at runtime. Composite
+  1D axes (A/D → −1/+1) and 2D virtual D-pads (WASD → dir).
+- **Component-based** (ADR-0145, leafwing-shaped): `ActionMap` authored component
+  **with a reflection schema** (serialized), `ActionState` derived component
+  (auto-attached Required Component, not serialized). Fluent builder + `key` /
+  `mouseButton` source helpers. Registered by `InputPlugin`; resolved each frame in
+  `preUpdate` after the raw device update.
+- Playground `?mode=input` drives an entity through the action layer and rebinds
+  `Reset` (Space↔Enter) at runtime. Reflection round-trip covered by a unit test.
+- Real analog axes (gamepad) and unit-normalized diagonals fold into Phase 3.
 
 ### Phase 3 — Gamepad
 
