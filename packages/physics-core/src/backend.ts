@@ -43,11 +43,19 @@ export interface BodyReadback {
   readonly angularVelocity: readonly number[];
 }
 
-/** A collision start/stop between two entities. */
-export interface CollisionEvent {
-  readonly kind: 'started' | 'stopped';
-  readonly a: Entity;
-  readonly b: Entity;
+/**
+ * A collision start/stop between two entities. A **class** (not an interface) so
+ * it doubles as an ECS message type: `PhysicsPlugin` registers it and writes one
+ * per event each fixed step, readable via `MessageReader(CollisionEvent)`.
+ * Backends may also produce plain `{ kind, a, b }` objects — structurally
+ * assignable, since the class has only public fields.
+ */
+export class CollisionEvent {
+  constructor(
+    readonly kind: 'started' | 'stopped',
+    readonly a: Entity,
+    readonly b: Entity,
+  ) {}
 }
 
 /** A ray to cast into the world. */

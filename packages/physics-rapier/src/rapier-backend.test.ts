@@ -119,6 +119,26 @@ describe('RapierBackend — real simulation', () => {
     backend.destroy();
   });
 
+  it('emits a collision "started" event when a box lands on the floor', async () => {
+    const backend = createRapierBackend();
+    await backend.init();
+    backend.setGravity('2d', [0, -9.81]);
+    backend.upsertBody(e(1), floor());
+    backend.upsertBody(e(2), box([0, 3]));
+
+    const started: { a: number; b: number }[] = [];
+    for (let i = 0; i < 240; i += 1) {
+      backend.step(1 / 60);
+      for (const ev of backend.drainCollisionEvents()) {
+        if (ev.kind === 'started') started.push({ a: ev.a as number, b: ev.b as number });
+      }
+    }
+    expect(started.length).toBeGreaterThan(0);
+    const pair = [started[0]!.a, started[0]!.b].sort((x, y) => x - y);
+    expect(pair).toEqual([1, 2]); // floor (e1) ↔ box (e2)
+    backend.destroy();
+  });
+
   it('removeBody drops the body from readback', async () => {
     const backend = createRapierBackend();
     await backend.init();

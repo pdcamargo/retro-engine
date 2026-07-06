@@ -149,8 +149,8 @@ These do not exist in the runtime and are the reason a complete game can't ship 
   fixed-timestep Sync→Step→Writeback bridge. `@retro-engine/physics-rapier` (`createRapierBackend`) is the
   **2D + 3D** backend over `@dimforge/rapier2d-compat` + `rapier3d-compat` — real dynamics, entity↔body
   maps, raycast, collision-event drain — verified headless (2D and 3D boxes fall and land, independently).
-  Remaining: joints, a kinematic character controller, and collision events surfaced to ECS.
-  → roadmap/physics.md
+  Collision start/stop events are surfaced to ECS as a `CollisionEvent` message (`MessageReader`).
+  Remaining: joints and a kinematic character controller. → roadmap/physics.md
 
 ## Planned architecture — physics package (not built yet)
 

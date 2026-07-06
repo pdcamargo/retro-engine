@@ -38,9 +38,12 @@ wasm is opt-in.
   routed by `snapshot.dimension`; 3D uses Vec3 translation, quaternion rotation,
   Vec3 angular velocity, `cuboid(hx,hy,hz)`. Verified headless (a 3D box falls +
   lands; 2D and 3D simulate independently in one backend). `capabilities.dimensions3d`.
-- **Remaining:** collision start/end events surfaced to ECS (a message channel;
-  the backend already drains them); a Rapier kinematic **character controller**;
-  joints (fixed/revolute/…); a 3D playground/studio demo + a moving character.
+- **Collision events ✅ (2026-07-06):** `CollisionEvent` is an ECS message;
+  `PhysicsPlugin` writes the backend's drained start/stop events each fixed step
+  (colliders created with `ActiveEvents.COLLISION_EVENTS`). Read via
+  `MessageReader(CollisionEvent)`. Verified headless (box lands → `started` event).
+- **Remaining:** a Rapier kinematic **character controller**; joints
+  (fixed/revolute/…); a 3D playground/studio demo + a moving character.
 
 ### Phase 4 — Studio integration (P1/P2)
 

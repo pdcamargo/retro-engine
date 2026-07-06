@@ -129,7 +129,8 @@ export class Rapier2dWorld {
     const colliderDesc = this.colliderDesc(snapshot)
       .setRestitution(snapshot.restitution)
       .setFriction(snapshot.friction)
-      .setSensor(snapshot.collider.isSensor);
+      .setSensor(snapshot.collider.isSensor)
+      .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
     const collider = world.createCollider(colliderDesc, body);
     this.bodies.set(entity, body);
     this.colliderEntity.set(collider.handle, entity);

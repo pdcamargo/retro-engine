@@ -192,6 +192,20 @@ a manual confirmation before their backlog/roadmap entries are considered closed
 
 ---
 
+## Physics — collision events → ECS · `@retro-engine/physics-core` + `physics-rapier` · ADR-0148
+
+- **What changed:** `CollisionEvent` is now an ECS message class; `PhysicsPlugin` writes the
+  backend's drained start/stop events each fixed step. Rapier colliders now enable
+  `ActiveEvents.COLLISION_EVENTS` (they're silent otherwise). Read via `MessageReader(CollisionEvent)`.
+- **Automated (REAL):** a headless bun test drops a box on the floor and asserts a `started`
+  collision event is emitted between the two entities. 6 rapier tests green; full gate green.
+- **HOW to test (in a game):** add a system with `MessageReader(CollisionEvent)`; each `{kind:'started'
+  |'stopped', a, b}` reports a contact between entity `a` and `b`. (Manual: wire it into a scene and
+  log hits; not visually verifiable on its own.)
+- **Remaining for the Physics box:** kinematic character controller + joints (+ a moving-character demo).
+
+---
+
 ## ✅ P0 Audio item COMPLETE — box checked in MASTER-ROADMAP
 
 The **Audio (core)** P0 item is fully done (HAL + Web Audio backend + `AudioClip` +

@@ -4,11 +4,11 @@ export type {
   BodyReadback,
   BodySnapshot,
   ColliderDesc,
-  CollisionEvent,
   PhysicsBackend,
   RaycastHit,
   RaycastQuery,
 } from './backend';
+export { CollisionEvent } from './backend';
 export type { ColliderShape2d, RigidBodyType } from './components-2d';
 export {
   AngularVelocity2d,

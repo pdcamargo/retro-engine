@@ -1,9 +1,10 @@
 import type { Entity } from '@retro-engine/ecs';
 import type { App, PluginObject } from '@retro-engine/engine';
-import { Query, RemovedComponents, Res, Time, Transform } from '@retro-engine/engine';
+import { MessageWriter, Query, RemovedComponents, Res, Time, Transform } from '@retro-engine/engine';
 import { t } from '@retro-engine/reflect';
 
 import type { PhysicsBackend } from './backend';
+import { CollisionEvent } from './backend';
 import {
   AngularVelocity2d,
   Collider2d,
@@ -61,6 +62,7 @@ export class PhysicsPlugin implements PluginObject {
     void this.backend.init();
     if (app.getResource(Gravity) === undefined) app.insertResource(new Gravity());
     app.insertResource(new Physics(this.backend));
+    app.messageRegistry.register(CollisionEvent);
 
     this.registerComponents(app);
 
@@ -74,8 +76,9 @@ export class PhysicsPlugin implements PluginObject {
         Query([Transform, RigidBody3d, Collider3d]),
         RemovedComponents(RigidBody2d),
         RemovedComponents(RigidBody3d),
+        MessageWriter(CollisionEvent),
       ],
-      (gravity, time, bodies2d, bodies3d, removed2d, removed3d) => {
+      (gravity, time, bodies2d, bodies3d, removed2d, removed3d, collisions) => {
         if (!backend.ready()) return;
         backend.setGravity('2d', [gravity.gravity2d[0] ?? 0, gravity.gravity2d[1] ?? 0]);
         backend.setGravity('3d', [
@@ -121,6 +124,9 @@ export class PhysicsPlugin implements PluginObject {
 
         // Step.
         backend.step(time.fixed.delta);
+
+        // Surface this step's collision start/stop events to ECS.
+        for (const event of backend.drainCollisionEvents()) collisions.write(event);
 
         // Writeback: simulated state → authored components.
         for (const [entity, transform] of bodies2d.entries()) {
