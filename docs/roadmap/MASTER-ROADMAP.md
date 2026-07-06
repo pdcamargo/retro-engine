@@ -155,9 +155,11 @@ foundation.**
       `emitWebBoot` (generated boot entry the target bundles), `parseProjectDescriptor`
       (`@retro-engine/project`), and a `retro-build` CLI (`retro build --target web`). **In-browser run proof
       done** — `@retro-engine/sample-game` exports via the CLI and boots in a real browser (WebGPU init +
-      crisp MSDF text + animating frame loop, Playwright-verified). Remaining before check-off: studio
-      "Build → Web" menu; packing a project's `assets/` into the `.rpak` (assets aren't bundled yet); source
-      maps / production polish (phase 6). (ADR-0151/0153.)
+      crisp MSDF text + animating frame loop, Playwright-verified). **Asset packing phase A done** — the CLI
+      scans `.meta` sidecars, packs a GUID-keyed `.rpak`, and emits `manifest.json` (verified: sample asset
+      reads back by GUID). Remaining before check-off: runtime `.rpak` asset loading (phase B — a browser
+      `RpakAssetSource` wired into the App's `AssetServer`) + a sprite-from-.rpak proof (phase C); studio
+      "Build → Web" menu; source maps / production polish. (ADR-0151/0153.)
       _AC:_ `packages/build` (Bun/Node-only) with an `ExportTarget` interface + registry and a shared Bun
       bundler for user code (engine externalized appropriately); a **web adapter** emitting a static site
       (engine + user bundle + `.rpak`) that runs in a browser; a **`.rpak` writer** (magic+version header →

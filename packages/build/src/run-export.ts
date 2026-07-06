@@ -1,5 +1,6 @@
 import { parseProjectDescriptor, type ProjectDescriptor } from '@retro-engine/project';
 
+import { scanProjectAssets } from './asset-scan';
 import { WebExportTarget } from './web-export-target';
 
 /** Options for {@link runWebExport}. */
@@ -59,10 +60,14 @@ export const runWebExport = async (
   }
 
   const outDir = options.outDir ?? join(options.projectRoot, 'dist', 'web');
+  // Pack the project's assets (scanned from `.meta` sidecars) into the `.rpak`
+  // and emit the GUID→location manifest beside the bundle.
+  const scanned = await scanProjectAssets(options.projectRoot);
   const target = new WebExportTarget({
     entrypoint,
     ...(descriptor.name.length > 0 ? { title: descriptor.name } : {}),
     ...(options.external !== undefined ? { external: options.external } : {}),
+    ...(scanned.inputs.length > 0 ? { assets: scanned.inputs, manifest: scanned.manifest } : {}),
   });
 
   const result = await target.export({

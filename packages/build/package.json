@@ -38,6 +38,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@retro-engine/assets": "workspace:*",
     "@retro-engine/project": "workspace:*"
   }
 }

@@ -1,3 +1,6 @@
+import type { AssetManifestFile } from '@retro-engine/assets';
+import { serializeAssetManifest } from '@retro-engine/assets';
+
 import type { ExportContext, ExportResult, ExportTarget } from './export-target';
 import type { RpakInput } from './rpak-writer';
 import { writeRpak } from './rpak-writer';
@@ -17,6 +20,11 @@ export interface WebExportConfig {
   readonly external?: readonly string[];
   /** Project assets to pack into the `.rpak`. Omit/empty to skip the archive. */
   readonly assets?: readonly RpakInput[];
+  /**
+   * GUID→location asset manifest. When present it is written as `manifest.json`
+   * beside the bundle so the runtime can resolve GUIDs to `.rpak` entries.
+   */
+  readonly manifest?: AssetManifestFile;
   /** Document title for the generated `index.html`. */
   readonly title?: string;
   /** Filename for the entry bundle. Default `'main.js'`. */
@@ -98,6 +106,12 @@ export class WebExportTarget implements ExportTarget {
         rpakName = this.config.rpakName ?? 'assets.rpak';
         const dest = join(ctx.outDir, rpakName);
         await writeFile(dest, await writeRpak(this.config.assets));
+        outputs.push(dest);
+      }
+
+      if (this.config.manifest !== undefined && this.config.manifest.entries.length > 0) {
+        const dest = join(ctx.outDir, 'manifest.json');
+        await writeFile(dest, serializeAssetManifest(this.config.manifest));
         outputs.push(dest);
       }
 

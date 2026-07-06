@@ -711,3 +711,26 @@ order — reuses the UI quad pipeline (no new pipeline). `borderEdgeRects` is th
 - Roadmap: `docs/roadmap/ui-system.md` (Phase 2c ✅). ADR-0150/0154. MASTER-ROADMAP UI item 🟡.
 
 ---
+
+## 🟡 Export — web asset packing, phase A (build/unit-verified)
+
+`retro build` now packs a project's assets into the export. `scanProjectAssets` (@retro-engine/build)
+walks the project's `.meta` sidecars (skipping node_modules/dist/.re/.git/.turbo), parses each
+({guid, kind}; location = sidecar path minus `.meta`), reads the asset bytes, and returns a baked
+AssetManifestFile + GUID-keyed RpakInput[]. `WebExportTarget` writes `manifest.json` beside the
+bundle; `runWebExport` runs the scan + packs. New `@retro-engine/assets` dep on build.
+
+- **Verified (build + unit, no MCP path — runtime doesn't load assets yet):** added a sample asset
+  (`apps/sample-game/assets/credits.txt` + `.meta`); `retro build` now emits `assets.rpak` + `manifest.json`
+  alongside main.js/index.html; the packed asset reads back by GUID through `RpakReader` and the manifest
+  parses (checked via a scratch script + a run-export test asserting both outputs + a manifest entry).
+- **Automated:** build 29 tests (parseMetaEntry parse/strip/malformed; scanProjectAssets over a fixture with
+  orphan + excluded-dir; run-export asserts manifest.json + assets.rpak). Full repo gate green. Changeset added.
+- **HOW to test:** `bun run packages/build/src/cli.ts --project apps/sample-game --out /tmp/dw` → `/tmp/dw`
+  contains assets.rpak + manifest.json; read a GUID back via RpakReader.
+- **Not done (Export P0 stays unchecked):** phase B — a browser `RpakAssetSource` wired into the App's
+  `AssetServer` so exported games actually LOAD packed assets; phase C — a sprite-from-.rpak browser proof;
+  studio "Build → Web" menu. Plan in `docs/roadmap/web-build-target.md`.
+- Roadmap: `web-build-target.md` (asset phase A ✅). ADR-0151/0153. MASTER-ROADMAP Export item 🟡.
+
+---

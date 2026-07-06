@@ -50,9 +50,12 @@ The pieces are in place; wiring them is a focused multi-phase effort:
   (`packages/engine/src/asset/asset-server.ts`) resolves a GUID → location via
   an `AssetManifest` (`setManifest` / `loadManifest`), then calls
   `source.read(location)` and the extension/kind importer.
-- **Phase A — build-time scan + pack:** walk `<project>/assets/` + `.meta`
-  sidecars → an `AssetManifest` (GUID→location/kind) + collect each asset's
-  bytes; emit `manifest.json` + a GUID-keyed `.rpak` (ADR-0151) beside the bundle.
+- **Phase A — build-time scan + pack ✅ (2026-07-06):** `scanProjectAssets`
+  (`@retro-engine/build`) walks a project's `.meta` sidecars → an `AssetManifest`
+  (GUID→location/kind) + each asset's bytes; `WebExportTarget` writes
+  `manifest.json` + a GUID-keyed `.rpak` beside the bundle. Verified: the
+  sample-game export emits both; the packed asset reads back by GUID and the
+  manifest parses.
 - **Phase B — runtime source:** a browser-safe `RpakAssetSource` (in
   `@retro-engine/runtime-web`) over `RangeRpakReader` (fetch the `.rpak` header +
   TOC once, then per-asset HTTP-Range reads). `bootWebGame` fetches `manifest.json`,

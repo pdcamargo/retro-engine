@@ -22,5 +22,7 @@ export type { IndexHtmlOptions } from './web-index-html';
 export { emitIndexHtml } from './web-index-html';
 export type { WebBootOptions } from './web-boot';
 export { emitWebBoot } from './web-boot';
+export type { ScannedAssets } from './asset-scan';
+export { parseMetaEntry, scanProjectAssets } from './asset-scan';
 export type { WebExportConfig } from './web-export-target';
 export { WebExportTarget } from './web-export-target';

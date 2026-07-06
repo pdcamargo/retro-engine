@@ -101,6 +101,7 @@
         "retro-build": "./src/cli.ts",
       },
       "dependencies": {
+        "@retro-engine/assets": "workspace:*",
         "@retro-engine/project": "workspace:*",
       },
     },

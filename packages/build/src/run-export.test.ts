@@ -24,6 +24,13 @@ entry = "src/game.ts"
 `,
   );
   await writeFile(join(root, 'src', 'game.ts'), 'export default { plugins: [] };\n');
+  // An asset + its `.meta` so the export packs a `.rpak` + manifest.
+  await mkdir(join(root, 'assets'), { recursive: true });
+  await writeFile(join(root, 'assets', 'data.bin'), new Uint8Array([7, 7, 7]));
+  await writeFile(
+    join(root, 'assets', 'data.bin.meta'),
+    new TextEncoder().encode(JSON.stringify({ version: 1, guid: 'g-data', kind: 'Blob' })),
+  );
 });
 
 afterAll(async () => {
@@ -40,9 +47,17 @@ describe('runWebExport', () => {
     const names = result.outputs.map((p) => p.split('/').pop());
     expect(names).toContain('index.html');
     expect(names).toContain('main.js');
+    // The project's asset was scanned + packed, and the manifest emitted.
+    expect(names).toContain('assets.rpak');
+    expect(names).toContain('manifest.json');
 
     const html = await readFile(join(result.outDir, 'index.html'), 'utf8');
     expect(html).toContain('<title>CLI Test Game</title>');
+
+    const manifest = JSON.parse(await readFile(join(result.outDir, 'manifest.json'), 'utf8')) as {
+      entries: { guid: string; location: string; kind: string }[];
+    };
+    expect(manifest.entries).toContainEqual({ guid: 'g-data', location: 'assets/data.bin', kind: 'Blob' });
   });
 
   it('throws a clear error when there is no project.retroengine', async () => {
