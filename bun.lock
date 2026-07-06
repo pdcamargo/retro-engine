@@ -277,6 +277,8 @@
       "name": "@retro-engine/runtime-web",
       "version": "0.0.0",
       "dependencies": {
+        "@retro-engine/assets": "workspace:*",
+        "@retro-engine/build": "workspace:*",
         "@retro-engine/engine": "workspace:*",
         "@retro-engine/project": "workspace:*",
         "@retro-engine/renderer-core": "workspace:*",

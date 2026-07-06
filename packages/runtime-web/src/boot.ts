@@ -1,10 +1,21 @@
-import { App } from '@retro-engine/engine';
+import { parseAssetManifest } from '@retro-engine/assets';
+import { RangeRpakReader } from '@retro-engine/build/rpak';
+import { App, AssetPlugin, AssetServer } from '@retro-engine/engine';
 import type { ProjectDefinition } from '@retro-engine/project';
 import type { Renderer } from '@retro-engine/renderer-core';
 import { createWebGPURenderer } from '@retro-engine/renderer-webgpu';
 
 import type { CanvasTarget } from './resolve-canvas';
 import { resolveCanvas } from './resolve-canvas';
+import { httpRangeFetch, RpakAssetSource } from './rpak-asset-source';
+
+/** Where an exported game's packed assets + manifest live, relative to the page. */
+export interface WebAssetsConfig {
+  /** URL of the `.rpak` archive (e.g. `'assets.rpak'`). */
+  readonly rpakUrl: string;
+  /** URL of the GUID→location `manifest.json`. */
+  readonly manifestUrl: string;
+}
 
 /** An RGBA clear color in the `[0, 1]` range. */
 export interface ClearColor {
@@ -36,6 +47,12 @@ export interface BootWebGameOptions {
    * the caller drives it (e.g. a host that owns the loop, or a test).
    */
   readonly autoRun?: boolean;
+  /**
+   * Packed asset delivery. When set, the game's assets are streamed from a
+   * `.rpak` over HTTP Range and resolved through the fetched manifest — wired
+   * before the project's plugins so their loaders resolve GUIDs from the archive.
+   */
+  readonly assets?: WebAssetsConfig;
 }
 
 /**
@@ -69,8 +86,27 @@ export const bootWebGame = async (
     ...(options.clearColor !== undefined ? { clearColor: options.clearColor } : {}),
   });
 
+  // Wire packed-asset delivery before the game's plugins so their loaders (added
+  // in `build` / via `whenResource(AssetServer)`) resolve GUIDs from the `.rpak`.
+  if (options.assets !== undefined) await wireAssets(app, options.assets);
+
   for (const plugin of definition.plugins) app.addPlugin(plugin);
 
   if (options.autoRun !== false) await app.run();
   return app;
+};
+
+/** Fetch the manifest, open a `.rpak`-backed source, and bind it to the App's `AssetServer`. */
+const wireAssets = async (app: App, assets: WebAssetsConfig): Promise<void> => {
+  const response = await fetch(assets.manifestUrl);
+  if (!response.ok) throw new Error(`bootWebGame: manifest fetch ${assets.manifestUrl} → ${response.status}`);
+  const manifest = parseAssetManifest(await response.text());
+  const source = new RpakAssetSource(new RangeRpakReader(httpRangeFetch(assets.rpakUrl)), manifest);
+  app.addPlugin(new AssetPlugin({ source }));
+  app.getResource(AssetServer)?.setManifest(manifest);
+  if (typeof window !== 'undefined') {
+    (window as unknown as { __retroAssets?: { entries: number } }).__retroAssets = {
+      entries: manifest.entries.size,
+    };
+  }
 };

@@ -12,6 +12,10 @@
     ".": {
       "types": "./src/index.ts",
       "default": "./src/index.ts"
+    },
+    "./rpak": {
+      "types": "./src/rpak.ts",
+      "default": "./src/rpak.ts"
     }
   },
   "publishConfig": {
@@ -23,6 +27,10 @@
       ".": {
         "types": "./dist/index.d.ts",
         "default": "./dist/index.js"
+      },
+      "./rpak": {
+        "types": "./dist/rpak.d.ts",
+        "default": "./dist/rpak.js"
       }
     }
   },

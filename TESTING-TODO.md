@@ -734,3 +734,27 @@ bundle; `runWebExport` runs the scan + packs. New `@retro-engine/assets` dep on 
 - Roadmap: `web-build-target.md` (asset phase A ✅). ADR-0151/0153. MASTER-ROADMAP Export item 🟡.
 
 ---
+
+## 🟡 Export — web asset delivery, phase B: runtime .rpak source (browser + unit-verified)
+
+Exported games can now load their packed assets. `RpakAssetSource` (@retro-engine/runtime-web) is an
+AssetSource that reads from a `.rpak` by GUID, resolving the AssetServer's location-based read through
+the project manifest (location→GUID), opening the archive lazily then streaming per-entry byte ranges.
+`httpRangeFetch` does HTTP Range (robust to non-Range 200 servers — slices locally). `bootWebGame({
+assets: { rpakUrl, manifestUrl } })` fetches the manifest, adds AssetPlugin({source}), and setManifests —
+before the game's plugins. New browser-safe `@retro-engine/build/rpak` subpath lets the browser runtime
+import the reader without the node-only export pipeline; `emitWebBoot`/`WebExportTarget` forward the URLs.
+
+- **Verified (browser + unit):** the sample-game export bundles the reader for the browser (node:zlib
+  fallback externalized) and boots — `bootWebGame` fetched `manifest.json`, wired the source, and set
+  `window.__retroAssets = { entries: 1 }` in-browser; the served `.rpak` parses (TOC has the GUID). The
+  `RpakAssetSource.read` path is unit-tested end-to-end over a real `writeRpak` archive + fake RangeFetch
+  (runtime-web 10 tests). Full repo gate green. Changeset added.
+- **HOW to test:** export the sample, serve, open in a WebGPU browser + devtools → `window.__retroAssets`
+  shows `{ entries: 1 }`; `fetch('assets.rpak')` returns the archive.
+- **Not done (Export P0 stays unchecked):** phase C — a real image loads by GUID from the `.rpak` and
+  renders as a Sprite in the browser (needs an image loader + a Sprite consumer in the sample), which
+  exercises an actual per-asset read end-to-end; studio "Build → Web" menu. Plan in web-build-target.md.
+- Roadmap: `web-build-target.md` (asset phase B ✅). ADR-0151/0153. MASTER-ROADMAP Export item 🟡.
+
+---

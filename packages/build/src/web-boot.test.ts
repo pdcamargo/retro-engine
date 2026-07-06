@@ -25,4 +25,12 @@ describe('emitWebBoot', () => {
     const src = emitWebBoot({ userEntry: './a"b.ts' });
     expect(src).toContain('import definition from "./a\\"b.ts";');
   });
+
+  it('forwards asset URLs when the export packs a .rpak', () => {
+    const src = emitWebBoot({
+      userEntry: './game.ts',
+      assets: { rpakUrl: 'assets.rpak', manifestUrl: 'manifest.json' },
+    });
+    expect(src).toContain('"assets":{"rpakUrl":"assets.rpak","manifestUrl":"manifest.json"}');
+  });
 });

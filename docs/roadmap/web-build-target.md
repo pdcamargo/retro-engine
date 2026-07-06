@@ -56,10 +56,14 @@ The pieces are in place; wiring them is a focused multi-phase effort:
   `manifest.json` + a GUID-keyed `.rpak` beside the bundle. Verified: the
   sample-game export emits both; the packed asset reads back by GUID and the
   manifest parses.
-- **Phase B — runtime source:** a browser-safe `RpakAssetSource` (in
-  `@retro-engine/runtime-web`) over `RangeRpakReader` (fetch the `.rpak` header +
-  TOC once, then per-asset HTTP-Range reads). `bootWebGame` fetches `manifest.json`,
-  `setManifest`s it, and injects the source into the App's `AssetServer`.
+- **Phase B — runtime source ✅ (2026-07-06):** `RpakAssetSource`
+  (`@retro-engine/runtime-web`) over `RangeRpakReader` (`httpRangeFetch`, robust
+  to non-Range `200` servers), imported via the new browser-safe
+  `@retro-engine/build/rpak` subpath. `bootWebGame({ assets })` fetches
+  `manifest.json`, adds `AssetPlugin({ source })`, and `setManifest`s — before the
+  game's plugins. Verified: the sample export bundles the reader for the browser
+  and boots (fetches manifest + wires the source in-browser); `RpakAssetSource.read`
+  is unit-tested end-to-end over a real archive.
 - **Phase C — proof:** a sample loads a real image by GUID and renders it as a
   `Sprite` in the browser (export→Playwright), confirming end-to-end delivery.
 

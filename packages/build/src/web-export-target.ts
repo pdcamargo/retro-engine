@@ -65,6 +65,12 @@ export class WebExportTarget implements ExportTarget {
     const userEntrySpecifier = relative(ctx.projectRoot, this.config.entrypoint)
       .split('\\')
       .join('/');
+    const rpakName = this.config.rpakName ?? 'assets.rpak';
+    const packsAssets =
+      this.config.assets !== undefined &&
+      this.config.assets.length > 0 &&
+      this.config.manifest !== undefined &&
+      this.config.manifest.entries.length > 0;
     const bootEntryPath = join(ctx.projectRoot, BOOT_ENTRY_NAME);
     await writeFile(
       bootEntryPath,
@@ -73,6 +79,7 @@ export class WebExportTarget implements ExportTarget {
           ? userEntrySpecifier
           : `./${userEntrySpecifier}`,
         ...(this.config.clearColor !== undefined ? { clearColor: this.config.clearColor } : {}),
+        ...(packsAssets ? { assets: { rpakUrl: rpakName, manifestUrl: 'manifest.json' } } : {}),
       }),
     );
 
@@ -101,12 +108,12 @@ export class WebExportTarget implements ExportTarget {
         outputs.push(dest);
       }
 
-      let rpakName: string | undefined;
+      let wroteRpak = false;
       if (this.config.assets !== undefined && this.config.assets.length > 0) {
-        rpakName = this.config.rpakName ?? 'assets.rpak';
         const dest = join(ctx.outDir, rpakName);
         await writeFile(dest, await writeRpak(this.config.assets));
         outputs.push(dest);
+        wroteRpak = true;
       }
 
       if (this.config.manifest !== undefined && this.config.manifest.entries.length > 0) {
@@ -118,7 +125,7 @@ export class WebExportTarget implements ExportTarget {
       const html = emitIndexHtml({
         bundlePath: bundleName,
         ...(this.config.title !== undefined ? { title: this.config.title } : {}),
-        ...(rpakName !== undefined ? { rpakPath: rpakName } : {}),
+        ...(wroteRpak ? { rpakPath: rpakName } : {}),
       });
       const indexDest = join(ctx.outDir, 'index.html');
       await writeFile(indexDest, html);
