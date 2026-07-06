@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 
-import { quat, vec3, vec4 } from '@retro-engine/math';
+import { vec3, vec4 } from '@retro-engine/math';
 
 import { App, Camera3d, Image, Images, Transform } from '../index';
 import { makeCapturingRenderer, makeStubCanvas } from '../test-utils';
@@ -40,7 +40,7 @@ const seedFont = (app: App): ReturnType<Fonts['add']> => {
 };
 
 // Places the text a few units in front of a default (identity, −Z-facing) camera.
-const inFront = () => new Transform(vec3.create(0, 0, -3), quat.identity(), vec3.create(0.05, 0.05, 0.05));
+const inFront = () => new Transform(vec3.create(0, 0, -3));
 
 describe('TextPlugin — world-space 3D text (integration)', () => {
   it('emits one transparent3d instanced draw per Text entity, one instance per glyph', async () => {
