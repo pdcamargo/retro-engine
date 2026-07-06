@@ -100,8 +100,9 @@ foundation.**
       picking (`pickTopmost`) + `UiInteractionPlugin` (reads `@retro-engine/input`), verified in a real
       browser (a clickable button + live click counter in the sample-game export). Plus **Phase 4b: the
       `UiButton` widget** (built-in hover/press/disabled tinting) + `Disabled` marker + `setUiBackground`,
-      verified via a working 3-button main menu (one disabled) in the sample-game export. Remaining: UI
-      **borders + corner radius** + z-index/clipping + per-line text alignment; `.rss`
+      verified via a working 3-button main menu (one disabled) in the sample-game export. Plus **Phase 2c:
+      node borders** (`UiStyle.borderWidth`/`borderColor` → inset edge quads, verified via outlined panel +
+      buttons). Remaining: UI **corner radius** + z-index/clipping + per-line text alignment; `.rss`
       combinators/`--vars`/inheritance + layout-pass wiring (3b); **more widgets** (label/toggle/slider/
       text-input) + focus/spatial nav (4c). (ADR-0150/0154.)
       _AC:_ `UiNode` + derived `ComputedLayout` (not serialized) reusing `Parent`/`Children`; a pure-TS

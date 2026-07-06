@@ -38,6 +38,31 @@ Remaining below: the studio "Build → Web" menu, packing `assets/` into the
 `.rpak` (currently assets aren't bundled), and source maps / production polish
 (phase 6).
 
+## Asset delivery — planned (the big remaining Export gap)
+
+Exported games currently load **no** project assets (the `.rpak` write path
+exists but nothing packs a project's `assets/` or reads them back at runtime).
+The pieces are in place; wiring them is a focused multi-phase effort:
+
+- **Injection point (confirmed):** `AssetSource.read(location): Promise<Uint8Array>`
+  (`@retro-engine/assets`) is the runtime seam — one source injected at App
+  startup, exactly as the renderer backend is. The `AssetServer`
+  (`packages/engine/src/asset/asset-server.ts`) resolves a GUID → location via
+  an `AssetManifest` (`setManifest` / `loadManifest`), then calls
+  `source.read(location)` and the extension/kind importer.
+- **Phase A — build-time scan + pack:** walk `<project>/assets/` + `.meta`
+  sidecars → an `AssetManifest` (GUID→location/kind) + collect each asset's
+  bytes; emit `manifest.json` + a GUID-keyed `.rpak` (ADR-0151) beside the bundle.
+- **Phase B — runtime source:** a browser-safe `RpakAssetSource` (in
+  `@retro-engine/runtime-web`) over `RangeRpakReader` (fetch the `.rpak` header +
+  TOC once, then per-asset HTTP-Range reads). `bootWebGame` fetches `manifest.json`,
+  `setManifest`s it, and injects the source into the App's `AssetServer`.
+- **Phase C — proof:** a sample loads a real image by GUID and renders it as a
+  `Sprite` in the browser (export→Playwright), confirming end-to-end delivery.
+
+Open sub-question: how the App/`CorePlugin` currently constructs its
+`AssetServer` + default source, so `bootWebGame` can override it cleanly.
+
 ## Goal
 
 A CLI (or studio menu) that takes a Retro Engine project and produces a deployable static web bundle: `index.html`, JS bundles, asset manifest, all assets, ready to upload to any static host. Counterpart to the studio producing desktop Tauri bundles.

@@ -129,6 +129,8 @@ class HelloTextPlugin implements PluginObject {
                   padding: 12,
                   gap: 8,
                   backgroundColor: vec4.create(0.12, 0.14, 0.2, 0.85),
+                  borderWidth: 2,
+                  borderColor: vec4.create(0.45, 0.55, 0.75, 1),
                 }),
               )
               .withChildren((panel) => {
@@ -154,7 +156,13 @@ class HelloTextPlugin implements PluginObject {
       disabled = false,
     ): void => {
       const parts: object[] = [
-        new UiNode({ width: 300, height: 56, padding: { left: 20, top: 15 } }),
+        new UiNode({
+          width: 300,
+          height: 56,
+          padding: { left: 20, top: 15 },
+          borderWidth: 2,
+          borderColor: vec4.create(0.62, 0.7, 0.95, 1),
+        }),
         new UiText({ text: name, font, fontSize: 28, color: vec4.create(1, 1, 1, 1) }),
         new UiButton(),
         new MenuAction(name),

@@ -78,6 +78,8 @@ export const uiNodeSchema: Schema<UiNode> = {
     top: t.number.optional(),
     bottom: t.number.optional(),
     backgroundColor: t.vec4.optional(),
+    borderWidth: EDGES_STRUCT,
+    borderColor: t.vec4.optional(),
   }) as unknown as FieldType<UiStyle>,
 };
 

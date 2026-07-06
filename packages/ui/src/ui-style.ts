@@ -77,6 +77,17 @@ export interface UiStyle {
    * layout, consumed by the UI render layer.
    */
   readonly backgroundColor: Vec4 | undefined;
+  /**
+   * Border thickness per side, in logical pixels, drawn *inside* the border box
+   * (CSS `border-box`). Zero (the default) draws no border. A paint property —
+   * ignored by layout for now (it does not inset content).
+   */
+  readonly borderWidth: Edges;
+  /**
+   * Border fill, linear RGBA in `[0, 1]`. `undefined` (the default) draws no
+   * border regardless of {@link borderWidth}.
+   */
+  readonly borderColor: Vec4 | undefined;
 }
 
 const ZERO_EDGES: Edges = { left: 0, right: 0, top: 0, bottom: 0 };
@@ -105,6 +116,8 @@ export const defaultUiStyle = (): UiStyle => ({
   top: undefined,
   bottom: undefined,
   backgroundColor: undefined,
+  borderWidth: ZERO_EDGES,
+  borderColor: undefined,
 });
 
 /** Authoring shorthand: a scalar (all four sides) or partial per-side edges. */
@@ -122,24 +135,26 @@ const resolveEdges = (init: EdgesInit | undefined, base: Edges): Edges => {
 };
 
 /** Partial style with edge shorthands, accepted by {@link makeStyle}. */
-export type UiStyleInit = Partial<Omit<UiStyle, 'padding' | 'margin'>> & {
+export type UiStyleInit = Partial<Omit<UiStyle, 'padding' | 'margin' | 'borderWidth'>> & {
   padding?: EdgesInit;
   margin?: EdgesInit;
+  borderWidth?: EdgesInit;
 };
 
 /**
  * Build a complete {@link UiStyle} from a partial init, filling every omitted
- * field with its default and expanding scalar `padding` / `margin` shorthands to
- * four-sided edges.
+ * field with its default and expanding scalar `padding` / `margin` /
+ * `borderWidth` shorthands to four-sided edges.
  */
 export const makeStyle = (init: UiStyleInit = {}): UiStyle => {
   const base = defaultUiStyle();
-  const { padding, margin, ...rest } = init;
+  const { padding, margin, borderWidth, ...rest } = init;
   return {
     ...base,
     ...rest,
     padding: resolveEdges(padding, base.padding),
     margin: resolveEdges(margin, base.margin),
+    borderWidth: resolveEdges(borderWidth, base.borderWidth),
   };
 };
 

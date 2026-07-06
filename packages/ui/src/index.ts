@@ -32,8 +32,8 @@ export { matches, resolveDeclarations, resolveUiStyle, specificity } from './rss
 export { UiRenderPlugin } from './render/ui-render-plugin';
 export { UiPipeline } from './render/ui-pipeline';
 export { makeUiPassNode, UiPassLabel } from './render/ui-pass-node';
-export type { ClipRect, UiQuadQuery } from './render/ui-prepare';
-export { computeClipRect, prepareUiQuads } from './render/ui-prepare';
+export type { BorderEdges, ClipRect, EdgeRect, UiQuadQuery } from './render/ui-prepare';
+export { borderEdgeRects, computeClipRect, prepareUiQuads } from './render/ui-prepare';
 export {
   packUiColor,
   packUiQuad,

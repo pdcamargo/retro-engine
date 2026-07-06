@@ -62,8 +62,12 @@ and a HUD (text + bars) from ECS components + `.rss`, with gamepad navigation.
   (`UiTextPassNode`) ordered after the quad pass. `UiText.color`, `packUiGlyph`,
   per-atlas batching. Verified in a real browser (HUD labels in the sample-game
   export). Bench: `ui-text-pack`.
-- Remaining (2c+): borders + corner radius; per-line text alignment within a
-  node; clipping/overflow; explicit z-index + interleaved text/quad ordering; a
+- **Phase 2c — borders ✅ (2026-07-06).** `UiStyle.borderWidth` (per-side Edges) +
+  `borderColor`; the prepare pass emits up to four inset edge quads per node
+  (`borderEdgeRects`, CSS border-box), reusing the quad pipeline. Verified in a
+  real browser (outlined HUD panel + menu buttons in the sample-game export).
+- Remaining (2d+): corner radius; per-line text alignment within a node;
+  clipping/overflow; explicit z-index + interleaved text/quad ordering; a
   UI-specific camera/scaling mode (fixed logical resolution + letterbox).
 
 ### Phase 3 — Retro CSS (`.rss`) 🟡 (parser + cascade shipped 2026-07-06)

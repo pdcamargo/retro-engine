@@ -691,3 +691,23 @@ the supported runtime recolor (resolved UiStyle is otherwise readonly). `pickTop
 - Roadmap: `docs/roadmap/ui-system.md` (Phase 4b ✅). ADR-0150/0154. MASTER-ROADMAP UI item 🟡.
 
 ---
+
+## ✅ In-game UI — Phase 2c: node borders (VERIFIED via browser)
+
+UI nodes can draw a border. `UiStyle` gains `borderWidth` (per-side Edges, same scalar/partial
+shorthand as padding/margin) + `borderColor` (Vec4), both reflection-registered. The overlay
+prepare pass emits up to four inset edge quads per node (CSS border-box; corners not double-
+covered), painted over the node's background and behind its children via the existing depth-first
+order — reuses the UI quad pipeline (no new pipeline). `borderEdgeRects` is the pure edge helper.
+
+- **Verified end-to-end (Playwright, real browser):** the `sample-game` export's bottom-right HUD
+  panel and all three MAIN MENU buttons now render light border outlines.
+- **Automated:** 77 UI tests (borderEdgeRects geometry: uniform/zero/single-side); full repo gate
+  green. Changeset added.
+- **HOW to test:** export the sample, serve, open → panel + menu buttons have outlines.
+- **Also:** promoted the big remaining Export gap (asset `.rpak` delivery) to a phased plan in
+  `docs/roadmap/web-build-target.md` (scanner → runtime RpakAssetSource → sprite proof) for a
+  future focused effort — exported games currently load no project assets.
+- Roadmap: `docs/roadmap/ui-system.md` (Phase 2c ✅). ADR-0150/0154. MASTER-ROADMAP UI item 🟡.
+
+---

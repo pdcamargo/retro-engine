@@ -2,7 +2,7 @@ import { describe, expect, it } from 'bun:test';
 
 import { packUiGlyph, UI_GLYPH_FLOAT_COUNT } from './ui-glyph-instance';
 import { packUiColor, packUiQuad, UI_INSTANCE_FLOAT_COUNT } from './ui-instance';
-import { computeClipRect } from './ui-prepare';
+import { borderEdgeRects, computeClipRect } from './ui-prepare';
 
 describe('computeClipRect', () => {
   it('maps a full-viewport box to the whole clip range', () => {
@@ -22,6 +22,27 @@ describe('computeClipRect', () => {
   it('keeps y-down screen space → y-up clip (top has the larger clip y)', () => {
     const r = computeClipRect(0, 0, 100, 100, 1000, 1000);
     expect(r.top).toBeGreaterThan(r.bottom);
+  });
+});
+
+describe('borderEdgeRects', () => {
+  it('produces four inset edges for a uniform border', () => {
+    const rects = borderEdgeRects(10, 20, 100, 50, { left: 2, right: 2, top: 2, bottom: 2 });
+    expect(rects).toEqual([
+      { x: 10, y: 20, w: 100, h: 2 }, // top
+      { x: 10, y: 68, w: 100, h: 2 }, // bottom
+      { x: 10, y: 22, w: 2, h: 46 }, // left (inset by top/bottom)
+      { x: 108, y: 22, w: 2, h: 46 }, // right (x + w - right = 10 + 100 - 2)
+    ]);
+  });
+
+  it('returns nothing for a zero border', () => {
+    expect(borderEdgeRects(0, 0, 100, 100, { left: 0, right: 0, top: 0, bottom: 0 })).toEqual([]);
+  });
+
+  it('emits only the sides with positive width', () => {
+    const rects = borderEdgeRects(0, 0, 50, 40, { left: 0, right: 0, top: 3, bottom: 0 });
+    expect(rects).toEqual([{ x: 0, y: 0, w: 50, h: 3 }]);
   });
 });
 
