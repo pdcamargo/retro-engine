@@ -13,8 +13,14 @@ export interface BundleConfig {
    * artifact; the studio's live build externalizes the engine to the host.
    */
   readonly external?: readonly string[];
-  /** Minify the output (production builds). Default `false`. */
-  readonly minify?: boolean;
+  /**
+   * Minify the output. `false` (default) emits readable output; `true` enables
+   * every pass. The granular form is the production default the web target uses:
+   * it keeps `identifiers: false` so component constructor names survive for
+   * reflection-based serialization (bundlers otherwise rename classes, which
+   * would break scene round-trips).
+   */
+  readonly minify?: boolean | { whitespace?: boolean; syntax?: boolean; identifiers?: boolean };
   /** Source-map mode. Default `'none'`. */
   readonly sourcemap?: 'none' | 'inline' | 'external';
   /** Execution target. Default `'browser'`. */
@@ -66,15 +72,28 @@ export const bundleUserCode = async (config: BundleConfig): Promise<BundleResult
     outputs: BunBlobArtifact[];
     logs: unknown[];
   }>;
-  const result = await build({
-    entrypoints: [...config.entrypoints],
-    target: config.target ?? 'browser',
-    format: 'esm',
-    external: [...(config.external ?? [])],
-    minify: config.minify ?? false,
-    sourcemap: config.sourcemap ?? 'none',
-    ...(config.outdir !== undefined ? { outdir: config.outdir } : {}),
-  });
+  // `throw: false` — return `{ success: false, logs }` on a build error instead
+  // of throwing an aggregate error, so callers get the diagnostics uniformly.
+  let result: { success: boolean; outputs: BunBlobArtifact[]; logs: unknown[] };
+  try {
+    result = await build({
+      entrypoints: [...config.entrypoints],
+      target: config.target ?? 'browser',
+      format: 'esm',
+      external: [...(config.external ?? [])],
+      minify: config.minify ?? false,
+      sourcemap: config.sourcemap ?? 'none',
+      throw: false,
+      ...(config.outdir !== undefined ? { outdir: config.outdir } : {}),
+    });
+  } catch (error) {
+    // Older Bun (no `throw` option) still throws — surface it as a failed result.
+    const logs =
+      error instanceof AggregateError
+        ? (error.errors as unknown[]).map((e) => String(e))
+        : [String(error)];
+    return { success: false, artifacts: [], logs };
+  }
   return {
     success: result.success,
     artifacts: result.outputs.map((output) => ({

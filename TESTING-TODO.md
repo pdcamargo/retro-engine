@@ -535,3 +535,31 @@ padding/margin shorthands, inline overrides win). Pure + headless.
 - Roadmap: `docs/roadmap/ui-system.md` (Phase 3 🟡). ADR-0150. MASTER-ROADMAP 🟡.
 
 ---
+
+## ✅ Web export — runtime host + `retro build` CLI + in-browser run proof (VERIFIED via browser)
+
+The web export can now turn a project into a static site that **actually boots in a browser**.
+New `@retro-engine/runtime-web` (`bootWebGame`: canvas → WebGPU renderer → add project plugins →
+run — ADR-0153); `emitWebBoot` + `WebExportTarget` bundle a generated boot entry so `main.js`
+boots the game; `parseProjectDescriptor` (in `@retro-engine/project`) reads `project.retroengine`;
+`runWebExport` + a `retro-build` CLI drive the export. New asset-free `@retro-engine/sample-game`
+(2D camera + MSDF `Text2d`) is the smoke test.
+
+- **Verified end-to-end (Playwright, not just unit tests):** `retro build --project apps/sample-game`
+  → static site → loaded in a real browser → WebGPU initialized, "RETRO ENGINE" / "WEB EXPORT OK"
+  rendered crisply, and the "SPIN!" label was caught mid-rotation (frame loop runs). This doubles as
+  the on-screen confirmation of the MSDF text pipeline (built-in default font).
+- **Automated:** runtime-web 7 tests, project descriptor 3, build web-boot/run-export/web-export
+  suites green; full monorepo gate green (lint/typecheck/test/build/bench). Changeset added.
+- **HOW to re-test manually:**
+  1. `bun run packages/build/src/cli.ts --project apps/sample-game --out /tmp/dist-web`
+  2. Serve it: `cd /tmp/dist-web && bunx serve` (or any static server) and open the URL in a
+     WebGPU browser (Chrome/Edge/Safari TP). You should see the three text lines with a spinning
+     "SPIN!". (Needs a WebGPU adapter — headless environments without a GPU won't render.)
+- **Not fully done (Export P0 stays unchecked):** studio "Build → Web" menu; packing `assets/`
+  into the `.rpak` (assets aren't bundled yet); source maps / prod polish; tree-shaking jsimgui out
+  of the shipped bundle (it's currently ~5 MB, mostly the editor-only imgui pulled in transitively).
+  Logged as "Export — Web follow-ups" in MASTER-ROADMAP.
+- Roadmap: `docs/roadmap/web-build-target.md`. ADRs 0151 + 0153. MASTER-ROADMAP Export item 🟡.
+
+---

@@ -5,6 +5,9 @@
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
+  "bin": {
+    "retro-build": "./src/cli.ts"
+  },
   "exports": {
     ".": {
       "types": "./src/index.ts",
@@ -33,5 +36,8 @@
     "lint": "oxlint .",
     "test": "bun test",
     "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@retro-engine/project": "workspace:*"
   }
 }

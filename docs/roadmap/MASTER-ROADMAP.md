@@ -134,13 +134,17 @@ foundation.**
 
 ## Platform / Tooling
 
-- [ ] **Export — Web target + `.rpak` foundation** — 🟡 `@retro-engine/build`; **Phases 1+2 shipped**:
-      the `.rpak` v1 format (`writeRpak` gzip+integrity, `RpakReader`, `RangeRpakReader` HTTP-Range
-      streaming), the `ExportTarget`/`ExportRegistry` interface, and the **web adapter** — `bundleUserCode`
-      (Bun bundler, browser/ESM, externals/minify/sourcemap), `emitIndexHtml`, and `WebExportTarget` (bundle
-      + index.html + packed `.rpak`). 19 tests, fully headless (fixture exports end-to-end, `.rpak` reads
-      back). Remaining before check-off: the `retro build` CLI + studio "Build → Web" menu + the in-browser
-      run proof (a real project exports and runs). (ADR-0151.)
+- [ ] **Export — Web target + `.rpak` foundation** — 🟡 `@retro-engine/build` + `@retro-engine/runtime-web`;
+      **Phases 1–3 shipped**: the `.rpak` v1 format (`writeRpak` gzip+integrity, `RpakReader`,
+      `RangeRpakReader` HTTP-Range streaming), the `ExportTarget`/`ExportRegistry` interface, the **web
+      adapter** (`bundleUserCode`, `emitIndexHtml`, `WebExportTarget`), **and now the runtime host + CLI**:
+      `@retro-engine/runtime-web` `bootWebGame` (canvas → WebGPU renderer → plugins → run, ADR-0153),
+      `emitWebBoot` (generated boot entry the target bundles), `parseProjectDescriptor`
+      (`@retro-engine/project`), and a `retro-build` CLI (`retro build --target web`). **In-browser run proof
+      done** — `@retro-engine/sample-game` exports via the CLI and boots in a real browser (WebGPU init +
+      crisp MSDF text + animating frame loop, Playwright-verified). Remaining before check-off: studio
+      "Build → Web" menu; packing a project's `assets/` into the `.rpak` (assets aren't bundled yet); source
+      maps / production polish (phase 6). (ADR-0151/0153.)
       _AC:_ `packages/build` (Bun/Node-only) with an `ExportTarget` interface + registry and a shared Bun
       bundler for user code (engine externalized appropriately); a **web adapter** emitting a static site
       (engine + user bundle + `.rpak`) that runs in a browser; a **`.rpak` writer** (magic+version header →
@@ -253,6 +257,13 @@ foundation.**
 
 ## Platform / Tooling
 
+- [ ] **Export — Web follow-ups** — the remaining slices of the P0 web target (ADR-0151/0153): studio
+      "Build → Web" menu (wrap `runWebExport`); pack a project's `assets/` into the `.rpak` + wire the
+      runtime `AssetServer` to a `RangeRpakReader` so exported games load real assets; source maps /
+      production polish (phase 6); and **tree-shake `jsimgui` out of shipped web builds** — `bootWebGame`
+      imports `createWebGPURenderer` from `@retro-engine/renderer-webgpu`, whose index re-exports
+      `createImGuiOverlay`, pulling the editor-only imgui/WASM into the game bundle (~5 MB dead weight).
+      _Links:_ [web-build-target.md](web-build-target.md)
 - [ ] **Export — Desktop (Tauri win/mac/linux)** — per-OS bundles via a **CI matrix** (no cross-compile);
       native `.rpak` streaming via a Tauri custom URI-scheme + mmap (one HTTP-Range loader path shared with
       web). _Links:_ [web-build-target.md](web-build-target.md)

@@ -47,3 +47,5 @@ export interface ProjectDefinition {
 export const defineProject = (definition: ProjectDefinition): ProjectDefinition => definition;
 
 export { isEditorHint, isRunInEditor, runInEditor } from './editor-hint';
+export type { ProjectDescriptor } from './descriptor';
+export { parseProjectDescriptor } from './descriptor';

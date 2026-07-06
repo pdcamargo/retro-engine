@@ -8,19 +8,28 @@ import { bundleUserCode } from './web-bundle';
 import { WebExportTarget } from './web-export-target';
 
 let root: string;
-let entrypoint: string;
+// Entry for the bundleUserCode test: imports an external so the bundle stays tiny.
+let bundleEntry: string;
+// Entry for the WebExportTarget tests: default-exports a ProjectDefinition.
+let gameEntry: string;
+
+// The generated boot entry imports `@retro-engine/runtime-web`; externalizing it
+// keeps the export bundle from pulling the whole engine graph into the test.
+const RUNTIME_EXTERNAL = '@retro-engine/runtime-web';
 
 beforeAll(async () => {
   root = await mkdtemp(join(tmpdir(), 'rpak-web-export-'));
   const src = join(root, 'src');
   await mkdir(src, { recursive: true });
-  entrypoint = join(src, 'main.ts');
-  // Imports an external so the bundle stays tiny + the test never pulls a real
-  // dependency graph — the wrapper's job is what's under test, not what it bundles.
+
+  bundleEntry = join(src, 'main.ts');
   await writeFile(
-    entrypoint,
+    bundleEntry,
     "import { boot } from 'fake-engine';\nboot(document.getElementById('game'));\nexport const ready = true;\n",
   );
+
+  gameEntry = join(src, 'game.ts');
+  await writeFile(gameEntry, 'export default { plugins: [] };\n');
 });
 
 afterAll(async () => {
@@ -30,7 +39,7 @@ afterAll(async () => {
 describe('bundleUserCode', () => {
   it('bundles a browser ESM entry, leaving externals as bare imports', async () => {
     const result = await bundleUserCode({
-      entrypoints: [entrypoint],
+      entrypoints: [bundleEntry],
       external: ['fake-engine'],
       target: 'browser',
     });
@@ -42,11 +51,11 @@ describe('bundleUserCode', () => {
 });
 
 describe('WebExportTarget', () => {
-  it('emits index.html, the entry bundle, and a .rpak the reader can read back', async () => {
+  it('emits index.html, a boot bundle that calls bootWebGame, and a readable .rpak', async () => {
     const outDir = join(root, 'dist');
     const target = new WebExportTarget({
-      entrypoint,
-      external: ['fake-engine'],
+      entrypoint: gameEntry,
+      external: [RUNTIME_EXTERNAL],
       title: 'My Game',
       assets: [
         { guid: 'asset-1', data: new TextEncoder().encode('level-one') },
@@ -61,6 +70,14 @@ describe('WebExportTarget', () => {
     expect(names).toContain('main.js');
     expect(names).toContain('assets.rpak');
 
+    // The bundle boots the game through the runtime host (kept external here).
+    const mainJs = await readFile(join(outDir, 'main.js'), 'utf8');
+    expect(mainJs).toContain('bootWebGame');
+    expect(mainJs).toContain(RUNTIME_EXTERNAL);
+
+    // The temp boot entry is cleaned up.
+    expect(names).not.toContain('.retro-web-boot-entry.ts');
+
     const html = await readFile(join(outDir, 'index.html'), 'utf8');
     expect(html).toContain('src="main.js"');
     expect(html).toContain('href="assets.rpak"');
@@ -74,7 +91,7 @@ describe('WebExportTarget', () => {
 
   it('skips the .rpak when there are no assets', async () => {
     const outDir = join(root, 'dist-noassets');
-    const target = new WebExportTarget({ entrypoint, external: ['fake-engine'] });
+    const target = new WebExportTarget({ entrypoint: gameEntry, external: [RUNTIME_EXTERNAL] });
     const result = await target.export({ projectRoot: root, outDir, production: false });
     expect(result.outputs.some((p) => p.endsWith('.rpak'))).toBe(false);
     const html = await readFile(join(outDir, 'index.html'), 'utf8');

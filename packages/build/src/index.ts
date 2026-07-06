@@ -20,5 +20,7 @@ export type { BundleArtifact, BundleConfig, BundleResult } from './web-bundle';
 export { bundleUserCode } from './web-bundle';
 export type { IndexHtmlOptions } from './web-index-html';
 export { emitIndexHtml } from './web-index-html';
+export type { WebBootOptions } from './web-boot';
+export { emitWebBoot } from './web-boot';
 export type { WebExportConfig } from './web-export-target';
 export { WebExportTarget } from './web-export-target';

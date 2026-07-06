@@ -1,0 +1,13 @@
+formatVersion = 2
+projectId = "sample-game-0001"
+
+[project]
+name = "Retro Engine Sample"
+version = "0.1.0"
+engine = "0.0.0"
+
+[build]
+entry = "src/game.ts"
+
+[run]
+startupScene = ""

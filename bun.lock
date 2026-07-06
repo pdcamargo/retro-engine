@@ -36,6 +36,19 @@
         "@webgpu/types": "latest",
       },
     },
+    "apps/sample-game": {
+      "name": "@retro-engine/sample-game",
+      "version": "0.1.0",
+      "dependencies": {
+        "@retro-engine/engine": "workspace:*",
+        "@retro-engine/math": "workspace:*",
+        "@retro-engine/project": "workspace:*",
+        "@retro-engine/runtime-web": "workspace:*",
+      },
+      "devDependencies": {
+        "@retro-engine/tsconfig": "workspace:*",
+      },
+    },
     "apps/studio": {
       "name": "@retro-engine/studio",
       "version": "0.0.0",
@@ -81,6 +94,12 @@
     "packages/build": {
       "name": "@retro-engine/build",
       "version": "0.0.0",
+      "bin": {
+        "retro-build": "./src/cli.ts",
+      },
+      "dependencies": {
+        "@retro-engine/project": "workspace:*",
+      },
     },
     "packages/create-project": {
       "name": "@retro-engine/create-project",
@@ -205,6 +224,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@retro-engine/engine": "workspace:*",
+        "smol-toml": "^1.3.0",
       },
       "devDependencies": {
         "@retro-engine/editor-sdk": "workspace:*",
@@ -247,6 +267,16 @@
       },
       "devDependencies": {
         "@webgpu/types": "latest",
+      },
+    },
+    "packages/runtime-web": {
+      "name": "@retro-engine/runtime-web",
+      "version": "0.0.0",
+      "dependencies": {
+        "@retro-engine/engine": "workspace:*",
+        "@retro-engine/project": "workspace:*",
+        "@retro-engine/renderer-core": "workspace:*",
+        "@retro-engine/renderer-webgpu": "workspace:*",
       },
     },
     "packages/studio-mcp-server": {
@@ -422,6 +452,10 @@
     "@retro-engine/renderer-webgl2": ["@retro-engine/renderer-webgl2@workspace:packages/renderer-webgl2"],
 
     "@retro-engine/renderer-webgpu": ["@retro-engine/renderer-webgpu@workspace:packages/renderer-webgpu"],
+
+    "@retro-engine/runtime-web": ["@retro-engine/runtime-web@workspace:packages/runtime-web"],
+
+    "@retro-engine/sample-game": ["@retro-engine/sample-game@workspace:apps/sample-game"],
 
     "@retro-engine/studio": ["@retro-engine/studio@workspace:apps/studio"],
 
