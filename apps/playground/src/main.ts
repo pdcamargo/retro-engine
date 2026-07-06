@@ -15,6 +15,7 @@ import { LoggingPlugin } from './logging-plugin';
 import { materialShowcasePlugin } from './material-showcase-plugin';
 import { motionVectorsShowcasePlugin } from './motion-vectors-showcase-plugin';
 import { observerShowcasePlugin } from './observer-showcase-plugin';
+import { physicsShowcasePlugin } from './physics-showcase-plugin';
 import { prefabShowcasePlugin } from './prefab-showcase-plugin';
 import { primitivesShowcasePlugin } from './primitives-showcase-plugin';
 import { saveShowcasePlugin } from './save-showcase-plugin';
@@ -102,6 +103,8 @@ const showcase =
     ? inputShowcasePlugin
     : mode === 'audio'
     ? audioShowcasePlugin
+    : mode === 'physics'
+    ? physicsShowcasePlugin
     : mode === 'slice'
     ? sliceShowcasePlugin
     : mode === 'atlas'

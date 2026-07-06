@@ -146,9 +146,10 @@ These do not exist in the runtime and are the reason a complete game can't ship 
   interface + `PhysicsCapabilities` + `NullPhysicsBackend`; Avian-shaped `2d`/`3d` components
   (`RigidBody`, `Collider`, `LinearVelocity`, `AngularVelocity`, `ExternalForce`, `Restitution`/`Friction`/
   `GravityScale`/`Sensor`), reflection-registered; a `Gravity` resource; and `PhysicsPlugin` running a
-  fixed-timestep Sync→Step→Writeback bridge (no-op until a backend is injected). Remaining: the Rapier
-  backend (`packages/physics-rapier`, Phase 2), joints, character controller, live events/raycasts, demo.
-  → roadmap/physics.md
+  fixed-timestep Sync→Step→Writeback bridge. `@retro-engine/physics-rapier` (`createRapierBackend` over
+  `@dimforge/rapier2d-compat`) is the **2D** backend — real dynamics, entity↔body maps, raycast, collision
+  events — verified headless (a box falls and lands). Remaining: 3D (`rapier3d-compat`), joints, a kinematic
+  character controller, and collision events/raycasts surfaced to ECS. → roadmap/physics.md
 
 ## Planned architecture — physics package (not built yet)
 

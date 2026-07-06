@@ -72,17 +72,16 @@ in-game UI, physics, or game export. **P0 is exactly that shippable-game foundat
       _AC:_ AudioClip importer/kind/.meta ✅; one-shot + looping ✅; `AudioSource`/`AudioListener` ✅;
       reflection schemas ✅; entity-driven SFX+music sample ✅. (Mixer buses → P1.)
       _Links:_ [audio.md](audio.md)
-- [ ] **Physics** — 🟡 `@retro-engine/physics-core` (ADR-0148) + `packages/physics-rapier` (Phase 2).
-      **Phase 1 shipped:** `PhysicsBackend` interface + `PhysicsCapabilities` + `NullPhysicsBackend`;
-      **Avian-shaped, `2d`/`3d`-suffixed** components (`RigidBody2d/3d`, `Collider2d/3d`, `LinearVelocity2d/3d`,
-      `AngularVelocity2d/3d`, `ExternalForce2d/3d`, `Restitution`/`Friction`/`GravityScale`, `Sensor`),
-      all reflection-registered; `Gravity` resource; `PhysicsPlugin` runs the Sync→Step→Writeback bridge in
-      the **fixed timestep** with the backend **injected at App startup** (no-op until a backend is present);
-      `Physics` resource for queries. **Remaining (Phase 2/3):** physics-rapier over `@dimforge/rapier2d-compat`
-      + `rapier3d-compat` (entity↔body maps, real stepping), joints, character controller, collision events +
-      raycast wired to the backend, and a demo where bodies fall, collide, and a character moves.
-      _AC:_ physics-core contract + components + reflection ✅; fixed-timestep bridge ✅; rapier backend ☐;
-      events + queries (live) ☐; joints ☐; falling/character demo ☐.
+- [ ] **Physics** — 🟡 `@retro-engine/physics-core` + `@retro-engine/physics-rapier` (ADR-0148).
+      **Phases 1–2 shipped:** the contract + Avian-shaped `2d`/`3d` components (reflection-registered) +
+      `Gravity`/`Physics` resources + fixed-timestep Sync→Step→Writeback `PhysicsPlugin` (Phase 1); the
+      **Rapier 2D backend** (`createRapierBackend` over `@dimforge/rapier2d-compat` — entity↔body maps,
+      async wasm gate, upsert/step/readBody/remove, gravity/gravity-scale/external-force/kinematic, raycast,
+      collision-event drain), verified by a deterministic headless test (box falls + lands); playground
+      `?mode=physics` demo (boxes fall + stack, Space drops more). **Remaining (Phase 3):** `rapier3d-compat`
+      (3D), joints, a kinematic **character controller**, and collision events/raycasts surfaced to ECS.
+      _AC:_ contract + components + reflection ✅; fixed-timestep bridge ✅; rapier 2D backend + real sim ✅;
+      2D falling demo ✅; 3D ☐; character controller ☐; joints ☐; ECS collision events ☐.
       _Links:_ [physics.md](physics.md)
 - [ ] **In-game UI (core) — "Retro CSS"** — ❌ `packages/ui`: retained ECS UI (Unity-UITK model + Bevy
       `UiSurface` mechanism).

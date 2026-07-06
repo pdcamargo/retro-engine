@@ -1,7 +1,7 @@
 # Physics System
 
 - **Created:** 2026-07-06
-- **Status:** In progress (Phase 1 shipped 2026-07-06)
+- **Status:** In progress (Phases 1–2 shipped 2026-07-06)
 - **ADR:** [ADR-0148](../adr/ADR-0148-physics-architecture.md)
 
 ## Goal
@@ -23,11 +23,13 @@ wasm is opt-in.
   the fixed timestep (no-op until a backend is injected).
 - Tests (reflection round-trip + bridge snapshot), a snapshot bench.
 
-### Phase 2 — physics-rapier (2D) + real stepping
+### Phase 2 — physics-rapier (2D) + real stepping ✅ (2026-07-06)
 
-- `packages/physics-rapier` over `@dimforge/rapier2d-compat`; entity↔body maps;
-  async wasm init gate (`ready()`); implement upsert/step/readBody. Sync gravity.
-- Playground/studio demo: boxes fall under gravity and land on a static floor.
+- `@retro-engine/physics-rapier` (`createRapierBackend`) over `@dimforge/rapier2d-compat`;
+  entity↔body maps; async wasm init gate (`ready()`); upsert/step/readBody/removeBody,
+  setGravity, gravity-scale, external force, kinematic targets, raycast, collision-event
+  drain. Verified headless (deterministic bun test: a box falls and lands on the floor).
+- Playground `?mode=physics`: boxes fall + stack on a static floor; Space drops more.
 
 ### Phase 3 — 3D + character controller + queries + events
 

@@ -26,6 +26,8 @@
         "@retro-engine/gltf": "workspace:*",
         "@retro-engine/input": "workspace:*",
         "@retro-engine/math": "workspace:*",
+        "@retro-engine/physics-core": "workspace:*",
+        "@retro-engine/physics-rapier": "workspace:*",
         "@retro-engine/reflect": "workspace:*",
         "@retro-engine/renderer-core": "workspace:*",
         "@retro-engine/renderer-webgpu": "workspace:*",
@@ -184,6 +186,15 @@
         "@retro-engine/reflect": "workspace:*",
       },
     },
+    "packages/physics-rapier": {
+      "name": "@retro-engine/physics-rapier",
+      "version": "0.0.0",
+      "dependencies": {
+        "@dimforge/rapier2d-compat": "^0.14.0",
+        "@retro-engine/ecs": "workspace:*",
+        "@retro-engine/physics-core": "workspace:*",
+      },
+    },
     "packages/project": {
       "name": "@retro-engine/project",
       "version": "0.0.0",
@@ -294,6 +305,8 @@
 
     "@changesets/write": ["@changesets/write@0.4.0", "", { "dependencies": { "@changesets/types": "^6.1.0", "fs-extra": "^7.0.1", "human-id": "^4.1.1", "prettier": "^2.7.1" } }, "sha512-CdTLvIOPiCNuH71pyDu3rA+Q0n65cmAbXnwWH84rKGiFumFzkmHNT8KHTMEchcxN+Kl8I54xGUhJ7l3E7X396Q=="],
 
+    "@dimforge/rapier2d-compat": ["@dimforge/rapier2d-compat@0.14.0", "", {}, "sha512-sljQVPstRS63hVLnVNphsZUjH51TZoptVM0XlglKAdZ8CT+kWnmA6olwjkF7omPWYrlKMd/nHORxOUdJDOSoAQ=="],
+
     "@hono/node-server": ["@hono/node-server@1.19.14", "", { "peerDependencies": { "hono": "^4" } }, "sha512-GwtvgtXxnWsucXvbQXkRgqksiH2Qed37H9xHZocE5sA3N8O8O8/8FA3uclQXxXVzc9XBZuEOMK7+r02FmSpHtw=="],
 
     "@inquirer/external-editor": ["@inquirer/external-editor@1.0.3", "", { "dependencies": { "chardet": "^2.1.1", "iconv-lite": "^0.7.0" }, "peerDependencies": { "@types/node": ">=18" }, "optionalPeers": ["@types/node"] }, "sha512-RWbSrDiYmO4LbejWY7ttpxczuwQyZLBUyygsA9Nsv95hpzUWwnNTVQmAq3xuh7vNwCp07UTmE5i11XAEExx4RA=="],
@@ -377,6 +390,8 @@
     "@retro-engine/mcp-protocol": ["@retro-engine/mcp-protocol@workspace:packages/mcp-protocol"],
 
     "@retro-engine/physics-core": ["@retro-engine/physics-core@workspace:packages/physics-core"],
+
+    "@retro-engine/physics-rapier": ["@retro-engine/physics-rapier@workspace:packages/physics-rapier"],
 
     "@retro-engine/playground": ["@retro-engine/playground@workspace:apps/playground"],
 

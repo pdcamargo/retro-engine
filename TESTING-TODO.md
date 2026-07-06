@@ -156,6 +156,25 @@ a manual confirmation before their backlog/roadmap entries are considered closed
 
 ---
 
+## Physics — Phase 2 (Rapier 2D backend) · `@retro-engine/physics-rapier` · ADR-0148
+
+- **What changed:** New `@retro-engine/physics-rapier` package: `createRapierBackend()` over
+  `@dimforge/rapier2d-compat` — real 2D dynamics implementing the full `PhysicsBackend` contract
+  (async wasm gate, entity↔body maps, upsert/step/readBody/remove, gravity/gravity-scale/
+  external-force/kinematic, raycast, collision-event drain). Playground `?mode=physics` demo.
+- **Automated (REAL verification):** 4 deterministic bun tests using the actual Rapier wasm —
+  a dynamic box falls under gravity and lands on a static floor (y: 5 → ~1.0), gravityScale 0
+  floats, removeBody drops the body, 3D snapshots ignored. This is genuine physics verification,
+  not just a compile. Full repo gate green (41 typecheck / 23 lint / 40 test / build).
+- **HOW to test (manual, visual):** run the playground (`cd apps/playground && bun run dev`), open
+  `?mode=physics`, click the canvas: 5 colored boxes fall and **stack on the grey floor**; press
+  **Space** to drop more from the top (random x). `window.__physics` shows `{ready, boxes, lowestY}`.
+- **Not deleted:** `docs/roadmap/physics.md` stays. MASTER-ROADMAP Physics box still unchecked —
+  Phase 3 (3D via rapier3d-compat, kinematic character controller, joints, ECS collision events)
+  remains for the full P0 AC.
+
+---
+
 ## ✅ P0 Audio item COMPLETE — box checked in MASTER-ROADMAP
 
 The **Audio (core)** P0 item is fully done (HAL + Web Audio backend + `AudioClip` +
