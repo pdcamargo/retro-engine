@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 
 import { packUiGlyph, UI_GLYPH_FLOAT_COUNT } from './ui-glyph-instance';
+import { packUiImage, UI_IMAGE_FLOAT_COUNT } from './ui-image-instance';
 import { packUiColor, packUiQuad, UI_INSTANCE_FLOAT_COUNT } from './ui-instance';
 import { borderEdgeRects, computeClipRect } from './ui-prepare';
 
@@ -94,5 +95,22 @@ describe('packUiGlyph', () => {
     expect(f32[8]).toBeCloseTo(0.01, 6);
     expect(f32[9]).toBeCloseTo(0.02, 6);
     expect(u32[10]).toBe(color);
+  });
+});
+
+describe('packUiImage', () => {
+  it('writes clip rect, source uv rect, then tint at the cursor', () => {
+    const buffer = new ArrayBuffer(2 * UI_IMAGE_FLOAT_COUNT * 4);
+    const f32 = new Float32Array(buffer);
+    const u32 = new Uint32Array(buffer);
+    const tint = packUiColor(0, 1, 0, 1);
+
+    packUiImage(-1, 1, 1, -1, 0, 0, 1, 1, tint, f32, u32, UI_IMAGE_FLOAT_COUNT); // second slot
+
+    expect(Array.from(f32.subarray(9, 13))).toEqual([-1, 1, 1, -1]); // clip rect
+    expect(Array.from(f32.subarray(13, 17))).toEqual([0, 0, 1, 1]); // uv rect
+    expect(u32[17]).toBe(tint);
+    // First slot untouched.
+    expect(f32[0]).toBe(0);
   });
 });

@@ -896,3 +896,39 @@ Extends "Retro CSS" with CSS custom properties and a runtime-overridable theme �
   gap = **image** + `.rss` inheritance). UI item stays unchecked.
 
 ---
+
+## ✅ In-game UI — image widget (`UiImage`, textured UI quads) (VERIFIED via browser export)
+
+Adds the `image` minimal widget (panel/label/button/**image** — the last widget in the UI AC set).
+
+- **New in `@retro-engine/ui`:** `UiImage` component (reflection-registered: image `Handle<Image>` +
+  `tint` + source `uv` rect) + a screen-space textured render path mirroring the MSDF text pipeline —
+  `UiImagePipeline` (per-texture bind-group cache), `prepareUiImages` (batch by texture), and a
+  `makeUiImagePassNode` pass wired into `UiRenderPlugin` ordered quad → **image** → text. A node can
+  carry both a `backgroundColor` and a `UiImage`.
+- **Verified end-to-end in a real browser** (`apps/sample-game` export → Playwright): added a 4th `.rss`
+  chip (`.chip.pic`) whose fill is a `UiImage` of a 2×2 procedural magenta/cyan checkerboard
+  (`Image.fromBytes` → `Images.add`). Probe read `__rss.imageInstances === 1` (the textured pipeline
+  packed + drew exactly one image) and the pic chip laid out at the strip's 4th slot — a solid-color quad
+  cannot produce a sampled texture, so this proves real texture sampling. Screenshot captured.
+- **Automated:** `packUiImage` test in `ui-render.test.ts` + `ui-image-pack` bench. Full repo gate green
+  (1941 tests). Changeset added.
+- **HOW to test:** `cd apps/sample-game && bun run build:web`, serve `dist/web`, open in a browser → the
+  top-left chip strip's 4th chip shows a magenta/cyan checker (the others are solid blue/orange/blue).
+- Docs: `roadmap/ui-system.md` (image widget ✅), MASTER-ROADMAP UI AC (`image` ✅). **The UI P0 item now
+  has only ONE AC gap left: `.rss` inheritance** (cascade ✅, inheritance ❌).
+
+## BLOCKED (this session) — studio MCP relay down
+
+- **Play-mode "inspector shows live values during play"** (the last Play-mode AC item) could NOT be
+  MCP-verified this session: the `retro-studio` MCP server/relay is disconnected (nothing on ws://…:8787,
+  `studio_connected`/ToolSearch find no tools), and `bun tauri dev` has no relay to connect to. **Code
+  inspection says it's already satisfied:** `panels-inspector.ts` re-reads each field fresh every frame via
+  `readField(instance, …)` and passes `readonly: state.playing` — so during play the inspector shows the
+  live (mutating) component values, just non-editable. If you can confirm in the studio (select an entity
+  with a changing gameplay value, press Play, watch the inspector update), Play mode's AC is fully met
+  (snapshot ✅ / step ✅ / gating ✅ / inspector-live ✅) and its box + backlog can close.
+- If the relay needs restarting: it's the `retro-studio` MCP server (`.mcp.json`:
+  `bun run packages/studio-mcp-server/src/cli.ts`) — a session-level MCP connection the harness owns.
+
+---

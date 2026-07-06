@@ -117,7 +117,16 @@ and a HUD (text + bars) from ECS components + `.rss`, with gamepad navigation.
   state) + `Disabled` marker (picking skips it) + `setUiBackground` runtime style
   setter. Verified in a real browser (a 3-button main menu with a disabled entry
   routing `MenuAction`s to a label, in the sample-game export).
-- Remaining (4c+): more widget components (label/toggle/slider/scrollview/
+- **Image widget ✅ (2026-07-06).** `UiImage` component (reflection-registered:
+  image handle + tint + source UV rect) + a screen-space textured pipeline
+  mirroring the MSDF text path — `UiImagePipeline` (per-texture bind-group cache),
+  `prepareUiImages` (batch UiImage nodes by source texture), `makeUiImagePassNode`
+  (ordered quad → **image** → text). Draws a texture into a node's box; a node may
+  carry both a background fill and a `UiImage`. Verified in a browser (sample-game
+  export): a 2×2 procedural checkerboard chip drew (`imageInstances === 1`), which
+  a solid quad can't fake. Bench: `ui-image-pack`. This closes the AC's
+  panel/label/button/**image** minimal-widget set.
+- Remaining (4c+): interactive widget components (toggle/slider/scrollview/
   text-input/dropdown/tabs) with `Message<T>`; keyboard/gamepad focus routing;
   a full menu/HUD sample scene styled by `.rss`.
 

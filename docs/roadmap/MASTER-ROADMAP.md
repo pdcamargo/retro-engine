@@ -112,16 +112,18 @@ foundation.**
       handles functional colors; verified in a browser (chips fill via `var(--accent)`, and a runtime
       `--accent` override recolors them live). Remaining: UI **corner radius** + z-index/clipping + per-line
       text alignment; `.rss` combinators + per-node scoped vars/inheritance + inline overrides + a `.rss`
-      asset kind; **more widgets** (label/toggle/slider/text-input) + focus/spatial nav (4c); an **image**
-      widget (textured UI quad — the last minimal-widget AC gap). (ADR-0150/0154.)
+      asset kind; **more widgets** (toggle/slider/text-input) + focus/spatial nav (4c). Plus **image
+      widget** ✅ — `UiImage` (image handle + tint + UV) + a screen-space textured pipeline mirroring the
+      MSDF text path (`UiImagePipeline`/`prepareUiImages`/`makeUiImagePassNode`, ordered quad → image →
+      text); verified in a browser (a 2×2 checkerboard chip drew, `imageInstances === 1`). (ADR-0150/0154.)
       _AC:_ `UiNode` + derived `ComputedLayout` (not serialized) reusing `Parent`/`Children`; a pure-TS
       **flexbox** `LayoutEngine` behind an interface, with a text-measure callback; a `.rss` (USS-subset)
       parser + style-resolution system matching type / `.class` / `#name` / **state-marker** selectors
       with cascade + inheritance; pseudo-class markers (`Hovered`/`Focused`/`Pressed`/`Disabled`/`Checked`);
       `--vars` via a theme resource ✅; render through the 2D pipeline (quads + MSDF glyphs) ✅; minimal
-      widgets (panel ✅ / label ✅ / button ✅ / image ❌); a HUD scene laid out with flex and styled by
+      widgets (panel ✅ / label ✅ / button ✅ / image ✅); a HUD scene laid out with flex and styled by
       `.rss` ✅. (Grid, virtualized list/tree, data binding, spatial nav → P1.) Depends on **Text rendering**
-      below. **Closest AC gaps: an image widget + `.rss` inheritance.**
+      below. **Closest AC gap: `.rss` inheritance** (cascade ✅, inheritance ❌) — the only remaining AC item.
       _Links:_ [ui-system.md](ui-system.md)
 
 ## Renderer

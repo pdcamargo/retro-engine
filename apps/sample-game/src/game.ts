@@ -7,6 +7,8 @@ import {
   Camera2d,
   ClearColorConfig,
   Commands,
+  Image,
+  Images,
   installDefaultFont,
   MessageReader,
   Query,
@@ -27,6 +29,8 @@ import {
   UiButton,
   UiClass,
   UiClicked,
+  UiImage,
+  UiImagePipeline,
   UiNode,
   UiPlugin,
   UiRenderPlugin,
@@ -107,6 +111,20 @@ class HelloTextPlugin implements PluginObject {
       (window as unknown as { __setAccent: (c: string) => void }).__setAccent = (c) =>
         setUiThemeVars(app, { '--accent': c });
     }
+
+    // A tiny procedural checkerboard texture for the UiImage widget demo (no
+    // asset on disk): a 2×2 magenta/cyan pattern added to the Images store. The
+    // sampled pattern proves the textured UI pipeline (a solid quad can't fake it).
+    const checker = app.getResource(Images)!.add(
+      Image.fromBytes({
+        width: 2,
+        height: 2,
+        format: 'rgba8unorm',
+        colorSpace: 'srgb',
+        data: new Uint8Array([255, 0, 255, 255, 0, 255, 255, 255, 0, 255, 255, 255, 255, 0, 255, 255]),
+        label: 'ui-image-demo-checker',
+      }),
+    );
 
     // Load a packed asset from the exported `.rpak` (present only when run from a
     // web export, where bootWebGame wires the RpakAssetSource + manifest). A tiny
@@ -285,6 +303,8 @@ class HelloTextPlugin implements PluginObject {
             root.spawn(new UiNode(), new UiClass({ classes: ['chip'] }));
             root.spawn(new UiNode(), new UiClass({ classes: ['chip', 'alt'] }));
             root.spawn(new UiNode(), new UiClass({ classes: ['chip', 'hot'] }), new Interactable());
+            // A `.chip`-sized node whose fill is a textured UiImage (the checker).
+            root.spawn(new UiNode(), new UiClass({ classes: ['chip', 'pic'] }), new UiImage({ image: checker }));
           });
       },
       { label: 'rss-chips-setup' },
@@ -311,7 +331,11 @@ class HelloTextPlugin implements PluginObject {
             cy: Math.round(layout.y + layout.height / 2),
           });
         }
-        (window as unknown as { __rss: unknown }).__rss = { chips: out };
+        (window as unknown as { __rss: unknown }).__rss = {
+          chips: out,
+          // >0 confirms the textured UI-image pipeline packed + drew the checker chip.
+          imageInstances: app.getResource(UiImagePipeline)?.count ?? 0,
+        };
       },
       { label: 'rss-report' },
     );

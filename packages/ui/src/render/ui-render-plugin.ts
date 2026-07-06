@@ -12,9 +12,13 @@ import {
 } from '@retro-engine/engine';
 
 import { ComputedLayout, UiNode } from '../ui-node';
+import { UiImage } from '../ui-image';
 import { UiViewport } from '../ui-plugin';
 import { UiText } from '../ui-text';
 
+import { makeUiImagePassNode, UiImagePassLabel } from './ui-image-pass-node';
+import { UiImagePipeline } from './ui-image-pipeline';
+import { prepareUiImages, type UiImageQuery } from './ui-image-prepare';
 import { makeUiPassNode, UiPassLabel } from './ui-pass-node';
 import { makeUiTextPassNode, UiTextPassLabel } from './ui-text-pass-node';
 import { UiPipeline } from './ui-pipeline';
@@ -42,6 +46,7 @@ export class UiRenderPlugin implements PluginObject {
 
   build(app: App): void {
     if (app.getResource(UiPipeline) === undefined) app.insertResource(new UiPipeline());
+    if (app.getResource(UiImagePipeline) === undefined) app.insertResource(new UiImagePipeline());
     if (app.getResource(UiTextPipeline) === undefined) app.insertResource(new UiTextPipeline());
 
     // Keep the UI viewport at the canvas's logical size so layout targets the
@@ -68,6 +73,23 @@ export class UiRenderPlugin implements PluginObject {
         prepareUiQuads(app, nodes as unknown as UiQuadQuery, viewport as UiViewport, pipeline as UiPipeline);
       },
       { set: RenderSet.Prepare, label: 'ui-prepare' },
+    );
+
+    app.addSystem(
+      'render',
+      [Extract(Query([UiNode, ComputedLayout, UiImage])), Res(UiViewport), ResMut(UiImagePipeline)],
+      (nodes, viewport, pipeline) => {
+        const renderImages = app.getResource(RenderImages);
+        if (renderImages === undefined) return;
+        prepareUiImages(
+          app,
+          nodes as unknown as UiImageQuery,
+          viewport as UiViewport,
+          renderImages,
+          pipeline as UiImagePipeline,
+        );
+      },
+      { set: RenderSet.Prepare, label: 'ui-image-prepare' },
     );
 
     app.addSystem(
@@ -100,8 +122,11 @@ export class UiRenderPlugin implements PluginObject {
     }
     graph.addNode(makeUiPassNode());
     graph.addEdge(CameraDriverLabel, UiPassLabel);
-    // Text draws after (over) the background quads.
+    // Images draw after (over) the background quads.
+    graph.addNode(makeUiImagePassNode());
+    graph.addEdge(UiPassLabel, UiImagePassLabel);
+    // Text draws after (over) images and backgrounds.
     graph.addNode(makeUiTextPassNode());
-    graph.addEdge(UiPassLabel, UiTextPassLabel);
+    graph.addEdge(UiImagePassLabel, UiTextPassLabel);
   }
 }

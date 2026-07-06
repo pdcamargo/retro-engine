@@ -1,5 +1,5 @@
 import type { Entity, Query as QueryHandle, World } from '@retro-engine/ecs';
-import type { App, Font, Fonts, PluginObject } from '@retro-engine/engine';
+import type { App, Font, Fonts, Image, PluginObject } from '@retro-engine/engine';
 import { ASSET_TYPE, Children, Fonts as FontsResource, Parent, Query, Res } from '@retro-engine/engine';
 import { FieldType, type Schema, t } from '@retro-engine/reflect';
 
@@ -7,6 +7,7 @@ import { FlexLayoutEngine } from './flex-layout';
 import type { LayoutEngine, LayoutNode, LayoutResult } from './layout-engine';
 import { resolveUiStyles, UiClass, uiClassSchema, UiStyleSheet, UiTheme } from './rss-style';
 import { makeTextMeasure } from './text-measure';
+import { UiImage } from './ui-image';
 import { ComputedLayout, UiNode } from './ui-node';
 import type { UiStyle } from './ui-style';
 import { UiText } from './ui-text';
@@ -99,6 +100,17 @@ export const uiTextSchema: Schema<UiText> = {
   color: t.vec4,
 };
 
+/**
+ * Reflection schema for {@link UiImage}: the source image handle (optional — a
+ * node may carry the component before its image resolves), the tint, and the
+ * source UV sub-rect. All authored, so all persist.
+ */
+export const uiImageSchema: Schema<UiImage> = {
+  image: t.handle<Image>(ASSET_TYPE.image).optional(),
+  tint: t.vec4,
+  uv: t.array(t.number) as unknown as FieldType<[number, number, number, number]>,
+};
+
 type UiNodeQuery = QueryHandle<readonly [typeof UiNode]>;
 
 /**
@@ -125,6 +137,7 @@ export class UiPlugin implements PluginObject {
 
     app.registerComponent(UiNode, uiNodeSchema, { name: 'UiNode', make: () => new UiNode() });
     app.registerComponent(UiText, uiTextSchema, { name: 'UiText', make: () => new UiText() });
+    app.registerComponent(UiImage, uiImageSchema, { name: 'UiImage', make: () => new UiImage() });
     app.registerComponent(UiClass, uiClassSchema, { name: 'UiClass', make: () => new UiClass() });
 
     // Resolve `.rss` styles before layout so a node's stylesheet-driven size /
