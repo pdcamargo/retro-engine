@@ -786,17 +786,32 @@ class MaterialPluginState<M extends Material> {
         continue;
       }
       const previous = renderMaterials.get(handle);
-      const prepared = prepareBindGroup(
-        app.renderer,
-        this.materialClass.bindGroup,
-        this.bindGroupLayout,
-        value as M,
-        previous,
-        this.scratch,
-        images,
-        renderImages,
-        `material#${this.materialClass.name}#${index}`,
-      );
+      let prepared;
+      try {
+        prepared = prepareBindGroup(
+          app.renderer,
+          this.materialClass.bindGroup,
+          this.bindGroupLayout,
+          value as M,
+          previous,
+          this.scratch,
+          images,
+          renderImages,
+          `material#${this.materialClass.name}#${index}`,
+        );
+      } catch (error) {
+        // A malformed material value (e.g. a wrong-shaped uniform field) must not
+        // abort the whole prepare pass and freeze the frame loop — skip this one,
+        // warn once, and leave the rest of the scene rendering. It re-prepares if
+        // the material is edited again (a fresh event).
+        app.logger.devWarn(
+          `MaterialPlugin.prepareMaterials: skipping material #${index} (${this.materialClass.name}) — ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+        pending.delete(index);
+        continue;
+      }
       renderMaterials.set(handle, prepared);
       // A texture handle not yet in RenderImages prepared against the default
       // image; keep re-preparing until it lands, then drop from the pending set.

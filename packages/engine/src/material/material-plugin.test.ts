@@ -237,6 +237,30 @@ describe('MaterialPlugin — per-material cull mode (doubleSided)', () => {
   });
 });
 
+describe('MaterialPlugin — prepare resilience', () => {
+  it('skips a material whose uniform pack throws, without aborting the frame', () => {
+    const { app, matPlugin } = buildStandardApp(makeRenderingRenderer());
+    const materials = app.getResource(matPlugin.Materials)!;
+    const good = materials.add(new StandardMaterial({ baseColor: vec4.create(1, 0, 0, 1) }));
+    // Malformed: bypass the constructor guard to store a 3-component vec4 field,
+    // which the uniform packer rejects at prepare time.
+    const bad = new StandardMaterial();
+    (bad as unknown as { emissive: number[] }).emissive = [1, 1, 1];
+    const badHandle = materials.add(bad);
+    app.world.spawn(...Camera3d());
+
+    // The malformed material must not take down the whole prepare pass / frame.
+    expect(() => {
+      app.advanceFrame();
+      app.advanceFrame();
+    }).not.toThrow();
+
+    const rendered = app.getResource(matPlugin.RenderMaterials)!;
+    expect(rendered.has(good)).toBe(true); // good material still prepared
+    expect(rendered.has(badHandle)).toBe(false); // bad one skipped
+  });
+});
+
 // Suppress unused-binding lint on the ShaderPlugin re-export — referenced
 // for documentation in the test file's prose context.
 void ShaderPlugin;

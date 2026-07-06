@@ -246,6 +246,23 @@ stabilization bug fixes.
 
 ---
 
+## Fix — malformed material uniform no longer freezes the render loop · `engine` · bug
+
+- **What changed:** (1) `StandardMaterial` validates/pads `baseColor`/`emissive` at construction (short
+  → padded from default, e.g. `emissive:[1,1,1]`→`[1,1,1,0]`; non-array/non-number → throws clearly).
+  (2) `MaterialPlugin.prepareMaterials` wraps each material's uniform pack in try/catch — a throwing
+  material is logged once and skipped, the rest of the scene keeps rendering.
+- **Automated:** unit tests — constructor padding/rejection (standard-material.test.ts) + a deliberately
+  malformed material is skipped while a good one still prepares (material-plugin.test.ts). Full gate green.
+- **Why bug file kept:** verified by unit tests, not the studio MCP — so per the loop rule I left
+  `docs/bugs/malformed-material-uniform-breaks-render-loop.md` for you to confirm & delete. The
+  MASTER-ROADMAP box is checked (fix shipped + unit-verified).
+- **HOW to confirm (manual, optional):** in the studio, set a `StandardMaterial.emissive` to a
+  3-component value via `studio.eval` / a hand-edited `.remat` → the viewport keeps rendering (a dev
+  warning is logged; the bad material is skipped) instead of freezing.
+
+---
+
 ## ✅ P0 Audio item COMPLETE — box checked in MASTER-ROADMAP
 
 The **Audio (core)** P0 item is fully done (HAL + Web Audio backend + `AudioClip` +

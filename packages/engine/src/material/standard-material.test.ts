@@ -36,6 +36,35 @@ describe('StandardMaterial fields', () => {
   });
 });
 
+describe('StandardMaterial vec-field validation', () => {
+  it('pads a short baseColor to a length-4 vec4 (alpha from the default)', () => {
+    // Float32-exact values so the packed Float32Array compares cleanly.
+    const m = new StandardMaterial({ baseColor: [0.5, 0.25, 0.75] as unknown as never });
+    expect([m.baseColor[0], m.baseColor[1], m.baseColor[2], m.baseColor[3]]).toEqual([0.5, 0.25, 0.75, 1]);
+  });
+
+  it('pads a short emissive (default alpha 0)', () => {
+    const m = new StandardMaterial({ emissive: [1, 1, 1] as unknown as never });
+    expect(m.emissive.length).toBe(4);
+    expect([m.emissive[0], m.emissive[1], m.emissive[2], m.emissive[3]]).toEqual([1, 1, 1, 0]);
+  });
+
+  it('accepts a full vec4 unchanged', () => {
+    const m = new StandardMaterial({ baseColor: [1, 2, 3, 4] as unknown as never });
+    expect([m.baseColor[0], m.baseColor[1], m.baseColor[2], m.baseColor[3]]).toEqual([1, 2, 3, 4]);
+  });
+
+  it('rejects a non-array-like value fast at construction', () => {
+    expect(() => new StandardMaterial({ emissive: 5 as unknown as never })).toThrow(/vec4-like/);
+  });
+
+  it('rejects a non-numeric component fast at construction', () => {
+    expect(() => new StandardMaterial({ baseColor: ['x', 0, 0, 0] as unknown as never })).toThrow(
+      /must be a number/,
+    );
+  });
+});
+
 // Minimal renderer that records the uniform buffer and its writes — enough to
 // assert the packed std140 layout of the binding-0 material uniform.
 const fail = (msg: string): never => {

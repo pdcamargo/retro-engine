@@ -15,6 +15,32 @@ import { ShaderRefs } from './material';
 import { PBR_WGSL } from './pbr.wgsl';
 
 /**
+ * Coerce an authored `vec4`-shaped value to a length-4 `Vec4`, padding missing
+ * components from `fallback`. Guards the constructor so a wrong-shaped value
+ * (e.g. a 3-component `emissive`) fails fast here with a clear message instead of
+ * throwing deep in the uniform packer mid-frame (see the render-loop freeze this
+ * prevents). A non-array-like value is rejected outright.
+ */
+const toVec4 = (value: ArrayLike<number>, fallback: Vec4, field: string): Vec4 => {
+  const length = (value as { length?: unknown }).length;
+  if (typeof length !== 'number') {
+    throw new TypeError(
+      `StandardMaterial.${field} must be a vec4-like value (array or Float32Array); got ${typeof value}`,
+    );
+  }
+  const out = vec4.create(fallback[0], fallback[1], fallback[2], fallback[3]);
+  const n = Math.min(length, 4);
+  for (let i = 0; i < n; i += 1) {
+    const component = value[i];
+    if (typeof component !== 'number' || Number.isNaN(component)) {
+      throw new TypeError(`StandardMaterial.${field}[${i}] must be a number; got ${String(component)}`);
+    }
+    out[i] = component;
+  }
+  return out;
+};
+
+/**
  * Metallic-roughness PBR material — Bevy's `StandardMaterial` minus IBL.
  *
  * Bindings (`@group(2)`):
@@ -119,8 +145,8 @@ export class StandardMaterial implements Material {
     depthBias?: number;
     doubleSided?: boolean;
   }) {
-    if (init?.baseColor) this.baseColor = init.baseColor;
-    if (init?.emissive) this.emissive = init.emissive;
+    if (init?.baseColor) this.baseColor = toVec4(init.baseColor, this.baseColor, 'baseColor');
+    if (init?.emissive) this.emissive = toVec4(init.emissive, this.emissive, 'emissive');
     if (init?.metallic !== undefined) this.metallic = init.metallic;
     if (init?.roughness !== undefined) this.roughness = init.roughness;
     if (init?.occlusionStrength !== undefined) this.occlusionStrength = init.occlusionStrength;

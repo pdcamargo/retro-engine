@@ -129,9 +129,10 @@ foundation.**
       _AC:_ a mesh missing a shader-required attribute (e.g. `TEXCOORD_0`) no longer freezes rendering —
       validated fallback or skipped draw + one dev warning; the prior repro renders.
       _Links:_ [`../bugs/mesh-without-uv-freezes-renderer.md`](../bugs/mesh-without-uv-freezes-renderer.md)
-- [ ] **Fix: malformed material uniform breaks the render loop** — 🟡.
-      _AC:_ a wrong-shaped `StandardMaterial` field is rejected/coerced with a dev warning instead of
-      breaking the whole render loop; the prior repro renders.
+- [x] **Fix: malformed material uniform breaks the render loop** — ✅. `StandardMaterial` coerces/rejects
+      vec fields at construction (short values padded, bad values throw with a clear message), and
+      `MaterialPlugin.prepareMaterials` wraps each pack in try/catch (log once + skip) so one bad material
+      can't abort the prepare pass / freeze the frame. Unit-tested. _(bug file kept for user confirmation.)_
       _Links:_ [`../bugs/malformed-material-uniform-breaks-render-loop.md`](../bugs/malformed-material-uniform-breaks-render-loop.md)
 
 ---
