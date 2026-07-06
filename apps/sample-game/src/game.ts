@@ -1,7 +1,9 @@
 import type { Entity } from '@retro-engine/ecs';
 import { quat, vec2, vec3, vec4 } from '@retro-engine/math';
-import type { App, PluginObject } from '@retro-engine/engine';
+import type { App, Handle, PluginObject } from '@retro-engine/engine';
 import {
+  Assets,
+  AssetServer,
   Camera2d,
   ClearColorConfig,
   Commands,
@@ -41,6 +43,16 @@ class MenuAction {
 /** Marker: the label showing the last chosen menu action. */
 class MenuLast {}
 
+/** Marker: the label reflecting a packed asset loaded from the exported `.rpak`. */
+class CreditsLabel {}
+
+/** Merge a patch into the `window.__game` probe (shared across demo systems). */
+const setGameProbe = (patch: Record<string, unknown>): void => {
+  if (typeof window === 'undefined') return;
+  const w = window as unknown as { __game?: Record<string, unknown> };
+  w.__game = { ...(w.__game ?? {}), ...patch };
+};
+
 /**
  * The whole sample game: a 2D camera, a title, a HUD line, and a spinning label,
  * all drawn with the engine's built-in default font (no external assets). It is
@@ -59,6 +71,22 @@ class HelloTextPlugin implements PluginObject {
     app.addPlugin(new InputPlugin());
     app.addPlugin(new UiInteractionPlugin());
     const font = installDefaultFont(app);
+
+    // Load a packed asset from the exported `.rpak` (present only when run from a
+    // web export, where bootWebGame wires the RpakAssetSource + manifest). A tiny
+    // text loader decodes the bytes; the credits label reflects the loaded value.
+    const texts = new Assets<string>();
+    let creditsHandle: Handle<string> | undefined;
+    let creditsShown = false;
+    app.whenResource(AssetServer, (server) => {
+      server.registerLoader('txt', texts, (bytes) => new TextDecoder().decode(bytes));
+      try {
+        const guid = 'sample-credits-0001' as Parameters<typeof server.loadByGuid>[0];
+        creditsHandle = server.loadByGuid<string>(guid);
+      } catch {
+        // No manifest/asset (running unpacked) — the label stays at its default.
+      }
+    });
 
     app.addSystem(
       'startup',
@@ -198,6 +226,11 @@ class HelloTextPlugin implements PluginObject {
               new UiText({ text: 'LAST: —', font, fontSize: 24, color: vec4.create(0.6, 1, 0.7, 1) }),
               new MenuLast(),
             );
+            root.spawn(
+              new UiNode({ padding: { left: 6, top: 4 } }),
+              new UiText({ text: 'CREDITS: —', font, fontSize: 20, color: vec4.create(0.8, 0.8, 0.95, 1) }),
+              new CreditsLabel(),
+            );
           });
       },
       { label: 'menu-setup' },
@@ -252,12 +285,27 @@ class HelloTextPlugin implements PluginObject {
           for (const row of labels.entries()) {
             (row[1] as UiText).text = `LAST: ${action.name}`;
           }
-          if (typeof window !== 'undefined') {
-            (window as unknown as { __game: { lastAction: string } }).__game = { lastAction: action.name };
-          }
+          setGameProbe({ lastAction: action.name });
         }
       },
       { label: 'menu-click' },
+    );
+
+    // Once the packed credits asset has streamed in from the `.rpak`, reflect it
+    // in the label + probe — the end-to-end proof that a GUID-referenced asset
+    // loads over HTTP from the exported archive.
+    app.addSystem(
+      'update',
+      [Query([UiText, CreditsLabel])],
+      (labels) => {
+        if (creditsShown || creditsHandle === undefined) return;
+        const value = texts.get(creditsHandle);
+        if (value === undefined) return;
+        creditsShown = true;
+        for (const row of labels.entries()) (row[1] as UiText).text = 'CREDITS: LOADED';
+        setGameProbe({ credits: value });
+      },
+      { label: 'credits-consume' },
     );
   }
 }

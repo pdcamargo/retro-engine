@@ -64,11 +64,22 @@ The pieces are in place; wiring them is a focused multi-phase effort:
   game's plugins. Verified: the sample export bundles the reader for the browser
   and boots (fetches manifest + wires the source in-browser); `RpakAssetSource.read`
   is unit-tested end-to-end over a real archive.
-- **Phase C — proof:** a sample loads a real image by GUID and renders it as a
-  `Sprite` in the browser (export→Playwright), confirming end-to-end delivery.
+- **Phase C — proof ✅ (2026-07-06):** the `sample-game` export packs a
+  `credits.txt` asset; at runtime it registers a text loader, `loadByGuid`s it,
+  and the value streams in from the `.rpak` over HTTP and is consumed by a system
+  (shown as "CREDITS: LOADED"; `window.__game.credits` matches the file exactly).
+  End-to-end asset delivery confirmed in a real browser (Playwright). A textured
+  `Sprite`-from-`.rpak` (image decode + GPU) is a further demo, not needed for the
+  delivery proof.
 
-Open sub-question: how the App/`CorePlugin` currently constructs its
-`AssetServer` + default source, so `bootWebGame` can override it cleanly.
+Resolved sub-question: `CorePlugin` does **not** add an `AssetServer`, so
+`bootWebGame` adds `AssetPlugin({ source })` itself (before the game's plugins).
+
+## Remaining for the Export P0 check-off
+
+- **Studio "Build → Web" menu** — wrap `runWebExport` behind the studio's Build
+  menu (studio-side; needs the studio to verify).
+- **Source maps / production polish** (phase 6).
 
 ## Goal
 

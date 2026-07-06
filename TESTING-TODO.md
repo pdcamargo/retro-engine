@@ -758,3 +758,24 @@ import the reader without the node-only export pipeline; `emitWebBoot`/`WebExpor
 - Roadmap: `web-build-target.md` (asset phase B ✅). ADR-0151/0153. MASTER-ROADMAP Export item 🟡.
 
 ---
+
+## ✅ Export — web asset delivery, phase C: end-to-end packed-asset load (VERIFIED via browser)
+
+The exported game now actually LOADS + consumes a packed asset. The `sample-game` packs
+`assets/credits.txt`; at runtime it registers a tiny text loader (`bytes → string`), `loadByGuid`s
+the credits GUID, and a system consumes the value once the async load drains into the store,
+showing "CREDITS: LOADED" and setting `window.__game.credits`.
+
+- **Verified end-to-end (Playwright, real browser):** `window.__game.credits` equals the exact
+  `credits.txt` content — proving the full path: build packs it → bootWebGame fetches manifest +
+  wires RpakAssetSource → loadByGuid → RpakAssetSource.read (location→GUID) → RangeRpakReader over
+  HTTP → decode → store → game code consumes it. The UI label updates to "CREDITS: LOADED".
+- **Automated:** app-only change (no packages/*/src) so no changeset; full repo gate green. The
+  underlying source/reader are unit-tested (phase B).
+- **HOW to test:** export the sample, serve, open in a WebGPU browser + devtools → `window.__game.credits`
+  is the credits text; the on-screen "CREDITS: LOADED" label confirms the consume.
+- **Export asset delivery A+B+C is complete + browser-verified.** Remaining for the Export P0
+  check-off: the studio "Build → Web" menu (studio-side) + source-map/prod polish.
+- Roadmap: `web-build-target.md` (asset phase C ✅). MASTER-ROADMAP Export item 🟡 (studio menu remains).
+
+---

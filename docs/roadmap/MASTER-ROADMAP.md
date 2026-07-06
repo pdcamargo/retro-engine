@@ -159,9 +159,11 @@ foundation.**
       scans `.meta` sidecars, packs a GUID-keyed `.rpak`, and emits `manifest.json`. **Runtime asset loading
       phase B done** — `RpakAssetSource` (`@retro-engine/runtime-web`, via a browser-safe
       `@retro-engine/build/rpak` subpath) + `bootWebGame({ assets })` fetch the manifest and bind a
-      `.rpak`-backed source to the App's `AssetServer` (verified in-browser + unit-tested read). Remaining
-      before check-off: a sprite-from-`.rpak` end-to-end proof (phase C — an image loads by GUID + renders);
-      studio "Build → Web" menu; source maps / production polish. (ADR-0151/0153.)
+      `.rpak`-backed source to the App's `AssetServer`. **Asset delivery A+B+C complete + browser-verified**:
+      the sample export packs `credits.txt`, and at runtime it `loadByGuid`s it — the value streams from the
+      `.rpak` over HTTP and is consumed by game code (`window.__game.credits` matches the file exactly; UI
+      shows "CREDITS: LOADED"). Remaining before check-off: **studio "Build → Web" menu** (studio-side) +
+      source maps / production polish. (ADR-0151/0153.)
       _AC:_ `packages/build` (Bun/Node-only) with an `ExportTarget` interface + registry and a shared Bun
       bundler for user code (engine externalized appropriately); a **web adapter** emitting a static site
       (engine + user bundle + `.rpak`) that runs in a browser; a **`.rpak` writer** (magic+version header →
