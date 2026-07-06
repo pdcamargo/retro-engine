@@ -1,9 +1,10 @@
 # Input System
 
 - **Created:** 2026-05-21
-- **Status:** In progress (Phases 1–2 shipped 2026-07-06)
+- **Status:** In progress (Phases 1–3 shipped 2026-07-06)
 - **ADR:** [ADR-0144](../adr/ADR-0144-input-system-architecture.md) (architecture),
-  [ADR-0145](../adr/ADR-0145-input-action-map.md) (action map)
+  [ADR-0145](../adr/ADR-0145-input-action-map.md) (action map),
+  [ADR-0146](../adr/ADR-0146-gamepad-input.md) (gamepad)
 
 ## Goal
 
@@ -39,11 +40,20 @@ action-mapping layer on top.
   `Reset` (Space↔Enter) at runtime. Reflection round-trip covered by a unit test.
 - Real analog axes (gamepad) and unit-normalized diagonals fold into Phase 3.
 
-### Phase 3 — Gamepad
+### Phase 3 — Gamepad ✅ (2026-07-06)
 
-- Web Gamepad API polling (poll each frame in `preUpdate`; the API has no events for
-  button state). `GamepadButtonInput` + `GamepadAxis` per connected pad; connect /
-  disconnect handling; dead-zone + per-axis calibration. Multi-pad → player mapping.
+- Poll-based `GamepadSource` (ADR-0146): `NavigatorGamepadSource` reads
+  `navigator.getGamepads()` each frame; `HeadlessGamepadSource` for tests.
+- W3C Standard-Gamepad normalization: named `GamepadButton` / `GamepadAxis`
+  (raw index access for non-standard pads); stick-Y flipped so up is +1; triggers
+  as `[0,1]` axes.
+- `Gamepads` resource keyed by pad index — per-pad `ButtonInput<GamepadButton>` +
+  `Axis<GamepadAxis>`, configurable dead zone, `first()` / `connectedIndices()`,
+  connect/disconnect via poll reconciliation. Polled + reconciled in `preUpdate`.
+- Playground `?mode=input` left stick moves the player, `South` fires.
+- **Follow-up:** gamepad bindings in the action map (a `'gamepad'` binding device +
+  analog-axis sources) — tracked in MASTER-ROADMAP.
+- Multi-pad → player-entity assignment is left to game code (per-index `GamepadState`).
 
 ### Phase 4 — Touch & gestures
 

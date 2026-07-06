@@ -57,3 +57,24 @@ a manual confirmation before their backlog/roadmap entries are considered closed
   will survive a scene save once the studio persists this component.
 
 ---
+
+## Input system — Phase 3 (gamepad) · `@retro-engine/input` · ADR-0146
+
+- **What changed:** Poll-based gamepad support. `GamepadSource` (`NavigatorGamepadSource`
+  + `HeadlessGamepadSource`), `Gamepads` resource keyed by pad index with per-pad
+  `ButtonInput<GamepadButton>` + `Axis<GamepadAxis>`, W3C Standard-Gamepad mapping
+  (named buttons/axes; stick-Y flipped so up=+1; triggers as [0,1] axes), configurable
+  dead zone, connect/disconnect via poll reconciliation. Polled in `preUpdate`.
+- **Automated:** +11 unit tests (dead zone, connect/read, button edges, triggers,
+  disconnect lifecycle, non-standard raw access, multi-pad) — 50 input tests green;
+  an `updateGamepads` bench joined the suite; full repo gate green.
+- **Why no MCP verification:** no gamepad-injection path (and no physical pad in CI).
+- **HOW to test (manual):** plug in an Xbox/PS controller, open playground `?mode=input`,
+  press any button on the pad once (browsers only expose a gamepad after first input),
+  then: **left stick** moves the square; **A / ✕ (South)** tints it. `window.__input.gamepad`
+  shows `{connected, x, y, south}`. If you have no controller, this phase is covered by
+  the unit tests only — the `Gamepads` API is driven by a scriptable `GamepadSource`.
+- **Follow-up (not done):** gamepad bindings in the action map (rebindable gamepad) —
+  logged as a new MASTER-ROADMAP item.
+
+---

@@ -1,7 +1,8 @@
-// Device check for @retro-engine/input (ADR-0144 + ADR-0145): a sprite driven
+// Device check for @retro-engine/input (ADR-0144/0145/0146): a sprite driven
 // through the action map. The `Move` axis2d (WASD / arrows) moves the white
 // "player" quad; the `Reset` button snaps it to the origin; `Fire` (left mouse
 // or F) tints it; the mouse wheel scales it via the raw `MouseScroll` resource.
+// A connected gamepad's left stick also moves the player and `South` (A) fires.
 // Press R to rebind `Reset` between Space and Enter at runtime (mutating the
 // serialized `ActionMap`). Live state is published to `window.__input` so a probe
 // or the dev console can confirm resolution without eyeballing pixels.
@@ -14,6 +15,7 @@ import { Camera2d, ClearColorConfig, Commands, Query, Res, Sprite, Transform } f
 import {
   ActionMap,
   ActionState,
+  Gamepads,
   InputPlugin,
   KeyboardInput,
   MouseScroll,
@@ -35,6 +37,7 @@ interface InputProbe {
   move: { x: number; y: number };
   fire: boolean;
   resetKey: string;
+  gamepad: { connected: boolean; x: number; y: number; south: boolean };
 }
 
 declare global {
@@ -80,15 +83,22 @@ export const inputShowcasePlugin = (app: App): void => {
     [
       Res(KeyboardInput),
       Res(MouseScroll),
+      Res(Gamepads),
       Query([Transform, Sprite, ActionState, ActionMap], { with: [Player] }),
     ],
-    (keys, wheel, players) => {
+    (keys, wheel, gamepads, players) => {
       // Runtime rebind demo: R toggles the Reset binding by rewriting the map.
       const rebind = keys.justPressed('KeyR');
 
       if (wheel.y !== 0) {
         scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale - Math.sign(wheel.y) * 0.15));
       }
+
+      // Fold in the first connected gamepad's left stick + South button.
+      const pad = gamepads.first();
+      const gx = pad?.axes.getOrZero('LeftStickX') ?? 0;
+      const gy = pad?.axes.getOrZero('LeftStickY') ?? 0;
+      const gSouth = pad?.buttons.pressed('South') ?? false;
 
       for (const [transform, sprite, actions, map] of players) {
         if (rebind) {
@@ -97,11 +107,11 @@ export const inputShowcasePlugin = (app: App): void => {
           if (reset) reset.bindings = buildMap(resetKey).get('Reset')!.bindings;
         }
 
-        // Sum both D-pads so WASD and arrows both work.
+        // Sum both D-pads and the gamepad stick so any device moves the player.
         const a = actions.axis2d('Move');
         const b = actions.axis2d('MoveArrows');
-        const dx = Math.max(-1, Math.min(1, a.x + b.x));
-        const dy = Math.max(-1, Math.min(1, a.y + b.y));
+        const dx = Math.max(-1, Math.min(1, a.x + b.x + gx));
+        const dy = Math.max(-1, Math.min(1, a.y + b.y + gy));
 
         const px = transform.translation[0] ?? 0;
         const py = transform.translation[1] ?? 0;
@@ -112,7 +122,7 @@ export const inputShowcasePlugin = (app: App): void => {
         vec3.set(nx, ny, pz, transform.translation);
         vec3.set(scale, scale, 1, transform.scale);
 
-        const fire = actions.pressed('Fire');
+        const fire = actions.pressed('Fire') || gSouth;
         if (fire) vec4.set(0.4, 0.9, 1, 1, sprite.color);
         else vec4.set(1, 1, 1, 1, sprite.color);
 
@@ -123,6 +133,12 @@ export const inputShowcasePlugin = (app: App): void => {
           move: { x: dx, y: dy },
           fire,
           resetKey,
+          gamepad: {
+            connected: pad !== undefined,
+            x: Number(gx.toFixed(2)),
+            y: Number(gy.toFixed(2)),
+            south: gSouth,
+          },
         };
       }
     },

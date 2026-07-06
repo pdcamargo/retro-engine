@@ -52,15 +52,18 @@ text, in-game UI, physics, or game export. **P0 is exactly that shippable-game f
 
 ## Engine
 
-- [ ] **Input system** — 🟡 `@retro-engine/input` (ADR-0144, ADR-0145). **Phases 1–2 shipped**
-      (keyboard + mouse + action map): `ButtonInput<T>` + `Axis<T>`, `KeyboardInput`/`MouseButtonInput`/
-      `MouseMotion`/`MouseScroll`/`CursorPosition`, `InputBackend` HAL (`DomInputBackend` + headless),
-      component-based `ActionMap` (reflection-registered) + derived `ActionState`, playground
-      `?mode=input` sample (drives an entity through actions + runtime rebind). **Remaining:** gamepad
-      (Phase 3), touch (Phase 4), studio binding editor (Phase 5).
+- [ ] **Input system** — 🟡 `@retro-engine/input` (ADR-0144, ADR-0145, ADR-0146). **Phases 1–3 shipped**
+      (keyboard + mouse + action map + gamepad): `ButtonInput<T>` + `Axis<T>`, `KeyboardInput`/
+      `MouseButtonInput`/`MouseMotion`/`MouseScroll`/`CursorPosition`, `InputBackend` HAL
+      (`DomInputBackend` + headless), component-based `ActionMap` (reflection-registered) + derived
+      `ActionState`, poll-based `Gamepads` (`GamepadSource` + standard-mapping + dead zones), playground
+      `?mode=input` sample. **Remaining:** touch (Phase 4), studio binding editor (Phase 5).
       _AC (full):_ pressed / just-pressed / just-released ✅; mouse buttons/motion/wheel/position ✅;
-      gamepad + touch ☐; action-map + reflection ✅; headless-safe ✅; a sample moves an entity ✅.
+      gamepad ✅; touch ☐; action-map + reflection ✅; headless-safe ✅; a sample moves an entity ✅.
       _Links:_ [input-system.md](input-system.md)
+- [ ] **Gamepad bindings in the action map** — extend `ActionBinding` with a `'gamepad'` device +
+      analog-axis sources so gamepad buttons/sticks are rebindable through `ActionMap` (currently gamepad
+      is read directly via the `Gamepads` resource). Follow-up from ADR-0146. _Links:_ [input-system.md](input-system.md)
 - [ ] **Audio (core)** — ❌ Audio HAL + Web Audio backend.
       _AC:_ `AudioClip` importer + asset kind (.wav/.ogg/.mp3) with `.meta`; `AudioSource`
       (play/pause/volume/pitch/loop) + `AudioListener` components; one-shot and looping playback;

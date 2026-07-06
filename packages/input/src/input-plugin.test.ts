@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 
 import { HeadlessInputBackend } from './dom-backend';
+import { HeadlessGamepadSource, NavigatorGamepadSource } from './gamepad-source';
 import { KeyboardInput } from './keyboard';
 import { CursorPosition, MouseButtonInput, MouseMotion, MouseScroll, mouseButtonFromIndex } from './mouse';
 import { applyInputFrame, InputPlugin } from './input-plugin';
@@ -185,5 +186,11 @@ describe('InputPlugin — backend selection', () => {
     const backend = new HeadlessInputBackend();
     const plugin = new InputPlugin({ backend });
     expect(plugin.getBackend()).toBe(backend);
+  });
+
+  it('defaults to a navigator gamepad source, or an injected one', () => {
+    expect(new InputPlugin().getGamepadSource()).toBeInstanceOf(NavigatorGamepadSource);
+    const source = new HeadlessGamepadSource();
+    expect(new InputPlugin({ gamepadSource: source }).getGamepadSource()).toBe(source);
   });
 });

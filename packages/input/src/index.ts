@@ -16,6 +16,16 @@ export { ActionBinding, ActionDef, ActionMap, key, mouseButton } from './action-
 export type { Axis2dValue } from './action-state';
 export { ActionState } from './action-state';
 export { resolveActionState } from './action-resolve';
+export type { GamepadAxis, GamepadButton } from './gamepad-mapping';
+export {
+  LEFT_TRIGGER_BUTTON,
+  RIGHT_TRIGGER_BUTTON,
+  STANDARD_BUTTONS,
+  STANDARD_STICK_AXES,
+} from './gamepad-mapping';
+export type { GamepadSnapshot, GamepadSource } from './gamepad-source';
+export { HeadlessGamepadSource, NavigatorGamepadSource } from './gamepad-source';
+export { applyDeadZone, Gamepads, GamepadState, updateGamepads } from './gamepad';
 export type { DomInputBackendOptions } from './dom-backend';
 export { DomInputBackend, HeadlessInputBackend } from './dom-backend';
 export type { InputPluginOptions } from './input-plugin';

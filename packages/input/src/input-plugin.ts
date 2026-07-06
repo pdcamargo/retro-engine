@@ -7,6 +7,9 @@ import { ActionState } from './action-state';
 import { ActionBinding, ActionDef, ActionMap } from './action-types';
 import { DomInputBackend, HeadlessInputBackend } from './dom-backend';
 import type { DomInputBackendOptions } from './dom-backend';
+import { Gamepads, updateGamepads } from './gamepad';
+import { NavigatorGamepadSource } from './gamepad-source';
+import type { GamepadSource } from './gamepad-source';
 import { KeyboardInput } from './keyboard';
 import {
   CursorPosition,
@@ -36,6 +39,12 @@ export interface InputPluginOptions {
    * context-menu events. Ignored when a `backend` is supplied. Defaults true.
    */
   readonly preventDefaults?: boolean;
+  /**
+   * Source polled for gamepad state each frame. Defaults to a
+   * {@link NavigatorGamepadSource} (which is itself no-op when no gamepad-capable
+   * `navigator` is present). Pass a stub source to script gamepad input in tests.
+   */
+  readonly gamepadSource?: GamepadSource;
 }
 
 /**
@@ -56,6 +65,7 @@ export interface InputPluginOptions {
  */
 export class InputPlugin implements PluginObject {
   private readonly backend: InputBackend;
+  private readonly gamepadSource: GamepadSource;
 
   constructor(options: InputPluginOptions = {}) {
     if (options.backend !== undefined) {
@@ -69,6 +79,7 @@ export class InputPlugin implements PluginObject {
     } else {
       this.backend = new HeadlessInputBackend();
     }
+    this.gamepadSource = options.gamepadSource ?? new NavigatorGamepadSource();
   }
 
   name(): string {
@@ -81,6 +92,7 @@ export class InputPlugin implements PluginObject {
     app.insertResource(new MouseMotion());
     app.insertResource(new MouseScroll());
     app.insertResource(new CursorPosition());
+    app.insertResource(new Gamepads());
 
     this.backend.attach();
 
@@ -98,6 +110,18 @@ export class InputPlugin implements PluginObject {
         applyInputFrame(backend, keyboard, mouseButtons, motion, scroll, cursor);
       },
       { name: 'input-update', label: 'input' },
+    );
+
+    // Gamepads are poll-based (no button events), so a separate source is polled
+    // and reconciled each frame, after the raw keyboard/mouse update.
+    const gamepadSource = this.gamepadSource;
+    app.addSystem(
+      'preUpdate',
+      [ResMut(Gamepads)],
+      (gamepads) => {
+        updateGamepads(gamepads, gamepadSource);
+      },
+      { name: 'gamepad-update', after: ['input'] },
     );
 
     // Action map (ADR-0145). Value types first, then the authored component;
@@ -146,6 +170,11 @@ export class InputPlugin implements PluginObject {
    */
   getBackend(): InputBackend {
     return this.backend;
+  }
+
+  /** The gamepad source this plugin polls each frame. */
+  getGamepadSource(): GamepadSource {
+    return this.gamepadSource;
   }
 }
 

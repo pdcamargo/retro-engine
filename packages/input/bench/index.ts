@@ -11,6 +11,7 @@ import { run } from 'mitata';
 
 import './input.bench';
 import './action-resolve.bench';
+import './gamepad.bench';
 
 interface NormalizedBench {
   readonly key: string;
