@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@retro-engine/ecs": "workspace:*",
     "@retro-engine/engine": "workspace:*",
     "@retro-engine/input": "workspace:*",
     "@retro-engine/math": "workspace:*",

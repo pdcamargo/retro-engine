@@ -1,3 +1,5 @@
+import type { Vec4 } from '@retro-engine/math';
+
 import { makeStyle, type UiStyle, type UiStyleInit } from './ui-style';
 
 /**
@@ -55,3 +57,12 @@ export class UiNode {
 
   static readonly requires = [ComputedLayout];
 }
+
+/**
+ * Set a node's background color at runtime. The resolved {@link UiStyle} is
+ * otherwise read-only; this is the supported way to recolor a node each frame
+ * (e.g. button hover/press feedback) without rebuilding the whole style.
+ */
+export const setUiBackground = (node: UiNode, color: Vec4 | undefined): void => {
+  (node.style as { backgroundColor: Vec4 | undefined }).backgroundColor = color;
+};

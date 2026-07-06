@@ -20,7 +20,7 @@ export type {
   MeasureFunc,
 } from './layout-engine';
 export { FlexLayoutEngine } from './flex-layout';
-export { ComputedLayout, UiNode } from './ui-node';
+export { ComputedLayout, setUiBackground, UiNode } from './ui-node';
 export type { UiTextOptions } from './ui-text';
 export { UiText } from './ui-text';
 export { makeTextMeasure } from './text-measure';
@@ -54,3 +54,5 @@ export { UiClicked } from './interaction/ui-clicked';
 export type { InteractionNode, PickEntry } from './interaction/picking';
 export { pickTopmost, UiPointer, updateUiInteraction } from './interaction/picking';
 export { UiInteractionPlugin } from './interaction/ui-interaction-plugin';
+export type { UiButtonOptions } from './interaction/ui-button';
+export { Disabled, UiButton } from './interaction/ui-button';

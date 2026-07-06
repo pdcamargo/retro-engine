@@ -665,3 +665,29 @@ Headless/no-input → no-op.
 - Roadmap: `docs/roadmap/ui-system.md` (Phase 4a ✅). ADR-0150/0154. MASTER-ROADMAP UI item 🟡.
 
 ---
+
+## ✅ In-game UI — Phase 4b: UiButton widget + Disabled (VERIFIED via browser)
+
+Ergonomic buttons on the interaction layer. `UiButton` holds a normal/hovered/pressed/disabled
+background palette; a built-in `UiInteractionPlugin` system tints the node from it by its
+`UiInteraction` state (games no longer hand-write hover/press tinting). `Disabled` marker: picking
+skips it (no hover/press/click) and it shows the disabled color. `setUiBackground(node, color)` is
+the supported runtime recolor (resolved UiStyle is otherwise readonly). `pickTopmost`/
+`updateUiInteraction` skip disabled entries.
+
+- **Verified end-to-end (Playwright, real browser):** the `sample-game` export renders a centered
+  3-button MAIN MENU — NEW GAME / LOAD (disabled, greyed) / QUIT — with built-in button styling.
+  Driving real DOM clicks at each button's reported screen center: NEW GAME → LAST:NEW GAME,
+  QUIT → LAST:QUIT, and the disabled LOAD button leaves LAST unchanged. Per-button routing via a
+  `MenuAction` component resolved from the `UiClicked` entity.
+- **Automated:** 74 UI tests (disabled-picking + UiButton palette/requires); full repo gate green
+  (lint/typecheck/test/build/bench). Changeset added.
+- **HOW to test:** export the sample, serve, open in a WebGPU browser → centered menu; hover a
+  button (lightens), click it (LAST label updates); the greyed LOAD button ignores clicks.
+- **Not done (UI P0 stays unchecked):** more widgets (label/toggle/slider/text-input) + focus/
+  spatial nav (4c); borders/radius + z-index; `.rss` runtime wiring (3b). Logged in MASTER-ROADMAP.
+- **Font note:** the built-in default font is uppercase-only and lacks `()`, so "LOAD (SOON)"
+  renders as "LOAD SOON" — cosmetic, not a bug (a real font asset would cover it).
+- Roadmap: `docs/roadmap/ui-system.md` (Phase 4b ✅). ADR-0150/0154. MASTER-ROADMAP UI item 🟡.
+
+---

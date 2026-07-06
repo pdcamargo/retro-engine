@@ -50,6 +50,12 @@ describe('pickTopmost', () => {
   it('returns null outside every node', () => {
     expect(pickTopmost([a, b], 200, 200)).toBeNull();
   });
+
+  it('skips disabled entries and picks the enabled node beneath', () => {
+    const base = node(1, layout(0, 0, 100, 100, 0));
+    const disabled = { ...node(2, layout(0, 0, 100, 100, 5)), disabled: true };
+    expect(pickTopmost([base, disabled], 50, 50)).toBe(base.entity);
+  });
 });
 
 describe('updateUiInteraction', () => {

@@ -1,4 +1,5 @@
-import { quat, type Vec4, vec2, vec3, vec4 } from '@retro-engine/math';
+import type { Entity } from '@retro-engine/ecs';
+import { quat, vec2, vec3, vec4 } from '@retro-engine/math';
 import type { App, PluginObject } from '@retro-engine/engine';
 import {
   Camera2d,
@@ -16,9 +17,10 @@ import {
 import { InputPlugin } from '@retro-engine/input';
 import { defineProject } from '@retro-engine/project';
 import {
-  Interactable,
+  ComputedLayout,
+  Disabled,
+  UiButton,
   UiClicked,
-  UiInteraction,
   UiNode,
   UiPlugin,
   UiRenderPlugin,
@@ -31,18 +33,13 @@ class Spin {
   constructor(public readonly speed: number = 0.8) {}
 }
 
-/** Marker: the clickable button node. */
-class ClickButton {}
-
-/** State + marker: the label node showing the click count. */
-class ClickCounter {
-  count = 0;
+/** The action a menu button represents. */
+class MenuAction {
+  constructor(public readonly name: string) {}
 }
 
-/** Set a UI node's background at runtime (the resolved style is otherwise readonly). */
-const setBackground = (node: UiNode, color: Vec4): void => {
-  (node.style as { backgroundColor: Vec4 }).backgroundColor = color;
-};
+/** Marker: the label showing the last chosen menu action. */
+class MenuLast {}
 
 /**
  * The whole sample game: a 2D camera, a title, a HUD line, and a spinning label,
@@ -62,10 +59,6 @@ class HelloTextPlugin implements PluginObject {
     app.addPlugin(new InputPlugin());
     app.addPlugin(new UiInteractionPlugin());
     const font = installDefaultFont(app);
-
-    const IDLE = vec4.create(0.24, 0.28, 0.42, 1);
-    const HOVER = vec4.create(0.34, 0.4, 0.6, 1);
-    const PRESSED = vec4.create(0.16, 0.19, 0.3, 1);
 
     app.addSystem(
       'startup',
@@ -153,7 +146,23 @@ class HelloTextPlugin implements PluginObject {
       { label: 'hello-ui-setup' },
     );
 
-    // A centered, clickable button + a click counter label — the interaction demo.
+    // A centered vertical menu of UiButton widgets (one Disabled) + a label
+    // reporting the last chosen action — the widget/interaction demo.
+    const menuButton = (
+      root: { spawn: (...c: object[]) => unknown },
+      name: string,
+      disabled = false,
+    ): void => {
+      const parts: object[] = [
+        new UiNode({ width: 300, height: 56, padding: { left: 20, top: 15 } }),
+        new UiText({ text: name, font, fontSize: 28, color: vec4.create(1, 1, 1, 1) }),
+        new UiButton(),
+        new MenuAction(name),
+      ];
+      if (disabled) parts.push(new Disabled());
+      root.spawn(...parts);
+    };
+
     app.addSystem(
       'startup',
       [Commands],
@@ -164,25 +173,26 @@ class HelloTextPlugin implements PluginObject {
               flexDirection: 'column',
               justifyContent: 'center',
               alignItems: 'center',
-              gap: 16,
+              gap: 14,
               flexGrow: 1,
             }),
           )
           .withChildren((root) => {
             root.spawn(
               new UiNode({ padding: { left: 6, top: 4 } }),
-              new UiText({ text: 'CLICKS: 0', font, fontSize: 30, color: vec4.create(0.9, 0.9, 1, 1) }),
-              new ClickCounter(),
+              new UiText({ text: 'MAIN MENU', font, fontSize: 34, color: vec4.create(0.9, 0.9, 1, 1) }),
             );
+            menuButton(root, 'NEW GAME');
+            menuButton(root, 'LOAD (SOON)', true);
+            menuButton(root, 'QUIT');
             root.spawn(
-              new UiNode({ width: 260, height: 72, padding: { left: 22, top: 22 }, backgroundColor: IDLE }),
-              new UiText({ text: 'CLICK ME', font, fontSize: 28, color: vec4.create(1, 1, 1, 1) }),
-              new Interactable(),
-              new ClickButton(),
+              new UiNode({ padding: { left: 6, top: 4 } }),
+              new UiText({ text: 'LAST: —', font, fontSize: 24, color: vec4.create(0.6, 1, 0.7, 1) }),
+              new MenuLast(),
             );
           });
       },
-      { label: 'click-demo-setup' },
+      { label: 'menu-setup' },
     );
 
     app.addSystem(
@@ -200,39 +210,46 @@ class HelloTextPlugin implements PluginObject {
       { label: 'hello-text-spin' },
     );
 
-    // Tint the button by its interaction state.
+    // Report each menu button's screen rect to a window probe (for verification).
     app.addSystem(
       'update',
-      [Query([UiNode, UiInteraction, ClickButton])],
-      (buttons) => {
-        for (const row of buttons.entries()) {
-          const node = row[1] as UiNode;
-          const state = (row[2] as UiInteraction).state;
-          setBackground(node, state === 'pressed' ? PRESSED : state === 'hovered' ? HOVER : IDLE);
+      [Query([ComputedLayout, MenuAction])],
+      (menu) => {
+        if (typeof window === 'undefined') return;
+        const items: { name: string; cx: number; cy: number; disabled: boolean }[] = [];
+        for (const row of menu.entries()) {
+          const entity = row[0] as Entity;
+          const layout = row[1] as ComputedLayout;
+          const action = row[2] as MenuAction;
+          items.push({
+            name: action.name,
+            cx: Math.round(layout.x + layout.width / 2),
+            cy: Math.round(layout.y + layout.height / 2),
+            disabled: app.world.getComponent(entity, Disabled) !== undefined,
+          });
         }
+        (window as unknown as { __menu: unknown }).__menu = items;
       },
-      { label: 'click-demo-tint' },
+      { label: 'menu-report' },
     );
 
-    // Count clicks and update the counter label + a window probe.
+    // Resolve a click to its MenuAction and update the LAST label + a probe.
     app.addSystem(
       'update',
-      [MessageReader(UiClicked), Query([UiText, ClickCounter])],
-      (clicks, counters) => {
-        let n = 0;
-        for (const _ of clicks) n += 1;
-        if (n === 0) return;
-        for (const row of counters.entries()) {
-          const text = row[1] as UiText;
-          const counter = row[2] as ClickCounter;
-          counter.count += n;
-          text.text = `CLICKS: ${counter.count}`;
+      [MessageReader(UiClicked), Query([UiText, MenuLast])],
+      (clicks, labels) => {
+        for (const click of clicks) {
+          const action = app.world.getComponent((click as UiClicked).entity, MenuAction);
+          if (action === undefined) continue;
+          for (const row of labels.entries()) {
+            (row[1] as UiText).text = `LAST: ${action.name}`;
+          }
           if (typeof window !== 'undefined') {
-            (window as unknown as { __game: { clicks: number } }).__game = { clicks: counter.count };
+            (window as unknown as { __game: { lastAction: string } }).__game = { lastAction: action.name };
           }
         }
       },
-      { label: 'click-demo-count' },
+      { label: 'menu-click' },
     );
   }
 }

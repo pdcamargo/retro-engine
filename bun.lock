@@ -40,6 +40,7 @@
       "name": "@retro-engine/sample-game",
       "version": "0.1.0",
       "dependencies": {
+        "@retro-engine/ecs": "workspace:*",
         "@retro-engine/engine": "workspace:*",
         "@retro-engine/input": "workspace:*",
         "@retro-engine/math": "workspace:*",

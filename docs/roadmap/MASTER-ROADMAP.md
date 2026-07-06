@@ -98,10 +98,12 @@ foundation.**
       verified in a real browser (a HUD panel with colored boxes + crisp labels in the sample-game export,
       ADR-0154). Plus **Phase 4a: pointer interaction** — `Interactable`/`UiInteraction`/`UiClicked` +
       picking (`pickTopmost`) + `UiInteractionPlugin` (reads `@retro-engine/input`), verified in a real
-      browser (a clickable button + live click counter in the sample-game export). Remaining: UI **borders +
-      corner radius** + z-index/clipping + per-line text alignment; `.rss` combinators/`--vars`/inheritance +
-      layout-pass wiring (3b); **widgets** (4b — label/button/slider components + focus routing + a menu
-      sample). (ADR-0150/0154.)
+      browser (a clickable button + live click counter in the sample-game export). Plus **Phase 4b: the
+      `UiButton` widget** (built-in hover/press/disabled tinting) + `Disabled` marker + `setUiBackground`,
+      verified via a working 3-button main menu (one disabled) in the sample-game export. Remaining: UI
+      **borders + corner radius** + z-index/clipping + per-line text alignment; `.rss`
+      combinators/`--vars`/inheritance + layout-pass wiring (3b); **more widgets** (label/toggle/slider/
+      text-input) + focus/spatial nav (4c). (ADR-0150/0154.)
       _AC:_ `UiNode` + derived `ComputedLayout` (not serialized) reusing `Parent`/`Children`; a pure-TS
       **flexbox** `LayoutEngine` behind an interface, with a text-measure callback; a `.rss` (USS-subset)
       parser + style-resolution system matching type / `.class` / `#name` / **state-marker** selectors

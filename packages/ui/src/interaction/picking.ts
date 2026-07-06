@@ -9,23 +9,27 @@ import type { UiInteraction } from './ui-interaction';
 export interface PickEntry {
   readonly entity: Entity;
   readonly layout: ComputedLayout;
+  /** When true the node is `Disabled` and never picked. */
+  readonly disabled?: boolean;
 }
 
 /**
  * Return the topmost interactive node whose border box contains the point
  * `(x, y)` (screen-space logical pixels), or `null`. "Topmost" is the greatest
  * {@link ComputedLayout.order} — the same depth-first order the renderer paints,
- * so the visually front-most node wins the pick.
+ * so the visually front-most node wins the pick. `disabled` entries are ignored.
  */
 export const pickTopmost = (entries: readonly PickEntry[], x: number, y: number): Entity | null => {
   let best: Entity | null = null;
   let bestOrder = -Infinity;
-  for (const { entity, layout } of entries) {
+  for (const entry of entries) {
+    if (entry.disabled) continue;
+    const layout = entry.layout;
     if (x < layout.x || x > layout.x + layout.width) continue;
     if (y < layout.y || y > layout.y + layout.height) continue;
     if (layout.order >= bestOrder) {
       bestOrder = layout.order;
-      best = entity;
+      best = entry.entity;
     }
   }
   return best;
@@ -47,6 +51,8 @@ export interface InteractionNode {
   readonly entity: Entity;
   readonly layout: ComputedLayout;
   readonly ui: UiInteraction;
+  /** When true the node is `Disabled` and never hovered/pressed/clicked. */
+  readonly disabled?: boolean;
 }
 
 /**

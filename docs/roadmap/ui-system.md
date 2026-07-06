@@ -86,9 +86,14 @@ and a HUD (text + bars) from ECS components + `.rss`, with gamepad navigation.
   state machine; `UiInteractionPlugin` runs it in `preUpdate` after input
   (`@retro-engine/input`). Verified in a real browser (a clickable button +
   live click counter in the sample-game export). Bench: `ui-picking`.
-- Remaining (4b+): headless widget components (label/button/toggle/slider/
-  scrollview/text-input/dropdown/tabs) with `Message<T>`; keyboard/gamepad focus
-  routing; a HUD/menu sample scene.
+- **Phase 4b — button widget ✅ (2026-07-06).** `UiButton` (normal/hovered/
+  pressed/disabled palette; a built-in system tints the node by `UiInteraction`
+  state) + `Disabled` marker (picking skips it) + `setUiBackground` runtime style
+  setter. Verified in a real browser (a 3-button main menu with a disabled entry
+  routing `MenuAction`s to a label, in the sample-game export).
+- Remaining (4c+): more widget components (label/toggle/slider/scrollview/
+  text-input/dropdown/tabs) with `Message<T>`; keyboard/gamepad focus routing;
+  a full menu/HUD sample scene styled by `.rss`.
 
 ### Later (P1+)
 

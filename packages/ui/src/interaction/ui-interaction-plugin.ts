@@ -1,11 +1,13 @@
 import type { Entity } from '@retro-engine/ecs';
 import type { App, PluginObject } from '@retro-engine/engine';
 import { MessageWriter, Query, ResMut } from '@retro-engine/engine';
+import { t } from '@retro-engine/reflect';
 import { CursorPosition, MouseButtonInput } from '@retro-engine/input';
 
-import { ComputedLayout } from '../ui-node';
+import { ComputedLayout, setUiBackground, UiNode } from '../ui-node';
 
 import { type InteractionNode, updateUiInteraction, UiPointer } from './picking';
+import { Disabled, UiButton } from './ui-button';
 import { UiClicked } from './ui-clicked';
 import { Interactable, UiInteraction } from './ui-interaction';
 
@@ -26,6 +28,12 @@ export class UiInteractionPlugin implements PluginObject {
   build(app: App): void {
     app.addMessage(UiClicked);
     app.registerComponent(Interactable, {}, { name: 'Interactable', make: () => new Interactable() });
+    app.registerComponent(Disabled, {}, { name: 'Disabled', make: () => new Disabled() });
+    app.registerComponent(
+      UiButton,
+      { normal: t.vec4, hovered: t.vec4, pressed: t.vec4, disabled: t.vec4 },
+      { name: 'UiButton', make: () => new UiButton() },
+    );
     if (app.getResource(UiPointer) === undefined) app.insertResource(new UiPointer());
 
     app.addSystem(
@@ -38,10 +46,12 @@ export class UiInteractionPlugin implements PluginObject {
 
         const nodes: InteractionNode[] = [];
         for (const row of (nodesQuery as { entries(): Iterable<readonly unknown[]> }).entries()) {
+          const entity = row[0] as Entity;
           nodes.push({
-            entity: row[0] as Entity,
+            entity,
             layout: row[1] as ComputedLayout,
             ui: row[2] as UiInteraction,
+            disabled: app.world.getComponent(entity, Disabled) !== undefined,
           });
         }
 
@@ -55,6 +65,30 @@ export class UiInteractionPlugin implements PluginObject {
         );
       },
       { label: 'ui-interaction', after: ['input'] },
+    );
+
+    // Drive each UiButton's background from its interaction state (built-in).
+    app.addSystem(
+      'preUpdate',
+      [Query([UiNode, UiInteraction, UiButton])],
+      (buttonsQuery) => {
+        for (const row of (buttonsQuery as { entries(): Iterable<readonly unknown[]> }).entries()) {
+          const entity = row[0] as Entity;
+          const node = row[1] as UiNode;
+          const state = (row[2] as UiInteraction).state;
+          const button = row[3] as UiButton;
+          const color =
+            app.world.getComponent(entity, Disabled) !== undefined
+              ? button.disabled
+              : state === 'pressed'
+                ? button.pressed
+                : state === 'hovered'
+                  ? button.hovered
+                  : button.normal;
+          setUiBackground(node, color);
+        }
+      },
+      { label: 'ui-button-style', after: ['ui-interaction'] },
     );
   }
 }
