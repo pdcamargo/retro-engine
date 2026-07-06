@@ -117,6 +117,34 @@ a manual confirmation before their backlog/roadmap entries are considered closed
 
 ---
 
+## Audio system — Phase 2 (ECS playback) · `@retro-engine/audio` · ADR-0147
+
+- **What changed:** Component-driven audio. `AudioSource` (clip handle, volume, pitch,
+  loop, playOnAdd, despawnOnEnd, play()/stop()) + `AudioListener` (master volume),
+  reflection-registered; `AudioVoices` runtime resource; `reconcileAudio` playback
+  system in postUpdate (playOnAdd retry-until-loaded, explicit play/stop, live volume
+  sync, despawn/drop finished one-shots, stop-on-removal). Listener → master gain.
+- **Automated:** +9 unit tests (playOnAdd + retry, play/stop, volume sync, despawnOnEnd,
+  loop-never-finishes, stop-on-removal) — 15 audio tests green; `reconcileAudio` bench
+  joined the suite; full repo gate green.
+- **Why no MCP verification:** same as Phase 1 — needs a real AudioContext + speakers.
+- **HOW to test (manual):** playground `?mode=audio`, click the canvas once (resumes audio),
+  then: looping **music** starts automatically (an `AudioSource` entity); **Space / left-click**
+  spawns a one-shot beep entity that despawns itself when done (`despawnOnEnd`); **M** toggles
+  the music (source.play()/stop()). `window.__audio` shows `{ oneShots, musicPlaying, voices }`
+  (voices = live `AudioVoices.size`).
+
+---
+
+## ✅ P0 Audio item COMPLETE — box checked in MASTER-ROADMAP
+
+The **Audio (core)** P0 item is fully done (HAL + Web Audio backend + `AudioClip` +
+`AudioSource`/`AudioListener` + reflection + entity SFX/music sample; headless-safe).
+Reference tag flipped to ✅. Mixer buses / spatial panning / studio audio preview are P1/P2.
+Next P0 target: **Physics** (or Engine text / in-game UI).
+
+---
+
 ## ✅ P0 Input item COMPLETE — box checked in MASTER-ROADMAP
 
 The **Input system** P0 item is fully done (keyboard + mouse + action map + gamepad +

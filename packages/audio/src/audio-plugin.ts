@@ -1,9 +1,21 @@
 import type { App, PluginObject } from '@retro-engine/engine';
-import { Assets, AssetServer, registerAssetKind, registerAssetStore } from '@retro-engine/engine';
+import {
+  Assets,
+  AssetServer,
+  Commands,
+  Query,
+  RemovedComponents,
+  ResMut,
+  registerAssetKind,
+  registerAssetStore,
+} from '@retro-engine/engine';
+import { t } from '@retro-engine/reflect';
 
 import type { AudioBackend } from './audio-backend';
 import { AUDIO_CLIP_ASSET_KIND, AUDIO_CLIP_EXTENSIONS, AudioClip, createAudioClipImporter } from './audio-clip';
+import { reconcileAudio } from './audio-playback';
 import { Audio } from './audio-resource';
+import { AudioListener, AudioSource, AudioVoices } from './audio-source';
 import { NullAudioBackend } from './null-audio-backend';
 import { WebAudioBackend } from './web-audio-backend';
 
@@ -67,6 +79,53 @@ export class AudioPlugin implements PluginObject {
       for (const ext of AUDIO_CLIP_EXTENSIONS) server.registerLoader(ext, clips, importer);
       server.registerLoaderByKind(AUDIO_CLIP_ASSET_KIND, clips, importer);
     });
+
+    // ECS-driven playback (ADR-0147 Phase 2).
+    app.insertResource(new AudioVoices());
+    app.registerComponent(
+      AudioSource,
+      {
+        clip: t.handle(AUDIO_CLIP_ASSET_KIND),
+        volume: t.number,
+        pitch: t.number,
+        loop: t.boolean,
+        playOnAdd: t.boolean,
+        despawnOnEnd: t.boolean,
+        playRequested: t.boolean.skip(),
+        stopRequested: t.boolean.skip(),
+        started: t.boolean.skip(),
+      },
+      { name: 'AudioSource', make: () => new AudioSource() },
+    );
+    app.registerComponent(
+      AudioListener,
+      { volume: t.number },
+      { name: 'AudioListener', make: () => new AudioListener() },
+    );
+
+    // The (first) listener's volume drives the master gain; runs before playback
+    // so voices started this frame see the current master.
+    app.addSystem(
+      'postUpdate',
+      [Query([AudioListener]), ResMut(Audio)],
+      (listeners, audio) => {
+        for (const [listener] of listeners) {
+          audio.setMasterVolume(listener.volume);
+          break;
+        }
+      },
+      { name: 'audio-listener', label: 'audio' },
+    );
+
+    // Start/stop/sync voices from AudioSource state each frame.
+    app.addSystem(
+      'postUpdate',
+      [Query([AudioSource]), RemovedComponents(AudioSource), ResMut(AudioVoices), ResMut(Audio), Commands],
+      (sources, removed, voices, audio, cmd) => {
+        reconcileAudio(sources.entries(), removed, voices, audio, (entity) => cmd.despawn(entity));
+      },
+      { name: 'audio-playback', after: ['audio'] },
+    );
   }
 
   /** The active audio backend, for teardown or advanced use. */

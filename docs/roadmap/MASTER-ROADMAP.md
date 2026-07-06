@@ -43,9 +43,9 @@ not a capability ceiling).
 
 ## North star
 
-The renderer and ECS are deep, but **you cannot ship a complete game yet**: input now exists
-(`@retro-engine/input` ✅), but there is still no audio, engine text, in-game UI, physics, or game
-export. **P0 is exactly that shippable-game foundation.**
+The renderer and ECS are deep, but **you cannot ship a complete game yet**: input and audio now
+exist (`@retro-engine/input` ✅, `@retro-engine/audio` ✅), but there is still no engine text,
+in-game UI, physics, or game export. **P0 is exactly that shippable-game foundation.**
 
 ---
 
@@ -63,14 +63,14 @@ export. **P0 is exactly that shippable-game foundation.**
       gamepad ✅; touch ✅; action-map + reflection ✅; headless-safe ✅; a sample moves an entity ✅.
       Optional Phase 5 (studio binding editor) + the two follow-ups below are P1.
       _Links:_ [input-system.md](input-system.md)
-- [ ] **Audio (core)** — 🟡 `@retro-engine/audio` (ADR-0147). **Phase 1 shipped:** `AudioBackend` HAL +
+- [x] **Audio (core)** — ✅ `@retro-engine/audio` (ADR-0147). **Phases 1–2 shipped:** `AudioBackend` HAL +
       `WebAudioBackend`/`NullAudioBackend`; `AudioClip` importer + asset kind (.wav/.ogg/.mp3) with `.meta`;
-      `Audio` resource (play/stop/volume/pitch/loop, one-shot + looping); `AudioPlugin` (opt-in,
-      headless-safe, autoplay-resume); playground `?mode=audio` sample. **Phase 2 (remaining for this box):**
-      `AudioSource` + `AudioListener` components (reflection) + ECS-driven playback + a sample that plays
-      SFX + music from entities. (Mixer buses → P1.)
-      _AC:_ AudioClip importer/kind/.meta ✅; one-shot + looping ✅; `AudioSource`/`AudioListener` components ☐;
-      reflection schemas ☐ (Phase 2); entity-driven SFX+music sample ☐ (Phase 2).
+      `Audio` resource (play/stop/volume/pitch/loop, one-shot + looping); component-based `AudioSource` +
+      `AudioListener` (reflection-registered) + `AudioVoices` runtime + `reconcileAudio` playback system
+      (playOnAdd, despawnOnEnd, live volume sync); `AudioPlugin` (opt-in, headless-safe, autoplay-resume);
+      playground `?mode=audio` sample plays entity-driven SFX + music.
+      _AC:_ AudioClip importer/kind/.meta ✅; one-shot + looping ✅; `AudioSource`/`AudioListener` ✅;
+      reflection schemas ✅; entity-driven SFX+music sample ✅. (Mixer buses → P1.)
       _Links:_ [audio.md](audio.md)
 - [ ] **Physics** — ❌ `packages/physics-core` (abstraction) + `packages/physics-rapier` (backend).
       _AC:_ physics-core leaf with a `PhysicsBackend` interface + `PhysicsCapabilities`; **Avian-shaped,

@@ -1,23 +1,33 @@
-// Device check for @retro-engine/audio Phase 1 (ADR-0147): plays sound through
-// the Web Audio backend. Space / left-click fires a one-shot beep at a random
-// pitch; M toggles a looping tone (music). The clips are generated as WAV bytes
-// at runtime (no asset file needed) and played directly through the `Audio`
-// resource. State is published to `window.__audio`.
+// Device check for @retro-engine/audio (ADR-0147) — the ECS path. A music entity
+// (`AudioSource`, looping) plays on spawn; an `AudioListener` sets master volume.
+// Space / left-click spawns a one-shot SFX `AudioSource` that despawns itself when
+// it finishes (despawnOnEnd). M toggles the music via the source's play()/stop().
+// Clips are generated as WAV bytes at runtime and added to the `AudioClips` store
+// to get handles. State is published to `window.__audio`.
 //
-// Open with `?mode=audio`. (Click once first — browsers keep audio suspended
-// until a user gesture; the backend resumes automatically on that click.)
+// Open with `?mode=audio`. (Click once first — browsers keep audio suspended until
+// a user gesture; the backend resumes automatically on that click.)
 
 import { vec2, vec4 } from '@retro-engine/math';
 import type { App } from '@retro-engine/engine';
-import { Camera2d, ClearColorConfig, Commands, Res, ResMut, Sprite, Transform } from '@retro-engine/engine';
-import { AudioClip, AudioPlugin, Audio } from '@retro-engine/audio';
-import type { VoiceId } from '@retro-engine/audio';
+import { Camera2d, ClearColorConfig, Commands, Query, Res, Sprite, Transform } from '@retro-engine/engine';
+import {
+  AudioClip,
+  AudioClips,
+  AudioListener,
+  AudioPlugin,
+  AudioSource,
+  AudioVoices,
+} from '@retro-engine/audio';
 import { InputPlugin, KeyboardInput, MouseButtonInput } from '@retro-engine/input';
 
+/** Marker for the looping music source. */
+class MusicTag {}
+
 interface AudioProbe {
-  suspended: boolean;
   oneShots: number;
-  looping: boolean;
+  musicPlaying: boolean;
+  voices: number;
 }
 
 declare global {
@@ -40,8 +50,8 @@ const makeToneWav = (freq: number, durationSec: number, sampleRate = 44100): Uin
   writeStr(8, 'WAVE');
   writeStr(12, 'fmt ');
   view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true); // PCM
-  view.setUint16(22, 1, true); // mono
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
   view.setUint32(24, sampleRate, true);
   view.setUint32(28, sampleRate * 2, true);
   view.setUint16(32, 2, true);
@@ -62,33 +72,39 @@ export const audioShowcasePlugin = (app: App): void => {
   app.addPlugin(new InputPlugin(canvas instanceof HTMLCanvasElement ? { pointerTarget: canvas } : {}));
   app.addPlugin(new AudioPlugin());
 
-  const beep = new AudioClip(makeToneWav(660, 0.15));
-  const music = new AudioClip(makeToneWav(220, 1.5));
-  let musicVoice: VoiceId | null = null;
+  // Add generated clips to the store to get handles (AudioSource references clips by handle).
+  const clips = app.getResource(AudioClips)!;
+  const beep = clips.add(new AudioClip(makeToneWav(660, 0.15)));
+  const music = clips.add(new AudioClip(makeToneWav(220, 1.5)));
+
   let oneShots = 0;
+  let musicPlaying = true;
 
   app.addSystem('startup', [Commands], (cmd) => {
     cmd.spawn(...Camera2d({ clearColor: ClearColorConfig.custom({ r: 0.05, g: 0.06, b: 0.09, a: 1 }) }));
+    cmd.spawn(new AudioListener(0.8)); // master volume 0.8
+    cmd.spawn(new AudioSource(music, { loop: true, volume: 0.3 }), new MusicTag());
     cmd.spawn(new Sprite({ color: vec4.create(0.4, 0.9, 1, 1), customSize: vec2.create(96, 96) }), new Transform());
   });
 
   app.addSystem(
     'update',
-    [ResMut(Audio), Res(KeyboardInput), Res(MouseButtonInput)],
-    (audio, keys, mouse) => {
+    [Commands, Res(KeyboardInput), Res(MouseButtonInput), Res(AudioVoices), Query([AudioSource], { with: [MusicTag] })],
+    (cmd, keys, mouse, voices, musicSources) => {
+      // One-shot SFX: spawn a self-cleaning AudioSource entity per trigger.
       if (keys.justPressed('Space') || mouse.justPressed('Left')) {
-        audio.play(beep, { volume: 0.7, pitch: 0.8 + Math.random() * 0.6 });
+        cmd.spawn(new AudioSource(beep, { despawnOnEnd: true, pitch: 0.8 + Math.random() * 0.6 }));
         oneShots += 1;
       }
+      // Toggle the looping music via the source's play()/stop() request flags.
       if (keys.justPressed('KeyM')) {
-        if (musicVoice !== null) {
-          audio.stop(musicVoice);
-          musicVoice = null;
-        } else {
-          musicVoice = audio.play(music, { volume: 0.3, loop: true });
+        musicPlaying = !musicPlaying;
+        for (const [source] of musicSources) {
+          if (musicPlaying) source.play();
+          else source.stop();
         }
       }
-      window.__audio = { suspended: audio.suspended(), oneShots, looping: musicVoice !== null };
+      window.__audio = { oneShots, musicPlaying, voices: voices.size };
     },
   );
 };

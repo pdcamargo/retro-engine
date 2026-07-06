@@ -8,5 +8,9 @@ export {
 export { WebAudioBackend } from './web-audio-backend';
 export { NullAudioBackend } from './null-audio-backend';
 export { Audio } from './audio-resource';
+export type { AudioSourceOptions } from './audio-source';
+export { AudioListener, AudioSource, AudioVoices } from './audio-source';
+export type { AudioController } from './audio-playback';
+export { reconcileAudio } from './audio-playback';
 export type { AudioPluginOptions } from './audio-plugin';
 export { AudioClips, AudioPlugin } from './audio-plugin';
