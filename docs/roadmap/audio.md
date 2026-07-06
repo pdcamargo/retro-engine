@@ -1,28 +1,57 @@
 # Audio System
 
 - **Created:** 2026-05-21
-- **Status:** Planning
+- **Status:** In progress (Phase 1 shipped 2026-07-06)
+- **ADR:** [ADR-0147](../adr/ADR-0147-audio-architecture.md)
 
 ## Goal
 
-An audio system that mirrors the renderer's HAL pattern: a thin interface in `packages/audio-core` and a Web Audio implementation in `packages/audio-web`. Plays back asset-system-managed sounds and music, supports spatial audio, mixer buses, and basic effects.
+`@retro-engine/audio` — a single package (layered on the engine like
+`@retro-engine/input`, not two `-core`/`-web` packages) with an `AudioBackend`
+HAL seam and a Web Audio implementation. Plays asset-managed sounds and music
+from ECS, the same in the browser and the Tauri webview. Headless-safe.
 
 ## Phases
 
-1. **Audio HAL** — `AudioBackend` interface (load, play, stop, set volume, attach effect, spatialize).
-2. **Web Audio backend** — implements the HAL using `AudioContext`, `AudioBufferSourceNode`, `GainNode`, `PannerNode`.
-3. **Asset integration** — `AudioClip` asset type with importer for `.wav`, `.ogg`, `.mp3`.
-4. **ECS bindings** — `AudioSource` component, `AudioListener` component, system that polls transforms and updates spatial positions.
-5. **Mixer buses** — named buses (Music, SFX, Voice) with per-bus volume + effects.
-6. **Studio integration** — audio preview, waveform display.
+### Phase 1 — HAL + Web Audio backend + AudioClip asset ✅ (2026-07-06)
 
-## Open questions
+- `AudioBackend` interface (`play` / `stop` / `stopAll` / `setVolume` /
+  `isPlaying` / master volume / `resume` / `suspended`); `VoiceId` handles;
+  `PlayOptions { volume, loop, pitch }`.
+- `WebAudioBackend` (AudioContext, master gain, lazy decode cache, per-voice
+  source→gain→master, autoplay-resume on first gesture) + `NullAudioBackend`.
+- `AudioClip` asset (encoded bytes) + importer + `.meta` kind on `.wav`/`.ogg`/`.mp3`.
+- `Audio` resource facade + `AudioPlugin` (opt-in, headless-safe backend select).
+- Unit tests with a mock/null backend; playground `?mode=audio` sample.
 
-- Streaming vs decoded-in-memory: large music files should stream.
-- Web Audio's `AudioContext` autoplay restrictions: how does the engine get a user-gesture promise from the studio shell?
-- Latency: Web Audio's quantum-based scheduling vs game frame timing.
+### Phase 2 — ECS components (AudioSource / AudioListener) + systems
+
+- `AudioSource` (clip handle, volume, pitch, loop, playOnStart, autoDespawn) +
+  `AudioListener` components, reflection-registered (§13).
+- Systems: start voices for sources that request play, stop on removal, sync
+  volume/pitch; one-shot vs looping. Sample plays SFX + music from entities.
+  **Completes the P0 Audio AC.**
+
+### Phase 3 — Mixer buses (P1)
+
+- Named buses (Master / Music / SFX / Voice) with per-bus volume + routing;
+  basic spatial panning via `PannerNode` off the `AudioListener` transform.
+
+### Phase 4 — Studio integration (P1/P2)
+
+- Audio preview in the asset browser, waveform display, `AudioSource` inspector.
+
+## Open questions (resolved / remaining)
+
+- **HAL split?** → No: one package, internal `AudioBackend` seam (ADR-0147).
+- **Autoplay / user gesture** → the backend self-resumes on the first
+  pointer/key event; no host wiring needed (ADR-0147).
+- **Decoded-in-memory vs streaming** → Phase 1 decodes fully in memory (cached).
+  Streaming large music via `MediaElementAudioSourceNode` is a later option.
+- **Latency: quantum scheduling vs frame timing** → fire-and-forget `start()` for
+  Phase 1/2; sample-accurate scheduling deferred.
 
 ## Links
 
-- Bevy audio
-- Web Audio spec
+- [ADR-0147](../adr/ADR-0147-audio-architecture.md)
+- Bevy audio; Web Audio API (MDN)

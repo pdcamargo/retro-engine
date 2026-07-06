@@ -95,6 +95,28 @@ a manual confirmation before their backlog/roadmap entries are considered closed
 
 ---
 
+## Audio system — Phase 1 (HAL + Web Audio + AudioClip) · `@retro-engine/audio` · ADR-0147
+
+- **What changed:** New `@retro-engine/audio` package. `AudioBackend` HAL +
+  `WebAudioBackend` (AudioContext, lazy decode cache, per-voice source→gain→master,
+  autoplay-resume) + `NullAudioBackend`; `AudioClip` asset (encoded bytes) + importer +
+  `.meta` kind on wav/ogg/mp3; `Audio` resource facade (play/stop/volume/pitch/loop,
+  one-shot + looping); `AudioPlugin` (opt-in, headless-safe). Playground `?mode=audio`.
+- **Automated:** 6 unit tests (importer defensive-copy, NullAudioBackend, `Audio` facade
+  routing incl. handle resolution) green; lint/typecheck/test/build green. No bench (no
+  headless-benchable per-frame path yet; Phase 2's `AudioSource` sync will carry one).
+- **Why no MCP verification:** audio needs a real `AudioContext` + speakers; no MCP path,
+  and headless bun has no Web Audio (unit tests use a mock/null backend).
+- **HOW to test (manual):** playground `?mode=audio`, **click the canvas once** (browsers
+  keep audio suspended until a gesture — the backend resumes on that click), then:
+  - **Space / left-click** → a short beep at a random pitch (one-shot; overlapping plays OK).
+  - **M** → toggle a looping low tone (music); M again stops it.
+  - `window.__audio` shows `{ suspended, oneShots, looping }`.
+- **Not deleted:** `docs/roadmap/audio.md` stays (Phase 2 ECS components + mixer buses remain).
+  MASTER-ROADMAP Audio box left unchecked until Phase 2 (`AudioSource`/`AudioListener` + sample).
+
+---
+
 ## ✅ P0 Input item COMPLETE — box checked in MASTER-ROADMAP
 
 The **Input system** P0 item is fully done (keyboard + mouse + action map + gamepad +

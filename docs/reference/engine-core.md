@@ -134,7 +134,11 @@ These do not exist in the runtime and are the reason a complete game can't ship 
   Standard-Gamepad mapping + dead zones + connect/disconnect); and a `Touches` resource (active touch
   points with a per-frame lifecycle). Remaining are P1 niceties: gamepad-in-action-map, touch gesture
   recognizers, and a studio binding editor. → roadmap/input-system.md
-- ❌ **Audio** — no `AudioContext`/`AudioSource`/clip decoding of any kind. → roadmap/audio.md
+- 🟡 **Audio** — `@retro-engine/audio` (ADR-0147) ships the HAL + Web Audio backend: `AudioBackend`
+  (`WebAudioBackend` + `NullAudioBackend`), an `AudioClip` asset (encoded bytes, lazy-decoded + cached)
+  on `.wav`/`.ogg`/`.mp3`, an `Audio` resource (play/stop/volume/pitch/loop, one-shot + looping,
+  autoplay-resume), and `AudioPlugin` (opt-in, headless-safe). Remaining: `AudioSource`/`AudioListener`
+  ECS components (Phase 2), mixer buses (P1). → roadmap/audio.md
 - ❌/🟡 **Windowing** — only a raw canvas + `ResizeObserver` + surface configure on the App. No `Window`
   resource, monitor/cursor/fullscreen control, multi-window, or window events.
 - ❌ **Physics** — no physics package at all (2D or 3D). Planned architecture below.

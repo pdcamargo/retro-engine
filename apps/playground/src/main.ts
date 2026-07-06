@@ -3,6 +3,7 @@ import { createWebGPURenderer } from '@retro-engine/renderer-webgpu';
 
 import { aoShowcasePlugin } from './ao-showcase-plugin';
 import { assetShowcasePlugin } from './asset-showcase-plugin';
+import { audioShowcasePlugin } from './audio-showcase-plugin';
 import { atlasShowcasePlugin } from './atlas-showcase-plugin';
 import { compositionShowcasePlugin } from './composition-showcase-plugin';
 import { gltfShowcasePlugin } from './gltf-showcase-plugin';
@@ -99,6 +100,8 @@ const showcase =
     ? imguiShowcasePlugin
     : mode === 'input'
     ? inputShowcasePlugin
+    : mode === 'audio'
+    ? audioShowcasePlugin
     : mode === 'slice'
     ? sliceShowcasePlugin
     : mode === 'atlas'

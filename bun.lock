@@ -19,6 +19,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@retro-engine/assets": "workspace:*",
+        "@retro-engine/audio": "workspace:*",
         "@retro-engine/ecs": "workspace:*",
         "@retro-engine/editor-sdk": "workspace:*",
         "@retro-engine/engine": "workspace:*",
@@ -65,6 +66,13 @@
     "packages/assets": {
       "name": "@retro-engine/assets",
       "version": "0.0.0",
+    },
+    "packages/audio": {
+      "name": "@retro-engine/audio",
+      "version": "0.0.0",
+      "dependencies": {
+        "@retro-engine/engine": "workspace:*",
+      },
     },
     "packages/create-project": {
       "name": "@retro-engine/create-project",
@@ -331,6 +339,8 @@
     "@oxlint/binding-win32-x64-msvc": ["@oxlint/binding-win32-x64-msvc@1.66.0", "", { "os": "win32", "cpu": "x64" }, "sha512-/DbBvw8UFBhja6PqudUjV4UtfsJr0Oa7jUjWVKB0g86lj/VwnPrkngn0sFql3c9RDA0O16dh7ozsXb6GjNAzBQ=="],
 
     "@retro-engine/assets": ["@retro-engine/assets@workspace:packages/assets"],
+
+    "@retro-engine/audio": ["@retro-engine/audio@workspace:packages/audio"],
 
     "@retro-engine/create-project": ["@retro-engine/create-project@workspace:packages/create-project"],
 

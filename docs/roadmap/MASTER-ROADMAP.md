@@ -63,10 +63,14 @@ export. **P0 is exactly that shippable-game foundation.**
       gamepad ✅; touch ✅; action-map + reflection ✅; headless-safe ✅; a sample moves an entity ✅.
       Optional Phase 5 (studio binding editor) + the two follow-ups below are P1.
       _Links:_ [input-system.md](input-system.md)
-- [ ] **Audio (core)** — ❌ Audio HAL + Web Audio backend.
-      _AC:_ `AudioClip` importer + asset kind (.wav/.ogg/.mp3) with `.meta`; `AudioSource`
-      (play/pause/volume/pitch/loop) + `AudioListener` components; one-shot and looping playback;
-      reflection schemas registered by the plugin; a sample plays SFX + music. (Mixer buses → P1.)
+- [ ] **Audio (core)** — 🟡 `@retro-engine/audio` (ADR-0147). **Phase 1 shipped:** `AudioBackend` HAL +
+      `WebAudioBackend`/`NullAudioBackend`; `AudioClip` importer + asset kind (.wav/.ogg/.mp3) with `.meta`;
+      `Audio` resource (play/stop/volume/pitch/loop, one-shot + looping); `AudioPlugin` (opt-in,
+      headless-safe, autoplay-resume); playground `?mode=audio` sample. **Phase 2 (remaining for this box):**
+      `AudioSource` + `AudioListener` components (reflection) + ECS-driven playback + a sample that plays
+      SFX + music from entities. (Mixer buses → P1.)
+      _AC:_ AudioClip importer/kind/.meta ✅; one-shot + looping ✅; `AudioSource`/`AudioListener` components ☐;
+      reflection schemas ☐ (Phase 2); entity-driven SFX+music sample ☐ (Phase 2).
       _Links:_ [audio.md](audio.md)
 - [ ] **Physics** — ❌ `packages/physics-core` (abstraction) + `packages/physics-rapier` (backend).
       _AC:_ physics-core leaf with a `PhysicsBackend` interface + `PhysicsCapabilities`; **Avian-shaped,

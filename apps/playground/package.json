@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@retro-engine/assets": "workspace:*",
+    "@retro-engine/audio": "workspace:*",
     "@retro-engine/ecs": "workspace:*",
     "@retro-engine/editor-sdk": "workspace:*",
     "@retro-engine/engine": "workspace:*",
