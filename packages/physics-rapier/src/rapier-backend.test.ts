@@ -63,6 +63,74 @@ const floor3d = (): BodySnapshot => ({
   gravityScale: 1,
 });
 
+const character = (translation: readonly number[]): BodySnapshot => ({
+  dimension: '2d',
+  bodyType: 'kinematic',
+  translation,
+  rotation: [0],
+  collider: { shape: 'rectangle', radius: 0.5, halfExtents: [0.5, 0.5], halfHeight: 0.5, isSensor: false },
+  linearVelocity: [0, 0],
+  angularVelocity: [0],
+  externalForce: [0, 0],
+  restitution: 0,
+  friction: 0.5,
+  gravityScale: 1,
+});
+
+const CHAR_CONFIG = {
+  dimension: '2d' as const,
+  offset: 0.01,
+  up: [0, 1],
+  maxSlopeClimbAngle: 0.8,
+  minSlopeSlideAngle: 0.5,
+  autostepHeight: 0,
+  autostepMinWidth: 0,
+  snapToGroundDistance: 0,
+};
+
+describe('RapierBackend — character controller', () => {
+  it('moves a kinematic character along the floor and reports grounded', async () => {
+    const backend = createRapierBackend();
+    await backend.init();
+    expect(backend.capabilities.characterController).toBe(true);
+    backend.setGravity('2d', [0, -9.81]);
+    backend.upsertBody(e(1), floor()); // top at y = 0.5
+    backend.upsertBody(e(2), character([0, 1.0])); // resting on the floor
+
+    let grounded = false;
+    for (let i = 0; i < 30; i += 1) {
+      grounded = backend.moveCharacter(e(2), CHAR_CONFIG, [0.1, -0.1])!.grounded;
+      backend.step(1 / 60);
+    }
+    const p = backend.readBody(e(2))!.translation;
+    expect(p[0]!).toBeGreaterThan(1.0); // moved right
+    expect(p[1]!).toBeGreaterThan(0.9); // stayed on the floor (did not sink)
+    expect(p[1]!).toBeLessThan(1.15);
+    expect(grounded).toBe(true);
+    backend.destroy();
+  });
+
+  it('is blocked by a wall (collide-and-slide)', async () => {
+    const backend = createRapierBackend();
+    await backend.init();
+    backend.upsertBody(e(1), floor());
+    // A wall just to the right of the character.
+    backend.upsertBody(e(2), {
+      ...floor(),
+      translation: [2, 5],
+      collider: { shape: 'rectangle', radius: 0.5, halfExtents: [0.5, 5], halfHeight: 0.5, isSensor: false },
+    });
+    backend.upsertBody(e(3), character([0, 1.0]));
+    for (let i = 0; i < 60; i += 1) {
+      backend.moveCharacter(e(3), CHAR_CONFIG, [0.1, -0.05]);
+      backend.step(1 / 60);
+    }
+    // Wall left face is at x = 1.5; char half-width 0.5 → stops near x ≈ 1.0.
+    expect(backend.readBody(e(3))!.translation[0]!).toBeLessThan(1.2);
+    backend.destroy();
+  });
+});
+
 describe('RapierBackend — real simulation', () => {
   it('a dynamic box falls under gravity and lands on a static floor', async () => {
     const backend = createRapierBackend();

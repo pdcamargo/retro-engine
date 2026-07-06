@@ -206,6 +206,21 @@ a manual confirmation before their backlog/roadmap entries are considered closed
 
 ---
 
+## Physics — kinematic character controller · `physics-core` + `physics-rapier` · ADR-0148
+
+- **What changed:** `CharacterController2d`/`3d` components (offset, slope limits, autostep,
+  snap-to-ground, `desiredTranslation` input, `grounded` output) + `PhysicsBackend.moveCharacter`.
+  The Rapier backend drives a per-entity `KinematicCharacterController` (2D + 3D); the bridge moves
+  the character by the collision-corrected amount each fixed step and writes back `grounded`.
+- **Automated (REAL):** 8 rapier tests — a kinematic character walks along a floor and stays grounded,
+  and is stopped by a wall (collide-and-slide). Full repo gate green.
+- **HOW to use (game):** spawn an entity with `Transform` + `RigidBody2d.kinematic()` +
+  `Collider2d.capsule(...)` + `new CharacterController2d({ snapToGroundDistance: 0.5 })`; each frame set
+  `cc.desiredTranslation` (e.g. from input + gravity) and read `cc.grounded`.
+- **Remaining for the Physics box:** joints (fixed/revolute/…).
+
+---
+
 ## ✅ P0 Audio item COMPLETE — box checked in MASTER-ROADMAP
 
 The **Audio (core)** P0 item is fully done (HAL + Web Audio backend + `AudioClip` +

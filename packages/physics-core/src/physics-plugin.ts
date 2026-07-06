@@ -1,12 +1,14 @@
 import type { Entity } from '@retro-engine/ecs';
 import type { App, PluginObject } from '@retro-engine/engine';
 import { MessageWriter, Query, RemovedComponents, Res, Time, Transform } from '@retro-engine/engine';
+import { vec2, vec3 } from '@retro-engine/math';
 import { t } from '@retro-engine/reflect';
 
 import type { PhysicsBackend } from './backend';
 import { CollisionEvent } from './backend';
 import {
   AngularVelocity2d,
+  CharacterController2d,
   Collider2d,
   ExternalForce2d,
   LinearVelocity2d,
@@ -14,6 +16,7 @@ import {
 } from './components-2d';
 import {
   AngularVelocity3d,
+  CharacterController3d,
   Collider3d,
   ExternalForce3d,
   LinearVelocity3d,
@@ -77,8 +80,10 @@ export class PhysicsPlugin implements PluginObject {
         RemovedComponents(RigidBody2d),
         RemovedComponents(RigidBody3d),
         MessageWriter(CollisionEvent),
+        Query([CharacterController2d]),
+        Query([CharacterController3d]),
       ],
-      (gravity, time, bodies2d, bodies3d, removed2d, removed3d, collisions) => {
+      (gravity, time, bodies2d, bodies3d, removed2d, removed3d, collisions, chars2d, chars3d) => {
         if (!backend.ready()) return;
         backend.setGravity('2d', [gravity.gravity2d[0] ?? 0, gravity.gravity2d[1] ?? 0]);
         backend.setGravity('3d', [
@@ -121,6 +126,46 @@ export class PhysicsPlugin implements PluginObject {
         }
         for (const entity of removed2d) backend.removeBody(entity);
         for (const entity of removed3d) backend.removeBody(entity);
+
+        // Character controllers: move by the collision-corrected amount (after
+        // the bodies are synced, before the step). Overrides the kinematic body's
+        // next translation set during sync.
+        for (const [entity, cc] of chars2d.entries()) {
+          const result = backend.moveCharacter(
+            entity,
+            {
+              dimension: '2d',
+              offset: cc.offset,
+              up: [cc.up[0] ?? 0, cc.up[1] ?? 1],
+              maxSlopeClimbAngle: cc.maxSlopeClimbAngle,
+              minSlopeSlideAngle: cc.minSlopeSlideAngle,
+              autostepHeight: cc.autostepHeight,
+              autostepMinWidth: cc.autostepMinWidth,
+              snapToGroundDistance: cc.snapToGroundDistance,
+            },
+            [cc.desiredTranslation[0] ?? 0, cc.desiredTranslation[1] ?? 0],
+          );
+          if (result !== null) cc.grounded = result.grounded;
+          vec2.set(0, 0, cc.desiredTranslation);
+        }
+        for (const [entity, cc] of chars3d.entries()) {
+          const result = backend.moveCharacter(
+            entity,
+            {
+              dimension: '3d',
+              offset: cc.offset,
+              up: [cc.up[0] ?? 0, cc.up[1] ?? 1, cc.up[2] ?? 0],
+              maxSlopeClimbAngle: cc.maxSlopeClimbAngle,
+              minSlopeSlideAngle: cc.minSlopeSlideAngle,
+              autostepHeight: cc.autostepHeight,
+              autostepMinWidth: cc.autostepMinWidth,
+              snapToGroundDistance: cc.snapToGroundDistance,
+            },
+            [cc.desiredTranslation[0] ?? 0, cc.desiredTranslation[1] ?? 0, cc.desiredTranslation[2] ?? 0],
+          );
+          if (result !== null) cc.grounded = result.grounded;
+          vec3.set(0, 0, 0, cc.desiredTranslation);
+        }
 
         // Step.
         backend.step(time.fixed.delta);
@@ -196,5 +241,36 @@ export class PhysicsPlugin implements PluginObject {
     app.registerComponent(Friction, { coefficient: t.number }, { name: 'Friction', make: () => new Friction() });
     app.registerComponent(GravityScale, { value: t.number }, { name: 'GravityScale', make: () => new GravityScale() });
     app.registerComponent(Sensor, {}, { name: 'Sensor', make: () => new Sensor() });
+
+    app.registerComponent(
+      CharacterController2d,
+      {
+        offset: t.number,
+        up: t.vec2,
+        maxSlopeClimbAngle: t.number,
+        minSlopeSlideAngle: t.number,
+        autostepHeight: t.number,
+        autostepMinWidth: t.number,
+        snapToGroundDistance: t.number,
+        desiredTranslation: t.vec2.skip(),
+        grounded: t.boolean.skip(),
+      },
+      { name: 'CharacterController2d', make: () => new CharacterController2d() },
+    );
+    app.registerComponent(
+      CharacterController3d,
+      {
+        offset: t.number,
+        up: t.vec3,
+        maxSlopeClimbAngle: t.number,
+        minSlopeSlideAngle: t.number,
+        autostepHeight: t.number,
+        autostepMinWidth: t.number,
+        snapToGroundDistance: t.number,
+        desiredTranslation: t.vec3.skip(),
+        grounded: t.boolean.skip(),
+      },
+      { name: 'CharacterController3d', make: () => new CharacterController3d() },
+    );
   }
 }

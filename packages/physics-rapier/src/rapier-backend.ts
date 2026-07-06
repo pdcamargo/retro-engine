@@ -2,6 +2,8 @@ import type { Entity } from '@retro-engine/ecs';
 import type {
   BodyReadback,
   BodySnapshot,
+  CharacterConfig,
+  CharacterMovement,
   CollisionEvent,
   PhysicsBackend,
   PhysicsCapabilities,
@@ -18,7 +20,7 @@ const CAPABILITIES: PhysicsCapabilities = {
   dimensions3d: true,
   continuousCollisionDetection: true,
   joints: false,
-  characterController: false,
+  characterController: true,
   raycast: true,
   shapecast: false,
 };
@@ -79,6 +81,12 @@ class RapierBackend implements PhysicsBackend {
 
   raycast(query: RaycastQuery): RaycastHit | null {
     return query.dimension === '2d' ? this.world2d.raycast(query) : this.world3d.raycast(query);
+  }
+
+  moveCharacter(entity: Entity, config: CharacterConfig, desired: readonly number[]): CharacterMovement | null {
+    return config.dimension === '2d'
+      ? this.world2d.moveCharacter(entity, config, desired)
+      : this.world3d.moveCharacter(entity, config, desired);
   }
 
   destroy(): void {

@@ -105,3 +105,53 @@ export class ExternalForce2d {
     this.value = value;
   }
 }
+
+/**
+ * A kinematic 2D character controller (collide-and-slide). Attach alongside a
+ * kinematic {@link RigidBody2d} + {@link Collider2d}; set
+ * {@link CharacterController2d.desiredTranslation} each frame and the physics
+ * bridge moves the character by the collision-corrected amount, reporting
+ * {@link CharacterController2d.grounded}. Authored fields (offset, slope limits,
+ * autostep, snap-to-ground, up) serialize; the per-frame input/output do not.
+ */
+export class CharacterController2d {
+  /** Skin width kept between the character and the environment. */
+  offset: number;
+  /** Up direction (gravity is "down" the opposite way). */
+  up: Vec2;
+  /** Steepest slope (radians) the character can climb. */
+  maxSlopeClimbAngle: number;
+  /** Shallowest slope (radians) that still causes sliding. */
+  minSlopeSlideAngle: number;
+  /** Max step height to auto-climb; `0` disables autostep. */
+  autostepHeight: number;
+  /** Minimum step width for autostep. */
+  autostepMinWidth: number;
+  /** Distance to snap down to ground when descending; `0` disables. */
+  snapToGroundDistance: number;
+
+  /** Runtime input: desired movement this frame. Reset to zero after each move. Not serialized. */
+  desiredTranslation: Vec2 = vec2.create(0, 0);
+  /** Runtime output: whether the character is grounded after the last move. Not serialized. */
+  grounded = false;
+
+  constructor(
+    options: {
+      offset?: number;
+      up?: Vec2;
+      maxSlopeClimbAngle?: number;
+      minSlopeSlideAngle?: number;
+      autostepHeight?: number;
+      autostepMinWidth?: number;
+      snapToGroundDistance?: number;
+    } = {},
+  ) {
+    this.offset = options.offset ?? 0.01;
+    this.up = options.up ?? vec2.create(0, 1);
+    this.maxSlopeClimbAngle = options.maxSlopeClimbAngle ?? (45 * Math.PI) / 180;
+    this.minSlopeSlideAngle = options.minSlopeSlideAngle ?? (30 * Math.PI) / 180;
+    this.autostepHeight = options.autostepHeight ?? 0;
+    this.autostepMinWidth = options.autostepMinWidth ?? 0;
+    this.snapToGroundDistance = options.snapToGroundDistance ?? 0;
+  }
+}

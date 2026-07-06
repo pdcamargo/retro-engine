@@ -80,10 +80,11 @@ in-game UI, physics, or game export. **P0 is exactly that shippable-game foundat
       collision-event drain), verified by deterministic headless tests. **Now dimension-aware:** the
       backend runs both `rapier2d-compat` + `rapier3d-compat` (2D and 3D bodies simulate independently,
       3D verified headless too). Playground `?mode=physics` demo (boxes fall + stack, Space drops more).
-      **Collision events** are now surfaced to ECS (`CollisionEvent` message, `MessageReader`) — verified
-      headless. **Remaining (Phase 3):** joints, a kinematic **character controller**, and a moving-character demo.
+      **Collision events** are surfaced to ECS (`CollisionEvent` message). A kinematic **character
+      controller** (`CharacterController2d`/`3d`, collide-and-slide, grounded, 2D+3D) is verified headless.
+      **Remaining (Phase 3):** joints (fixed/revolute/…).
       _AC:_ contract + components + reflection ✅; fixed-timestep bridge ✅; rapier 2D+3D + real sim ✅;
-      falling demo ✅; ECS collision events ✅; character controller ☐; joints ☐.
+      falling demo ✅; ECS collision events ✅; character controller ✅; joints ☐.
       _Links:_ [physics.md](physics.md)
 - [ ] **In-game UI (core) — "Retro CSS"** — ❌ `packages/ui`: retained ECS UI (Unity-UITK model + Bevy
       `UiSurface` mechanism).

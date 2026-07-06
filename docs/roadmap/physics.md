@@ -42,8 +42,12 @@ wasm is opt-in.
   `PhysicsPlugin` writes the backend's drained start/stop events each fixed step
   (colliders created with `ActiveEvents.COLLISION_EVENTS`). Read via
   `MessageReader(CollisionEvent)`. Verified headless (box lands → `started` event).
-- **Remaining:** a Rapier kinematic **character controller**; joints
-  (fixed/revolute/…); a 3D playground/studio demo + a moving character.
+- **Character controller ✅ (2026-07-06):** `CharacterController2d`/`3d` components
+  (offset, slope limits, autostep, snap-to-ground, `desiredTranslation` in /
+  `grounded` out) over Rapier's `KinematicCharacterController` (per-entity, 2D+3D).
+  Verified headless (character walks a floor + stays grounded; blocked by a wall).
+- **Remaining:** joints (fixed/revolute/…); a playground/studio demo with a moving
+  character (2D `?mode=physics` demo exists for falling bodies).
 
 ### Phase 4 — Studio integration (P1/P2)
 

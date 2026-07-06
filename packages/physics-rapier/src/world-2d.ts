@@ -1,9 +1,18 @@
 import RAPIER from '@dimforge/rapier2d-compat';
-import type { ColliderDesc, EventQueue, RigidBody, RigidBodyDesc, World } from '@dimforge/rapier2d-compat';
+import type {
+  ColliderDesc,
+  EventQueue,
+  KinematicCharacterController,
+  RigidBody,
+  RigidBodyDesc,
+  World,
+} from '@dimforge/rapier2d-compat';
 import type { Entity } from '@retro-engine/ecs';
 import type {
   BodyReadback,
   BodySnapshot,
+  CharacterConfig,
+  CharacterMovement,
   CollisionEvent,
   RaycastHit,
   RaycastQuery,
@@ -20,6 +29,7 @@ export class Rapier2dWorld {
   private isReady = false;
   private readonly bodies = new Map<Entity, RigidBody>();
   private readonly colliderEntity = new Map<number, Entity>();
+  private readonly controllers = new Map<Entity, KinematicCharacterController>();
   private readonly gravity = { x: 0, y: -9.81 };
   private drained: CollisionEvent[] = [];
 
@@ -66,6 +76,36 @@ export class Rapier2dWorld {
     for (const [handle, e] of this.colliderEntity) {
       if (e === entity) this.colliderEntity.delete(handle);
     }
+    const controller = this.controllers.get(entity);
+    if (controller !== undefined) {
+      this.world.removeCharacterController(controller);
+      this.controllers.delete(entity);
+    }
+  }
+
+  moveCharacter(entity: Entity, config: CharacterConfig, desired: readonly number[]): CharacterMovement | null {
+    if (this.world === null) return null;
+    const body = this.bodies.get(entity);
+    if (body === undefined || body.numColliders() === 0) return null;
+    let controller = this.controllers.get(entity);
+    if (controller === undefined) {
+      controller = this.world.createCharacterController(config.offset);
+      this.controllers.set(entity, controller);
+    }
+    controller.setUp({ x: config.up[0] ?? 0, y: config.up[1] ?? 1 });
+    controller.setMaxSlopeClimbAngle(config.maxSlopeClimbAngle);
+    controller.setMinSlopeSlideAngle(config.minSlopeSlideAngle);
+    if (config.autostepHeight > 0) controller.enableAutostep(config.autostepHeight, config.autostepMinWidth, true);
+    else controller.disableAutostep();
+    if (config.snapToGroundDistance > 0) controller.enableSnapToGround(config.snapToGroundDistance);
+    else controller.disableSnapToGround();
+
+    controller.computeColliderMovement(body.collider(0), { x: desired[0] ?? 0, y: desired[1] ?? 0 });
+    const m = controller.computedMovement();
+    const grounded = controller.computedGrounded();
+    const t = body.translation();
+    body.setNextKinematicTranslation({ x: t.x + m.x, y: t.y + m.y });
+    return { movement: [m.x, m.y], grounded };
   }
 
   step(dt: number): void {
@@ -113,6 +153,7 @@ export class Rapier2dWorld {
     this.events = null;
     this.bodies.clear();
     this.colliderEntity.clear();
+    this.controllers.clear();
     this.isReady = false;
   }
 

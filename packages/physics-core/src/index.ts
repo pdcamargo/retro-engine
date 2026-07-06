@@ -3,6 +3,8 @@ export { NULL_PHYSICS_CAPABILITIES } from './capabilities';
 export type {
   BodyReadback,
   BodySnapshot,
+  CharacterConfig,
+  CharacterMovement,
   ColliderDesc,
   PhysicsBackend,
   RaycastHit,
@@ -12,6 +14,7 @@ export { CollisionEvent } from './backend';
 export type { ColliderShape2d, RigidBodyType } from './components-2d';
 export {
   AngularVelocity2d,
+  CharacterController2d,
   Collider2d,
   ExternalForce2d,
   LinearVelocity2d,
@@ -20,6 +23,7 @@ export {
 export type { ColliderShape3d } from './components-3d';
 export {
   AngularVelocity3d,
+  CharacterController3d,
   Collider3d,
   ExternalForce3d,
   LinearVelocity3d,

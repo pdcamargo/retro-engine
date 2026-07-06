@@ -75,6 +75,31 @@ export interface RaycastHit {
 }
 
 /**
+ * Per-move configuration for a kinematic character, assembled by the bridge from
+ * a `CharacterController2d` / `CharacterController3d` component. Angles are in
+ * radians; `autostepHeight` / `snapToGroundDistance` of `0` disable those
+ * features.
+ */
+export interface CharacterConfig {
+  readonly dimension: PhysicsDimension;
+  readonly offset: number;
+  readonly up: readonly number[];
+  readonly maxSlopeClimbAngle: number;
+  readonly minSlopeSlideAngle: number;
+  readonly autostepHeight: number;
+  readonly autostepMinWidth: number;
+  readonly snapToGroundDistance: number;
+}
+
+/** The result of a {@link PhysicsBackend.moveCharacter} call. */
+export interface CharacterMovement {
+  /** The collide-and-slide-corrected translation actually applied. */
+  readonly movement: readonly number[];
+  /** Whether the character is touching the ground after the move. */
+  readonly grounded: boolean;
+}
+
+/**
  * The physics solver seam. Implemented by a concrete backend (e.g.
  * `@retro-engine/physics-rapier`) and injected into `PhysicsPlugin`. Speaks only
  * in `Entity` ids and plain data — never ECS query or math types — so a backend
@@ -101,6 +126,13 @@ export interface PhysicsBackend {
   drainCollisionEvents(): readonly CollisionEvent[];
   /** Cast a ray and return the nearest hit, or `null`. */
   raycast(query: RaycastQuery): RaycastHit | null;
+  /**
+   * Move `entity`'s kinematic character by `desired`, using the backend's
+   * collide-and-slide character controller, and apply the corrected movement to
+   * the body. Returns the applied movement + grounded state, or `null` if the
+   * entity has no body/collider or the backend has no character controller.
+   */
+  moveCharacter(entity: Entity, config: CharacterConfig, desired: readonly number[]): CharacterMovement | null;
   /** Release all backend resources. */
   destroy(): void;
 }

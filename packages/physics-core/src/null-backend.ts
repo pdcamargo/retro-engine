@@ -1,6 +1,7 @@
 import type {
   BodyReadback,
   BodySnapshot,
+  CharacterMovement,
   CollisionEvent,
   PhysicsBackend,
   RaycastHit,
@@ -36,6 +37,9 @@ export class NullPhysicsBackend implements PhysicsBackend {
     return NO_EVENTS;
   }
   raycast(_query: RaycastQuery): RaycastHit | null {
+    return null;
+  }
+  moveCharacter(): CharacterMovement | null {
     return null;
   }
   destroy(): void {}

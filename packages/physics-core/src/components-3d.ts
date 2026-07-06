@@ -98,3 +98,45 @@ export class ExternalForce3d {
     this.value = value;
   }
 }
+
+/**
+ * A kinematic 3D character controller (collide-and-slide). Attach alongside a
+ * kinematic {@link RigidBody3d} + {@link Collider3d}; set
+ * {@link CharacterController3d.desiredTranslation} each frame and the physics
+ * bridge moves the character by the collision-corrected amount, reporting
+ * {@link CharacterController3d.grounded}.
+ */
+export class CharacterController3d {
+  offset: number;
+  up: Vec3;
+  maxSlopeClimbAngle: number;
+  minSlopeSlideAngle: number;
+  autostepHeight: number;
+  autostepMinWidth: number;
+  snapToGroundDistance: number;
+
+  /** Runtime input: desired movement this frame. Reset to zero after each move. Not serialized. */
+  desiredTranslation: Vec3 = vec3.create(0, 0, 0);
+  /** Runtime output: whether the character is grounded after the last move. Not serialized. */
+  grounded = false;
+
+  constructor(
+    options: {
+      offset?: number;
+      up?: Vec3;
+      maxSlopeClimbAngle?: number;
+      minSlopeSlideAngle?: number;
+      autostepHeight?: number;
+      autostepMinWidth?: number;
+      snapToGroundDistance?: number;
+    } = {},
+  ) {
+    this.offset = options.offset ?? 0.01;
+    this.up = options.up ?? vec3.create(0, 1, 0);
+    this.maxSlopeClimbAngle = options.maxSlopeClimbAngle ?? (45 * Math.PI) / 180;
+    this.minSlopeSlideAngle = options.minSlopeSlideAngle ?? (30 * Math.PI) / 180;
+    this.autostepHeight = options.autostepHeight ?? 0;
+    this.autostepMinWidth = options.autostepMinWidth ?? 0;
+    this.snapToGroundDistance = options.snapToGroundDistance ?? 0;
+  }
+}
