@@ -191,6 +191,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@dimforge/rapier2d-compat": "^0.14.0",
+        "@dimforge/rapier3d-compat": "^0.14.0",
         "@retro-engine/ecs": "workspace:*",
         "@retro-engine/physics-core": "workspace:*",
       },
@@ -306,6 +307,8 @@
     "@changesets/write": ["@changesets/write@0.4.0", "", { "dependencies": { "@changesets/types": "^6.1.0", "fs-extra": "^7.0.1", "human-id": "^4.1.1", "prettier": "^2.7.1" } }, "sha512-CdTLvIOPiCNuH71pyDu3rA+Q0n65cmAbXnwWH84rKGiFumFzkmHNT8KHTMEchcxN+Kl8I54xGUhJ7l3E7X396Q=="],
 
     "@dimforge/rapier2d-compat": ["@dimforge/rapier2d-compat@0.14.0", "", {}, "sha512-sljQVPstRS63hVLnVNphsZUjH51TZoptVM0XlglKAdZ8CT+kWnmA6olwjkF7omPWYrlKMd/nHORxOUdJDOSoAQ=="],
+
+    "@dimforge/rapier3d-compat": ["@dimforge/rapier3d-compat@0.14.0", "", {}, "sha512-/uHrUzS+CRQ+NQrrJCEDUkhwHlNsAAexbNXgbN9sHY+GwR+SFFAFrxRr8Llf5/AJZzqiLANdQIfJ63Cw4gJVqw=="],
 
     "@hono/node-server": ["@hono/node-server@1.19.14", "", { "peerDependencies": { "hono": "^4" } }, "sha512-GwtvgtXxnWsucXvbQXkRgqksiH2Qed37H9xHZocE5sA3N8O8O8/8FA3uclQXxXVzc9XBZuEOMK7+r02FmSpHtw=="],
 

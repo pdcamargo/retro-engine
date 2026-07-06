@@ -175,6 +175,23 @@ a manual confirmation before their backlog/roadmap entries are considered closed
 
 ---
 
+## Physics — 3D backend · `@retro-engine/physics-rapier` · ADR-0148
+
+- **What changed:** `createRapierBackend()` is now dimension-aware — internal `world-2d.ts` +
+  `world-3d.ts` adapters (rapier2d-compat / rapier3d-compat), routed by snapshot dimension;
+  `capabilities.dimensions3d = true`. 3D: Vec3 translation, quaternion rotation, Vec3 angular
+  velocity, cuboid(hx,hy,hz)/ball/capsule.
+- **Automated (REAL):** 5 deterministic bun tests on the actual wasm — a 3D box falls + lands
+  on a floor (rotation is a quaternion), and a mixed scene runs 2D + 3D bodies independently.
+  Full repo gate green.
+- **HOW to test (manual):** the 2D `?mode=physics` demo is unchanged (still uses the 2D path);
+  a dedicated 3D visual demo (Camera3d + meshes) will land with the character-controller phase.
+  The 3D backend itself is proven by the deterministic tests.
+- **Remaining for the Physics box:** kinematic character controller, joints, and collision
+  events surfaced to ECS (a message channel).
+
+---
+
 ## ✅ P0 Audio item COMPLETE — box checked in MASTER-ROADMAP
 
 The **Audio (core)** P0 item is fully done (HAL + Web Audio backend + `AudioClip` +

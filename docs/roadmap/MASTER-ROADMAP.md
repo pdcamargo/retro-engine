@@ -77,11 +77,13 @@ in-game UI, physics, or game export. **P0 is exactly that shippable-game foundat
       `Gravity`/`Physics` resources + fixed-timestep Sync→Step→Writeback `PhysicsPlugin` (Phase 1); the
       **Rapier 2D backend** (`createRapierBackend` over `@dimforge/rapier2d-compat` — entity↔body maps,
       async wasm gate, upsert/step/readBody/remove, gravity/gravity-scale/external-force/kinematic, raycast,
-      collision-event drain), verified by a deterministic headless test (box falls + lands); playground
-      `?mode=physics` demo (boxes fall + stack, Space drops more). **Remaining (Phase 3):** `rapier3d-compat`
-      (3D), joints, a kinematic **character controller**, and collision events/raycasts surfaced to ECS.
-      _AC:_ contract + components + reflection ✅; fixed-timestep bridge ✅; rapier 2D backend + real sim ✅;
-      2D falling demo ✅; 3D ☐; character controller ☐; joints ☐; ECS collision events ☐.
+      collision-event drain), verified by deterministic headless tests. **Now dimension-aware:** the
+      backend runs both `rapier2d-compat` + `rapier3d-compat` (2D and 3D bodies simulate independently,
+      3D verified headless too). Playground `?mode=physics` demo (boxes fall + stack, Space drops more).
+      **Remaining (Phase 3):** joints, a kinematic **character controller**, and collision events surfaced
+      to ECS (a message channel — the backend already drains them).
+      _AC:_ contract + components + reflection ✅; fixed-timestep bridge ✅; rapier 2D+3D + real sim ✅;
+      falling demo ✅; character controller ☐; joints ☐; ECS collision events ☐.
       _Links:_ [physics.md](physics.md)
 - [ ] **In-game UI (core) — "Retro CSS"** — ❌ `packages/ui`: retained ECS UI (Unity-UITK model + Bevy
       `UiSurface` mechanism).

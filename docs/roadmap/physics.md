@@ -1,7 +1,7 @@
 # Physics System
 
 - **Created:** 2026-07-06
-- **Status:** In progress (Phases 1–2 shipped 2026-07-06)
+- **Status:** In progress (Phases 1–2 + 3D backend shipped 2026-07-06)
 - **ADR:** [ADR-0148](../adr/ADR-0148-physics-architecture.md)
 
 ## Goal
@@ -33,9 +33,14 @@ wasm is opt-in.
 
 ### Phase 3 — 3D + character controller + queries + events
 
-- `rapier3d-compat`; `AngularVelocity3d` (Vec3); joints (fixed/revolute/etc.);
-  Rapier kinematic character controller; raycast/shapecast query service;
-  collision start/end events surfaced to ECS; a 3D demo + a moving character.
+- **3D backend ✅ (2026-07-06):** the Rapier backend now handles both dims —
+  `world-2d.ts` / `world-3d.ts` adapters over `rapier2d-compat` / `rapier3d-compat`,
+  routed by `snapshot.dimension`; 3D uses Vec3 translation, quaternion rotation,
+  Vec3 angular velocity, `cuboid(hx,hy,hz)`. Verified headless (a 3D box falls +
+  lands; 2D and 3D simulate independently in one backend). `capabilities.dimensions3d`.
+- **Remaining:** collision start/end events surfaced to ECS (a message channel;
+  the backend already drains them); a Rapier kinematic **character controller**;
+  joints (fixed/revolute/…); a 3D playground/studio demo + a moving character.
 
 ### Phase 4 — Studio integration (P1/P2)
 
