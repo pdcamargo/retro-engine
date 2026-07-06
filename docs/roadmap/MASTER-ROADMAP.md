@@ -125,9 +125,11 @@ foundation.**
 
 ## Stabilization (engine freezers)
 
-- [ ] **Fix: mesh missing a required attribute freezes the renderer** — 🟡.
-      _AC:_ a mesh missing a shader-required attribute (e.g. `TEXCOORD_0`) no longer freezes rendering —
-      validated fallback or skipped draw + one dev warning; the prior repro renders.
+- [x] **Fix: mesh missing a required attribute freezes the renderer** — ✅. `MaterialPlugin` checks the
+      mesh's vertex layout provides every attribute the material requires (`Material.requiredMeshAttributes()`,
+      default `POSITION`/`NORMAL`/`UV_0`) before building a pipeline; a mesh missing one has its draw
+      skipped + one dev warning, instead of an invalid pipeline poisoning the frame. Guard decision
+      unit-tested (`missingMeshAttributes`). _(bug file kept for user confirmation.)_
       _Links:_ [`../bugs/mesh-without-uv-freezes-renderer.md`](../bugs/mesh-without-uv-freezes-renderer.md)
 - [x] **Fix: malformed material uniform breaks the render loop** — ✅. `StandardMaterial` coerces/rejects
       vec fields at construction (short values padded, bad values throw with a clear message), and

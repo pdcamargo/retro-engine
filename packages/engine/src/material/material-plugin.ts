@@ -26,8 +26,8 @@ import { Images } from '../image/images';
 import { RenderImages } from '../image/image-plugin';
 import { GpuLights } from '../light3d/gpu-lights';
 import type { App } from '../index';
-import type { AllocatorSlice } from '../mesh';
-import { MeshAllocator, Meshes, Mesh3d, RenderMeshes } from '../mesh';
+import type { AllocatorSlice, MeshVertexAttribute } from '../mesh';
+import { MeshAllocator, MeshAttribute, Meshes, Mesh3d, RenderMeshes } from '../mesh';
 import type { PluginObject } from '../plugin';
 import {
   PREPASS_FLAGS_NONE,
@@ -198,6 +198,29 @@ export interface MaterialPluginOptions {
  * Not unique — instantiate one per material type. Re-instantiating for the
  * same material type throws at `build()`.
  */
+/**
+ * Vertex attributes the built-in PBR / unlit vertex shaders consume — the
+ * fallback for materials that don't declare {@link Material.requiredMeshAttributes}.
+ */
+const DEFAULT_REQUIRED_MESH_ATTRIBUTES: readonly MeshVertexAttribute[] = [
+  MeshAttribute.POSITION,
+  MeshAttribute.NORMAL,
+  MeshAttribute.UV_0,
+];
+
+/**
+ * The subset of `required` attributes not present in a mesh's provided layout
+ * attribute ids. A non-empty result means a valid pipeline can't be built for
+ * that mesh with the given material — the caller skips the draw. Exported for
+ * tests.
+ *
+ * @internal
+ */
+export const missingMeshAttributes = (
+  provided: readonly import('../mesh').MeshVertexAttributeId[],
+  required: readonly MeshVertexAttribute[],
+): MeshVertexAttribute[] => required.filter((attr) => !provided.includes(attr.id));
+
 export class MaterialPlugin<M extends Material> implements PluginObject {
   readonly materialClass: MaterialCtor<M>;
   /** Per-type subclass of {@link Materials} — register / look up via this constructor. */
@@ -664,6 +687,8 @@ class MaterialPluginState<M extends Material> {
    * referenced images land (async decode + GPU upload), then dropped.
    */
   private readonly pendingTextureMaterials = new Map<number, Handle<M>>();
+  /** Mesh handle indices already warned about for a missing required attribute (warn once). */
+  private readonly warnedMissingMeshAttrs = new Set<number>();
   app!: App;
   initialised = false;
   /**
@@ -902,6 +927,25 @@ class MaterialPluginState<M extends Material> {
         if (prepared === undefined) continue;
 
         const materialInstance = mainWorldMaterials?.get(meshMat.handle);
+
+        // Guard against a mesh that lacks a vertex attribute the material's shader
+        // requires: building a pipeline for it fails device validation, and the
+        // invalid pipeline poisons the whole frame's encoder (freezing the
+        // viewport). Skip this mesh's draw and warn once instead.
+        const required = materialInstance?.requiredMeshAttributes?.() ?? DEFAULT_REQUIRED_MESH_ATTRIBUTES;
+        const missingAttrs = missingMeshAttributes(renderMesh.layout.attributeIds, required);
+        if (missingAttrs.length > 0) {
+          if (!this.warnedMissingMeshAttrs.has(mesh3d.handle.index)) {
+            this.warnedMissingMeshAttrs.add(mesh3d.handle.index);
+            app.logger.devWarn(
+              `MaterialPlugin: mesh #${mesh3d.handle.index} is missing vertex attribute(s) [${missingAttrs
+                .map((a) => a.name)
+                .join(', ')}] required by ${this.materialClass.name}; skipping its draw (a valid pipeline can't be built).`,
+            );
+          }
+          continue;
+        }
+
         const alphaMode = materialInstance?.alphaMode?.() ?? 'opaque';
         const depthBias = materialInstance?.depthBias?.() ?? 0;
         const doubleSided = materialInstance?.doubleSided?.() ?? false;
@@ -1313,6 +1357,25 @@ class MaterialPluginState<M extends Material> {
         );
 
         const materialInstance = mainWorldMaterials?.get(meshMat.handle);
+
+        // Guard against a mesh that lacks a vertex attribute the material's shader
+        // requires: building a pipeline for it fails device validation, and the
+        // invalid pipeline poisons the whole frame's encoder (freezing the
+        // viewport). Skip this mesh's draw and warn once instead.
+        const required = materialInstance?.requiredMeshAttributes?.() ?? DEFAULT_REQUIRED_MESH_ATTRIBUTES;
+        const missingAttrs = missingMeshAttributes(renderMesh.layout.attributeIds, required);
+        if (missingAttrs.length > 0) {
+          if (!this.warnedMissingMeshAttrs.has(mesh3d.handle.index)) {
+            this.warnedMissingMeshAttrs.add(mesh3d.handle.index);
+            app.logger.devWarn(
+              `MaterialPlugin: mesh #${mesh3d.handle.index} is missing vertex attribute(s) [${missingAttrs
+                .map((a) => a.name)
+                .join(', ')}] required by ${this.materialClass.name}; skipping its draw (a valid pipeline can't be built).`,
+            );
+          }
+          continue;
+        }
+
         const alphaMode = materialInstance?.alphaMode?.() ?? 'opaque';
         const depthBias = materialInstance?.depthBias?.() ?? 0;
         const doubleSided = materialInstance?.doubleSided?.() ?? false;

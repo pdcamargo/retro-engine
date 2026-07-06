@@ -58,6 +58,15 @@ export interface Material {
    * arbitrary post-effect surfaces — should leave this method unset.
    */
   prepassWrites?(): import('../prepass/components').PrepassFlags;
+  /**
+   * The mesh vertex attributes this material's vertex shader consumes. A mesh
+   * lacking any of them cannot build a valid render pipeline, so the renderer
+   * skips that mesh's draw (with one dev warning) instead of letting an invalid
+   * pipeline poison the frame and freeze the viewport. Defaults to the standard
+   * 3D set — `POSITION`, `NORMAL`, `UV_0` — when unset, which matches the
+   * built-in PBR / unlit vertex shaders.
+   */
+  requiredMeshAttributes?(): readonly import('../mesh/vertex-attribute').MeshVertexAttribute[];
 }
 
 /**

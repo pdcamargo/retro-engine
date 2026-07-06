@@ -7,13 +7,13 @@ import type {
   Renderer,
 } from '@retro-engine/renderer-core';
 
-import { App, Camera3d, Cuboid, Mesh3d, Meshes, ShaderPlugin } from '../index';
+import { App, Camera3d, Cuboid, Mesh3d, MeshAttribute, Meshes, ShaderPlugin } from '../index';
 import { Light3dPlugin } from '../light3d/light-3d-plugin';
 import { DepthPrepass, MotionVectorPrepass, NormalPrepass } from '../prepass/components';
 import { PrepassPlugin } from '../prepass/prepass-plugin';
 import { makeRenderingRenderer, makeStubCanvas } from '../test-utils';
 
-import { MaterialPlugin } from './material-plugin';
+import { MaterialPlugin, missingMeshAttributes } from './material-plugin';
 import { StandardMaterial, StandardMaterialPlugin } from './standard-material';
 import { UnlitMaterial, UnlitMaterialPlugin } from './unlit-material';
 
@@ -258,6 +258,25 @@ describe('MaterialPlugin — prepare resilience', () => {
     const rendered = app.getResource(matPlugin.RenderMaterials)!;
     expect(rendered.has(good)).toBe(true); // good material still prepared
     expect(rendered.has(badHandle)).toBe(false); // bad one skipped
+  });
+});
+
+describe('missingMeshAttributes', () => {
+  const std = [MeshAttribute.POSITION, MeshAttribute.NORMAL, MeshAttribute.UV_0];
+
+  it('flags a mesh missing UV against the standard requirement', () => {
+    const provided = [MeshAttribute.POSITION.id, MeshAttribute.NORMAL.id];
+    expect(missingMeshAttributes(provided, std).map((a) => a.name)).toEqual(['Vertex_Uv_0']);
+  });
+
+  it('flags a mesh missing NORMAL', () => {
+    const provided = [MeshAttribute.POSITION.id, MeshAttribute.UV_0.id];
+    expect(missingMeshAttributes(provided, std).map((a) => a.name)).toEqual(['Vertex_Normal']);
+  });
+
+  it('passes a fully-attributed mesh', () => {
+    const provided = [MeshAttribute.POSITION.id, MeshAttribute.NORMAL.id, MeshAttribute.UV_0.id];
+    expect(missingMeshAttributes(provided, std)).toEqual([]);
   });
 });
 

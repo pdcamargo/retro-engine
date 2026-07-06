@@ -263,6 +263,33 @@ stabilization bug fixes.
 
 ---
 
+## Fix — mesh missing a required attribute no longer freezes the renderer · `engine` · bug
+
+- **What changed:** `MaterialPlugin` checks (before building a pipeline) that a mesh's vertex layout
+  provides every attribute the material requires (`Material.requiredMeshAttributes()`, default
+  POSITION/NORMAL/UV_0). A mesh missing one has its draw skipped + one dev warning, instead of an
+  invalid pipeline poisoning the frame encoder and freezing the viewport. Guards the mesh + skinned
+  queue paths.
+- **Automated:** `missingMeshAttributes` unit tests (missing UV / missing normal / full mesh). The
+  actual GPU freeze can't be reproduced with the stub renderer (it doesn't validate pipelines), so the
+  guard's *decision* is unit-tested; the end-to-end freeze-avoidance is by construction (skip before
+  pipeline build). Also fixed a test fixture (`buildCube`) that was a UV-less mesh only "working"
+  because the stub skips validation. Full gate green (1154 engine tests).
+- **Why bug file kept:** unit-test-only verification (no MCP freeze-repro path) — left
+  `docs/bugs/mesh-without-uv-freezes-renderer.md` for you to confirm & delete. MASTER-ROADMAP box checked.
+- **HOW to confirm (manual, optional):** in the studio, add a mesh/glTF whose vertex data omits UVs and
+  assign a `StandardMaterial` → the viewport keeps rendering (that mesh is skipped + a dev warning logged)
+  instead of freezing.
+
+---
+
+## ✅ Both P0 stabilization bugs fixed — Input, Audio, Physics + both freezers = P0 progressing fast
+
+Four P0 items + both stabilization freezers now done. Remaining P0: Engine text (MSDF), In-game UI
+(depends on text), Play mode, Web export.
+
+---
+
 ## ✅ P0 Audio item COMPLETE — box checked in MASTER-ROADMAP
 
 The **Audio (core)** P0 item is fully done (HAL + Web Audio backend + `AudioClip` +

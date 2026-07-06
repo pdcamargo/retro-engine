@@ -39,6 +39,9 @@ const buildCube = (): Mesh =>
   new Mesh({ label: 'cube' })
     .insertAttribute(MeshAttribute.POSITION, new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0]))
     .insertAttribute(MeshAttribute.NORMAL, new Float32Array([0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1]))
+    // UV_0 is required by the PBR vertex shader — without it the renderer now
+    // skips the draw (see the missing-attribute guard), so the fixture provides it.
+    .insertAttribute(MeshAttribute.UV_0, new Float32Array([0, 0, 1, 0, 0, 1, 1, 1]))
     .setIndices(u16Indices([0, 1, 2, 1, 3, 2]));
 
 const buildApp = (source?: MemoryAssetSource) => {
