@@ -72,15 +72,18 @@ in-game UI, physics, or game export. **P0 is exactly that shippable-game foundat
       _AC:_ AudioClip importer/kind/.meta ✅; one-shot + looping ✅; `AudioSource`/`AudioListener` ✅;
       reflection schemas ✅; entity-driven SFX+music sample ✅. (Mixer buses → P1.)
       _Links:_ [audio.md](audio.md)
-- [ ] **Physics** — ❌ `packages/physics-core` (abstraction) + `packages/physics-rapier` (backend).
-      _AC:_ physics-core leaf with a `PhysicsBackend` interface + `PhysicsCapabilities`; **Avian-shaped,
-      `2d`/`3d`-suffixed** components (`RigidBody2d/3d`, `Collider2d/3d`, `LinearVelocity2d/3d`,
-      `AngularVelocity2d/3d`, `ExternalForce*`, `Restitution`/`Friction`/`GravityScale`, `Sensor`, joints),
-      reflection-registered; physics-rapier over `@dimforge/rapier2d-compat` + `rapier3d-compat` with a
-      Sync→Step→Writeback bridge + entity↔body maps; `PhysicsPlugin` steps inside the **fixed timestep**,
-      backend **injected at App startup**; collision start/end events + raycast/shapecast query service; a
-      demo where bodies fall, collide, and a character controller moves. Write a new ADR when work starts.
-      _Links:_ new — create `physics.md` + an ADR on start. (design recorded in [`../reference/engine-core.md`](../reference/engine-core.md))
+- [ ] **Physics** — 🟡 `@retro-engine/physics-core` (ADR-0148) + `packages/physics-rapier` (Phase 2).
+      **Phase 1 shipped:** `PhysicsBackend` interface + `PhysicsCapabilities` + `NullPhysicsBackend`;
+      **Avian-shaped, `2d`/`3d`-suffixed** components (`RigidBody2d/3d`, `Collider2d/3d`, `LinearVelocity2d/3d`,
+      `AngularVelocity2d/3d`, `ExternalForce2d/3d`, `Restitution`/`Friction`/`GravityScale`, `Sensor`),
+      all reflection-registered; `Gravity` resource; `PhysicsPlugin` runs the Sync→Step→Writeback bridge in
+      the **fixed timestep** with the backend **injected at App startup** (no-op until a backend is present);
+      `Physics` resource for queries. **Remaining (Phase 2/3):** physics-rapier over `@dimforge/rapier2d-compat`
+      + `rapier3d-compat` (entity↔body maps, real stepping), joints, character controller, collision events +
+      raycast wired to the backend, and a demo where bodies fall, collide, and a character moves.
+      _AC:_ physics-core contract + components + reflection ✅; fixed-timestep bridge ✅; rapier backend ☐;
+      events + queries (live) ☐; joints ☐; falling/character demo ☐.
+      _Links:_ [physics.md](physics.md)
 - [ ] **In-game UI (core) — "Retro CSS"** — ❌ `packages/ui`: retained ECS UI (Unity-UITK model + Bevy
       `UiSurface` mechanism).
       _AC:_ `UiNode` + derived `ComputedLayout` (not serialized) reusing `Parent`/`Children`; a pure-TS

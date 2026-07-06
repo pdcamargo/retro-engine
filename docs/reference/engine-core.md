@@ -142,7 +142,13 @@ These do not exist in the runtime and are the reason a complete game can't ship 
   Remaining are P1/P2: mixer buses, spatial panning, studio audio preview. → roadmap/audio.md
 - ❌/🟡 **Windowing** — only a raw canvas + `ResizeObserver` + surface configure on the App. No `Window`
   resource, monitor/cursor/fullscreen control, multi-window, or window events.
-- ❌ **Physics** — no physics package at all (2D or 3D). Planned architecture below.
+- 🟡 **Physics** — `@retro-engine/physics-core` (ADR-0148) ships the contract + data: `PhysicsBackend`
+  interface + `PhysicsCapabilities` + `NullPhysicsBackend`; Avian-shaped `2d`/`3d` components
+  (`RigidBody`, `Collider`, `LinearVelocity`, `AngularVelocity`, `ExternalForce`, `Restitution`/`Friction`/
+  `GravityScale`/`Sensor`), reflection-registered; a `Gravity` resource; and `PhysicsPlugin` running a
+  fixed-timestep Sync→Step→Writeback bridge (no-op until a backend is injected). Remaining: the Rapier
+  backend (`packages/physics-rapier`, Phase 2), joints, character controller, live events/raycasts, demo.
+  → roadmap/physics.md
 
 ## Planned architecture — physics package (not built yet)
 

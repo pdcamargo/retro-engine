@@ -174,6 +174,16 @@
       "name": "@retro-engine/mcp-protocol",
       "version": "0.0.0",
     },
+    "packages/physics-core": {
+      "name": "@retro-engine/physics-core",
+      "version": "0.0.0",
+      "dependencies": {
+        "@retro-engine/ecs": "workspace:*",
+        "@retro-engine/engine": "workspace:*",
+        "@retro-engine/math": "workspace:*",
+        "@retro-engine/reflect": "workspace:*",
+      },
+    },
     "packages/project": {
       "name": "@retro-engine/project",
       "version": "0.0.0",
@@ -365,6 +375,8 @@
     "@retro-engine/math": ["@retro-engine/math@workspace:packages/math"],
 
     "@retro-engine/mcp-protocol": ["@retro-engine/mcp-protocol@workspace:packages/mcp-protocol"],
+
+    "@retro-engine/physics-core": ["@retro-engine/physics-core@workspace:packages/physics-core"],
 
     "@retro-engine/playground": ["@retro-engine/playground@workspace:apps/playground"],
 

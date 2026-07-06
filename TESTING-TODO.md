@@ -136,6 +136,26 @@ a manual confirmation before their backlog/roadmap entries are considered closed
 
 ---
 
+## Physics — Phase 1 (physics-core contract + components) · `@retro-engine/physics-core` · ADR-0148
+
+- **What changed:** New `@retro-engine/physics-core` package. `PhysicsBackend` interface +
+  `PhysicsCapabilities` + `NullPhysicsBackend`; Avian-shaped `2d`/`3d` components (RigidBody,
+  Collider, Linear/Angular velocity, ExternalForce, Restitution/Friction/GravityScale/Sensor),
+  reflection-registered; `Gravity` + `Physics` resources; `PhysicsPlugin` runs the
+  Sync→Step→Writeback bridge in the fixed timestep (no-op until a backend is injected).
+- **Automated:** 16 unit tests (component factories, bridge snapshot/writeback/collider-desc/
+  angle, null backend, reflection round-trip incl. vec2/vec3/enum) green; a snapshot bench joined
+  the suite; full repo gate green.
+- **Why not verified in the studio yet:** nothing moves without a backend — real behavior arrives
+  in Phase 2 (physics-rapier). Phase 1 is contract + components, unit-tested.
+- **HOW to test (manual, later):** nothing visible yet — Phase 2 will add a `?mode=physics`
+  playground demo (boxes fall + land). For now: `bun test` in packages/physics-core is green, and
+  the components will appear in the studio Add-Component list once a project loads the plugin.
+- **Not deleted:** `docs/roadmap/physics.md` stays (Phase 2 rapier backend + Phase 3 3D/character/
+  joints/events remain). MASTER-ROADMAP Physics box left unchecked until real simulation ships.
+
+---
+
 ## ✅ P0 Audio item COMPLETE — box checked in MASTER-ROADMAP
 
 The **Audio (core)** P0 item is fully done (HAL + Web Audio backend + `AudioClip` +
