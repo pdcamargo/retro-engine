@@ -241,7 +241,10 @@ foundation.**
       _Links:_ [ui-system.md](ui-system.md)
 - [ ] **Audio mixer buses** — bus routing, per-bus volume, basic spatial panning. _Links:_ [audio.md](audio.md)
 - [ ] **Windowing** — `Window` resource, cursor/fullscreen/present-mode(vsync), multi-window, window events.
-- [ ] **Diagnostics store** — `DiagnosticsStore` (FPS/frame-time/entity-count/asset counts) + overlay.
+- [ ] **Diagnostics store** — 🟡 **core shipped**: `DiagnosticsStore` (EMA `frameTimeMs` + derived `fps`,
+      `entityCount`, `frameCount`) + `updateDiagnostics` + opt-in `DiagnosticsPlugin` (updates each frame from
+      the real clock delta + `World.entityCount`, added in O(1)). Unit + integration tested. Remaining: asset
+      counts + an on-screen overlay (studio panel / in-game UI). Box unchecked pending user confirmation (§3).
 - [ ] **ECS ordering depth** — `SystemSet` + set-level config/run-conditions + `.chain()` + ambiguity
       detection; exclusive systems (`&mut World` param); explicit state-transition ordering.
       _Links:_ [system-params.md](system-params.md) · [`../backlog/explicit-state-transition-ordering.md`](../backlog/explicit-state-transition-ordering.md)

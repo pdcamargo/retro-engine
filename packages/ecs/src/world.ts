@@ -425,6 +425,14 @@ export class World {
     }
   }
 
+  /**
+   * Number of live entities, in O(1). A reserved id not yet allocated via
+   * {@link World.spawnReserved} does not count until it is live.
+   */
+  get entityCount(): number {
+    return this.entityIndex.size;
+  }
+
   /** Builder bound to `entity` for chained insert/remove/despawn. */
   entity(entity: Entity): EntityRef {
     return new EntityRef(this, entity);

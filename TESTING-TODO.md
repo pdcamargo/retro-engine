@@ -1032,3 +1032,34 @@ that the integration test could not.
   (Rich-text runs + a billboard flag are non-AC follow-ups.)
 
 ---
+
+## ⭑ P0 STATUS — the shippable-game foundation is AC-complete (awaiting your checkoffs)
+
+Every P0 acceptance criterion is now met **except one blocked item**. Nothing unblocked remains, so per
+"never stall the loop" I've begun P1. Please review + check the P0 boxes you're happy with:
+- **Input / Audio / Physics** — ✅ already checked (pre-session).
+- **In-game UI** — all AC met (flexbox + `.rss` cascade/inheritance/`--vars` + pseudo-states + 2D render +
+  panel/label/button/image widgets + `.rss`-styled HUD), browser-verified. Box unchecked (needs your §3 OK).
+- **Text (MSDF)** — all AC met; `Text2d` + world-space `Text` (3D) both browser-pixel-verified. Box unchecked.
+- **Export (web + `.rpak`)** — all AC met: a real project exports via the CLI and runs from the artifact,
+  streaming `.rpak` assets over HTTP (browser-verified). Box unchecked. (Beyond-AC extras: a studio
+  "Build → Web" menu — BLOCKED, studio; source maps — optional polish.)
+- **Play mode** — snapshot/restore ✅ + Step ✅ + gating ✅ (all MCP-verified earlier). The one unmet AC —
+  "inspector shows live values during play" — is **BLOCKED** (needs studio-MCP verification; the relay has
+  been disconnected all session). Code inspection shows it's already satisfied (see the earlier BLOCKED note).
+- **Stabilization freezer fixes** — ✅ (bug files kept for your confirmation).
+
+## ✅ P1 — Diagnostics store (FPS / frame-time / entity-count) (unit + integration verified)
+
+- **New:** `@retro-engine/ecs` `World.entityCount` (O(1) live count). `@retro-engine/engine`
+  `DiagnosticsStore` (EMA `frameTimeMs`, derived `fps`, `entityCount`, `frameCount`) + `updateDiagnostics`
+  (pure) + opt-in `DiagnosticsPlugin` (updates each frame from the real clock delta + entity count, `'last'`
+  stage).
+- **Verified:** `diagnostics.test.ts` (4 tests) — EMA convergence to the sample, first-sample seed,
+  zero-delta handling, and an App+`advanceFrame` integration (frame count, live entity count incl. a
+  mid-run spawn, non-zero fps). Full ecs+engine suites green (1262). Changeset added.
+- **HOW to test:** `app.addPlugin(new DiagnosticsPlugin())`, then read `Res(DiagnosticsStore)` — `fps` /
+  `frameTimeMs` / `entityCount` update live. Remaining (non-AC): asset counts + an on-screen overlay.
+- Roadmap: MASTER-ROADMAP P1 Diagnostics 🟡 (core shipped), box unchecked pending your confirmation.
+
+---
