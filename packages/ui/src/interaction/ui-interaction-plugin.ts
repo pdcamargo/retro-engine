@@ -1,6 +1,6 @@
 import type { Entity } from '@retro-engine/ecs';
 import type { App, PluginObject } from '@retro-engine/engine';
-import { MessageReader, MessageWriter, Query, ResMut } from '@retro-engine/engine';
+import { MessageReader, MessageWriter, Query, Res, ResMut } from '@retro-engine/engine';
 import { t } from '@retro-engine/reflect';
 import { CursorPosition, MouseButtonInput } from '@retro-engine/input';
 
@@ -9,6 +9,7 @@ import { ComputedLayout, setUiBackground, UiNode } from '../ui-node';
 import { type InteractionNode, updateUiInteraction, UiPointer } from './picking';
 import { Disabled, UiButton } from './ui-button';
 import { UiClicked } from './ui-clicked';
+import { computeSliderValue, UiSlider, UiSliderChanged } from './ui-slider';
 import { Interactable, UiInteraction } from './ui-interaction';
 import { applyToggleClicks, UiToggle, UiToggled } from './ui-toggle';
 
@@ -40,6 +41,12 @@ export class UiInteractionPlugin implements PluginObject {
       UiToggle,
       { checked: t.boolean, on: t.vec4, off: t.vec4, disabled: t.vec4 },
       { name: 'UiToggle', make: () => new UiToggle() },
+    );
+    app.addMessage(UiSliderChanged);
+    app.registerComponent(
+      UiSlider,
+      { value: t.number, min: t.number, max: t.number },
+      { name: 'UiSlider', make: () => new UiSlider() },
     );
     if (app.getResource(UiPointer) === undefined) app.insertResource(new UiPointer());
 
@@ -137,6 +144,29 @@ export class UiInteractionPlugin implements PluginObject {
         }
       },
       { label: 'ui-toggle-style', after: ['ui-toggle'] },
+    );
+
+    // Drag the pressed slider: map the cursor's x across the node's track to its
+    // value while the primary button is held on it. Runs after picking so
+    // `UiPointer.pressed` reflects this frame's press.
+    app.addSystem(
+      'preUpdate',
+      [Res(UiPointer), MessageWriter(UiSliderChanged)],
+      (pointer, changed) => {
+        const pressed = (pointer as UiPointer).pressed;
+        if (pressed === null) return;
+        const slider = app.world.getComponent(pressed, UiSlider);
+        const layout = app.world.getComponent(pressed, ComputedLayout);
+        const cursor = app.getResource(CursorPosition);
+        if (slider === undefined || layout === undefined || cursor === undefined || !cursor.present) return;
+        const next = computeSliderValue(cursor.x, layout.x, layout.width, slider.min, slider.max);
+        if (next !== slider.value) {
+          slider.value = next;
+          app.world.markChanged(pressed, UiSlider);
+          (changed as { write(m: UiSliderChanged): void }).write(new UiSliderChanged(pressed, next));
+        }
+      },
+      { label: 'ui-slider', after: ['ui-interaction'] },
     );
   }
 }

@@ -1320,3 +1320,25 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
   scrollview/dropdown/tabs + focus/nav/data-binding/virtualized-views/screens remain). Box unchecked.
 
 ---
+
+## ✅ P1 — In-game UI depth, Phase 1: UiSlider (draggable value) widget (unit-verified; visual/drag check pending)
+
+- **New:** `@retro-engine/ui` (roadmap `in-game-ui-depth.md`). `UiSlider` holds `value` in `[min,max]`;
+  a built-in system maps the cursor's x across the node's `ComputedLayout` track to the value while the
+  slider is the pressed node (`UiPointer.pressed`), emitting `UiSliderChanged { entity, value }`. Works
+  grabbing the track or thumb. Value mapping is a pure `computeSliderValue(cursorX, trackX, trackWidth,
+  min, max)` (clamps to ends, zero-width track → min). Reuses `Interactable` (`requires = [UiNode,
+  Interactable]`). Reflection schema `value`/`min`/`max`. The widget owns the value; visual fill is
+  composed by the game.
+- **Verified:** `ui-slider.test.ts` (+7): defaults; initial-value clamp; requires; `computeSliderValue`
+  edges/midpoint/clamp-outside/non-zero-min/zero-width. Full ui gate green: typecheck, lint (54 files), 107
+  tests, build. Changeset added. NOTE: drag logic (computeSliderValue) fully unit-tested; the plugin's
+  pressed-node drag wiring follows the codebase pure-function pattern — a live drag→value eyeball in the
+  studio/export is still worth a look (studio relay down).
+- **HOW to test:** `cmd.spawn(new UiSlider({ min: 0, max: 1 }))` with `UiPlugin`+`UiInteractionPlugin`+
+  `InputPlugin`; press and drag across the node → `MessageReader(UiSliderChanged)` reports values 0..1
+  (e.g. wire it to `audio.setBusVolume('music', s.value)` for a volume slider).
+- Roadmap: MASTER-ROADMAP "In-game UI depth" 🟡 Phase 1 in progress (toggle + slider done; text-input/
+  scrollview/dropdown/tabs + focus/nav/data-binding/virtualized-views/screens remain). Box unchecked.
+
+---

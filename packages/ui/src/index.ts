@@ -86,3 +86,5 @@ export type { UiButtonOptions } from './interaction/ui-button';
 export { Disabled, UiButton } from './interaction/ui-button';
 export type { UiToggleOptions } from './interaction/ui-toggle';
 export { applyToggleClicks, UiToggle, UiToggled } from './interaction/ui-toggle';
+export type { UiSliderOptions } from './interaction/ui-slider';
+export { computeSliderValue, UiSlider, UiSliderChanged } from './interaction/ui-slider';

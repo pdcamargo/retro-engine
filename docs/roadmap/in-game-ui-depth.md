@@ -14,9 +14,10 @@ More interactive widgets, each an authored component that reuses the picking /
 - **Toggle / checkbox** ✅ — `UiToggle` flips `checked` on click, emits
   `UiToggled`, drives its background from state. Pure `applyToggleClicks` +
   unit tests.
-- **Slider** — a draggable value in `[min, max]`; drag the thumb / click the
-  track. Needs pointer-drag deltas (cursor motion while pressed) and a `UiSlider`
-  component + `UiSliderChanged` message.
+- **Slider** ✅ — `UiSlider` maps the pointer's x across the node's track to a
+  value in `[min, max]` while held (driven off `UiPointer.pressed`), emits
+  `UiSliderChanged`. Pure `computeSliderValue` + unit tests. (Visual fill is
+  composed by the game / a follow-up — the widget owns the value.)
 - **Text input** — focus, caret, key capture, editable string. The biggest
   widget (keyboard routing + focus management + caret rendering).
 - **Scrollview** — clipped content + scroll offset from wheel / drag; depends on
