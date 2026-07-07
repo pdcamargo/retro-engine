@@ -4,7 +4,7 @@ import type {
   LayoutNode,
   LayoutResult,
 } from './layout-engine';
-import { computeGridLayout, parseGridTemplate, placeGridItems } from './grid-layout';
+import { computeGridLayout, gridRowCount, parseGridTemplate, placeGridItems } from './grid-layout';
 import { type AlignItems, isReverse, isRow, type UiStyle } from './ui-style';
 
 const clamp = (v: number, min: number, max: number | undefined): number =>
@@ -356,20 +356,26 @@ function layoutGrid(
   inFlow: readonly LayoutNode[],
 ): LayoutResult {
   const s = node.style;
+  const columns = parseGridTemplate(s.gridTemplateColumns);
+  const rows = parseGridTemplate(s.gridTemplateRows);
+  const gridItems = inFlow.map((c) => ({ colSpan: c.style.gridColumnSpan, rowSpan: c.style.gridRowSpan }));
+
+  // Generate implicit rows (CSS grid-auto-rows) so items past the explicit rows
+  // flow into fixed-height rows instead of collapsing to zero size.
+  if (s.gridAutoRows > 0 && columns.length > 0) {
+    const needed = gridRowCount(columns.length, gridItems);
+    while (rows.length < needed) rows.push({ kind: 'px', value: s.gridAutoRows });
+  }
+
   const grid = computeGridLayout(
-    {
-      columns: parseGridTemplate(s.gridTemplateColumns),
-      rows: parseGridTemplate(s.gridTemplateRows),
-      columnGap: s.gap,
-      rowGap: s.gap,
-    },
+    { columns, rows, columnGap: s.gap, rowGap: s.gap },
     { width: contentW, height: contentH },
   );
 
   // Auto-place each in-flow child (honoring its column/row span) into the grid.
   const placed = placeGridItems(
     { columnSizes: grid.columnSizes, rowSizes: grid.rowSizes, columnGap: s.gap, rowGap: s.gap },
-    inFlow.map((c) => ({ colSpan: c.style.gridColumnSpan, rowSpan: c.style.gridRowSpan })),
+    gridItems,
   );
 
   const results = new Map<LayoutNode, LayoutResult>();

@@ -191,6 +191,7 @@ const mapDeclarations = (props: Record<string, string>): UiStyleInit => {
       case 'grid-template-rows': init.gridTemplateRows = value; break;
       case 'grid-column': init.gridColumnSpan = spanCount(value); break;
       case 'grid-row': init.gridRowSpan = spanCount(value); break;
+      case 'grid-auto-rows': init.gridAutoRows = len(value); break;
       case 'flex-direction': init.flexDirection = value as FlexDirection; break;
       case 'justify-content': init.justifyContent = value as JustifyContent; break;
       case 'align-items': init.alignItems = alignKeyword(value) as AlignItems; break;

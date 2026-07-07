@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test';
 
 import {
   computeGridLayout,
+  gridRowCount,
   type GridTracks,
   parseGridTemplate,
   placeGridItems,
@@ -140,5 +141,24 @@ describe('placeGridItems', () => {
     expect(r[0]!.width).toBe(300);
     expect(r[1]!.width).toBe(300);
     expect(r[2]).toEqual({ x: 0, y: 0, width: 0, height: 0 }); // grid full
+  });
+});
+
+describe('gridRowCount', () => {
+  it('counts the rows sparse placement needs (unbounded)', () => {
+    expect(gridRowCount(2, [{}, {}, {}, {}, {}])).toBe(3); // 5 items / 2 cols → 3 rows
+    expect(gridRowCount(3, [{}, {}, {}])).toBe(1);
+    expect(gridRowCount(3, [])).toBe(0);
+  });
+
+  it('accounts for spans when growing rows', () => {
+    // A row-2 span in col 0, then 3 single cells across 2 cols.
+    expect(gridRowCount(2, [{ rowSpan: 2 }, {}, {}, {}])).toBe(3);
+    // A full-width span forces the next item onto a new row.
+    expect(gridRowCount(2, [{ colSpan: 2 }, {}])).toBe(2);
+  });
+
+  it('is zero rows for zero columns', () => {
+    expect(gridRowCount(0, [{}, {}])).toBe(0);
   });
 });

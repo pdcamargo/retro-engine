@@ -66,6 +66,14 @@ export interface UiStyle {
   readonly gridColumnSpan: number;
   /** Rows this node spans when it is a grid item (CSS `grid-row: span N`). Default `1`. */
   readonly gridRowSpan: number;
+  /**
+   * Height in pixels of **implicit** grid rows — rows generated automatically
+   * when items overflow the explicit {@link gridTemplateRows} (CSS
+   * `grid-auto-rows`, fixed-size subset). `0` (the default) generates no implicit
+   * rows, so an overflowing item collapses to zero size. Used only when
+   * {@link display} is `'grid'`.
+   */
+  readonly gridAutoRows: number;
   readonly flexDirection: FlexDirection;
   readonly justifyContent: JustifyContent;
   readonly alignItems: AlignItems;
@@ -134,6 +142,7 @@ export const defaultUiStyle = (): UiStyle => ({
   gridTemplateRows: '',
   gridColumnSpan: 1,
   gridRowSpan: 1,
+  gridAutoRows: 0,
   flexDirection: 'row',
   justifyContent: 'flex-start',
   alignItems: 'stretch',

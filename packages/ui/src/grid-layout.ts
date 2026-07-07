@@ -130,51 +130,96 @@ export interface GridTracks {
   readonly rowGap: number;
 }
 
-/**
- * Place `items` into a resolved grid by CSS-style sparse auto-placement: scan
- * cells row-major and drop each item at the first free top-left cell where its
- * `colSpan × rowSpan` block fits and is unoccupied, marking those cells used.
- * Returns one `LayoutRect` per item (spanning rect); an item that fits nowhere
- * (grid full, or larger than the grid) gets a zero-size rect. Pure — the
- * placement half of grid layout, unit-tested. Spans are clamped to `≥ 1` and to
- * the grid's track counts.
- */
-export const placeGridItems = (grid: GridTracks, items: readonly GridItem[]): LayoutRect[] => {
-  const cols = grid.columnSizes.length;
-  const rows = grid.rowSizes.length;
-  const colOff = trackOffsets(grid.columnSizes, grid.columnGap);
-  const rowOff = trackOffsets(grid.rowSizes, grid.rowGap);
-  const occupied: boolean[] = Array.from({ length: cols * rows }, () => false);
+/** An item's assigned cell: its top-left track + span. `col < 0` means unplaced. */
+interface GridCell {
+  readonly col: number;
+  readonly row: number;
+  readonly colSpan: number;
+  readonly rowSpan: number;
+}
 
+/**
+ * Assign each item a cell by CSS-style sparse row-major auto-placement: scan
+ * cells top-to-bottom, left-to-right and drop each item at the first free
+ * top-left cell where its `colSpan × rowSpan` block fits, marking those cells
+ * used. Rows grow up to `maxRows` (`Infinity` = unbounded, for implicit
+ * auto-rows); an item that fits within no allowed row is left unplaced
+ * (`col: -1`). Column spans are clamped to `[1, colCount]`, row spans to `≥ 1`.
+ * Returns the cells plus the number of rows actually used.
+ */
+const assignGridCells = (
+  colCount: number,
+  items: readonly GridItem[],
+  maxRows: number,
+): { cells: GridCell[]; rowCount: number } => {
+  const cells: GridCell[] = [];
+  if (colCount <= 0) {
+    for (let i = 0; i < items.length; i += 1) cells.push({ col: -1, row: 0, colSpan: 0, rowSpan: 0 });
+    return { cells, rowCount: 0 };
+  }
+
+  const occupied: boolean[] = [];
+  const occ = (r: number, c: number): boolean => occupied[r * colCount + c] === true;
+  const mark = (r: number, c: number): void => {
+    const i = r * colCount + c;
+    while (occupied.length <= i) occupied.push(false);
+    occupied[i] = true;
+  };
   const fits = (c: number, r: number, cs: number, rs: number): boolean => {
-    if (c + cs > cols || r + rs > rows) return false;
+    if (c + cs > colCount || r + rs > maxRows) return false;
     for (let rr = r; rr < r + rs; rr += 1) {
-      for (let cc = c; cc < c + cs; cc += 1) if (occupied[rr * cols + cc]) return false;
+      for (let cc = c; cc < c + cs; cc += 1) if (occ(rr, cc)) return false;
     }
     return true;
   };
 
-  const rects: LayoutRect[] = [];
+  let rowCount = 0;
   for (const item of items) {
-    const cs = Math.max(1, Math.min(cols, item.colSpan ?? 1));
-    const rs = Math.max(1, Math.min(rows, item.rowSpan ?? 1));
+    const cs = Math.max(1, Math.min(colCount, item.colSpan ?? 1));
+    const rs = Math.max(1, item.rowSpan ?? 1);
     let placed = false;
-    for (let r = 0; r < rows && !placed; r += 1) {
-      for (let c = 0; c < cols && !placed; c += 1) {
+    for (let r = 0; !placed && r + rs <= maxRows; r += 1) {
+      for (let c = 0; c < colCount && !placed; c += 1) {
         if (!fits(c, r, cs, rs)) continue;
         for (let rr = r; rr < r + rs; rr += 1) {
-          for (let cc = c; cc < c + cs; cc += 1) occupied[rr * cols + cc] = true;
+          for (let cc = c; cc < c + cs; cc += 1) mark(rr, cc);
         }
-        rects.push({
-          x: colOff[c]!,
-          y: rowOff[r]!,
-          width: spanSize(grid.columnSizes, grid.columnGap, c, cs),
-          height: spanSize(grid.rowSizes, grid.rowGap, r, rs),
-        });
+        cells.push({ col: c, row: r, colSpan: cs, rowSpan: rs });
+        rowCount = Math.max(rowCount, r + rs);
         placed = true;
       }
     }
-    if (!placed) rects.push({ x: 0, y: 0, width: 0, height: 0 });
+    if (!placed) cells.push({ col: -1, row: 0, colSpan: 0, rowSpan: 0 });
   }
-  return rects;
+  return { cells, rowCount };
+};
+
+/**
+ * The number of rows the sparse auto-placement of `items` needs across
+ * `colCount` columns, with rows growing implicitly (unbounded). Pure — lets the
+ * layout engine size grid auto-rows (implicit tracks) before resolving geometry.
+ */
+export const gridRowCount = (colCount: number, items: readonly GridItem[]): number =>
+  assignGridCells(colCount, items, Number.POSITIVE_INFINITY).rowCount;
+
+/**
+ * Place `items` into a resolved grid by CSS-style sparse auto-placement (see
+ * {@link gridRowCount}). Returns one `LayoutRect` per item (its spanning rect);
+ * an item that fits nowhere within the grid's rows (grid full) gets a zero-size
+ * rect. Pure — the placement half of grid layout, unit-tested.
+ */
+export const placeGridItems = (grid: GridTracks, items: readonly GridItem[]): LayoutRect[] => {
+  const colOff = trackOffsets(grid.columnSizes, grid.columnGap);
+  const rowOff = trackOffsets(grid.rowSizes, grid.rowGap);
+  const { cells } = assignGridCells(grid.columnSizes.length, items, grid.rowSizes.length);
+  return cells.map((cell) =>
+    cell.col < 0
+      ? { x: 0, y: 0, width: 0, height: 0 }
+      : {
+          x: colOff[cell.col]!,
+          y: rowOff[cell.row]!,
+          width: spanSize(grid.columnSizes, grid.columnGap, cell.col, cell.colSpan),
+          height: spanSize(grid.rowSizes, grid.rowGap, cell.row, cell.rowSpan),
+        },
+  );
 };

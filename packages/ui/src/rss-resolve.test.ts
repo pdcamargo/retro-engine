@@ -96,6 +96,12 @@ describe('resolveUiStyle (declaration mapping)', () => {
     expect(style.gridRowSpan).toBe(3);
   });
 
+  it('maps grid-auto-rows to a pixel height', () => {
+    const rules = parseRss(`.grid { display: grid; grid-auto-rows: 48px; }`);
+    const style = resolveUiStyle(rules, node({ classes: ['grid'] }));
+    expect(style.gridAutoRows).toBe(48);
+  });
+
   it('maps justify-items / justify-self, normalizing CSS grid start/end keywords', () => {
     const rules = parseRss(`
       .grid { justify-items: center; align-items: end; }

@@ -45,7 +45,14 @@ authoring).
   `justify-self` (+ `align-*`) and normalizes CSS grid `start`/`end` to
   `flex-start`/`flex-end`. Layout + resolver unit-tested (center, end, per-item
   self override, mixed stretch/aligned axes).
+- **Auto-rows ✅** — `UiStyle.gridAutoRows` (fixed px, default `0`) generates
+  implicit rows so items past the explicit `grid-template-rows` flow into new rows
+  instead of collapsing to zero size. The placement core was refactored around a
+  shared `assignGridCells` (bounded → `placeGridItems`; unbounded → the new
+  `gridRowCount`), and the layout engine grows the row template to `gridRowCount`
+  before resolving geometry. `.rss` maps `grid-auto-rows`. Unit-tested (no-explicit-
+  rows flow, fr + implicit-px interplay, span-aware row counting).
 - **Remaining:** explicit line placement (`grid-column: 1 / 3`); `auto` /
   `minmax()` tracks (needs the child intrinsic-measure hook); grid-level
-  `justify-content` / `align-content` (distributing whole tracks); grid auto-rows
-  (implicit tracks for overflow).
+  `justify-content` / `align-content` (distributing whole tracks); `grid-auto-flow:
+  column` + implicit *column* tracks.

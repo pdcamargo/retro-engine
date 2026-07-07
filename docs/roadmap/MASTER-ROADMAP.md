@@ -247,9 +247,12 @@ foundation.**
       `grid-column`/`grid-row: span N`); (3b) **item alignment** — `UiStyle` `justifyItems`/`justifySelf`
       (inline axis) + `alignItems`/`alignSelf` reused for the block axis, a `placeInCell` helper (stretch
       fills, else start/center/end at definite-or-intrinsic size), `.rss` `justify-items`/`justify-self`
-      (CSS `start`/`end` normalized). Layout + resolver unit-tested. Remaining (Phase 3c): explicit line
-      placement (`grid-column: 1 / 3`), `auto`/`minmax` tracks, grid `justify-content`/`align-content`,
-      auto-rows. _Links:_ [css-grid-ui.md](css-grid-ui.md) · [ui-system.md](ui-system.md)
+      (CSS `start`/`end` normalized); (3c) **auto-rows** — `UiStyle.gridAutoRows` (fixed px) generates
+      implicit rows so overflow items flow instead of collapsing; placement refactored around a shared
+      `assignGridCells` (bounded → `placeGridItems`, unbounded → new `gridRowCount`), `.rss` `grid-auto-rows`.
+      Layout + resolver unit-tested. Remaining: explicit line placement (`grid-column: 1 / 3`), `auto`/`minmax`
+      tracks, grid `justify-content`/`align-content`, `grid-auto-flow: column`.
+      _Links:_ [css-grid-ui.md](css-grid-ui.md) · [ui-system.md](ui-system.md)
 - [ ] **In-game UI depth** — 🟡 **Phases 1 (partial) + 2 shipped**: widgets `UiToggle` (checkbox) +
       `UiSlider` (drag→value) reuse the `Interactable`/`UiClicked` foundation with pure, unit-tested logic;
       **focus + spatial navigation** (ADR-0163) — `UiFocus` resource + `Focusable` marker + message-driven

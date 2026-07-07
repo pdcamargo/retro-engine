@@ -1713,3 +1713,23 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
 - Roadmap: MASTER-ROADMAP "CSS Grid for the UI layout engine" now 🟡 Phases 1–3b shipped. Box unchecked.
 
 ---
+
+## ✅ P1 — CSS Grid for the UI, Phase 3c: auto-rows (unit-verified)
+
+- **New:** `@retro-engine/ui` (ADR-0167). Grid items past the explicit `grid-template-rows` now flow into
+  implicit rows instead of collapsing to zero size. `UiStyle.gridAutoRows` (fixed px, default `0` = off,
+  reflected) sizes them; the layout engine grows the row template to the needed count before resolving
+  geometry. Placement refactored around a shared `assignGridCells` (bounded → `placeGridItems`; unbounded →
+  new `gridRowCount`). `.rss` maps `grid-auto-rows`.
+- **Verified:** `grid-layout.test.ts` (+3): `gridRowCount` counts rows (items/cols, span-aware, zero cols);
+  the existing `placeGridItems` suite still passes after the refactor. `flex-layout.test.ts` (+2): 4 items
+  flow into two implicit 40px rows with no explicit rows; an implicit 30px row appended past a 1fr explicit
+  row (fr resolves over the remaining height). `rss-resolve.test.ts` (+1): `grid-auto-rows: 48px` → 48. Full
+  ui gate green: typecheck, lint (0/0), 157 tests, build. Changeset.
+- **HOW to test:** `.list { display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: 48px }` with N
+  children → they flow into as many 48px rows as needed (no more zero-size overflow).
+- **NOTE:** Remaining grid work (explicit line placement `1 / 3`, `auto`/`minmax` tracks, grid
+  `justify-content`/`align-content`, `grid-auto-flow: column`) tracked in `css-grid-ui.md`.
+- Roadmap: MASTER-ROADMAP "CSS Grid for the UI layout engine" now 🟡 Phases 1–3c shipped. Box unchecked.
+
+---

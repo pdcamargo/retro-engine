@@ -304,6 +304,44 @@ describe('FlexLayoutEngine — display: grid', () => {
     expect(r[0]).toEqual({ x: 30, y: 80, width: 40, height: 20 });
   });
 
+  it('flows items into implicit auto-rows when there are no explicit rows', () => {
+    const r = rects(
+      node(
+        {
+          width: 200,
+          height: 200,
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr',
+          gridAutoRows: 40, // implicit rows, 40px tall
+        },
+        [node({}), node({}), node({}), node({})],
+      ),
+    );
+    expect(r[0]).toEqual({ x: 0, y: 0, width: 100, height: 40 });
+    expect(r[1]).toEqual({ x: 100, y: 0, width: 100, height: 40 });
+    expect(r[2]).toEqual({ x: 0, y: 40, width: 100, height: 40 });
+    expect(r[3]).toEqual({ x: 100, y: 40, width: 100, height: 40 });
+  });
+
+  it('appends implicit rows past the explicit rows (fr + auto-row interplay)', () => {
+    const r = rects(
+      node(
+        {
+          width: 100,
+          height: 100,
+          display: 'grid',
+          gridTemplateColumns: '1fr',
+          gridTemplateRows: '1fr',
+          gridAutoRows: 30,
+        },
+        [node({}), node({})],
+      ),
+    );
+    // explicit fr row takes 100 − 30 (implicit px) = 70; implicit row is 30.
+    expect(r[0]).toEqual({ x: 0, y: 0, width: 100, height: 70 });
+    expect(r[1]).toEqual({ x: 0, y: 70, width: 100, height: 30 });
+  });
+
   it('mixes a stretched axis with an aligned axis (stretch width, center height)', () => {
     const r = rects(
       node(
