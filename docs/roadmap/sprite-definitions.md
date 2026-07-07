@@ -16,12 +16,15 @@ roadmap item. Several building blocks already existed and are reused.
 - **PPU** — pixels-per-unit sizing exists via sprite bounds; formalize as a
   definition field.
 
-## Phase A — the `.meta` sprite-definition model
+## Phase A — the `.meta` sprite-definition model ✅
 
-A serializable spec: `mode: 'single' | 'multiple'`; a `grid` spec **or** a
-`rects` list; per-sprite `pivot`, `border` (9-slice), `ppu`, `name`. A pure
-resolver turns a definition into a `TextureAtlasLayout` (via `fromGrid` /
-`fromRects`) plus per-sprite pivot/border/PPU metadata.
+`SpriteDefinition` (`mode` single/multiple; `source` grid|rects; `ppu`; per-slice
+`slices` with pivot/border/name) + pure `resolveSpriteDefinition(def)` →
+`{ layout, sprites }`: dispatches to `fromGrid`/`fromRects`, computes each slice's
+pixel size (for `customSize = pixelSize / ppu`), and applies per-slice
+pivot/border/name (defaults: `'center'` pivot, `DEFAULT_PPU`=100, index name).
+Unit-tested. (Data model + resolver only — no runtime consumer yet; Phase B mints
+from it.)
 
 ## Phase B — sub-asset minting
 

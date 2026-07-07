@@ -301,10 +301,11 @@ foundation.**
       packed manifest for the bundle path; mipmaps/trilinear, max-size, PPU (Phase 3).
       _Links:_ [texture-import-settings.md](texture-import-settings.md)
 - [ ] **Sprite definitions (`.meta`, Unity-style)** — 🟡 **slicing geometry in place**: grid
-      (`TextureAtlasLayout.fromGrid`, pre-existing) + **manual-rect (`fromRects`, new)** + 9-slice
-      (`TextureSlicer`, pre-existing). Remaining: the `.meta` definition model (single/multiple, grid|rects,
-      pivot/border/PPU) + a resolver → layout (Phase A); sub-asset minting via composite GUID (ADR-0126,
-      Phase B); the Sprite Editor UI (Phase C, studio). _Links:_ [sprite-definitions.md](sprite-definitions.md)
+      (`TextureAtlasLayout.fromGrid`, pre-existing) + **manual-rect (`fromRects`)** + 9-slice
+      (`TextureSlicer`, pre-existing); **`.meta` definition model + resolver** (`SpriteDefinition` +
+      `resolveSpriteDefinition` → layout + per-slice pivot/border/ppu/pixelSize, Phase A). Remaining:
+      sub-asset minting via composite GUID (ADR-0126, Phase B); the Sprite Editor UI (Phase C, studio).
+      _Links:_ [sprite-definitions.md](sprite-definitions.md)
 - [ ] **Scenes/prefabs follow-ups** — nested-scene per-instance overrides; hot-reload removal of user
       observers/hooks + selection remap.
       _Links:_ [scenes-and-prefabs.md](scenes-and-prefabs.md) · [`../backlog/nested-scene-instance-overrides.md`](../backlog/nested-scene-instance-overrides.md) · [`../backlog/hot-reload-observer-hook-removal.md`](../backlog/hot-reload-observer-hook-removal.md)

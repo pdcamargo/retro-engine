@@ -4,6 +4,15 @@ export { atlasSyncSystem } from './atlas-sync';
 export { calculateSpriteBoundsSystem } from './calculate-sprite-bounds';
 export type { SpriteAnchor, SpriteOptions } from './sprite';
 export { Rect, resolveAnchor, Sprite } from './sprite';
+export type {
+  ResolvedSprite,
+  ResolvedSpriteDefinition,
+  SpriteDefinition,
+  SpriteGridSource,
+  SpriteRectsSource,
+  SpriteSliceDef,
+} from './sprite-definition';
+export { DEFAULT_PPU, resolveSpriteDefinition } from './sprite-definition';
 export type { SpriteAlphaBucket, SpriteBatch } from './sprite-batch';
 export {
   packSpriteInstance,

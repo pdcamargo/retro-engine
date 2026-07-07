@@ -1574,3 +1574,22 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
   your confirmation.
 
 ---
+
+## ✅ P1 — Sprite definitions, Phase A: `.meta` model + resolver (unit-verified)
+
+- **New:** `@retro-engine/engine` `SpriteDefinition` (mode single/multiple; source grid|rects; ppu;
+  per-slice `slices` = pivot/border/name) + pure `resolveSpriteDefinition(def)` → `{ layout, sprites }`.
+  Dispatches to `fromGrid`/`fromRects`, computes each slice's pixel size (for `customSize = pixelSize/ppu`),
+  applies per-slice pivot/border/name (defaults: 'center', DEFAULT_PPU=100, index name). All exported.
+- **Verified:** `sprite-definition.test.ts` (+3): grid → 4 sprites w/ 16×16 pixelSize + defaults; manual
+  rects → correct pixel sizes + custom ppu; per-slice name/pivot/border overrides by index. Full engine gate
+  green: typecheck, lint, 1264 tests, build. Changeset.
+- **HOW to test:** `resolveSpriteDefinition({ mode:'multiple', source:{ kind:'grid', tileSize, columns, rows },
+  ppu: 100 })` → `.layout` (TextureAtlasLayout) + `.sprites[i]` metadata; a consumer sizes each sprite via
+  `pixelSize/ppu` and anchors it at `pivot`.
+- **NOTE:** data model + resolver only — no runtime consumer yet. Phase B (mint each slice as a sub-asset via
+  composite GUID, ADR-0126) + Phase C (Sprite Editor UI, studio-blocked) remain (tracked in
+  `sprite-definitions.md`).
+- Roadmap: MASTER-ROADMAP "Sprite definitions" now 🟡 slicing + model/resolver in place. Box unchecked.
+
+---
