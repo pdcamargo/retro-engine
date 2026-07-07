@@ -64,6 +64,20 @@ export class Audio {
     return this.backend.masterVolume();
   }
 
+  /**
+   * Set the linear gain of a mixer bus (e.g. `'music'`, `'sfx'`), scaling every
+   * voice routed to it. Route a voice to a bus with `play(clip, { bus })` or an
+   * {@link AudioSource}'s `bus` field.
+   */
+  setBusVolume(bus: string, volume: number): void {
+    this.backend.setBusVolume(bus, volume);
+  }
+
+  /** The current gain of a mixer bus, or `1` for one never set. */
+  busVolume(bus: string): number {
+    return this.backend.busVolume(bus);
+  }
+
   /** Resume the audio context (browsers start suspended until a user gesture). */
   resume(): void {
     this.backend.resume();

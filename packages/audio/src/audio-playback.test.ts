@@ -176,3 +176,22 @@ describe('reconcileAudio — finish / removal', () => {
     expect(voices.size).toBe(0);
   });
 });
+
+describe('reconcileAudio — mixer bus routing', () => {
+  it('forwards a source bus in the play options', () => {
+    const audio = new MockAudio();
+    const voices = new AudioVoices();
+    const src = new AudioSource(undefined, { bus: 'music' });
+    reconcileAudio([[e(1), src]], [], voices, audio, noDespawn);
+    expect(audio.played).toHaveLength(1);
+    expect(audio.played[0]!.options?.bus).toBe('music');
+  });
+
+  it('omits the bus for a source with no bus (routes to master)', () => {
+    const audio = new MockAudio();
+    const voices = new AudioVoices();
+    const src = new AudioSource(); // default bus ''
+    reconcileAudio([[e(1), src]], [], voices, audio, noDespawn);
+    expect(audio.played[0]!.options?.bus).toBeUndefined();
+  });
+});

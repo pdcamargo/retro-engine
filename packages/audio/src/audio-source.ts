@@ -15,6 +15,7 @@ export interface AudioSourceOptions {
   readonly loop?: boolean;
   readonly playOnAdd?: boolean;
   readonly despawnOnEnd?: boolean;
+  readonly bus?: string;
 }
 
 /**
@@ -44,6 +45,11 @@ export class AudioSource {
   playOnAdd: boolean;
   /** Despawn the entity when a non-looping voice finishes. */
   despawnOnEnd: boolean;
+  /**
+   * Mixer bus to route this source through (e.g. `'music'`, `'sfx'`). Empty
+   * routes straight to master. Set the bus's level with `Audio.setBusVolume`.
+   */
+  bus: string;
 
   /** Runtime: set by {@link AudioSource.play} to (re)start on the next frame. Not serialized. */
   playRequested = false;
@@ -63,6 +69,7 @@ export class AudioSource {
     this.loop = options.loop ?? false;
     this.playOnAdd = options.playOnAdd ?? true;
     this.despawnOnEnd = options.despawnOnEnd ?? false;
+    this.bus = options.bus ?? '';
   }
 
   /** Request a (re)start of this source on the next audio update. */

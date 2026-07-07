@@ -29,6 +29,7 @@ const startVoice = (
     volume: source.volume,
     pitch: source.pitch,
     loop: source.loop,
+    ...(source.bus !== '' ? { bus: source.bus } : {}),
   });
   if (voice !== null) voices.set(entity, { voice, despawnOnEnd: source.despawnOnEnd });
   else voices.delete(entity);

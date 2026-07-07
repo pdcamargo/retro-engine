@@ -1234,3 +1234,24 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
   `ecs-ordering-depth.md`. Box unchecked pending your confirmation.
 
 ---
+
+## ✅ P1 — Audio mixer buses, Phase 1: named buses + per-bus volume (unit + stub-context verified)
+
+- **New:** `@retro-engine/audio` (ADR-0159, roadmap `audio-mixer-buses.md`). Voices route through a named
+  bus whose volume scales every voice on it, independent of per-voice + master gain (`voice.gain → bus →
+  master`). `PlayOptions.bus`, `Audio.setBusVolume(bus, v)`/`busVolume(bus)`, and authored `AudioSource.bus`
+  (serialized, reflection schema updated with `bus: t.string`). `WebAudioBackend` inserts a lazily-created
+  `GainNode` per bus wired to master; `NullAudioBackend` round-trips bus volumes headlessly. String-keyed
+  (names are conventions, not a fixed set). Web Audio fan-in pattern confirmed against MDN (§2).
+- **Verified:** `audio.test.ts` (+3): Null bus round-trip (defaults to 1); `Audio` facade forwards bus on
+  play + bus volume; `WebAudioBackend` against a stub AudioContext — a bus gain node is created wired to
+  master and scaled, a bussed voice's gain connects to the bus (not master), a busless voice connects to
+  master. `audio-playback.test.ts` (+2): `reconcileAudio` forwards `AudioSource.bus`, omits it when empty.
+  Full audio gate green: typecheck, lint (13 files), 22 tests, build. Changeset added.
+- **HOW to test:** `cmd.spawn(new AudioSource(musicHandle, { loop: true, bus: 'music' }))` +
+  `audio.setBusVolume('music', 0.3)` → all music-bus voices dim while sfx/master are untouched. In a browser
+  (WebAudioBackend) the volume actually changes; headless it round-trips the value.
+- Roadmap: MASTER-ROADMAP "Audio mixer buses" now 🟡 Phase 1 shipped; remaining (submix trees, effect
+  inserts, spatial panning) tracked in `audio-mixer-buses.md`. Box unchecked pending your confirmation.
+
+---

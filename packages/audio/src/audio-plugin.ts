@@ -91,6 +91,7 @@ export class AudioPlugin implements PluginObject {
         loop: t.boolean,
         playOnAdd: t.boolean,
         despawnOnEnd: t.boolean,
+        bus: t.string,
         playRequested: t.boolean.skip(),
         stopRequested: t.boolean.skip(),
         started: t.boolean.skip(),

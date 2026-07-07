@@ -16,6 +16,12 @@ export interface PlayOptions {
   readonly loop?: boolean;
   /** Playback-rate multiplier (also shifts pitch). `1` = original. Default `1`. */
   readonly pitch?: number;
+  /**
+   * Mixer bus to route this voice through (e.g. `'music'`, `'sfx'`). Omitted
+   * routes straight to master. Per-voice, bus, and master gain multiply. The
+   * bus is created on first use; names are free-form conventions, not a fixed set.
+   */
+  readonly bus?: string;
 }
 
 /**
@@ -49,6 +55,13 @@ export interface AudioBackend {
   setMasterVolume(volume: number): void;
   /** The current master gain. */
   masterVolume(): number;
+  /**
+   * Set the linear gain of a mixer bus, scaling every voice routed to it via
+   * {@link PlayOptions.bus}. Creates the bus if it does not exist yet.
+   */
+  setBusVolume(bus: string, volume: number): void;
+  /** The current gain of a mixer bus, or `1` for a bus that has never been set. */
+  busVolume(bus: string): number;
   /** Release all resources (stop everything, close the context). */
   destroy(): void;
 }

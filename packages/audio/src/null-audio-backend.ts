@@ -8,6 +8,7 @@ import type { AudioBackend, VoiceId } from './audio-backend';
  */
 export class NullAudioBackend implements AudioBackend {
   private volume = 1;
+  private readonly busVolumes = new Map<string, number>();
 
   resume(): void {}
 
@@ -35,6 +36,14 @@ export class NullAudioBackend implements AudioBackend {
 
   masterVolume(): number {
     return this.volume;
+  }
+
+  setBusVolume(bus: string, volume: number): void {
+    this.busVolumes.set(bus, volume);
+  }
+
+  busVolume(bus: string): number {
+    return this.busVolumes.get(bus) ?? 1;
   }
 
   destroy(): void {}

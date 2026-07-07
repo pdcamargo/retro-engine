@@ -245,7 +245,11 @@ foundation.**
 - [ ] **In-game UI depth** — virtualized list/tree views, data binding, more widgets
       (toggle/slider/scrollview/text-input/dropdown/tabs), spatial navigation, screen management.
       _Links:_ [ui-system.md](ui-system.md)
-- [ ] **Audio mixer buses** — bus routing, per-bus volume, basic spatial panning. _Links:_ [audio.md](audio.md)
+- [ ] **Audio mixer buses** — 🟡 **Phase 1 shipped** (ADR-0159): named buses + per-bus volume
+      (`PlayOptions.bus`, `Audio.setBusVolume`/`busVolume`, `AudioSource.bus`; `voice.gain → bus → master`,
+      string-keyed + lazily created, headless parity, reflection schema updated; unit + stub-context tested).
+      Remaining: submix trees (bus→bus), effect inserts (filter/compressor/reverb), spatial panning.
+      _Links:_ [audio-mixer-buses.md](audio-mixer-buses.md) · [audio.md](audio.md)
 - [ ] **Windowing** — 🟡 **read side shipped**: `Window` resource (logical + physical size + dpr, mirrored
       from the surface) + `WindowResized` event + `syncWindow` + opt-in `WindowPlugin` (`'first'`-stage sync,
       headless-safe). Unit + integration tested. Remaining: cursor/fullscreen/present-mode(vsync) controls,

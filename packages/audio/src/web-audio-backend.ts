@@ -23,6 +23,7 @@ interface Voice {
 export class WebAudioBackend implements AudioBackend {
   private readonly ctx: AudioContext;
   private readonly master: GainNode;
+  private readonly buses = new Map<string, GainNode>();
   private readonly decodeCache = new Map<AudioClip, AudioBuffer>();
   private readonly decoding = new Map<AudioClip, Promise<AudioBuffer | null>>();
   private readonly voices = new Map<VoiceId, Voice>();
@@ -50,7 +51,7 @@ export class WebAudioBackend implements AudioBackend {
 
     const gain = this.ctx.createGain();
     gain.gain.value = options?.volume ?? 1;
-    gain.connect(this.master);
+    gain.connect(options?.bus !== undefined ? this.bus(options.bus) : this.master);
 
     const voice: Voice = {
       source: null,
@@ -110,10 +111,31 @@ export class WebAudioBackend implements AudioBackend {
     return this.master.gain.value;
   }
 
+  setBusVolume(bus: string, volume: number): void {
+    this.bus(bus).gain.value = volume;
+  }
+
+  busVolume(bus: string): number {
+    return this.buses.get(bus)?.gain.value ?? 1;
+  }
+
   destroy(): void {
     this.stopAll();
+    for (const bus of this.buses.values()) bus.disconnect();
+    this.buses.clear();
     this.detachResume();
     void this.ctx.close();
+  }
+
+  /** The bus gain node for `name`, created (and wired to master) on first use. */
+  private bus(name: string): GainNode {
+    let node = this.buses.get(name);
+    if (node === undefined) {
+      node = this.ctx.createGain();
+      node.connect(this.master);
+      this.buses.set(name, node);
+    }
+    return node;
   }
 
   private startVoice(id: VoiceId, voice: Voice, buffer: AudioBuffer): void {
