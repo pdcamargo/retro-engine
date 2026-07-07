@@ -1,5 +1,6 @@
 import type { ActionState } from './action-state';
 import type { ActionBinding, ActionMap, BindingRole } from './action-types';
+import type { GamepadButton } from './gamepad-mapping';
 import type { KeyCode } from './keyboard';
 import type { MouseButton } from './mouse';
 
@@ -12,21 +13,27 @@ interface ButtonQuery<T> {
   pressed(input: T): boolean;
 }
 
-const bindingHeld = (
-  b: ActionBinding,
-  keyboard: ButtonQuery<KeyCode>,
-  mouse: ButtonQuery<MouseButton>,
-): boolean =>
-  b.device === 'key' ? keyboard.pressed(b.code as KeyCode) : mouse.pressed(b.code as MouseButton);
+/** The three device inputs the resolver reads a binding's held state from. */
+export interface ActionInputs {
+  readonly keyboard: ButtonQuery<KeyCode>;
+  readonly mouse: ButtonQuery<MouseButton>;
+  readonly gamepad: ButtonQuery<GamepadButton>;
+}
 
-const roleHeld = (
-  bindings: readonly ActionBinding[],
-  role: BindingRole,
-  keyboard: ButtonQuery<KeyCode>,
-  mouse: ButtonQuery<MouseButton>,
-): boolean => {
+const bindingHeld = (b: ActionBinding, inputs: ActionInputs): boolean => {
+  switch (b.device) {
+    case 'key':
+      return inputs.keyboard.pressed(b.code as KeyCode);
+    case 'mouse':
+      return inputs.mouse.pressed(b.code as MouseButton);
+    case 'gamepad':
+      return inputs.gamepad.pressed(b.code as GamepadButton);
+  }
+};
+
+const roleHeld = (bindings: readonly ActionBinding[], role: BindingRole, inputs: ActionInputs): boolean => {
   for (const b of bindings) {
-    if (b.role === role && bindingHeld(b, keyboard, mouse)) return true;
+    if (b.role === role && bindingHeld(b, inputs)) return true;
   }
   return false;
 };
@@ -43,12 +50,7 @@ const roleHeld = (
  *
  * @internal
  */
-export const resolveActionState = (
-  map: ActionMap,
-  state: ActionState,
-  keyboard: ButtonQuery<KeyCode>,
-  mouse: ButtonQuery<MouseButton>,
-): void => {
+export const resolveActionState = (map: ActionMap, state: ActionState, inputs: ActionInputs): void => {
   // Roll this frame's held state into "previous" before recomputing.
   state.prevPressedMap.clear();
   for (const [name, held] of state.pressedMap) state.prevPressedMap.set(name, held);
@@ -56,14 +58,14 @@ export const resolveActionState = (
   for (const def of map.defs) {
     switch (def.kind) {
       case 'button': {
-        const held = roleHeld(def.bindings, 'trigger', keyboard, mouse);
+        const held = roleHeld(def.bindings, 'trigger', inputs);
         state.pressedMap.set(def.name, held);
         state.valueMap.set(def.name, held ? 1 : 0);
         break;
       }
       case 'axis': {
-        const pos = roleHeld(def.bindings, 'positiveX', keyboard, mouse) ? 1 : 0;
-        const neg = roleHeld(def.bindings, 'negativeX', keyboard, mouse) ? 1 : 0;
+        const pos = roleHeld(def.bindings, 'positiveX', inputs) ? 1 : 0;
+        const neg = roleHeld(def.bindings, 'negativeX', inputs) ? 1 : 0;
         const v = pos - neg;
         state.valueMap.set(def.name, v);
         state.pressedMap.set(def.name, v !== 0);
@@ -71,11 +73,11 @@ export const resolveActionState = (
       }
       case 'axis2d': {
         const x =
-          (roleHeld(def.bindings, 'positiveX', keyboard, mouse) ? 1 : 0) -
-          (roleHeld(def.bindings, 'negativeX', keyboard, mouse) ? 1 : 0);
+          (roleHeld(def.bindings, 'positiveX', inputs) ? 1 : 0) -
+          (roleHeld(def.bindings, 'negativeX', inputs) ? 1 : 0);
         const y =
-          (roleHeld(def.bindings, 'positiveY', keyboard, mouse) ? 1 : 0) -
-          (roleHeld(def.bindings, 'negativeY', keyboard, mouse) ? 1 : 0);
+          (roleHeld(def.bindings, 'positiveY', inputs) ? 1 : 0) -
+          (roleHeld(def.bindings, 'negativeY', inputs) ? 1 : 0);
         state.vec2Map.set(def.name, { x, y });
         state.valueMap.set(def.name, Math.hypot(x, y));
         state.pressedMap.set(def.name, x !== 0 || y !== 0);

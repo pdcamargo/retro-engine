@@ -229,9 +229,10 @@ foundation.**
 ## Engine
 
 - [ ] **Input follow-ups** — three additive extensions on the shipped `@retro-engine/input`
-      (ADR-0144/0145/0146): (a) **gamepad bindings in the action map** — an `ActionBinding` `'gamepad'`
-      device + analog-axis sources so gamepad is rebindable through `ActionMap` (currently read directly
-      via `Gamepads`); (b) **touch gesture recognizers** — 🟡 **tap + swipe shipped**
+      (ADR-0144/0145/0146): (a) **gamepad bindings in the action map** — 🟡 **buttons shipped**
+      (`gamepadButton()` source + `'gamepad'` device; works in `.button`/`.axis2d`/mixed via the existing
+      builders, read from the first connected pad; `resolveActionState` now takes an `ActionInputs` bundle;
+      unit-tested). Analog stick axes as action sources remain; (b) **touch gesture recognizers** — 🟡 **tap + swipe shipped**
       (`recognizeGestures` + `TouchGesturePlugin` emitting `TapGesture`/`SwipeGesture` messages, tunable
       `TouchGestureConfig`; unit-tested). Pan (available via touch deltas) + pinch (2-touch) remain;
       (c) **studio binding editor** (Phase 5, BLOCKED — studio) — edit the `ActionMap` live + an MCP command.

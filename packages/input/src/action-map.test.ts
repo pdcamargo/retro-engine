@@ -2,7 +2,9 @@ import { describe, expect, it } from 'bun:test';
 
 import { resolveActionState } from './action-resolve';
 import { ActionState } from './action-state';
-import { ActionMap, key, mouseButton } from './action-types';
+import { ActionMap, gamepadButton, key, mouseButton } from './action-types';
+import { ButtonInput } from './button-input';
+import type { GamepadButton } from './gamepad-mapping';
 import { KeyboardInput } from './keyboard';
 import { MouseButtonInput } from './mouse';
 
@@ -11,6 +13,7 @@ interface Harness {
   readonly state: ActionState;
   readonly keyboard: KeyboardInput;
   readonly mouse: MouseButtonInput;
+  readonly gamepad: ButtonInput<GamepadButton>;
   resolve(): void;
 }
 
@@ -18,15 +21,17 @@ const harness = (map: ActionMap): Harness => {
   const state = new ActionState();
   const keyboard = new KeyboardInput();
   const mouse = new MouseButtonInput();
+  const gamepad = new ButtonInput<GamepadButton>();
   return {
     map,
     state,
     keyboard,
     mouse,
+    gamepad,
     resolve() {
       // The plugin clears device transitions each frame; the action layer only
       // reads `pressed`, so held state is what matters here.
-      resolveActionState(map, state, keyboard, mouse);
+      resolveActionState(map, state, { keyboard, mouse, gamepad });
     },
   };
 };
@@ -156,5 +161,45 @@ describe('resolveActionState — axis2d', () => {
     h.resolve();
     expect(h.state.value('Nope')).toBe(0);
     expect(h.state.axis2d('Nope')).toEqual({ x: 0, y: 0 });
+  });
+
+  it('resolves a button action from a gamepad-button binding', () => {
+    const h = harness(new ActionMap().button('Jump', gamepadButton('South')));
+    h.resolve();
+    expect(h.state.pressed('Jump')).toBe(false);
+
+    h.gamepad.press('South');
+    h.resolve();
+    expect(h.state.pressed('Jump')).toBe(true);
+    expect(h.state.justPressed('Jump')).toBe(true);
+
+    h.gamepad.release('South');
+    h.resolve();
+    expect(h.state.pressed('Jump')).toBe(false);
+  });
+
+  it('mixes gamepad + keyboard on one action (OR-ed)', () => {
+    const h = harness(new ActionMap().button('Fire', key('KeyF'), gamepadButton('RightTrigger')));
+    h.gamepad.press('RightTrigger');
+    h.resolve();
+    expect(h.state.pressed('Fire')).toBe(true);
+    h.gamepad.release('RightTrigger');
+    h.resolve();
+    expect(h.state.pressed('Fire')).toBe(false);
+  });
+
+  it('drives a virtual D-pad axis2d from gamepad buttons', () => {
+    const h = harness(
+      new ActionMap().axis2d('Move', {
+        left: gamepadButton('DPadLeft'),
+        right: gamepadButton('DPadRight'),
+        up: gamepadButton('DPadUp'),
+        down: gamepadButton('DPadDown'),
+      }),
+    );
+    h.gamepad.press('DPadRight');
+    h.gamepad.press('DPadUp');
+    h.resolve();
+    expect(h.state.axis2d('Move')).toEqual({ x: 1, y: 1 });
   });
 });

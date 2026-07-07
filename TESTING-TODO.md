@@ -1111,3 +1111,20 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
   are explicitly niche/deferred. Both boxes unchecked pending your confirmation.
 
 ---
+
+## ✅ P1 — Gamepad buttons in the ActionMap (unit-verified)
+
+- **New:** `@retro-engine/input` `gamepadButton(button)` source + a `'gamepad'` `InputDevice` — bind actions
+  to gamepad buttons through the existing `ActionMap` builders (`.button`, virtual-D-pad `.axis2d`, or mixed
+  with keyboard/mouse). Read from the first connected pad. `resolveActionState` now takes an `ActionInputs`
+  bundle (`{ keyboard, mouse, gamepad }`) — **breaking** for direct callers (plugin path unaffected).
+- **Verified:** `action-map.test.ts` (+3 gamepad tests, 12 total): button press → action, mixed
+  gamepad+keyboard OR-ing, virtual D-pad `axis2d` from gamepad buttons. Full repo gate green (1970 tests;
+  full typecheck confirms the signature change breaks no other caller). Changeset added.
+- **HOW to test:** `new ActionMap().button('Jump', gamepadButton('South'))` on a player entity (with
+  `InputPlugin`); the action fires when the first pad's South button is pressed. Remaining: analog stick
+  axes as action sources (Input follow-up a); the studio binding editor (BLOCKED — studio).
+- Roadmap: MASTER-ROADMAP Input follow-ups (a) 🟡 (buttons shipped, analog remaining). Box unchecked pending
+  your confirmation.
+
+---

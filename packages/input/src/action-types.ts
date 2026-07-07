@@ -1,9 +1,10 @@
+import type { GamepadButton } from './gamepad-mapping';
 import { ActionState } from './action-state';
 import type { KeyCode } from './keyboard';
 import type { MouseButton } from './mouse';
 
-/** Which device an {@link ActionBinding} reads. Gamepad is added in a later phase. */
-export type InputDevice = 'key' | 'mouse';
+/** Which device an {@link ActionBinding} reads. */
+export type InputDevice = 'key' | 'mouse' | 'gamepad';
 
 /**
  * The part an {@link ActionBinding} plays in its action:
@@ -33,6 +34,13 @@ export const key = (code: KeyCode): ActionSource => ({ device: 'key', code });
 
 /** A mouse-button source for an action binding. */
 export const mouseButton = (button: MouseButton): ActionSource => ({ device: 'mouse', code: button });
+
+/**
+ * A gamepad-button source for an action binding — read from the first connected
+ * pad. Digital only (D-pad, face/shoulder buttons, clicked sticks); analog stick
+ * axes are a separate follow-up.
+ */
+export const gamepadButton = (button: GamepadButton): ActionSource => ({ device: 'gamepad', code: button });
 
 /**
  * One physical input mapped into an action, in a specific {@link BindingRole}.

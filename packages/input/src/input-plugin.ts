@@ -8,6 +8,7 @@ import { ActionBinding, ActionDef, ActionMap } from './action-types';
 import { DomInputBackend, HeadlessInputBackend } from './dom-backend';
 import type { DomInputBackendOptions } from './dom-backend';
 import { Gamepads, updateGamepads } from './gamepad';
+import type { GamepadButton } from './gamepad-mapping';
 import { NavigatorGamepadSource } from './gamepad-source';
 import type { GamepadSource } from './gamepad-source';
 import { KeyboardInput } from './keyboard';
@@ -157,10 +158,13 @@ export class InputPlugin implements PluginObject {
     // device update this frame so the action layer reads fresh input.
     app.addSystem(
       'preUpdate',
-      [Query([ActionMap, ActionState]), Res(KeyboardInput), Res(MouseButtonInput)],
-      (rows, keyboard, mouseButtons) => {
+      [Query([ActionMap, ActionState]), Res(KeyboardInput), Res(MouseButtonInput), Res(Gamepads)],
+      (rows, keyboard, mouseButtons, gamepads) => {
+        // Gamepad bindings read the first connected pad (single-player convenience).
+        const pad = (gamepads as Gamepads).first();
+        const gamepad = { pressed: (b: GamepadButton): boolean => pad?.buttons.pressed(b) ?? false };
         for (const [map, state] of rows) {
-          resolveActionState(map, state, keyboard, mouseButtons);
+          resolveActionState(map, state, { keyboard, mouse: mouseButtons, gamepad });
         }
       },
       { name: 'action-update', after: ['input'] },

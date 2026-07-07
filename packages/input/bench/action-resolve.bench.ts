@@ -7,6 +7,8 @@ import { bench, summary } from 'mitata';
 import { resolveActionState } from '../src/action-resolve';
 import { ActionState } from '../src/action-state';
 import { ActionMap, key, mouseButton } from '../src/action-types';
+import { ButtonInput } from '../src/button-input';
+import type { GamepadButton } from '../src/gamepad-mapping';
 import { KeyboardInput } from '../src/keyboard';
 import { MouseButtonInput } from '../src/mouse';
 
@@ -26,11 +28,12 @@ for (const buttons of [4, 16, 64]) {
       const state = new ActionState();
       const keyboard = new KeyboardInput();
       const mouse = new MouseButtonInput();
+      const gamepad = new ButtonInput<GamepadButton>();
       // A realistic mix of held inputs.
       keyboard.press('KeyW');
       keyboard.press('KeyD');
       mouse.press('Left');
-      yield () => resolveActionState(map, state, keyboard, mouse);
+      yield () => resolveActionState(map, state, { keyboard, mouse, gamepad });
     });
   });
 }
