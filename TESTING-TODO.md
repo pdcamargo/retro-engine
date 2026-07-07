@@ -1128,3 +1128,20 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
   your confirmation.
 
 ---
+
+## ✅ P1 — Pan + pinch touch gestures (completes tap/swipe/pan/pinch) (unit-verified)
+
+- **New:** `@retro-engine/input` `PanGesture` (single moving touch, per-frame delta) + `PinchGesture`
+  (two-touch incremental `scale` of their separation + center). `recognizeGestures` now returns
+  `{ taps, swipes, pans, pinches }` (tracking the 2-touch distance in `TouchGestureState`);
+  `TouchGesturePlugin` emits all four as messages.
+- **Verified:** `touch-gestures.test.ts` (+2, 8 total): pan delta only after the down frame; pinch scale
+  spreading (×2) / together (×0.5); a single touch is a pan not a pinch. input typecheck/lint/tests green
+  (64). Changeset added.
+- **HOW to test:** with `TouchGesturePlugin`, read `MessageReader(PanGesture)` (drag one finger) /
+  `MessageReader(PinchGesture)` (two fingers apart/together).
+- Roadmap: MASTER-ROADMAP Input follow-ups (b) touch gestures ✅ (tap/swipe/pan/pinch all shipped). The
+  Input follow-ups item now has only analog gamepad axes (a) + the studio binding editor (c, BLOCKED) left.
+  Box unchecked pending your confirmation.
+
+---

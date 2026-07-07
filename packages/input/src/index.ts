@@ -16,6 +16,8 @@ export { TouchPoint, Touches } from './touch';
 export type { SwipeDirection, TouchGestureConfig } from './touch-gestures';
 export {
   DEFAULT_TOUCH_GESTURE_CONFIG,
+  PanGesture,
+  PinchGesture,
   recognizeGestures,
   SwipeGesture,
   TapGesture,

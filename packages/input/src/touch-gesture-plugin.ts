@@ -4,6 +4,8 @@ import { MessageWriter, Res, ResMut, Time } from '@retro-engine/engine';
 import { Touches } from './touch';
 import {
   DEFAULT_TOUCH_GESTURE_CONFIG,
+  PanGesture,
+  PinchGesture,
   recognizeGestures,
   SwipeGesture,
   TapGesture,
@@ -43,15 +45,32 @@ export class TouchGesturePlugin implements PluginObject {
     if (app.getResource(TouchGestureState) === undefined) app.insertResource(new TouchGestureState());
     app.addMessage(TapGesture);
     app.addMessage(SwipeGesture);
+    app.addMessage(PanGesture);
+    app.addMessage(PinchGesture);
     const config = this.config;
     app.addSystem(
       'preUpdate',
-      [Res(Touches), Res(Time), ResMut(TouchGestureState), MessageWriter(TapGesture), MessageWriter(SwipeGesture)],
-      (touches, time, state, tapWriter, swipeWriter) => {
+      [
+        Res(Touches),
+        Res(Time),
+        ResMut(TouchGestureState),
+        MessageWriter(TapGesture),
+        MessageWriter(SwipeGesture),
+        MessageWriter(PanGesture),
+        MessageWriter(PinchGesture),
+      ],
+      (touches, time, state, tapWriter, swipeWriter, panWriter, pinchWriter) => {
         const nowMs = (time as Time).real.elapsed * 1000;
-        const { taps, swipes } = recognizeGestures(touches as Touches, nowMs, state as TouchGestureState, config);
+        const { taps, swipes, pans, pinches } = recognizeGestures(
+          touches as Touches,
+          nowMs,
+          state as TouchGestureState,
+          config,
+        );
         for (const tap of taps) (tapWriter as { write(m: TapGesture): void }).write(tap);
         for (const swipe of swipes) (swipeWriter as { write(m: SwipeGesture): void }).write(swipe);
+        for (const pan of pans) (panWriter as { write(m: PanGesture): void }).write(pan);
+        for (const pinch of pinches) (pinchWriter as { write(m: PinchGesture): void }).write(pinch);
       },
       { name: 'touch-gestures', label: 'touch-gestures', after: ['input'] },
     );

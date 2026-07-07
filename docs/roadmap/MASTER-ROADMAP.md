@@ -232,9 +232,9 @@ foundation.**
       (ADR-0144/0145/0146): (a) **gamepad bindings in the action map** — 🟡 **buttons shipped**
       (`gamepadButton()` source + `'gamepad'` device; works in `.button`/`.axis2d`/mixed via the existing
       builders, read from the first connected pad; `resolveActionState` now takes an `ActionInputs` bundle;
-      unit-tested). Analog stick axes as action sources remain; (b) **touch gesture recognizers** — 🟡 **tap + swipe shipped**
-      (`recognizeGestures` + `TouchGesturePlugin` emitting `TapGesture`/`SwipeGesture` messages, tunable
-      `TouchGestureConfig`; unit-tested). Pan (available via touch deltas) + pinch (2-touch) remain;
+      unit-tested). Analog stick axes as action sources remain; (b) **touch gesture recognizers** — ✅ **tap/swipe/pan/pinch
+      shipped** (`recognizeGestures` + `TouchGesturePlugin` emitting `TapGesture`/`SwipeGesture`/`PanGesture`/
+      `PinchGesture` messages, tunable `TouchGestureConfig`; 8 unit tests);
       (c) **studio binding editor** (Phase 5, BLOCKED — studio) — edit the `ActionMap` live + an MCP command.
       _Links:_ [input-system.md](input-system.md)
 - [ ] **CSS Grid for the UI layout engine** — pure-TS grid behind the `LayoutEngine` interface (Taffy-WASM

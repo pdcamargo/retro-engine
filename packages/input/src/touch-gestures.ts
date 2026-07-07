@@ -24,6 +24,29 @@ export class SwipeGesture {
   ) {}
 }
 
+/** A single-touch drag this frame — the continuous per-frame movement. */
+export class PanGesture {
+  constructor(
+    /** Current touch position (target-local pixels). */
+    readonly x: number,
+    readonly y: number,
+    /** Movement since last frame. */
+    readonly deltaX: number,
+    readonly deltaY: number,
+  ) {}
+}
+
+/** A two-touch pinch this frame — the incremental scale between the two contacts. */
+export class PinchGesture {
+  constructor(
+    /** This frame's distance ÷ last frame's: `>1` spreading apart, `<1` pinching in. */
+    readonly scale: number,
+    /** Midpoint between the two touches (target-local pixels). */
+    readonly centerX: number,
+    readonly centerY: number,
+  ) {}
+}
+
 /** Thresholds distinguishing a tap from a swipe from neither. */
 export interface TouchGestureConfig {
   /** Max touch duration to still count as a tap (ms). */
@@ -51,26 +74,35 @@ export const DEFAULT_TOUCH_GESTURE_CONFIG: TouchGestureConfig = {
  */
 export class TouchGestureState {
   readonly starts = new Map<number, number>();
+  /** Last frame's two-touch separation, for the incremental pinch scale. */
+  pinchPrevDistance: number | undefined;
 }
 
 const dominantDirection = (dx: number, dy: number): SwipeDirection =>
   Math.abs(dx) >= Math.abs(dy) ? (dx >= 0 ? 'right' : 'left') : dy >= 0 ? 'down' : 'up';
 
 /**
- * Recognize taps + swipes from the current {@link Touches} state, given the
- * frame's timestamp `nowMs`. Records each new touch's start time in `state`, and
- * on the frame a touch ends classifies it by travel + duration against `config`.
- * Pure aside from mutating `state` (its whole purpose). A touch that both starts
- * and ends within a single frame is not recognized (real taps span frames).
+ * Recognize gestures from the current {@link Touches} state, given the frame's
+ * timestamp `nowMs`:
+ * - **tap / swipe** — classified on release, by travel + duration against `config`;
+ * - **pan** — a single moving touch, emitted per frame (continuous drag);
+ * - **pinch** — two active touches, the incremental scale of their separation.
+ *
+ * Records each new touch's start time in `state` and tracks the two-touch
+ * distance across frames. Pure aside from mutating `state` (its whole purpose).
+ * A touch that both starts and ends within a single frame is not recognized
+ * (real taps span frames).
  */
 export const recognizeGestures = (
   touches: Touches,
   nowMs: number,
   state: TouchGestureState,
   config: TouchGestureConfig = DEFAULT_TOUCH_GESTURE_CONFIG,
-): { taps: TapGesture[]; swipes: SwipeGesture[] } => {
+): { taps: TapGesture[]; swipes: SwipeGesture[]; pans: PanGesture[]; pinches: PinchGesture[] } => {
   const taps: TapGesture[] = [];
   const swipes: SwipeGesture[] = [];
+  const pans: PanGesture[] = [];
+  const pinches: PinchGesture[] = [];
 
   // Record the start time of any newly-begun (still-active) touch.
   for (const t of touches.iter()) {
@@ -100,5 +132,25 @@ export const recognizeGestures = (
     }
   }
 
-  return { taps, swipes };
+  // Continuous gestures from the active touches: pan (1 touch), pinch (2 touches).
+  const active = Array.from(touches.iter());
+  if (active.length === 2) {
+    const [a, b] = active as [(typeof active)[number], (typeof active)[number]];
+    const distance = Math.hypot(b.x - a.x, b.y - a.y);
+    const centerX = (a.x + b.x) / 2;
+    const centerY = (a.y + b.y) / 2;
+    if (state.pinchPrevDistance !== undefined && state.pinchPrevDistance > 0 && distance !== state.pinchPrevDistance) {
+      pinches.push(new PinchGesture(distance / state.pinchPrevDistance, centerX, centerY));
+    }
+    state.pinchPrevDistance = distance;
+  } else {
+    // Not a two-finger pinch this frame; forget the reference distance.
+    state.pinchPrevDistance = undefined;
+    if (active.length === 1) {
+      const t = active[0]!;
+      if (t.deltaX !== 0 || t.deltaY !== 0) pans.push(new PanGesture(t.x, t.y, t.deltaX, t.deltaY));
+    }
+  }
+
+  return { taps, swipes, pans, pinches };
 };
