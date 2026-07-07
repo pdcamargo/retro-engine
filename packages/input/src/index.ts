@@ -2,6 +2,8 @@ export { ButtonInput } from './button-input';
 export { Axis } from './axis';
 export type { KeyCode } from './keyboard';
 export { KeyboardInput } from './keyboard';
+export type { KeyCharInput } from './text-input';
+export { charFromKeyDown, ReceivedCharacters } from './text-input';
 export type { MouseButton, MouseScrollUnit } from './mouse';
 export {
   CursorPosition,

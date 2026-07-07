@@ -1,5 +1,6 @@
 import type { MouseScrollUnit } from './mouse';
 import type { InputBackend, RawInputEvent } from './raw-event';
+import { charFromKeyDown } from './text-input';
 
 /** Options for {@link DomInputBackend}. */
 export interface DomInputBackendOptions {
@@ -65,6 +66,8 @@ export class DomInputBackend implements InputBackend {
     this.bind(this.keyboardTarget, 'keydown', (e) => {
       const ev = e as KeyboardEvent;
       this.queue.push({ kind: 'key-down', code: ev.code, repeat: ev.repeat });
+      const char = charFromKeyDown({ key: ev.key, ctrl: ev.ctrlKey, meta: ev.metaKey, alt: ev.altKey });
+      if (char !== null) this.queue.push({ kind: 'char', char });
     });
     this.bind(this.keyboardTarget, 'keyup', (e) => {
       this.queue.push({ kind: 'key-up', code: (e as KeyboardEvent).code });

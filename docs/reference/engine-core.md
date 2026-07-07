@@ -131,9 +131,11 @@ These do not exist in the runtime and are the reason a complete game can't ship 
   `MouseScroll` / `CursorPosition` resources; an `InputBackend` HAL (`DomInputBackend` + headless);
   `InputPlugin` (opt-in, headless-safe); a component-based `ActionMap` (reflection-registered) + derived
   `ActionState` with composite axes / virtual D-pads; a poll-based `Gamepads` resource (`GamepadSource` +
-  Standard-Gamepad mapping + dead zones + connect/disconnect); and a `Touches` resource (active touch
-  points with a per-frame lifecycle). Remaining are P1 niceties: gamepad-in-action-map, touch gesture
-  recognizers, and a studio binding editor. → roadmap/input-system.md
+  Standard-Gamepad mapping + dead zones + connect/disconnect); a `Touches` resource (active touch
+  points with a per-frame lifecycle); and a `ReceivedCharacters` text-input stream (layout/Shift-aware
+  typed characters via `KeyboardEvent.key`, distinct from the physical `KeyboardInput`, ADR-0169).
+  Gamepad-in-action-map (buttons + analog) and touch gesture recognizers also shipped. Remaining are P1
+  niceties: a studio binding editor, and IME/CJK composition for text input. → roadmap/input-system.md
 - ✅ **Audio** — `@retro-engine/audio` (ADR-0147): HAL + Web Audio backend (`WebAudioBackend` +
   `NullAudioBackend`), an `AudioClip` asset (encoded bytes, lazy-decoded + cached) on `.wav`/`.ogg`/`.mp3`,
   an `Audio` resource (play/stop/volume/pitch/loop, one-shot + looping, autoplay-resume), and

@@ -239,6 +239,10 @@ foundation.**
       shipped** (`recognizeGestures` + `TouchGesturePlugin` emitting `TapGesture`/`SwipeGesture`/`PanGesture`/
       `PinchGesture` messages, tunable `TouchGestureConfig`; 8 unit tests);
       (c) **studio binding editor** (Phase 5, BLOCKED — studio) — edit the `ActionMap` live + an MCP command.
+      (d) **text-input character stream** — ✅ **shipped** (ADR-0169): `ReceivedCharacters` per-frame resource
+      (layout/Shift-aware via `KeyboardEvent.key`, distinct from the physical `KeyboardInput`), a `char` raw
+      event from the DOM backend, pure `charFromKeyDown` filter (single printable chars, drops Ctrl/Meta
+      chords, allows AltGr). Unit-tested. Unblocks the UI text-input widget. (IME/CJK composition → follow-up.)
       _Links:_ [input-system.md](input-system.md)
 - [ ] **CSS Grid for the UI layout engine** — 🟡 **Phases 1–3b shipped, grid usable** (ADR-0167): (1) pure
       track-sizing + cell-geometry core; (2) `UiStyle` `display`/`gridTemplate*` + `FlexLayoutEngine` grid
@@ -261,7 +265,8 @@ foundation.**
       state** (`UiFocus` / `UiToggle`), so a focus ring is authored in `.rss` (`*:focus`, `Toggle:checked`)
       with no hardcoded border code; **focus activation** (`UiActivate` → `UiClicked` on the focused node,
       so Enter/South drives the click path). Focus is complete (navigate + ring + activate). Remaining
-      widgets: text-input, scrollview, dropdown/tabs; data binding; virtualized list/tree views; screen
+      widgets: text-input (the `@retro-engine/input` `ReceivedCharacters` stream that feeds it is now
+      shipped — ADR-0169), scrollview, dropdown/tabs; data binding; virtualized list/tree views; screen
       management.
       _Links:_ [in-game-ui-depth.md](in-game-ui-depth.md) · [ui-system.md](ui-system.md)
 - [ ] **Audio mixer buses** — 🟡 **Phases 1–4 shipped** (ADR-0159/0162/0164/0165/0168): (1) named buses +

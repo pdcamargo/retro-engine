@@ -20,6 +20,7 @@ import {
   mouseButtonFromIndex,
 } from './mouse';
 import type { InputBackend } from './raw-event';
+import { ReceivedCharacters } from './text-input';
 import { Touches } from './touch';
 
 /** Options for {@link InputPlugin}. */
@@ -95,6 +96,7 @@ export class InputPlugin implements PluginObject {
     app.insertResource(new MouseScroll());
     app.insertResource(new CursorPosition());
     app.insertResource(new Touches());
+    app.insertResource(new ReceivedCharacters());
     app.insertResource(new Gamepads());
 
     this.backend.attach();
@@ -109,9 +111,10 @@ export class InputPlugin implements PluginObject {
         ResMut(MouseScroll),
         ResMut(CursorPosition),
         ResMut(Touches),
+        ResMut(ReceivedCharacters),
       ],
-      (keyboard, mouseButtons, motion, scroll, cursor, touches) => {
-        applyInputFrame(backend, keyboard, mouseButtons, motion, scroll, cursor, touches);
+      (keyboard, mouseButtons, motion, scroll, cursor, touches, chars) => {
+        applyInputFrame(backend, keyboard, mouseButtons, motion, scroll, cursor, touches, chars);
       },
       { name: 'input-update', label: 'input' },
     );
@@ -204,12 +207,14 @@ export const applyInputFrame = (
   scroll: MouseScroll,
   cursor: CursorPosition,
   touches: Touches,
+  chars?: ReceivedCharacters,
 ): void => {
   keyboard.clear();
   mouseButtons.clear();
   motion.clear();
   scroll.clear();
   touches.beginFrame();
+  chars?.clear();
 
   for (const ev of backend.drain()) {
     switch (ev.kind) {
@@ -218,6 +223,9 @@ export const applyInputFrame = (
         break;
       case 'key-up':
         keyboard.release(ev.code);
+        break;
+      case 'char':
+        chars?.push(ev.char);
         break;
       case 'mouse-down': {
         const button = mouseButtonFromIndex(ev.button);

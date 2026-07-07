@@ -67,6 +67,17 @@ action-mapping layer on top.
   `Touches` — tracked in MASTER-ROADMAP. Works in any browser today (touch events
   don't need WebGL2); mobile *export* still depends on the WebGL2 backend.
 
+### Text input (character stream) ✅ (ADR-0169)
+
+The "separate channel" the open question below anticipated. `ReceivedCharacters`
+is a per-frame resource of the characters typed this frame (`chars()` / `text()`),
+layout- and Shift-aware because it reads `KeyboardEvent.key`, not the physical
+`KeyCode`. A new `char` raw event carries it from the `DomInputBackend`; the pure
+`charFromKeyDown` filter keeps single printable characters and drops command
+chords (Ctrl/Meta), allowing AltGr. `InputPlugin` clears + fills it each frame.
+Unit-tested. IME composition (CJK) is a follow-up. Unblocks the UI text-input
+widget.
+
 ### Phase 5 — Studio integration
 
 - Input binding editor panel (edit the `ActionMap`, live-rebind), MCP command to
@@ -78,8 +89,9 @@ action-mapping layer on top.
   A raw-event reader can layer on later if a use case needs every event.
 - **Multi-player local input** (which gamepad → which player) → Phase 3.
 - **Tauri OS-global input** → out of scope; game input is webview-scoped (ADR-0144).
-- **Text input vs game input** → the studio uses ImGui's own text capture; game text
-  input is a Phase 2+ concern (a separate channel), not mixed into `KeyboardInput`.
+- **Text input vs game input** → ✅ resolved (ADR-0169): a separate `ReceivedCharacters`
+  channel keyed off `KeyboardEvent.key`, never mixed into the physical `KeyboardInput`.
+  The studio still uses ImGui's own text capture.
 
 ## Links
 

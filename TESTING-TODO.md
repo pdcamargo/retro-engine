@@ -1733,3 +1733,26 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
 - Roadmap: MASTER-ROADMAP "CSS Grid for the UI layout engine" now 🟡 Phases 1–3c shipped. Box unchecked.
 
 ---
+
+## ✅ P1 — Input: text-input character stream (ReceivedCharacters) (unit-verified)
+
+- **New:** `@retro-engine/input` (ADR-0169). A layout- and Shift-aware stream of typed characters, separate
+  from the physical `KeyboardInput` (which stays keyed on `KeyCode` positions for gameplay). `Res(Received
+  Characters)` exposes `chars()` / `text()` / `length` — the characters typed this frame, cleared + refilled
+  each frame by `InputPlugin`. A new `char` raw event carries it from `DomInputBackend` (off
+  `KeyboardEvent.key`); pure `charFromKeyDown` keeps single printable chars, drops Ctrl/Meta chords, allows
+  AltGr. `applyInputFrame` takes an optional trailing `ReceivedCharacters` (bench/old callers unaffected).
+- **Verified:** `text-input.test.ts` (new, 8): `charFromKeyDown` accepts printables incl. `é`/space, rejects
+  named keys + Ctrl/Meta chords, allows AltGr; `ReceivedCharacters` buffer/text/clear. `input-plugin.test.ts`
+  (+1): `char` events accumulate into `ReceivedCharacters` and clear next frame. 80 input tests. Full input
+  gate green: typecheck, lint (0/0), build.
+- **HOW to test:** add `InputPlugin`, then a system reading `Res(ReceivedCharacters)` — type on the keyboard
+  and `typed.text()` is `"Aé!"` etc. (respects layout + Shift), while `KeyboardInput` still reports the
+  physical `KeyCode`s. This unblocks the UI text-input widget.
+- **NOTE:** IME/CJK composition (multi-keystroke) is a deliberate follow-up (single-char `keydown` path only).
+  Browser-level verification of the DOM `keydown.key` wiring is worth a manual check (the char-filtering
+  logic + per-frame buffering are unit-covered; the DOM listener mirrors the proven keyboard listener).
+- Roadmap: MASTER-ROADMAP "Input follow-ups" now lists (d) text-input stream shipped; "In-game UI depth"
+  notes the widget's input prerequisite is met. Box unchecked.
+
+---

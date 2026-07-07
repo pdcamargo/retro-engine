@@ -12,6 +12,8 @@ import type { MouseScrollUnit } from './mouse';
 export type RawInputEvent =
   | { readonly kind: 'key-down'; readonly code: string; readonly repeat: boolean }
   | { readonly kind: 'key-up'; readonly code: string }
+  /** A key-down produced a text character (layout + Shift resolved); see `charFromKeyDown`. */
+  | { readonly kind: 'char'; readonly char: string }
   | { readonly kind: 'mouse-down'; readonly button: number }
   | { readonly kind: 'mouse-up'; readonly button: number }
   | {

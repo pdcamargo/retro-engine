@@ -6,6 +6,7 @@ import { KeyboardInput } from './keyboard';
 import { CursorPosition, MouseButtonInput, MouseMotion, MouseScroll, mouseButtonFromIndex } from './mouse';
 import { applyInputFrame, InputPlugin } from './input-plugin';
 import type { InputBackend, RawInputEvent } from './raw-event';
+import { ReceivedCharacters } from './text-input';
 import { Touches } from './touch';
 
 /** A backend whose next-drain events are set per frame; drains exactly once. */
@@ -31,6 +32,7 @@ interface Frame {
   readonly scroll: MouseScroll;
   readonly cursor: CursorPosition;
   readonly touches: Touches;
+  readonly chars: ReceivedCharacters;
   step(events?: readonly RawInputEvent[]): void;
 }
 
@@ -42,6 +44,7 @@ const makeFrame = (): Frame => {
   const scroll = new MouseScroll();
   const cursor = new CursorPosition();
   const touches = new Touches();
+  const chars = new ReceivedCharacters();
   return {
     backend,
     keyboard,
@@ -50,9 +53,10 @@ const makeFrame = (): Frame => {
     scroll,
     cursor,
     touches,
+    chars,
     step(events: readonly RawInputEvent[] = []) {
       backend.push(events);
-      applyInputFrame(backend, keyboard, mouseButtons, motion, scroll, cursor, touches);
+      applyInputFrame(backend, keyboard, mouseButtons, motion, scroll, cursor, touches, chars);
     },
   };
 };
@@ -100,6 +104,22 @@ describe('applyInputFrame — keyboard', () => {
     expect(f.keyboard.justReleased('KeyW')).toBe(true);
     expect(f.mouseButtons.pressed('Left')).toBe(false);
     expect(f.mouseButtons.justReleased('Left')).toBe(true);
+  });
+
+  it('accumulates char events into ReceivedCharacters, clearing each frame', () => {
+    const f = makeFrame();
+    f.step([
+      { kind: 'key-down', code: 'KeyH', repeat: false },
+      { kind: 'char', char: 'h' },
+      { kind: 'key-down', code: 'KeyI', repeat: false },
+      { kind: 'char', char: 'i' },
+    ]);
+    expect(f.chars.text()).toBe('hi');
+    expect([...f.chars.chars()]).toEqual(['h', 'i']);
+    // Next frame with no char events: buffer is cleared.
+    f.step();
+    expect(f.chars.text()).toBe('');
+    expect(f.chars.length).toBe(0);
   });
 });
 
