@@ -15,7 +15,10 @@ import type { LayoutRect } from './layout-engine';
 export type GridTrack =
   | { readonly kind: 'px'; readonly value: number }
   | { readonly kind: 'fr'; readonly value: number }
-  | { readonly kind: 'minmax'; readonly min: number; readonly maxKind: 'px' | 'fr'; readonly maxValue: number };
+  | { readonly kind: 'minmax'; readonly min: number; readonly maxKind: 'px' | 'fr'; readonly maxValue: number }
+  /** `auto` — content-sized. The layout engine resolves it to a pixel size (max
+   * intrinsic size of the single-span items in the track) before sizing the rest. */
+  | { readonly kind: 'auto' };
 
 /** Parse one simple track token (`<n>fr` or `<n>px` / bare `<n>`), or `null`. */
 const parseSimpleTrack = (token: string): { kind: 'px' | 'fr'; value: number } | null => {
@@ -27,8 +30,9 @@ const parseSimpleTrack = (token: string): { kind: 'px' | 'fr'; value: number } |
   return Number.isFinite(v) ? { kind: 'px', value: v } : null;
 };
 
-/** Parse one track token: a `minmax(a, b)` or a simple `<n>fr` / `<n>px`. `null` if unrecognized. */
+/** Parse one track token: `auto`, a `minmax(a, b)`, or a simple `<n>fr` / `<n>px`. `null` if unrecognized. */
 const parseTrack = (token: string): GridTrack | null => {
+  if (token === 'auto') return { kind: 'auto' };
   if (token.startsWith('minmax(') && token.endsWith(')')) {
     const parts = token.slice(7, -1).split(',');
     if (parts.length !== 2) return null;
@@ -100,6 +104,9 @@ interface TrackResolve {
 const classifyTrack = (t: GridTrack): TrackResolve => {
   if (t.kind === 'px') return { fixed: Math.max(0, t.value), flex: 0, floor: 0 };
   if (t.kind === 'fr') return { fixed: 0, flex: Math.max(0, t.value), floor: 0 };
+  // An `auto` track that reached here was not content-resolved by the layout
+  // engine; treat it as 0 (defensive — the engine substitutes it to `px` first).
+  if (t.kind === 'auto') return { fixed: 0, flex: 0, floor: 0 };
   const min = Math.max(0, t.min);
   return t.maxKind === 'fr'
     ? { fixed: 0, flex: Math.max(0, t.maxValue), floor: min }
@@ -205,7 +212,7 @@ export interface GridTracks {
 }
 
 /** An item's assigned cell: its top-left track + span. `col < 0` means unplaced. */
-interface GridCell {
+export interface GridCell {
   readonly col: number;
   readonly row: number;
   readonly colSpan: number;
@@ -335,6 +342,19 @@ const assignByFlow = (
   const t = assignRowMajor(rowCount, items.map(transposeItem), colCount);
   return { cells: t.cells.map(transposeCell), growCount: t.rowCount };
 };
+
+/**
+ * The cell each item is assigned (index-aligned to `items`) for a grid of
+ * `colCount × rowCount` tracks under `flow`. Pure — lets the layout engine size
+ * `auto` tracks (from the intrinsic size of their items) before resolving
+ * geometry, without re-implementing placement.
+ */
+export const assignGridCells = (
+  colCount: number,
+  rowCount: number,
+  items: readonly GridItem[],
+  flow: GridFlow = 'row',
+): GridCell[] => assignByFlow(colCount, rowCount, items, flow).cells;
 
 /**
  * The number of tracks the sparse auto-placement of `items` needs on the growing

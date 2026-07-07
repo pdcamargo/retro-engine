@@ -2051,3 +2051,26 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
 - Roadmap: MASTER-ROADMAP "CSS Grid for the UI layout engine" now 🟡 Phases 1–3h shipped. Box unchecked.
 
 ---
+
+## ✅ P1 — CSS Grid for the UI, Phase 3i: auto (content-sized) tracks → GRID FEATURE-COMPLETE (unit + e2e verified)
+
+- **New:** `@retro-engine/ui` (ADR-0167). The final grid track-sizing piece: `auto` tracks size to content.
+  `grid-template-columns: auto 1fr` → col 0 shrinks to its items' intrinsic width, 1fr takes the rest.
+  Resolves the placement↔sizing chicken-egg: placement needs only track counts, so the engine places first
+  (new exported `assignGridCells`), measures each auto track's single-span items via the intrinsic-measure,
+  substitutes the track to that px size, then resolves fr over the remainder. Gated on the presence of an
+  `auto` track → grids without one take an unchanged path (isolated risk).
+- **Verified:** `grid-layout.test.ts` (+1): `parseGridTemplate('auto 1fr auto')`. `flex-layout.test.ts`
+  (+1): e2e `gridTemplateColumns: 'auto 1fr'` with a 60px child → col0=60 (auto), col1=140 (1fr).
+  (Updated the "skips malformed tokens" test since `auto` is now valid.) 193 ui tests. Full ui gate green:
+  typecheck, lint (0/0), build.
+- **HOW to test:** `.form { display: grid; grid-template-columns: auto 1fr }` → label column sizes to the
+  widest label, the field column fills the rest.
+- **NOTE:** **CSS Grid is now FEATURE-COMPLETE** — px/fr/auto/minmax tracks, spanning, explicit line
+  placement, implicit auto-rows/columns, row/column auto-flow, item alignment (justify/align items+self),
+  content distribution (all 6 modes). This closes out the "CSS Grid for the UI layout engine" P1 item — I've
+  shipped all planned phases; **box left unchecked pending your confirmation (§3)** — worth a look. Remaining
+  niceties (not blocking): multi-span `auto` contribution, subgrid, named lines/areas.
+- Roadmap: MASTER-ROADMAP "CSS Grid for the UI layout engine" now 🟡 Phases 1–3i shipped (feature-complete).
+
+---

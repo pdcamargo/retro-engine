@@ -80,7 +80,7 @@ describe('parseGridTemplate', () => {
   });
 
   it('skips malformed tokens', () => {
-    expect(parseGridTemplate('1fr auto 2fr')).toEqual([
+    expect(parseGridTemplate('1fr wat 2fr')).toEqual([
       { kind: 'fr', value: 1 },
       { kind: 'fr', value: 2 },
     ]);
@@ -94,6 +94,14 @@ describe('parseGridTemplate', () => {
     ]);
     expect(parseGridTemplate('minmax(50px,200px)')).toEqual([
       { kind: 'minmax', min: 50, maxKind: 'px', maxValue: 200 },
+    ]);
+  });
+
+  it('parses the auto keyword as an auto track', () => {
+    expect(parseGridTemplate('auto 1fr auto')).toEqual([
+      { kind: 'auto' },
+      { kind: 'fr', value: 1 },
+      { kind: 'auto' },
     ]);
   });
 });

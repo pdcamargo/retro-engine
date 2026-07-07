@@ -93,8 +93,8 @@ export type { UiTextInputOptions, TextEditKey, TextEditState } from './interacti
 export { applyEditKey, applyTextInputFrame, insertText, UiTextChanged, UiTextInput } from './interaction/ui-text-input';
 export { UiTextInputPlugin } from './interaction/ui-text-input-plugin';
 export { DiagnosticsOverlayPlugin, DiagnosticsText, formatDiagnostics } from './diagnostics-overlay';
-export type { GridFlow, GridItem, GridLayout, GridSpec, GridTracks, GridTrack } from './grid-layout';
-export { computeGridLayout, gridRowCount, gridTrackCount, parseGridTemplate, placeGridItems, resolveGridTracks } from './grid-layout';
+export type { GridCell, GridFlow, GridItem, GridLayout, GridSpec, GridTracks, GridTrack } from './grid-layout';
+export { assignGridCells, computeGridLayout, gridRowCount, gridTrackCount, parseGridTemplate, placeGridItems, resolveGridTracks } from './grid-layout';
 export type { FocusNode, NavDirection } from './focus/focus-nav';
 export { spatialNavigate, tabNavigate } from './focus/focus-nav';
 export { Focusable, UiFocus, UiNavigate } from './focus/ui-focus';

@@ -304,6 +304,23 @@ describe('FlexLayoutEngine — display: grid', () => {
     expect(r[0]).toEqual({ x: 30, y: 80, width: 40, height: 20 });
   });
 
+  it('sizes an auto column to its content, leaving fr the rest', () => {
+    const r = rects(
+      node(
+        {
+          width: 200,
+          height: 20,
+          display: 'grid',
+          gridTemplateColumns: 'auto 1fr',
+          gridTemplateRows: '20px',
+        },
+        [node({ width: 60, height: 20 }), node({})],
+      ),
+    );
+    expect(r[0]).toEqual({ x: 0, y: 0, width: 60, height: 20 }); // auto col = child's intrinsic width
+    expect(r[1]).toEqual({ x: 60, y: 0, width: 140, height: 20 }); // 1fr = 200 − 60
+  });
+
   it('sizes minmax(px, fr) columns end-to-end (grows with room, floors when tight)', () => {
     const grid = (width: number) =>
       rects(

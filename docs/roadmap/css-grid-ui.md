@@ -80,6 +80,15 @@ authoring).
   iterative CSS floored-`fr` algorithm (freeze starved floored tracks at their min,
   re-split the rest). `minmax(px,px)` → its min. Authored via the template strings,
   no new style fields. Unit + end-to-end layout tested.
-- **Remaining:** `auto` (content-sized) tracks — the last piece, needing the child
-  intrinsic-measure hook + the placement-vs-sizing chicken-and-egg. `minmax` with a
-  `px`/`fr` bound is done; only content-based sizing is deferred.
+- **`auto` (content-sized) tracks ✅** — resolves the placement↔sizing chicken-egg
+  by placing first (placement needs only track counts), measuring each `auto`
+  track's single-span items via the intrinsic-measure, substituting the track to
+  that px size, then resolving `fr` over the remainder. New exported
+  `assignGridCells` exposes the assignments; the path is gated on an `auto` track so
+  other grids are unchanged. Multi-span `auto` contributions are a documented
+  follow-up. Unit + end-to-end tested.
+
+**Grid is feature-complete** for the common set: `px`/`fr`/`auto`/`minmax` tracks,
+spanning, explicit line placement, implicit auto-rows/columns, row/column auto-flow,
+item alignment, and content distribution (all 6 modes). Remaining niceties:
+multi-span `auto` contribution, subgrid, named lines/areas.

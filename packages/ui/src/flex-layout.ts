@@ -4,7 +4,14 @@ import type {
   LayoutNode,
   LayoutResult,
 } from './layout-engine';
-import { computeGridLayout, gridTrackCount, parseGridTemplate, placeGridItems } from './grid-layout';
+import {
+  assignGridCells,
+  computeGridLayout,
+  type GridTrack,
+  gridTrackCount,
+  parseGridTemplate,
+  placeGridItems,
+} from './grid-layout';
 import { type AlignItems, isReverse, isRow, type JustifyContent, type UiStyle } from './ui-style';
 
 const clamp = (v: number, min: number, max: number | undefined): number =>
@@ -413,6 +420,31 @@ function layoutGrid(
   } else if (s.gridAutoColumns > 0 && rows.length > 0) {
     const needed = gridTrackCount(rows.length, gridItems, 'column');
     while (columns.length < needed) columns.push({ kind: 'px', value: s.gridAutoColumns });
+  }
+
+  // Resolve `auto` tracks to a pixel size from their items' intrinsic size, before
+  // sizing the rest. Placement only needs track counts, so it can run first; each
+  // auto track takes the max content size of its single-span items. Gated so grids
+  // without `auto` tracks take an unchanged path.
+  if (columns.some((t) => t.kind === 'auto') || rows.some((t) => t.kind === 'auto')) {
+    const cells = assignGridCells(columns.length, rows.length, gridItems, flow);
+    const autoSize = (axis: 'col' | 'row', track: number): number => {
+      let size = 0;
+      for (let i = 0; i < inFlow.length; i += 1) {
+        const cell = cells[i];
+        if (cell === undefined || cell.col < 0) continue;
+        const inTrack =
+          axis === 'col' ? cell.col === track && cell.colSpan === 1 : cell.row === track && cell.rowSpan === 1;
+        if (!inTrack) continue;
+        const m = measureNode(inFlow[i]!, contentW, contentH);
+        size = Math.max(size, axis === 'col' ? m.width : m.height);
+      }
+      return size;
+    };
+    const resolveAuto = (track: GridTrack, axis: 'col' | 'row', i: number): GridTrack =>
+      track.kind === 'auto' ? { kind: 'px', value: autoSize(axis, i) } : track;
+    for (let c = 0; c < columns.length; c += 1) columns[c] = resolveAuto(columns[c]!, 'col', c);
+    for (let r = 0; r < rows.length; r += 1) rows[r] = resolveAuto(rows[r]!, 'row', r);
   }
 
   const grid = computeGridLayout(
