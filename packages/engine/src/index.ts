@@ -129,6 +129,7 @@ export { NextState, State } from './state';
 export type { FixedClock, RealClock, VirtualClock } from './time';
 export { Time } from './time';
 export { DiagnosticsPlugin, DiagnosticsStore, updateDiagnostics } from './diagnostics';
+export { syncWindow, Window, WindowPlugin, WindowResized } from './window';
 export { composeTransformInto, decomposeTransformInto, GlobalTransform, Transform } from './transform';
 export type { ChildBuilder } from './hierarchy';
 export { Children, Parent } from './hierarchy';

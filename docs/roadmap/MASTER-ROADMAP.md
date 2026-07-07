@@ -240,7 +240,10 @@ foundation.**
       (toggle/slider/scrollview/text-input/dropdown/tabs), spatial navigation, screen management.
       _Links:_ [ui-system.md](ui-system.md)
 - [ ] **Audio mixer buses** — bus routing, per-bus volume, basic spatial panning. _Links:_ [audio.md](audio.md)
-- [ ] **Windowing** — `Window` resource, cursor/fullscreen/present-mode(vsync), multi-window, window events.
+- [ ] **Windowing** — 🟡 **read side shipped**: `Window` resource (logical + physical size + dpr, mirrored
+      from the surface) + `WindowResized` event + `syncWindow` + opt-in `WindowPlugin` (`'first'`-stage sync,
+      headless-safe). Unit + integration tested. Remaining: cursor/fullscreen/present-mode(vsync) controls,
+      multi-window. Box unchecked pending user confirmation (§3).
 - [ ] **Diagnostics store** — 🟡 **core shipped**: `DiagnosticsStore` (EMA `frameTimeMs` + derived `fps`,
       `entityCount`, `frameCount`) + `updateDiagnostics` + opt-in `DiagnosticsPlugin` (updates each frame from
       the real clock delta + `World.entityCount`, added in O(1)). Unit + integration tested. Remaining: asset

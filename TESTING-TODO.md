@@ -1078,3 +1078,19 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
   system-params.md item 1 ✅. Box unchecked pending your confirmation.
 
 ---
+
+## ✅ P1 — `Window` resource + `WindowResized` event (windowing, read side) (unit + integration verified)
+
+- **New:** `@retro-engine/engine` `Window` resource (logical `width`/`height` + `physicalWidth`/`Height` +
+  `devicePixelRatio`, mirrored from the drawing surface) + `WindowResized` message + `syncWindow` (pure
+  fold) + opt-in `WindowPlugin` (`'first'`-stage sync each frame, emits `WindowResized` on logical-size
+  change, headless-safe). Lets game code read the window size without DOM globals (headless-safe).
+- **Verified:** `window.test.ts` (5 tests): `syncWindow` dpr division / change detection / dpr guard, and a
+  capturing-renderer integration (Window reflects the surface; `WindowResized` fires once on first sight,
+  not on a steady size). Full gate green (1961 tests; full typecheck across all packages confirms the
+  `Window` export doesn't collide with the DOM `Window` type anywhere). Changeset added.
+- **HOW to test:** `app.addPlugin(new WindowPlugin())`, read `Res(Window).width/height` or
+  `MessageReader(WindowResized)`. Remaining (non-AC): cursor/fullscreen/present-mode controls + multi-window.
+- Roadmap: MASTER-ROADMAP P1 Windowing 🟡 (read side shipped). Box unchecked pending your confirmation.
+
+---
