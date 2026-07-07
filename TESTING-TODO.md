@@ -1094,3 +1094,20 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
 - Roadmap: MASTER-ROADMAP P1 Windowing 🟡 (read side shipped). Box unchecked pending your confirmation.
 
 ---
+
+## ✅ P1 — Touch gesture recognizers (tap + swipe) (unit-verified)
+
+- **New:** `@retro-engine/input` `recognizeGestures` (pure: records touch start times, classifies on release
+  into `TapGesture` / directional `SwipeGesture` by travel + duration; canceled touches emit nothing) +
+  `TouchGestureConfig`/`DEFAULT_TOUCH_GESTURE_CONFIG` + `TouchGesturePlugin` (opt-in; `preUpdate` after the
+  input drain, emits `TapGesture`/`SwipeGesture` messages).
+- **Verified:** `touch-gestures.test.ts` (6 tests): tap, swipe direction incl. dominant-axis, neither-case
+  (too slow/short), far-but-slow rejected, canceled dropped. input typecheck/lint/tests green (59). Changeset.
+- **HOW to test:** `app.addPlugin(new InputPlugin()); app.addPlugin(new TouchGesturePlugin())`, read
+  `MessageReader(TapGesture)` / `MessageReader(SwipeGesture)`. Remaining: pan (already available via touch
+  deltas) + pinch (2-touch) + the studio binding editor (BLOCKED — studio).
+- Roadmap: MASTER-ROADMAP Input follow-ups (b) 🟡. **Also noted: the System-param sugar P1 item is
+  substantially complete** — `Local` + `MessageReader/Writer` + `Trigger` + `NextState` all ship; items 5-9
+  are explicitly niche/deferred. Both boxes unchecked pending your confirmation.
+
+---

@@ -13,6 +13,15 @@ export {
 export type { InputBackend, RawInputEvent } from './raw-event';
 export type { TouchPhase } from './touch';
 export { TouchPoint, Touches } from './touch';
+export type { SwipeDirection, TouchGestureConfig } from './touch-gestures';
+export {
+  DEFAULT_TOUCH_GESTURE_CONFIG,
+  recognizeGestures,
+  SwipeGesture,
+  TapGesture,
+  TouchGestureState,
+} from './touch-gestures';
+export { TouchGesturePlugin } from './touch-gesture-plugin';
 export type { ActionKind, ActionSource, BindingRole, InputDevice } from './action-types';
 export { ActionBinding, ActionDef, ActionMap, key, mouseButton } from './action-types';
 export type { Axis2dValue } from './action-state';

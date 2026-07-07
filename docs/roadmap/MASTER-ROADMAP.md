@@ -231,8 +231,10 @@ foundation.**
 - [ ] **Input follow-ups** — three additive extensions on the shipped `@retro-engine/input`
       (ADR-0144/0145/0146): (a) **gamepad bindings in the action map** — an `ActionBinding` `'gamepad'`
       device + analog-axis sources so gamepad is rebindable through `ActionMap` (currently read directly
-      via `Gamepads`); (b) **touch gesture recognizers** — tap / pan / pinch / swipe on top of `Touches`;
-      (c) **studio binding editor** (Phase 5) — edit the `ActionMap` live + an MCP command.
+      via `Gamepads`); (b) **touch gesture recognizers** — 🟡 **tap + swipe shipped**
+      (`recognizeGestures` + `TouchGesturePlugin` emitting `TapGesture`/`SwipeGesture` messages, tunable
+      `TouchGestureConfig`; unit-tested). Pan (available via touch deltas) + pinch (2-touch) remain;
+      (c) **studio binding editor** (Phase 5, BLOCKED — studio) — edit the `ActionMap` live + an MCP command.
       _Links:_ [input-system.md](input-system.md)
 - [ ] **CSS Grid for the UI layout engine** — pure-TS grid behind the `LayoutEngine` interface (Taffy-WASM
       only as a fallback escape hatch). _Links:_ [ui-system.md](ui-system.md)
@@ -251,9 +253,12 @@ foundation.**
 - [ ] **ECS ordering depth** — `SystemSet` + set-level config/run-conditions + `.chain()` + ambiguity
       detection; exclusive systems (`&mut World` param); explicit state-transition ordering.
       _Links:_ [system-params.md](system-params.md) · [`../backlog/explicit-state-transition-ordering.md`](../backlog/explicit-state-transition-ordering.md)
-- [ ] **System-param sugar** — 🟡 **`Local<T>` shipped** (`Local(factory)` → per-system persistent
-      `LocalState<T>`, lazily seeded, per-system slot; unit-tested). Remaining: reader/writer/trigger sugar.
-      Box unchecked pending user confirmation (§3). _Links:_ [system-params.md](system-params.md)
+- [ ] **System-param sugar** — 🟢 **substantially complete**: all the useful sugar ships — `Local<T>`
+      (this session), `MessageReader`/`MessageWriter`, `Trigger` (observers), and `NextState` (state.ts).
+      The remaining sketches (items 5-9 in system-params.md: `EventReader/Writer`, stage-scoped params,
+      schedule-scoped resources, `QueryState`, exclusive `&mut World`) are explicitly "may not be needed" /
+      niche and deferred until a real consumer asks. Box unchecked pending user confirmation (§3).
+      _Links:_ [system-params.md](system-params.md)
 - [ ] **Texture import settings (`.meta`)** — filter (nearest/point·bilinear·trilinear), wrap, color space
       (sRGB/linear), mipmaps, max size, PPU; consumed by `RenderImage` sampler/upload. **High-value + cheap
       — required for crisp pixel-art; consider pulling into P0.**
