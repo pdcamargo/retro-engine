@@ -1844,22 +1844,25 @@ export class App {
   }
 
   /**
-   * Configure set-level ordering for the named set within `stage`. Every system
-   * that joined the set (via {@link AddSystemOptions.inSet}) inherits the
-   * `before` / `after` constraints — one declaration orders a whole group,
-   * rather than repeating `after: [...]` on each member. `before` / `after`
-   * target other set names or labels in the same stage; forward references and
-   * unmatched names are ignored, exactly like per-system ordering.
+   * Configure the named set within `stage`. Every system that joined the set
+   * (via {@link AddSystemOptions.inSet}) inherits the config — one declaration
+   * configures a whole group rather than repeating it on each member:
    *
-   * Repeated calls for the same set merge additively. Introducing an ordering
-   * cycle throws here (the offending config is rolled back), matching
-   * {@link App.addSystem}'s eager cycle check.
+   * - `before` / `after` — ordering, targeting other set names or labels in the
+   *   same stage; forward references and unmatched names are ignored, exactly
+   *   like per-system ordering. Repeated calls merge additively; introducing an
+   *   ordering cycle throws here (the offending config is rolled back), matching
+   *   {@link App.addSystem}'s eager cycle check.
+   * - `runIf` — a run condition gating the whole group: a member runs only when
+   *   its own `runIf` (if any) and every set it belongs to pass. Multiple
+   *   conditions on one set are AND-ed.
    *
    * @example
    * ```ts
    * app.addSystem('update', [ResMut(Velocity)], integrate, { inSet: 'physics' });
    * app.addSystem('update', [Res(Velocity)], resolveContacts, { inSet: 'physics' });
    * app.configureSet('update', 'physics', { after: ['input'] }); // both run after input
+   * app.configureSet('update', 'gameplay', { runIf: inState(GameState.Playing) });
    * ```
    */
   configureSet(stage: Stage, set: string, ordering: SetOrdering): this {
@@ -2599,6 +2602,7 @@ export class App {
     for (const sys of systems) {
       if (this.disabledSystems.has(sys.id)) continue;
       if (sys.runIf && !sys.runIf.test(this)) continue;
+      if (!this.stages.render.setConditionsPass(sys, this)) continue;
       const lastSeenTick = this.lastSeenTickOf(sys.id);
       const lastSeenFrame = this.lastSeenFrameOf(sys.id);
       const tickAtRunStart = this.renderWorld.changeTick;

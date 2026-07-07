@@ -22,8 +22,14 @@ every member. String-keyed (matches labels); registration-time only, so zero
 per-frame cost. `SystemInfo.sets` surfaces membership for tooling. Unit tested;
 set-edge topo scaling benched.
 
-**Deferred to Phase 2b:** set-level `runIf` (gating a whole group) — touches the
-per-frame `runStage` gate, cleanly separable, done next.
+## Phase 2b — set-level `runIf` ✅ (ADR-0158)
+
+`App.configureSet(stage, set, { runIf })` gates a whole group: a member runs only
+when its own `runIf` and every set it belongs to pass (multiple conditions on one
+set AND-ed). Checked through a shared `StageSystems.setConditionsPass(sys, app)`
+called from both runners (`runStage` and the render `runRenderSet`), so the gate
+is applied everywhere with no half-coverage; alloc-free on the hot path. Unit
+tested.
 
 ## Phase 3 — Ambiguity detection
 

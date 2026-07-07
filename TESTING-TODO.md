@@ -1215,3 +1215,22 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
   Box unchecked pending your confirmation.
 
 ---
+
+## ✅ P1 — ECS ordering depth, Phase 2b: set-level run conditions (unit verified)
+
+- **New:** `@retro-engine/engine` (ADR-0158). `App.configureSet(stage, set, { runIf })` gates a whole set:
+  a member runs only when its own `runIf` (if any) AND every set it belongs to pass; multiple conditions on
+  one set are AND-ed. Shared `StageSystems.setConditionsPass(sys, app)` is checked in BOTH the main-stage
+  runner (`runStage`) and the render-stage runner (`runRenderSet`) — no half-coverage; alloc-free on the hot
+  path (no array built for set-less systems). `SetOrdering` gained an optional `runIf` field.
+- **Verified:** `schedule.test.ts` (+3, 23 total): set-level runIf toggles all members on/off across frames;
+  a member needs its own runIf AND the set condition; two conditions on one set AND together. Full engine
+  gate green: typecheck, lint (626 files), 1234 tests, build. Changeset added.
+- **HOW to test:** `app.addSystem('update', [...], f, { inSet: 'gameplay' })` on several systems, then
+  `app.configureSet('update', 'gameplay', { runIf: inState(GameState.Playing) })` → all gameplay systems run
+  only while in the Playing state; flip state → they stop, verified by execution-order trace.
+- Roadmap: MASTER-ROADMAP "ECS ordering depth" now 🟡 Phases 1–2b shipped; remaining (ambiguity detection —
+  needs per-param access metadata; exclusive `&mut World`; state-transition ordering) tracked in
+  `ecs-ordering-depth.md`. Box unchecked pending your confirmation.
+
+---

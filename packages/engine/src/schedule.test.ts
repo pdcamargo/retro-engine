@@ -297,4 +297,66 @@ describe('SystemSet + configureSet (ADR-0158)', () => {
     // The rolled-back config leaves a runnable schedule.
     expect(() => app.advanceFrame(0)).not.toThrow();
   });
+
+  it('set-level runIf gates every member (Phase 2b)', () => {
+    const app = new App({ renderer: makeHeadlessRenderer() });
+    const trace: string[] = [];
+    let enabled = false;
+    app.addSystem('update', [], () => trace.push('a'), { inSet: 'gameplay' });
+    app.addSystem('update', [], () => trace.push('b'), { inSet: 'gameplay' });
+    app.addSystem('update', [], () => trace.push('always'));
+    app.configureSet('update', 'gameplay', { runIf: new RunCondition(() => enabled) });
+
+    app.advanceFrame(0);
+    expect(trace).toEqual(['always']); // gameplay gated off
+
+    enabled = true;
+    trace.length = 0;
+    app.advanceFrame(16);
+    expect(trace.sort()).toEqual(['a', 'always', 'b']); // gameplay now runs
+  });
+
+  it('a member runs only when its own runIf AND the set condition pass', () => {
+    const app = new App({ renderer: makeHeadlessRenderer() });
+    const trace: string[] = [];
+    let setOn = true;
+    let ownOn = true;
+    app.addSystem('update', [], () => trace.push('m'), {
+      inSet: 'g',
+      runIf: new RunCondition(() => ownOn),
+    });
+    app.configureSet('update', 'g', { runIf: new RunCondition(() => setOn) });
+
+    app.advanceFrame(0);
+    expect(trace).toEqual(['m']); // both pass
+
+    trace.length = 0;
+    setOn = false;
+    app.advanceFrame(16);
+    expect(trace).toEqual([]); // set gate fails
+
+    trace.length = 0;
+    setOn = true;
+    ownOn = false;
+    app.advanceFrame(32);
+    expect(trace).toEqual([]); // own gate fails
+  });
+
+  it('AND-s multiple run conditions configured on the same set', () => {
+    const app = new App({ renderer: makeHeadlessRenderer() });
+    const trace: string[] = [];
+    let a = true;
+    let b = true;
+    app.addSystem('update', [], () => trace.push('s'), { inSet: 'g' });
+    app.configureSet('update', 'g', { runIf: new RunCondition(() => a) });
+    app.configureSet('update', 'g', { runIf: new RunCondition(() => b) });
+
+    app.advanceFrame(0);
+    expect(trace).toEqual(['s']);
+
+    trace.length = 0;
+    b = false;
+    app.advanceFrame(16);
+    expect(trace).toEqual([]); // second condition fails → gated
+  });
 });

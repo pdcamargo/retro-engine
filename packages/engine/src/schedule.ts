@@ -66,14 +66,19 @@ export interface RegisteredSystem {
 }
 
 /**
- * Set-level ordering configured through `App.configureSet`. `before` / `after`
- * name other sets or labels in the same stage; every member of the configured
- * set inherits the constraint. Merged additively across repeated configuration
- * of the same set.
+ * Set-level configuration applied through `App.configureSet`, inherited by every
+ * member of the set. Merged additively across repeated configuration of the same
+ * set.
+ *
+ * - `before` / `after` — ordering: name other sets or labels in the same stage.
+ * - `runIf` — a run condition gating the whole group: a member runs only if its
+ *   own `runIf` (if any) **and** every set it belongs to pass. AND-ed across
+ *   multiple conditions on the same set.
  */
 export interface SetOrdering {
   readonly before?: readonly string[];
   readonly after?: readonly string[];
+  readonly runIf?: RunCondition;
 }
 
 /**
@@ -90,6 +95,8 @@ export class StageSystems {
   private cache: RegisteredSystem[] | null = null;
   /** Set-level ordering for this stage, keyed by set name. Fed into every topo sort. */
   private readonly setOrdering = new Map<string, SetOrdering>();
+  /** Set-level run conditions for this stage, keyed by set name (AND-ed per set). */
+  private readonly setRunConditions = new Map<string, RunCondition[]>();
 
   push(sys: RegisteredSystem): void {
     this.systems.push(sys);
@@ -104,11 +111,18 @@ export class StageSystems {
   }
 
   /**
-   * Add set-level ordering for `name` (merged additively with any prior config
-   * for the same set) and re-sort eagerly so a resulting cycle is reported at
-   * the `configureSet` call site. On a cycle the merge is rolled back.
+   * Add set-level config for `name` (merged additively with any prior config for
+   * the same set). Ordering (`before` / `after`) re-sorts eagerly so a resulting
+   * cycle is reported at the `configureSet` call site and rolled back; a
+   * `runIf` is appended to the set's gate (run conditions don't affect ordering).
    */
   configureSet(name: string, ordering: SetOrdering): void {
+    if (ordering.runIf !== undefined) {
+      const conds = this.setRunConditions.get(name);
+      if (conds) conds.push(ordering.runIf);
+      else this.setRunConditions.set(name, [ordering.runIf]);
+    }
+    if (ordering.before === undefined && ordering.after === undefined) return;
     const prev = this.setOrdering.get(name);
     const merged: SetOrdering = {
       before: [...(prev?.before ?? []), ...(ordering.before ?? [])],
@@ -129,6 +143,24 @@ export class StageSystems {
   ordered(): readonly RegisteredSystem[] {
     if (this.cache === null) this.cache = topoSort(this.systems, this.setOrdering);
     return this.cache;
+  }
+
+  /**
+   * Whether every set-level run condition for `sys`'s set memberships passes
+   * against `app` this tick. `true` when the system joined no sets or the sets
+   * carry no conditions. Alloc-free on the hot path (no array built). The
+   * system's own `runIf` is checked separately by the runner.
+   */
+  setConditionsPass(sys: RegisteredSystem, app: App): boolean {
+    if (sys.sets === undefined) return true;
+    for (const setName of sys.sets) {
+      const conds = this.setRunConditions.get(setName);
+      if (conds === undefined) continue;
+      for (const cond of conds) {
+        if (!cond.test(app)) return false;
+      }
+    }
+    return true;
   }
 
   /**
@@ -306,6 +338,7 @@ export const runStage = (stageSystems: StageSystems, app: App, stage: Stage): vo
   for (const sys of stageSystems.ordered()) {
     if (app.isSystemDisabled(sys.id)) continue;
     if (sys.runIf && !sys.runIf.test(app)) continue;
+    if (!stageSystems.setConditionsPass(sys, app)) continue;
     const lastSeenTick = app.lastSeenTickOf(sys.id);
     const lastSeenFrame = app.lastSeenFrameOf(sys.id);
     const tickAtRunStart = app.world.changeTick;
