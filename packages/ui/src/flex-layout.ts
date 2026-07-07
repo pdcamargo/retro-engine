@@ -5,7 +5,7 @@ import type {
   LayoutResult,
 } from './layout-engine';
 import { computeGridLayout, gridRowCount, parseGridTemplate, placeGridItems } from './grid-layout';
-import { type AlignItems, isReverse, isRow, type UiStyle } from './ui-style';
+import { type AlignItems, isReverse, isRow, type JustifyContent, type UiStyle } from './ui-style';
 
 const clamp = (v: number, min: number, max: number | undefined): number =>
   Math.min(Math.max(v, min), max ?? Number.POSITIVE_INFINITY);
@@ -339,6 +339,18 @@ function placeInCell(
 }
 
 /**
+ * Leading offset that positions a grid's track block (`used` pixels) within the
+ * container's `available` content space per `justify-content` / `align-content`:
+ * `center` centers it, `flex-end` pushes it to the far edge, everything else
+ * (incl. the `space-*` modes) starts at 0 — track-level space distribution is a
+ * later phase. Only bites when the tracks don't fill the container.
+ */
+function contentOffset(mode: JustifyContent, used: number, available: number): number {
+  const leftover = Math.max(0, available - used);
+  return mode === 'center' ? leftover / 2 : mode === 'flex-end' ? leftover : 0;
+}
+
+/**
  * Lay out a `display: grid` node's children into template cells (row-major),
  * each child aligned within its cell by `justify-items`/`justify-self` (inline /
  * horizontal axis) and `align-items`/`align-self` (block / vertical axis) —
@@ -383,6 +395,13 @@ function layoutGrid(
     gridItems,
   );
 
+  // Distribute the whole track block within the content box when it doesn't fill
+  // it (justify-content = column axis, align-content = row axis).
+  const usedW = grid.columnSizes.reduce((a, b) => a + b, 0) + s.gap * Math.max(0, grid.columnSizes.length - 1);
+  const usedH = grid.rowSizes.reduce((a, b) => a + b, 0) + s.gap * Math.max(0, grid.rowSizes.length - 1);
+  const contentOffsetX = contentOffset(s.justifyContent, usedW, contentW);
+  const contentOffsetY = contentOffset(s.alignContent, usedH, contentH);
+
   const results = new Map<LayoutNode, LayoutResult>();
   inFlow.forEach((child, i) => {
     const rect = placed[i]!;
@@ -402,8 +421,8 @@ function layoutGrid(
       child,
       offsetResult(
         layoutNode(child, col.size, rowAxis.size),
-        s.padding.left + rect.x + col.offset,
-        s.padding.top + rect.y + rowAxis.offset,
+        s.padding.left + contentOffsetX + rect.x + col.offset,
+        s.padding.top + contentOffsetY + rect.y + rowAxis.offset,
       ),
     );
   });

@@ -88,6 +88,12 @@ export interface UiStyle {
   readonly gridAutoRows: number;
   readonly flexDirection: FlexDirection;
   readonly justifyContent: JustifyContent;
+  /**
+   * Distribution of a **grid's** row track block along the block (row) axis when
+   * it does not fill the container (CSS `align-content`); `justifyContent` is the
+   * column axis for grid. Used only when {@link display} is `'grid'`.
+   */
+  readonly alignContent: JustifyContent;
   readonly alignItems: AlignItems;
   readonly alignSelf: AlignSelf;
   /**
@@ -159,6 +165,7 @@ export const defaultUiStyle = (): UiStyle => ({
   gridAutoRows: 0,
   flexDirection: 'row',
   justifyContent: 'flex-start',
+  alignContent: 'flex-start',
   alignItems: 'stretch',
   alignSelf: 'auto',
   justifyItems: 'stretch',

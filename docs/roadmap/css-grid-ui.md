@@ -60,6 +60,12 @@ authoring).
   syntax (`N / M`, `N / span M`, bare `N` = a line) via `gridLine` (a bare number
   is now correctly a line, not a span). Unit-tested (placement, clamp-to-width,
   auto-flow-around, line parsing).
+- **Content distribution ✅** — `justify-content` (column axis) + the new
+  `alignContent` (row axis) position the whole track block within the content box
+  when the tracks don't fill it (`start`/`center`/`flex-end`, a leading offset
+  applied to every cell via `contentOffset`). `.rss` maps `align-content`. The
+  `space-*` modes (track-level spacing) fall back to start — a follow-up.
+  Unit-tested (center both axes, flex-end both axes).
 - **Remaining:** `auto` / `minmax()` tracks (needs the child intrinsic-measure
-  hook); grid-level `justify-content` / `align-content` (distributing whole
-  tracks); `grid-auto-flow: column` + implicit *column* tracks.
+  hook); `space-between`/`around`/`evenly` track spacing; `grid-auto-flow: column`
+  + implicit *column* tracks.

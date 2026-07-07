@@ -342,6 +342,45 @@ describe('FlexLayoutEngine — display: grid', () => {
     expect(r[1]).toEqual({ x: 0, y: 70, width: 100, height: 30 });
   });
 
+  it('centers a fixed track block in a larger container (justify/align-content)', () => {
+    const r = rects(
+      node(
+        {
+          width: 200,
+          height: 200,
+          display: 'grid',
+          gridTemplateColumns: '40px 40px', // used 80 wide
+          gridTemplateRows: '40px', // used 40 tall
+          justifyContent: 'center',
+          alignContent: 'center',
+        },
+        [node({}), node({})],
+      ),
+    );
+    // Track block 80×40 centered in 200×200 → leading offset (60, 80).
+    expect(r[0]).toEqual({ x: 60, y: 80, width: 40, height: 40 });
+    expect(r[1]).toEqual({ x: 100, y: 80, width: 40, height: 40 });
+  });
+
+  it('pushes a fixed track block to the far edge (flex-end content)', () => {
+    const r = rects(
+      node(
+        {
+          width: 100,
+          height: 100,
+          display: 'grid',
+          gridTemplateColumns: '30px',
+          gridTemplateRows: '20px',
+          justifyContent: 'flex-end',
+          alignContent: 'flex-end',
+        },
+        [node({})],
+      ),
+    );
+    // 30×20 pushed to bottom-right of 100×100 → (70, 80).
+    expect(r[0]).toEqual({ x: 70, y: 80, width: 30, height: 20 });
+  });
+
   it('places an explicitly-positioned child at its grid lines; auto children flow around it', () => {
     const r = rects(
       node({ width: 200, height: 200, display: 'grid', gridTemplateColumns: '1fr 1fr', gridTemplateRows: '1fr 1fr' }, [

@@ -111,6 +111,13 @@ describe('resolveUiStyle (declaration mapping)', () => {
     expect(style.gridAutoRows).toBe(48);
   });
 
+  it('maps justify-content / align-content (grid track distribution)', () => {
+    const rules = parseRss(`.grid { justify-content: center; align-content: flex-end; }`);
+    const style = resolveUiStyle(rules, node({ classes: ['grid'] }));
+    expect(style.justifyContent).toBe('center');
+    expect(style.alignContent).toBe('flex-end');
+  });
+
   it('maps justify-items / justify-self, normalizing CSS grid start/end keywords', () => {
     const rules = parseRss(`
       .grid { justify-items: center; align-items: end; }

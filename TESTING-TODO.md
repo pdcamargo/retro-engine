@@ -1868,3 +1868,20 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
 - Roadmap: MASTER-ROADMAP "CSS Grid for the UI layout engine" now 🟡 Phases 1–3d shipped. Box unchecked.
 
 ---
+
+## ✅ P1 — CSS Grid for the UI, Phase 3e: content distribution (unit-verified)
+
+- **New:** `@retro-engine/ui` (ADR-0167). When a grid's tracks don't fill the container, the whole track
+  block can be positioned: `justify-content` (column axis) + new `UiStyle.alignContent` (row axis, reflected).
+  `start`/`center`/`flex-end` supported via `contentOffset` (a leading offset added to every cell). `.rss`
+  maps `align-content`. `space-*` modes fall back to start (follow-up).
+- **Verified:** `flex-layout.test.ts` (+2): an 80×40 track block centered in 200×200 → offset (60,80); a
+  30×20 block flex-end in 100×100 → (70,80). `rss-resolve.test.ts` (+1): justify/align-content parse. 179 ui
+  tests. Full ui gate green: typecheck, lint (0/0), build.
+- **HOW to test:** `.board { display: grid; grid-template-columns: 40px 40px 40px; justify-content: center;
+  align-content: center }` in a larger container → the 3-cell board sits centered instead of top-left.
+- **NOTE:** Only bites for grids whose tracks are smaller than the container (fr tracks fill it → no-op).
+  `space-between/around/evenly` track spacing + `auto`/`minmax` tracks remain. Additive under ADR-0167.
+- Roadmap: MASTER-ROADMAP "CSS Grid for the UI layout engine" now 🟡 Phases 1–3e shipped. Box unchecked.
+
+---

@@ -259,9 +259,11 @@ foundation.**
       `assignGridCells` (bounded → `placeGridItems`, unbounded → new `gridRowCount`), `.rss` `grid-auto-rows`;
       (3d) **explicit line placement** — `UiStyle` `gridColumnStart`/`gridRowStart` (1-based lines), a two-pass
       `assignGridCells` (explicit items reserved first, then auto-flow around them), `.rss` `grid-column`/
-      `grid-row` full CSS line syntax (`N / M`, `N / span M`, bare `N` = a line) via `gridLine`.
-      Layout + resolver unit-tested. Remaining: `auto`/`minmax` tracks, grid `justify-content`/`align-content`,
-      `grid-auto-flow: column`.
+      `grid-row` full CSS line syntax (`N / M`, `N / span M`, bare `N` = a line) via `gridLine`; (3e)
+      **content distribution** — `justify-content` (column axis) + new `alignContent` (row axis) position the
+      track block within the container (`start`/`center`/`flex-end`) when tracks don't fill it, `.rss`
+      `align-content`. Layout + resolver unit-tested. Remaining: `auto`/`minmax` tracks, `space-*` track
+      spacing, `grid-auto-flow: column`.
       _Links:_ [css-grid-ui.md](css-grid-ui.md) · [ui-system.md](ui-system.md)
 - [ ] **In-game UI depth** — 🟡 **Phases 1 (partial) + 2 shipped**: widgets `UiToggle` (checkbox) +
       `UiSlider` (drag→value) reuse the `Interactable`/`UiClicked` foundation with pure, unit-tested logic;

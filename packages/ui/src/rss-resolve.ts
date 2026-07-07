@@ -237,6 +237,7 @@ const mapDeclarations = (props: Record<string, string>): UiStyleInit => {
       case 'grid-auto-rows': init.gridAutoRows = len(value); break;
       case 'flex-direction': init.flexDirection = value as FlexDirection; break;
       case 'justify-content': init.justifyContent = value as JustifyContent; break;
+      case 'align-content': init.alignContent = value as JustifyContent; break;
       case 'align-items': init.alignItems = alignKeyword(value) as AlignItems; break;
       case 'align-self': init.alignSelf = alignKeyword(value) as AlignSelf; break;
       case 'justify-items': init.justifyItems = alignKeyword(value) as AlignItems; break;
