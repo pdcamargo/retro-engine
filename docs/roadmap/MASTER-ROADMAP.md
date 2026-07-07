@@ -262,8 +262,10 @@ foundation.**
       `grid-row` full CSS line syntax (`N / M`, `N / span M`, bare `N` = a line) via `gridLine`; (3e)
       **content distribution** — `justify-content` (column axis) + new `alignContent` (row axis) position the
       track block within the container (`start`/`center`/`flex-end`) when tracks don't fill it, `.rss`
-      `align-content`. Layout + resolver unit-tested. Remaining: `auto`/`minmax` tracks, `space-*` track
-      spacing, `grid-auto-flow: column`.
+      `align-content`; (3f) **column flow** — `gridAutoFlow: 'row'|'column'` + `gridAutoColumns`, column flow
+      fills columns first (transposed onto the tested row-major placer via `gridTrackCount`/`placeGridItems`
+      `flow` arg), `.rss` `grid-auto-flow`/`grid-auto-columns`. Layout + resolver unit-tested. Remaining:
+      `auto`/`minmax` tracks, `space-*` track spacing.
       _Links:_ [css-grid-ui.md](css-grid-ui.md) · [ui-system.md](ui-system.md)
 - [ ] **In-game UI depth** — 🟡 **Phases 1 (partial) + 2 shipped**: widgets `UiToggle` (checkbox) +
       `UiSlider` (drag→value) reuse the `Interactable`/`UiClicked` foundation with pure, unit-tested logic;

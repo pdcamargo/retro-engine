@@ -60,6 +60,8 @@ export const uiNodeSchema: Schema<UiNode> = {
     gridColumnStart: t.number,
     gridRowStart: t.number,
     gridAutoRows: t.number,
+    gridAutoFlow: t.enum('row', 'column'),
+    gridAutoColumns: t.number,
     flexDirection: t.enum('row', 'row-reverse', 'column', 'column-reverse'),
     justifyContent: t.enum(
       'flex-start',

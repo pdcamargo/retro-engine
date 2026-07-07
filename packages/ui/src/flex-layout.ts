@@ -4,7 +4,7 @@ import type {
   LayoutNode,
   LayoutResult,
 } from './layout-engine';
-import { computeGridLayout, gridRowCount, parseGridTemplate, placeGridItems } from './grid-layout';
+import { computeGridLayout, gridTrackCount, parseGridTemplate, placeGridItems } from './grid-layout';
 import { type AlignItems, isReverse, isRow, type JustifyContent, type UiStyle } from './ui-style';
 
 const clamp = (v: number, min: number, max: number | undefined): number =>
@@ -377,11 +377,18 @@ function layoutGrid(
     rowStart: c.style.gridRowStart,
   }));
 
-  // Generate implicit rows (CSS grid-auto-rows) so items past the explicit rows
-  // flow into fixed-height rows instead of collapsing to zero size.
-  if (s.gridAutoRows > 0 && columns.length > 0) {
-    const needed = gridRowCount(columns.length, gridItems);
-    while (rows.length < needed) rows.push({ kind: 'px', value: s.gridAutoRows });
+  // Generate implicit tracks so overflowing items flow instead of collapsing:
+  // `row` flow grows rows (grid-auto-rows) across the columns; `column` flow grows
+  // columns (grid-auto-columns) down the rows.
+  const flow = s.gridAutoFlow;
+  if (flow === 'row') {
+    if (s.gridAutoRows > 0 && columns.length > 0) {
+      const needed = gridTrackCount(columns.length, gridItems, 'row');
+      while (rows.length < needed) rows.push({ kind: 'px', value: s.gridAutoRows });
+    }
+  } else if (s.gridAutoColumns > 0 && rows.length > 0) {
+    const needed = gridTrackCount(rows.length, gridItems, 'column');
+    while (columns.length < needed) columns.push({ kind: 'px', value: s.gridAutoColumns });
   }
 
   const grid = computeGridLayout(
@@ -393,6 +400,7 @@ function layoutGrid(
   const placed = placeGridItems(
     { columnSizes: grid.columnSizes, rowSizes: grid.rowSizes, columnGap: s.gap, rowGap: s.gap },
     gridItems,
+    flow,
   );
 
   // Distribute the whole track block within the content box when it doesn't fill

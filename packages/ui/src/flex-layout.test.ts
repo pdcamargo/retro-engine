@@ -304,6 +304,27 @@ describe('FlexLayoutEngine — display: grid', () => {
     expect(r[0]).toEqual({ x: 30, y: 80, width: 40, height: 20 });
   });
 
+  it('fills columns first with grid-auto-flow: column + implicit auto-columns', () => {
+    const r = rects(
+      node(
+        {
+          width: 200,
+          height: 80,
+          display: 'grid',
+          gridTemplateRows: '40px 40px', // 2 fixed rows
+          gridAutoFlow: 'column',
+          gridAutoColumns: 50, // implicit columns, 50px wide
+        },
+        [node({}), node({}), node({}), node({})],
+      ),
+    );
+    // Fill col 0 (rows 0,1), then col 1 (rows 0,1).
+    expect(r[0]).toEqual({ x: 0, y: 0, width: 50, height: 40 });
+    expect(r[1]).toEqual({ x: 0, y: 40, width: 50, height: 40 });
+    expect(r[2]).toEqual({ x: 50, y: 0, width: 50, height: 40 });
+    expect(r[3]).toEqual({ x: 50, y: 40, width: 50, height: 40 });
+  });
+
   it('flows items into implicit auto-rows when there are no explicit rows', () => {
     const r = rects(
       node(

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'bun:test';
 import {
   computeGridLayout,
   gridRowCount,
+  gridTrackCount,
   type GridTracks,
   parseGridTemplate,
   placeGridItems,
@@ -159,6 +160,30 @@ describe('placeGridItems', () => {
     // Start line 3 (col 2) with span 2 in a 3-col grid would overflow → clamped to col 1.
     const r = placeGridItems(tracks, [{ colStart: 3, rowStart: 1, colSpan: 2 }]);
     expect(r[0]).toEqual({ x: 100, y: 0, width: 200, height: 100 }); // cols 1-2
+  });
+
+  it('fills columns first with grid-auto-flow: column', () => {
+    // 3 cols × 2 rows, column flow → item order goes down col 0, then col 1, …
+    const r = placeGridItems(tracks, [{}, {}, {}, {}], 'column');
+    expect(r[0]).toEqual({ x: 0, y: 0, width: 100, height: 100 }); // col 0, row 0
+    expect(r[1]).toEqual({ x: 0, y: 100, width: 100, height: 100 }); // col 0, row 1
+    expect(r[2]).toEqual({ x: 100, y: 0, width: 100, height: 100 }); // col 1, row 0
+    expect(r[3]).toEqual({ x: 100, y: 100, width: 100, height: 100 }); // col 1, row 1
+  });
+
+  it('honors a row span under column flow', () => {
+    // First item spans both rows of column 0; the next drops to column 1.
+    const r = placeGridItems(tracks, [{ rowSpan: 2 }, {}], 'column');
+    expect(r[0]).toEqual({ x: 0, y: 0, width: 100, height: 200 });
+    expect(r[1]).toEqual({ x: 100, y: 0, width: 100, height: 100 });
+  });
+});
+
+describe('gridTrackCount', () => {
+  it('counts rows for row flow, columns for column flow', () => {
+    expect(gridTrackCount(2, [{}, {}, {}, {}, {}], 'row')).toBe(3); // 5 items / 2 cols
+    expect(gridTrackCount(2, [{}, {}, {}, {}, {}], 'column')).toBe(3); // 5 items / 2 rows
+    expect(gridTrackCount(3, [{}, {}, {}, {}, {}], 'column')).toBe(2); // 5 items / 3 rows
   });
 });
 

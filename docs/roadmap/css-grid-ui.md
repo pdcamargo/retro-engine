@@ -66,6 +66,10 @@ authoring).
   applied to every cell via `contentOffset`). `.rss` maps `align-content`. The
   `space-*` modes (track-level spacing) fall back to start — a follow-up.
   Unit-tested (center both axes, flex-end both axes).
+- **Column flow ✅** — `UiStyle.gridAutoFlow: 'row'|'column'` + `gridAutoColumns`
+  (implicit column width). Column flow fills columns top-to-bottom then rightward;
+  implemented by transposing onto the tested row-major placer (`gridTrackCount(fixed,
+  items, flow)` + a `flow` arg on `placeGridItems`), so the row path is untouched.
+  `.rss` `grid-auto-flow` / `grid-auto-columns`. Unit-tested.
 - **Remaining:** `auto` / `minmax()` tracks (needs the child intrinsic-measure
-  hook); `space-between`/`around`/`evenly` track spacing; `grid-auto-flow: column`
-  + implicit *column* tracks.
+  hook); `space-between`/`around`/`evenly` track spacing.

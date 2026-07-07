@@ -111,6 +111,13 @@ describe('resolveUiStyle (declaration mapping)', () => {
     expect(style.gridAutoRows).toBe(48);
   });
 
+  it('maps grid-auto-flow + grid-auto-columns', () => {
+    const rules = parseRss(`.grid { display: grid; grid-auto-flow: column; grid-auto-columns: 60px; }`);
+    const style = resolveUiStyle(rules, node({ classes: ['grid'] }));
+    expect(style.gridAutoFlow).toBe('column');
+    expect(style.gridAutoColumns).toBe(60);
+  });
+
   it('maps justify-content / align-content (grid track distribution)', () => {
     const rules = parseRss(`.grid { justify-content: center; align-content: flex-end; }`);
     const style = resolveUiStyle(rules, node({ classes: ['grid'] }));

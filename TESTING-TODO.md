@@ -1988,3 +1988,24 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
 - Roadmap: MASTER-ROADMAP "Audio mixer buses" Phase 4d now includes listener orientation ✅.
 
 ---
+
+## ✅ P1 — CSS Grid for the UI, Phase 3f: grid-auto-flow: column (unit-verified)
+
+- **New:** `@retro-engine/ui` (ADR-0167). Grid auto-placement can fill columns first (top-to-bottom, then
+  rightward) via `UiStyle.gridAutoFlow: 'row'|'column'` (default `'row'`) + `gridAutoColumns` (implicit
+  column width, the column-flow counterpart to `gridAutoRows`). Implemented by transposing onto the existing
+  tested row-major placer — new `gridTrackCount(fixed, items, flow)` (generalizes `gridRowCount`) + a `flow`
+  arg on `placeGridItems`; the row-flow path is untouched. `.rss` maps `grid-auto-flow`/`grid-auto-columns`.
+- **Verified:** `grid-layout.test.ts` (+3): column fill order (down col 0, then col 1), row-span under column
+  flow, `gridTrackCount` for both flows. `flex-layout.test.ts` (+1): a column-flow grid with 2 fixed rows +
+  implicit 50px auto-columns fills columns. `rss-resolve.test.ts` (+1): `grid-auto-flow: column` +
+  `grid-auto-columns: 60px`. 184 ui tests. Full ui gate green: typecheck, lint (0/0), build.
+- **HOW to test:** `.strip { display: grid; grid-template-rows: 40px 40px; grid-auto-flow: column;
+  grid-auto-columns: 50px }` → items fill down each column then move right (a horizontal strip / toolbar),
+  generating 50px columns as needed.
+- **NOTE:** Additive under ADR-0167 (no new ADR). Remaining grid: `auto`/`minmax` tracks (needs child
+  intrinsic-measure), `space-*` track spacing. Grid placement is now feature-complete (row + column flow,
+  spanning, explicit lines, auto-tracks, alignment, content distribution).
+- Roadmap: MASTER-ROADMAP "CSS Grid for the UI layout engine" now 🟡 Phases 1–3f shipped. Box unchecked.
+
+---

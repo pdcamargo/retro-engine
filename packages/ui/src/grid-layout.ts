@@ -159,7 +159,7 @@ const UNPLACED: GridCell = { col: -1, row: 0, colSpan: 0, rowSpan: 0 };
  * an explicit column is clamped so its span fits the width. Returns the cells
  * (index-aligned to `items`) plus the number of rows actually used.
  */
-const assignGridCells = (
+const assignRowMajor = (
   colCount: number,
   items: readonly GridItem[],
   maxRows: number,
@@ -228,24 +228,81 @@ const assignGridCells = (
   return { cells: cells.map((c) => c ?? UNPLACED), rowCount };
 };
 
-/**
- * The number of rows the sparse auto-placement of `items` needs across
- * `colCount` columns, with rows growing implicitly (unbounded). Pure — lets the
- * layout engine size grid auto-rows (implicit tracks) before resolving geometry.
- */
-export const gridRowCount = (colCount: number, items: readonly GridItem[]): number =>
-  assignGridCells(colCount, items, Number.POSITIVE_INFINITY).rowCount;
+/** Auto-placement direction (CSS `grid-auto-flow`): fill rows first, or columns first. */
+export type GridFlow = 'row' | 'column';
+
+/** Swap an item's axes, so column-flow can reuse the row-major placer transposed. */
+const transposeItem = (item: GridItem): GridItem => ({
+  ...(item.rowSpan !== undefined ? { colSpan: item.rowSpan } : {}),
+  ...(item.colSpan !== undefined ? { rowSpan: item.colSpan } : {}),
+  ...(item.rowStart !== undefined ? { colStart: item.rowStart } : {}),
+  ...(item.colStart !== undefined ? { rowStart: item.colStart } : {}),
+});
+
+/** Swap an assigned cell's axes back after a transposed placement. */
+const transposeCell = (cell: GridCell): GridCell => ({
+  col: cell.col < 0 ? -1 : cell.row,
+  row: cell.col < 0 ? 0 : cell.col,
+  colSpan: cell.rowSpan,
+  rowSpan: cell.colSpan,
+});
 
 /**
- * Place `items` into a resolved grid by CSS-style sparse auto-placement (see
- * {@link gridRowCount}). Returns one `LayoutRect` per item (its spanning rect);
- * an item that fits nowhere within the grid's rows (grid full) gets a zero-size
- * rect. Pure — the placement half of grid layout, unit-tested.
+ * Assign cells for either flow. `'row'` fills each row left-to-right then wraps
+ * (fixed `colCount` columns, rows grow to `maxRows`). `'column'` fills each column
+ * top-to-bottom then moves right (fixed `rowCount` rows, columns grow to
+ * `maxCols`) — implemented by transposing onto the same tested row-major placer.
+ * `growCount` is the number of tracks the growing axis actually used (rows for
+ * `'row'`, columns for `'column'`).
  */
-export const placeGridItems = (grid: GridTracks, items: readonly GridItem[]): LayoutRect[] => {
+const assignByFlow = (
+  colCount: number,
+  rowCount: number,
+  items: readonly GridItem[],
+  flow: GridFlow,
+): { cells: GridCell[]; growCount: number } => {
+  if (flow === 'row') {
+    const { cells, rowCount: growCount } = assignRowMajor(colCount, items, rowCount);
+    return { cells, growCount };
+  }
+  const t = assignRowMajor(rowCount, items.map(transposeItem), colCount);
+  return { cells: t.cells.map(transposeCell), growCount: t.rowCount };
+};
+
+/**
+ * The number of tracks the sparse auto-placement of `items` needs on the growing
+ * axis, unbounded — rows for `'row'` flow (across `fixedCount` columns), columns
+ * for `'column'` flow (down `fixedCount` rows). Pure — lets the layout engine size
+ * implicit tracks (`grid-auto-rows` / `grid-auto-columns`) before resolving
+ * geometry.
+ */
+export const gridTrackCount = (
+  fixedCount: number,
+  items: readonly GridItem[],
+  flow: GridFlow = 'row',
+): number => {
+  const src = flow === 'row' ? items : items.map(transposeItem);
+  return assignRowMajor(fixedCount, src, Number.POSITIVE_INFINITY).rowCount;
+};
+
+/** The number of rows `'row'`-flow auto-placement needs across `colCount` columns. Pure. */
+export const gridRowCount = (colCount: number, items: readonly GridItem[]): number =>
+  gridTrackCount(colCount, items, 'row');
+
+/**
+ * Place `items` into a resolved grid by CSS-style sparse auto-placement, filling
+ * rows (`flow: 'row'`, the default) or columns (`flow: 'column'`). Returns one
+ * `LayoutRect` per item (its spanning rect); an item that fits nowhere gets a
+ * zero-size rect. Pure — the placement half of grid layout, unit-tested.
+ */
+export const placeGridItems = (
+  grid: GridTracks,
+  items: readonly GridItem[],
+  flow: GridFlow = 'row',
+): LayoutRect[] => {
   const colOff = trackOffsets(grid.columnSizes, grid.columnGap);
   const rowOff = trackOffsets(grid.rowSizes, grid.rowGap);
-  const { cells } = assignGridCells(grid.columnSizes.length, items, grid.rowSizes.length);
+  const { cells } = assignByFlow(grid.columnSizes.length, grid.rowSizes.length, items, flow);
   return cells.map((cell) =>
     cell.col < 0
       ? { x: 0, y: 0, width: 0, height: 0 }

@@ -26,6 +26,9 @@ export type AlignSelf = 'auto' | AlignItems;
  */
 export type Display = 'flex' | 'grid';
 
+/** Grid auto-placement direction (CSS `grid-auto-flow`): fill rows first, or columns first. */
+export type GridAutoFlow = 'row' | 'column';
+
 /** In-flow (`'relative'`) or taken out of flow and positioned by insets. */
 export type PositionType = 'relative' | 'absolute';
 
@@ -83,9 +86,22 @@ export interface UiStyle {
    * when items overflow the explicit {@link gridTemplateRows} (CSS
    * `grid-auto-rows`, fixed-size subset). `0` (the default) generates no implicit
    * rows, so an overflowing item collapses to zero size. Used only when
-   * {@link display} is `'grid'`.
+   * {@link display} is `'grid'` with `'row'` {@link gridAutoFlow}.
    */
   readonly gridAutoRows: number;
+  /**
+   * Auto-placement direction (CSS `grid-auto-flow`): `'row'` (the default) fills
+   * each row before wrapping to the next; `'column'` fills each column before
+   * moving right. Used only when {@link display} is `'grid'`.
+   */
+  readonly gridAutoFlow: GridAutoFlow;
+  /**
+   * Width in pixels of **implicit** grid columns — the `'column'`-flow counterpart
+   * to {@link gridAutoRows}, generated when items overflow the explicit
+   * {@link gridTemplateColumns}. `0` (the default) generates none. Used only with
+   * `'column'` {@link gridAutoFlow}.
+   */
+  readonly gridAutoColumns: number;
   readonly flexDirection: FlexDirection;
   readonly justifyContent: JustifyContent;
   /**
@@ -163,6 +179,8 @@ export const defaultUiStyle = (): UiStyle => ({
   gridColumnStart: 0,
   gridRowStart: 0,
   gridAutoRows: 0,
+  gridAutoFlow: 'row',
+  gridAutoColumns: 0,
   flexDirection: 'row',
   justifyContent: 'flex-start',
   alignContent: 'flex-start',
