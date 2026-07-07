@@ -351,8 +351,10 @@ foundation.**
       'nearest' }`; data maps → `{ colorSpace: 'linear' }`), unit-tested + backward-compatible. (2)
       per-asset `<name>.meta` overrides — the image importer reads its own sibling `.meta` (JSON of
       `TextureImportSettings`) via `LoadContext.read` and merges over the default; importer-local (no
-      asset-server change), missing/malformed sidecar ignored, unit-tested. Remaining: bake `.meta` into the
-      packed manifest for the bundle path; mipmaps/trilinear, max-size, PPU (Phase 3).
+      asset-server change), missing/malformed sidecar ignored, unit-tested. (3) **`.meta` baked into the
+      export manifest** ✅ (ADR-0172) — `AssetManifestEntry.meta` carries the sidecar's settings, the build
+      scan bakes them, `RpakAssetSource` synthesizes the `<name>.meta` read so exported games apply texture
+      settings (the importer is unchanged). Generic + unit-tested. Remaining: mipmaps/trilinear, max-size, PPU.
       _Links:_ [texture-import-settings.md](texture-import-settings.md)
 - [ ] **Sprite definitions (`.meta`, Unity-style)** — 🟡 **slicing geometry in place**: grid
       (`TextureAtlasLayout.fromGrid`, pre-existing) + **manual-rect (`fromRects`)** + 9-slice

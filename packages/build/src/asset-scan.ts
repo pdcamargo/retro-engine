@@ -31,10 +31,15 @@ export const parseMetaEntry = (metaLocation: string, bytes: Uint8Array): AssetMa
   if (typeof meta.guid !== 'string' || typeof meta.kind !== 'string') {
     throw new Error(`asset scan: '${metaLocation}' is missing a string 'guid' or 'kind'`);
   }
+  // Bake the sidecar's import settings (everything beyond the sidecar-metadata
+  // keys version/guid/kind) into the manifest so a bundle source can serve them
+  // without shipping the loose file.
+  const { version: _v, guid: _g, kind: _k, ...extra } = raw as Record<string, unknown>;
   return {
     guid: meta.guid as AssetManifestEntry['guid'],
     location: metaLocation.slice(0, -META_SUFFIX.length),
     kind: meta.kind,
+    ...(Object.keys(extra).length > 0 ? { meta: extra } : {}),
   };
 };
 

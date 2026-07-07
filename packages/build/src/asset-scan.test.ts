@@ -16,6 +16,16 @@ describe('parseMetaEntry', () => {
     expect(e.kind).toBe('Image');
   });
 
+  it('bakes import settings (beyond version/guid/kind) into `meta`, else omits it', () => {
+    const withSettings = new TextEncoder().encode(
+      JSON.stringify({ version: 1, guid: 'g1', kind: 'Image', filter: 'nearest', colorSpace: 'linear' }),
+    );
+    const e = parseMetaEntry('assets/pixel.png.meta', withSettings);
+    expect(e.meta).toEqual({ filter: 'nearest', colorSpace: 'linear' });
+    // A sidecar with only version/guid/kind carries no import settings → no meta.
+    expect(parseMetaEntry('assets/hero.png.meta', meta('g2', 'Image')).meta).toBeUndefined();
+  });
+
   it('throws on non-object JSON', () => {
     expect(() => parseMetaEntry('x.meta', new TextEncoder().encode('42'))).toThrow(/not a JSON object/);
   });

@@ -23,6 +23,19 @@ describe('parseAssetManifest', () => {
     expect(manifest.entries.get('g2' as AssetGuid)?.kind).toBe('StandardMaterial');
   });
 
+  it('round-trips an entry’s baked `meta` (import settings), omitting it otherwise', () => {
+    const withMeta: AssetManifestEntry = {
+      guid: 'g1' as AssetGuid,
+      location: 'assets/pixel.png',
+      kind: 'Image',
+      meta: { filter: 'nearest', colorSpace: 'linear' },
+    };
+    const plain: AssetManifestEntry = { guid: 'g2' as AssetGuid, location: 'a.mesh', kind: 'Mesh' };
+    const round = parseAssetManifest(serializeAssetManifest(bakeManifest([withMeta, plain])));
+    expect(round.entries.get('g1' as AssetGuid)?.meta).toEqual({ filter: 'nearest', colorSpace: 'linear' });
+    expect(round.entries.get('g2' as AssetGuid)?.meta).toBeUndefined();
+  });
+
   it('throws on malformed JSON', () => {
     expect(() => parseAssetManifest('{ not json')).toThrow();
   });

@@ -2074,3 +2074,27 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
 - Roadmap: MASTER-ROADMAP "CSS Grid for the UI layout engine" now 🟡 Phases 1–3i shipped (feature-complete).
 
 ---
+
+## ✅ P1 — Texture import settings Phase 2b: bake .meta into the export manifest (unit + export-verified)
+
+- **New:** `@retro-engine/assets` + `@retro-engine/build` + `@retro-engine/runtime-web` (ADR-0172). Exported
+  games now apply per-asset import settings (a texture's `filter`/`colorSpace`, etc.), which were previously
+  lost in the bundle because `.meta` sidecars aren't packed into the `.rpak`. `AssetManifestEntry` gains an
+  optional `meta` field (the sidecar's fields beyond version/guid/kind); the build scan bakes it;
+  `RpakAssetSource` synthesizes the `<name>.meta` read from it → the engine's image importer (reads
+  `ctx.read('<name>.meta')`) gets the settings unchanged. Assets without settings get no `meta` (lean
+  manifest); the importer's "no sidecar → defaults" path is preserved (unbaked `.meta` read falls through →
+  throws → defaults).
+- **Verified:** `manifest.test.ts` (+1): meta round-trips (serialize→parse), omitted when absent.
+  `asset-scan.test.ts` (+1): `parseMetaEntry` bakes settings beyond version/guid/kind, omits when none.
+  `rpak-asset-source.test.ts` (+1): serves the baked `.meta`, reads the asset, falls through for an unbaked
+  `.meta`. 77 assets+build+runtime-web tests. Full gate green (17 turbo tasks: typecheck/lint/build). **Export
+  sanity-checked**: `bun run build:web` on sample-game → manifest.json unchanged (its credits.txt sidecar has
+  no settings → no spurious meta), export still valid.
+- **HOW to test:** give a texture a `<name>.png.meta` with `{"filter":"nearest"}`, `retro build --target web`,
+  then run the exported game → the texture samples nearest-neighbor (pixel-art crisp), same as in the editor.
+  Confirm the exported `manifest.json` entry has a `meta: { filter: "nearest" }`.
+- **NOTE:** ADR-0172. Remaining texture Phase 3: mipmaps/trilinear (GPU), max-size downscale, PPU (sprite-side).
+- Roadmap: MASTER-ROADMAP "Texture import settings" now notes Phase (3) manifest bake ✅.
+
+---

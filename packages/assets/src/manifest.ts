@@ -8,6 +8,13 @@ export interface AssetManifestEntry {
   readonly location: string;
   /** The asset-kind tag selecting the importer / serializer for this asset. */
   readonly kind: string;
+  /**
+   * The asset's `.meta` sidecar fields baked into the manifest (import settings
+   * like a texture's `filter` / `colorSpace`), so a bundle source can serve them
+   * without shipping the loose sidecar. Omitted when the sidecar carries nothing
+   * beyond `guid` / `kind`.
+   */
+  readonly meta?: Readonly<Record<string, unknown>>;
 }
 
 /**
@@ -54,7 +61,7 @@ export const parseAssetManifest = (text: string): AssetManifest => {
   }
   const entries = new Map<AssetGuid, AssetManifestEntry>();
   for (const raw of file.entries as readonly unknown[]) {
-    const entry = raw as { guid?: unknown; location?: unknown; kind?: unknown };
+    const entry = raw as { guid?: unknown; location?: unknown; kind?: unknown; meta?: unknown };
     if (
       typeof entry.guid !== 'string' ||
       typeof entry.location !== 'string' ||
@@ -68,7 +75,13 @@ export const parseAssetManifest = (text: string): AssetManifest => {
     if (entries.has(guid)) {
       throw new Error(`parseAssetManifest: duplicate GUID '${entry.guid}' in manifest.`);
     }
-    entries.set(guid, { guid, location: entry.location, kind: entry.kind });
+    const hasMeta = typeof entry.meta === 'object' && entry.meta !== null;
+    entries.set(guid, {
+      guid,
+      location: entry.location,
+      kind: entry.kind,
+      ...(hasMeta ? { meta: entry.meta as Readonly<Record<string, unknown>> } : {}),
+    });
   }
   return { entries };
 };

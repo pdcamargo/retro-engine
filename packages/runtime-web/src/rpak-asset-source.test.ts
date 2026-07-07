@@ -45,3 +45,28 @@ describe('RpakAssetSource', () => {
     await expect(source.read('assets/missing.txt')).rejects.toThrow(/no packed asset/);
   });
 });
+
+describe('RpakAssetSource — baked .meta sidecars', () => {
+  it('serves a baked .meta from the manifest, reads the asset, and falls through for an unbaked .meta', async () => {
+    const bytes = await writeRpak([{ guid: 'g1', data: new Uint8Array([1, 2]) }]);
+    const reader = new RangeRpakReader(async (s, e) => bytes.subarray(s, e));
+    const manifest: AssetManifest = {
+      entries: new Map([
+        [
+          'g1' as AssetGuid,
+          { guid: 'g1' as AssetGuid, location: 'assets/pixel.png', kind: 'Image', meta: { filter: 'nearest' } },
+        ],
+      ]),
+    };
+    const source = new RpakAssetSource(reader, manifest);
+
+    // The `.meta` is synthesized from the baked manifest fields.
+    expect(JSON.parse(new TextDecoder().decode(await source.read('assets/pixel.png.meta')))).toEqual({
+      filter: 'nearest',
+    });
+    // The asset itself still streams from the rpak.
+    expect(Array.from(await source.read('assets/pixel.png'))).toEqual([1, 2]);
+    // A `.meta` with no baked entry falls through → throws (importer treats it as "no sidecar").
+    await expect(source.read('assets/other.png.meta')).rejects.toThrow(/no packed asset/);
+  });
+});

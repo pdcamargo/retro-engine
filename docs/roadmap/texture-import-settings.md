@@ -22,9 +22,15 @@ silently ignored) and merges it over the default. No asset-server or
 `LoadContext`-shape change — lower risk than pre-threading a settings field. Pure
 parser + sibling-path + importer tests.
 
-**Remaining:** bake `.meta` settings into the packed manifest entry for the
-bundle/web path (so a baked build carries per-asset settings without a loose
-sidecar).
+## Phase 2b — bake `.meta` into the export manifest ✅ (ADR-0172)
+
+`AssetManifestEntry` gained an optional `meta` field (the sidecar's fields beyond
+`version`/`guid`/`kind`); the build scan (`parseMetaEntry`) bakes it, and
+`RpakAssetSource` synthesizes the `<name>.meta` read from it — so an exported game
+applies per-asset settings without shipping the loose sidecar, and the engine
+importer (which reads `ctx.read('<name>.meta')`) is unchanged. Generic across any
+sidecar-reading importer; assets without settings stay `meta`-less. Unit-tested +
+export sanity-checked.
 
 ## Phase 3 — mipmaps, max size, PPU
 

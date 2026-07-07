@@ -30,15 +30,29 @@ export const httpRangeFetch = (url: string): RangeFetch => async (start, end) =>
 export class RpakAssetSource implements AssetSource {
   readonly #reader: RangeRpakReader;
   readonly #locationToGuid: Map<string, string>;
+  /** `<location>.meta` → the sidecar JSON bytes baked into the manifest (import settings). */
+  readonly #metaByLocation: Map<string, Uint8Array>;
   #opened: Promise<void> | undefined;
 
   constructor(reader: RangeRpakReader, manifest: AssetManifest) {
     this.#reader = reader;
     this.#locationToGuid = new Map();
-    for (const entry of manifest.entries.values()) this.#locationToGuid.set(entry.location, entry.guid);
+    this.#metaByLocation = new Map();
+    const encoder = new TextEncoder();
+    for (const entry of manifest.entries.values()) {
+      this.#locationToGuid.set(entry.location, entry.guid);
+      // Serve the asset's `.meta` sidecar from the baked manifest fields, so an
+      // importer that reads `<name>.meta` (e.g. texture import settings) gets them
+      // in the bundle without the loose sidecar being packed.
+      if (entry.meta !== undefined) {
+        this.#metaByLocation.set(`${entry.location}.meta`, encoder.encode(JSON.stringify(entry.meta)));
+      }
+    }
   }
 
   async read(location: string): Promise<Uint8Array> {
+    const meta = this.#metaByLocation.get(location);
+    if (meta !== undefined) return meta;
     this.#opened ??= this.#reader.open();
     await this.#opened;
     const guid = this.#locationToGuid.get(location);
