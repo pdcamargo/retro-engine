@@ -32,8 +32,14 @@ More interactive widgets, each an authored component that reuses the picking /
 axis+perpendicular cost. `UiFocusPlugin` consumes `UiNavigate`, moves focus,
 clears stale focus. Pure `tabNavigate`/`spatialNavigate` unit-tested.
 
-**Remaining (2b):** activate the focused widget (Enter/Space/South → click it) +
-a focus-ring visual. Both build on `UiFocus`.
+**Focus-ring visual ✅:** `deriveStates` now emits the `:focused` pseudo-class for
+the `UiFocus.current` node (and `:checked` for a checked `UiToggle`), so a focus
+ring is authored purely in `.rss` — `*:focus { border-color: … }`, `Toggle:checked
+{ … }` — with no hardcoded border code. Wired through `resolveUiStyles`'
+`focusedEntity` param (the `ui-style` system soft-reads `UiFocus`).
+
+**Remaining (2b):** activate the focused widget (Enter/Space/South → click it),
+building on `UiFocus`.
 
 ## Phase 3 — Data binding
 

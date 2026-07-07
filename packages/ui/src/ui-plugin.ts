@@ -3,6 +3,7 @@ import type { App, Font, Fonts, Image, PluginObject } from '@retro-engine/engine
 import { ASSET_TYPE, Children, Fonts as FontsResource, Parent, Query, Res } from '@retro-engine/engine';
 import { FieldType, type Schema, t } from '@retro-engine/reflect';
 
+import { UiFocus } from './focus/ui-focus';
 import { FlexLayoutEngine } from './flex-layout';
 import type { LayoutEngine, LayoutNode, LayoutResult } from './layout-engine';
 import { resolveUiStyles, UiClass, uiClassSchema, UiStyleSheet, UiTheme } from './rss-style';
@@ -146,11 +147,15 @@ export class UiPlugin implements PluginObject {
       'postUpdate',
       [Query([UiNode]), Res(UiStyleSheet), Res(UiTheme)],
       (nodes, sheet, theme) => {
+        // Soft dependency on UiFocusPlugin: drive `:focus` styling when present,
+        // no-op (null) otherwise so the style system runs without focus wired up.
+        const focused = app.getResource(UiFocus)?.current ?? null;
         resolveUiStyles(
           app.world,
           nodes as unknown as Parameters<typeof resolveUiStyles>[1],
           sheet as UiStyleSheet,
           theme as UiTheme,
+          focused,
         );
       },
       { label: 'ui-style' },

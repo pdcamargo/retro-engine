@@ -4,6 +4,7 @@ import { type Schema, t } from '@retro-engine/reflect';
 
 import { Disabled } from './interaction/ui-button';
 import { UiInteraction } from './interaction/ui-interaction';
+import { UiToggle } from './interaction/ui-toggle';
 import { parseRss, type RssRule } from './rss-parser';
 import { collectGlobalVars, resolveNodeVars, resolveUiStyle, type StyleNode } from './rss-resolve';
 import { UiNode } from './ui-node';
@@ -85,11 +86,13 @@ export const setUiThemeVars = (app: App, vars: Record<string, string>): void => 
 };
 
 /**
- * The live pseudo-class states of a node, derived from its runtime components:
- * `hovered`/`pressed` from {@link UiInteraction} (a pressed node is also hovered,
- * as in CSS `:hover` + `:active`) and `disabled` from the {@link Disabled} marker.
+ * The live pseudo-class states of a node, derived from its runtime components +
+ * the current focus: `hovered`/`pressed` from {@link UiInteraction} (a pressed
+ * node is also hovered, as in CSS `:hover` + `:active`), `disabled` from the
+ * {@link Disabled} marker, `checked` from a {@link UiToggle}'s state, and
+ * `focused` when the node is `focusedEntity`.
  */
-const deriveStates = (world: World, entity: Entity): string[] => {
+const deriveStates = (world: World, entity: Entity, focusedEntity: Entity | null): string[] => {
   const states: string[] = [];
   const interaction = world.getComponent(entity, UiInteraction);
   if (interaction !== undefined) {
@@ -97,13 +100,20 @@ const deriveStates = (world: World, entity: Entity): string[] => {
     if (interaction.state === 'pressed') states.push('pressed');
   }
   if (world.getComponent(entity, Disabled) !== undefined) states.push('disabled');
+  if (world.getComponent(entity, UiToggle)?.checked === true) states.push('checked');
+  if (focusedEntity !== null && entity === focusedEntity) states.push('focused');
   return states;
 };
 
 /** Build a node's `.rss` matching identity from its {@link UiClass} + live states. */
-const buildStyleNode = (world: World, entity: Entity, cls: UiClass): StyleNode => ({
+const buildStyleNode = (
+  world: World,
+  entity: Entity,
+  cls: UiClass,
+  focusedEntity: Entity | null,
+): StyleNode => ({
   classes: cls.classes,
-  states: deriveStates(world, entity),
+  states: deriveStates(world, entity, focusedEntity),
   ...(cls.type !== '' ? { type: cls.type } : {}),
   ...(cls.name !== '' ? { name: cls.name } : {}),
 });
@@ -125,6 +135,7 @@ export const resolveUiStyles = (
   nodes: UiNodeQuery,
   sheet: UiStyleSheet,
   theme?: UiTheme,
+  focusedEntity: Entity | null = null,
 ): void => {
   const uiSet = new Set<Entity>();
   for (const row of nodes.entries()) uiSet.add(row[0] as Entity);
@@ -140,7 +151,7 @@ export const resolveUiStyles = (
     let merged = inherited;
     const cls = world.getComponent(entity, UiClass);
     if (cls !== undefined) {
-      const styleNode = buildStyleNode(world, entity, cls);
+      const styleNode = buildStyleNode(world, entity, cls, focusedEntity);
       const own = resolveNodeVars(rules, styleNode);
       if (Object.keys(own).length > 0) merged = { ...inherited, ...own };
       const node = world.getComponent(entity, UiNode);

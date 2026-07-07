@@ -1420,3 +1420,22 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
   views, screens. Box unchecked pending your confirmation.
 
 ---
+
+## ✅ P1 — In-game UI depth: `:focused` / `:checked` .rss pseudo-classes wired to live state (unit-verified)
+
+- **New:** `@retro-engine/ui`. The `.rss` resolver already matched `:focused`/`:checked` but nothing emitted
+  them. `deriveStates` now pushes `checked` for a checked `UiToggle` and `focused` for the `UiFocus.current`
+  node. `resolveUiStyles` gained an optional `focusedEntity` arg (default none); the `ui-style` system
+  soft-reads the `UiFocus` resource (only present with `UiFocusPlugin`), so the style pass is unchanged
+  without focus. This is the focus-RING visual — authored purely in `.rss` (`*:focus { border-color }`),
+  no hardcoded border code — plus toggle-checked styling (`Toggle:checked { ... }`).
+- **Verified:** `rss-style.test.ts` (+2): `.cb:checked` flips background when the UiToggle is checked;
+  `.item:focused` applies only to the focused entity and reverts when focus clears. Full ui gate green:
+  typecheck, lint (60 files), 121 tests, build. Changeset added.
+- **HOW to test:** author `Toggle:checked { background-color: … }` / `Button:focus { border-color: … }` in
+  a `.rss` sheet with `UiPlugin` (+ `UiFocusPlugin` for `:focus`); the styles apply as toggles check and
+  focus moves.
+- Roadmap: MASTER-ROADMAP "In-game UI depth" — focus ring visual done via `:focus` styling; Phase 2b now
+  only needs focus activation (Enter/South → click the focused widget). Box unchecked pending confirmation.
+
+---

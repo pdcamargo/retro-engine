@@ -5,6 +5,7 @@ import { Children, Parent } from '@retro-engine/engine';
 
 import { Disabled } from './interaction/ui-button';
 import { UiInteraction } from './interaction/ui-interaction';
+import { UiToggle } from './interaction/ui-toggle';
 import { parseRss } from './rss-parser';
 import { collectThemeVars, parseColor, resolveUiStyle, substituteVars } from './rss-resolve';
 import { resolveUiStyles, UiClass, UiStyleSheet, UiTheme } from './rss-style';
@@ -115,6 +116,45 @@ describe('resolveUiStyles — ECS integration', () => {
     const e = world.spawn(new UiNode(), new UiClass({ classes: ['box'] }), new Disabled());
     resolveUiStyles(world, world.query([UiNode]), sheet);
     expectColor(bgColor(world, e), [128 / 255, 128 / 255, 128 / 255, 1]);
+  });
+
+  it('applies the :checked state from a UiToggle', () => {
+    const checkSheet = new UiStyleSheet(
+      parseRss(`
+        .cb { background-color: #101010; }
+        .cb:checked { background-color: #00ff00; }
+      `),
+    );
+    const world = new World();
+    const e = world.spawn(new UiNode(), new UiClass({ classes: ['cb'] }), new UiToggle({ checked: false }));
+
+    resolveUiStyles(world, world.query([UiNode]), checkSheet);
+    expectColor(bgColor(world, e), [16 / 255, 16 / 255, 16 / 255, 1]); // unchecked → base
+
+    world.getComponent(e, UiToggle)!.checked = true;
+    resolveUiStyles(world, world.query([UiNode]), checkSheet);
+    expectColor(bgColor(world, e), [0, 1, 0, 1]); // checked → :checked rule
+  });
+
+  it('applies the :focused state only to the focused entity', () => {
+    const focusSheet = new UiStyleSheet(
+      parseRss(`
+        .item { background-color: #101010; }
+        .item:focused { background-color: #0000ff; }
+      `),
+    );
+    const world = new World();
+    const a = world.spawn(new UiNode(), new UiClass({ classes: ['item'] }));
+    const b = world.spawn(new UiNode(), new UiClass({ classes: ['item'] }));
+
+    // Focus `a`: only it gets the :focused rule.
+    resolveUiStyles(world, world.query([UiNode]), focusSheet, undefined, a);
+    expectColor(bgColor(world, a), [0, 0, 1, 1]);
+    expectColor(bgColor(world, b), [16 / 255, 16 / 255, 16 / 255, 1]);
+
+    // No focus → both fall back to base.
+    resolveUiStyles(world, world.query([UiNode]), focusSheet, undefined, null);
+    expectColor(bgColor(world, a), [16 / 255, 16 / 255, 16 / 255, 1]);
   });
 
   it('matches #name and bare type selectors', () => {
