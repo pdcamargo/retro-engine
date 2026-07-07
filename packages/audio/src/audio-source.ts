@@ -16,6 +16,8 @@ export interface AudioSourceOptions {
   readonly playOnAdd?: boolean;
   readonly despawnOnEnd?: boolean;
   readonly bus?: string;
+  readonly spatial?: boolean;
+  readonly panWidth?: number;
 }
 
 /**
@@ -50,6 +52,16 @@ export class AudioSource {
    * routes straight to master. Set the bus's level with `Audio.setBusVolume`.
    */
   bus: string;
+  /**
+   * Pan this source in stereo by its world position relative to the
+   * {@link AudioListener}. When `false` it plays centered.
+   */
+  spatial: boolean;
+  /**
+   * World-space horizontal offset from the listener at which the pan reaches full
+   * left/right. Only meaningful when {@link AudioSource.spatial}.
+   */
+  panWidth: number;
 
   /** Runtime: set by {@link AudioSource.play} to (re)start on the next frame. Not serialized. */
   playRequested = false;
@@ -70,6 +82,8 @@ export class AudioSource {
     this.playOnAdd = options.playOnAdd ?? true;
     this.despawnOnEnd = options.despawnOnEnd ?? false;
     this.bus = options.bus ?? '';
+    this.spatial = options.spatial ?? false;
+    this.panWidth = options.panWidth ?? 10;
   }
 
   /** Request a (re)start of this source on the next audio update. */

@@ -257,8 +257,10 @@ foundation.**
       volume; (2) submix trees — `Audio.setBusOutput(bus, output)` routes bus→bus, facade owns the graph +
       rejects cycles; (3) effect inserts — `Audio.setBusEffect(bus, {filter|compressor} | null)` inserts a
       `BiquadFilterNode`/`DynamicsCompressorNode` between a bus's gain and output via one `rebuildBus` that
-      composes with submix routing; headless parity; `busEffect` query. Unit + stub-context tested.
-      Remaining: multi-effect chains, reverb sends, sidechain ducking, spatial panning.
+      composes with submix routing; headless parity; `busEffect` query; (4) **spatial stereo panning**
+      (ADR-0165) — `AudioSource.spatial` + `panWidth`, a per-voice `StereoPannerNode`, an `audio-spatial`
+      system panning by world X vs. the `AudioListener` (pure `panForOffset`), non-spatial audio unchanged.
+      Unit + stub-context tested. Remaining: distance attenuation, full 3D `PannerNode`, reverb/sidechain.
       _Links:_ [audio-mixer-buses.md](audio-mixer-buses.md) · [audio.md](audio.md)
 - [ ] **Windowing** — 🟡 **read side shipped**: `Window` resource (logical + physical size + dpr, mirrored
       from the surface) + `WindowResized` event + `syncWindow` + opt-in `WindowPlugin` (`'first'`-stage sync,

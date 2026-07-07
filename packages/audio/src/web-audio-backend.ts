@@ -6,6 +6,8 @@ interface Voice {
   /** The source node, or `null` while its clip is still decoding. */
   source: AudioBufferSourceNode | null;
   readonly gain: GainNode;
+  /** Stereo panner for a spatial voice, or `null` for a centered one. */
+  readonly panner: StereoPannerNode | null;
   readonly loop: boolean;
   readonly pitch: number;
   stopped: boolean;
@@ -54,11 +56,22 @@ export class WebAudioBackend implements AudioBackend {
 
     const gain = this.ctx.createGain();
     gain.gain.value = options?.volume ?? 1;
-    gain.connect(options?.bus !== undefined ? this.bus(options.bus) : this.master);
+    const out = options?.bus !== undefined ? this.bus(options.bus) : this.master;
+    // A spatial voice gets a stereo panner between its gain and the output;
+    // a centered voice connects straight through (no per-voice panner cost).
+    let panner: StereoPannerNode | null = null;
+    if (options?.spatial === true) {
+      panner = this.ctx.createStereoPanner();
+      gain.connect(panner);
+      panner.connect(out);
+    } else {
+      gain.connect(out);
+    }
 
     const voice: Voice = {
       source: null,
       gain,
+      panner,
       loop: options?.loop ?? false,
       pitch: options?.pitch ?? 1,
       stopped: false,
@@ -100,6 +113,11 @@ export class WebAudioBackend implements AudioBackend {
   setVolume(voice: VoiceId, volume: number): void {
     const v = this.voices.get(voice);
     if (v !== undefined) v.gain.gain.value = volume;
+  }
+
+  setPan(voice: VoiceId, pan: number): void {
+    const v = this.voices.get(voice);
+    if (v?.panner != null) v.panner.pan.value = pan < -1 ? -1 : pan > 1 ? 1 : pan;
   }
 
   isPlaying(voice: VoiceId): boolean {
@@ -210,6 +228,7 @@ export class WebAudioBackend implements AudioBackend {
     voice.cleaned = true;
     if (voice.source !== null) voice.source.disconnect();
     voice.gain.disconnect();
+    if (voice.panner !== null) voice.panner.disconnect();
     this.voices.delete(id);
   }
 

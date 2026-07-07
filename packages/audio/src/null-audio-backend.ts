@@ -26,6 +26,8 @@ export class NullAudioBackend implements AudioBackend {
 
   setVolume(): void {}
 
+  setPan(): void {}
+
   isPlaying(): boolean {
     return false;
   }

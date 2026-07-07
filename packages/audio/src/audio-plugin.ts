@@ -3,8 +3,10 @@ import {
   Assets,
   AssetServer,
   Commands,
+  GlobalTransform,
   Query,
   RemovedComponents,
+  Res,
   ResMut,
   registerAssetKind,
   registerAssetStore,
@@ -17,6 +19,7 @@ import { reconcileAudio } from './audio-playback';
 import { Audio } from './audio-resource';
 import { AudioListener, AudioSource, AudioVoices } from './audio-source';
 import { NullAudioBackend } from './null-audio-backend';
+import { panForOffset } from './spatial';
 import { WebAudioBackend } from './web-audio-backend';
 
 /**
@@ -92,6 +95,8 @@ export class AudioPlugin implements PluginObject {
         playOnAdd: t.boolean,
         despawnOnEnd: t.boolean,
         bus: t.string,
+        spatial: t.boolean,
+        panWidth: t.number,
         playRequested: t.boolean.skip(),
         stopRequested: t.boolean.skip(),
         started: t.boolean.skip(),
@@ -126,6 +131,33 @@ export class AudioPlugin implements PluginObject {
         reconcileAudio(sources.entries(), removed, voices, audio, (entity) => cmd.despawn(entity));
       },
       { name: 'audio-playback', after: ['audio'] },
+    );
+
+    // Stereo-pan spatial sources by their world X relative to the first
+    // AudioListener that has a transform. Uses the current GlobalTransform
+    // (a frame of latency is inaudible); runs after playback so voices exist.
+    app.addSystem(
+      'postUpdate',
+      [Query([AudioSource, GlobalTransform]), Query([AudioListener, GlobalTransform]), Res(AudioVoices), ResMut(Audio)],
+      (sources, listeners, voices, audio) => {
+        let listenerX = 0;
+        let hasListener = false;
+        for (const [, transform] of listeners as Iterable<readonly [AudioListener, GlobalTransform]>) {
+          listenerX = transform.matrix[12] ?? 0;
+          hasListener = true;
+          break;
+        }
+        if (!hasListener) return;
+        for (const row of (sources as { entries(): Iterable<readonly unknown[]> }).entries()) {
+          const source = row[1] as AudioSource;
+          if (!source.spatial) continue;
+          const active = (voices as AudioVoices).get(row[0] as never);
+          if (active === undefined) continue;
+          const worldX = (row[2] as GlobalTransform).matrix[12] ?? 0;
+          (audio as Audio).setPan(active.voice, panForOffset(worldX, listenerX, source.panWidth));
+        }
+      },
+      { name: 'audio-spatial', after: ['audio-playback'] },
     );
   }
 

@@ -32,8 +32,14 @@ stub-context tested (incl. effect surviving a submix reroute).
 **Remaining:** multi-effect chains per bus, live param automation, reverb
 (`ConvolverNode`) sends, sidechain ducking.
 
-## Phase 4 — spatial panning
+## Phase 4 — spatial panning 🟡 (ADR-0165)
 
-Positional audio off the `AudioListener` transform: per-voice `PannerNode` (or a
-cheaper stereo pan for 2D), distance attenuation model. Ties `AudioSource` +
-`AudioListener` world transforms into the routing graph.
+**Done (pan):** `AudioSource.spatial` + `panWidth`; a per-spatial-voice
+`StereoPannerNode` (`PlayOptions.spatial`, `Audio.setPan`); the `audio-spatial`
+system pans each spatial voice by its world X vs. the first transform-bearing
+`AudioListener`, via pure `panForOffset`. Non-spatial audio is unchanged (no
+panner). Unit + stub-context tested.
+
+**Remaining (4b):** distance attenuation (needs a falloff model + a combine with
+the volume-sync path), a full 3D `PannerNode` mode (elevation/HRTF/rolloff),
+Doppler.

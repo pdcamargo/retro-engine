@@ -48,6 +48,12 @@ export interface PlayOptions {
    * bus is created on first use; names are free-form conventions, not a fixed set.
    */
   readonly bus?: string;
+  /**
+   * Give this voice a stereo panner so its left/right position can be driven with
+   * {@link AudioBackend.setPan} (a spatial `AudioSource`). Omitted plays centered
+   * with no panner. Default `false`.
+   */
+  readonly spatial?: boolean;
 }
 
 /**
@@ -75,6 +81,12 @@ export interface AudioBackend {
   stopAll(): void;
   /** Set a live voice's linear gain. Unknown or finished ids are ignored. */
   setVolume(voice: VoiceId, volume: number): void;
+  /**
+   * Set a live voice's stereo pan, `[-1, 1]` (left..right). No-op for a voice
+   * that was not started with `spatial: true` (it has no panner), or an unknown
+   * id.
+   */
+  setPan(voice: VoiceId, pan: number): void;
   /** Whether `voice` is still playing. */
   isPlaying(voice: VoiceId): boolean;
   /** Set the master gain applied to every voice, `[0, ∞)` (typically `[0, 1]`). */

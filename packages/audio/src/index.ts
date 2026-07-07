@@ -1,4 +1,5 @@
-export type { AudioBackend, PlayOptions, VoiceId } from './audio-backend';
+export type { AudioBackend, BusEffect, PlayOptions, VoiceId } from './audio-backend';
+export { panForOffset } from './spatial';
 export {
   AUDIO_CLIP_ASSET_KIND,
   AUDIO_CLIP_EXTENSIONS,

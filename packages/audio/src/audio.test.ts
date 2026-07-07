@@ -32,6 +32,10 @@ class MockBackend implements AudioBackend {
   }
   stopAll(): void {}
   setVolume(): void {}
+  readonly pans: [VoiceId, number][] = [];
+  setPan(voice: VoiceId, pan: number): void {
+    this.pans.push([voice, pan]);
+  }
   isPlaying(): boolean {
     return true;
   }
@@ -184,6 +188,15 @@ describe('Audio facade', () => {
     expect(audio.busEffect('music')).toBeNull();
     expect(backend.busEffects[backend.busEffects.length - 1]).toEqual(['music', null]);
   });
+
+  it('forwards a spatial route on play and pan to the backend', () => {
+    const backend = new MockBackend();
+    const audio = new Audio(backend, new AudioClips());
+    const voice = audio.play(new AudioClip(new Uint8Array([1])), { spatial: true })!;
+    expect(backend.playCalls[0]!.options?.spatial).toBe(true);
+    audio.setPan(voice, -0.5);
+    expect(backend.pans).toContainEqual([voice, -0.5]);
+  });
 });
 
 /** Minimal Web Audio graph stub: records gain nodes and their connections. */
@@ -236,15 +249,31 @@ class StubCompressorNode {
     this.outputs.length = 0;
   }
 }
+class StubPannerNode {
+  readonly pan = new StubParam(0);
+  readonly outputs: object[] = [];
+  connect(target: object): void {
+    this.outputs.push(target);
+  }
+  disconnect(): void {
+    this.outputs.length = 0;
+  }
+}
 class StubAudioContext {
   state = 'running';
   readonly destination = { id: 'destination' };
   readonly created: StubGainNode[] = [];
   readonly filters: StubFilterNode[] = [];
+  readonly panners: StubPannerNode[] = [];
   createGain(): StubGainNode {
     const g = new StubGainNode();
     this.created.push(g);
     return g;
+  }
+  createStereoPanner(): StubPannerNode {
+    const p = new StubPannerNode();
+    this.panners.push(p);
+    return p;
   }
   createBufferSource(): StubBufferSource {
     return new StubBufferSource();
@@ -356,5 +385,31 @@ describe('WebAudioBackend — mixer buses', () => {
     const fx = dialogueBus.outputs[0]!;
     expect(dialogueBus.outputs).toHaveLength(1); // gain → effect only
     expect((fx as { outputs: object[] }).outputs).toContain(voiceBus); // effect → voice submix
+  });
+
+  it('inserts a stereo panner only for a spatial voice, and setPan drives it', () => {
+    const ctx = new StubAudioContext();
+    const backend = new WebAudioBackend(ctx as unknown as AudioContext);
+    const master = ctx.created[0]!;
+
+    // Non-spatial voice → no panner (gain → master).
+    const plain = backend.play(new AudioClip(new Uint8Array([1])))!;
+    expect(ctx.panners).toHaveLength(0);
+    backend.setPan(plain, 0.9); // no-op, no panner — must not throw
+    const plainGain = ctx.created[ctx.created.length - 1]!;
+    expect(plainGain.outputs).toContain(master);
+
+    // Spatial voice → a panner between the gain and master.
+    const spatial = backend.play(new AudioClip(new Uint8Array([2])), { spatial: true })!;
+    const panner = ctx.panners[ctx.panners.length - 1]!;
+    const spatialGain = ctx.created[ctx.created.length - 1]!;
+    expect(spatialGain.outputs).toContain(panner);
+    expect(spatialGain.outputs).not.toContain(master);
+    expect(panner.outputs).toContain(master);
+
+    backend.setPan(spatial, -0.5);
+    expect(panner.pan.value).toBe(-0.5);
+    backend.setPan(spatial, -3); // clamps to [-1, 1]
+    expect(panner.pan.value).toBe(-1);
   });
 });

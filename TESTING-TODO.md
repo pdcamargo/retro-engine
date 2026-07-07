@@ -1477,3 +1477,23 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
   reverb sends, sidechain ducking, spatial panning) tracked in `audio-mixer-buses.md`. Box unchecked.
 
 ---
+
+## ✅ P1 — Audio mixer buses, Phase 4: 2D spatial stereo panning (unit + stub-context verified)
+
+- **New:** `@retro-engine/audio` (ADR-0165). `AudioSource.spatial` + `panWidth` opt a source into stereo
+  panning by world position. `PlayOptions.spatial` gives a voice a `StereoPannerNode` (`gain → panner →
+  bus/master`); `Audio.setPan(voice, pan)` drives it (`[-1,1]`, clamped; no-op for non-spatial). The
+  `audio-spatial` system (postUpdate, after audio-playback) pans each spatial voice by its world X vs. the
+  first `AudioListener` with a `GlobalTransform`, via pure `panForOffset(sourceX, listenerX, panWidth)`.
+  Non-spatial audio is byte-for-byte unchanged (no panner). `NullAudioBackend` no-ops. StereoPannerNode
+  confirmed against MDN (§2). Reflection: `spatial`/`panWidth` added to the AudioSource schema.
+- **Verified:** `spatial.test.ts` (+5): panForOffset center/left/right/clamp/listener-relative/zero-width.
+  `audio.test.ts` (+2): facade forwards spatial on play + setPan; WebAudio stub — a spatial voice gets a
+  panner (gain→panner→master) while a plain voice doesn't (gain→master), and setPan sets/clamps pan.value.
+  Full audio gate green: typecheck, lint (15 files), 34 tests, build. Changeset.
+- **HOW to test:** spawn `new AudioSource(clip, { spatial: true })` on a positioned entity + an
+  `AudioListener` on a transform; the sound pans left/right as the source moves relative to the listener.
+- Roadmap: MASTER-ROADMAP "Audio mixer buses" now 🟡 Phases 1–4 (pan) shipped; remaining (distance
+  attenuation, full 3D PannerNode, reverb/sidechain) tracked in `audio-mixer-buses.md`. Box unchecked.
+
+---

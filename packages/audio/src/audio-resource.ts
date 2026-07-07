@@ -54,6 +54,11 @@ export class Audio {
     this.backend.setVolume(voice, volume);
   }
 
+  /** Set a live voice's stereo pan, `[-1, 1]` (no-op for a non-spatial voice). */
+  setPan(voice: VoiceId, pan: number): void {
+    this.backend.setPan(voice, pan);
+  }
+
   /** Whether `voice` is still playing. */
   isPlaying(voice: VoiceId): boolean {
     return this.backend.isPlaying(voice);
