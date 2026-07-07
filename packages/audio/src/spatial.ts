@@ -11,6 +11,37 @@ export const panForOffset = (sourceX: number, listenerX: number, panWidth: numbe
   return t < -1 ? -1 : t > 1 ? 1 : t;
 };
 
+/** A normalized listener basis: the direction it faces + its up vector. */
+export interface ListenerAxes {
+  readonly forward: readonly [number, number, number];
+  readonly up: readonly [number, number, number];
+}
+
+/** Normalize a 3-vector, falling back to `fallback` when it is (near) zero-length. */
+const normalize3 = (
+  x: number,
+  y: number,
+  z: number,
+  fallback: readonly [number, number, number],
+): [number, number, number] => {
+  const len = Math.hypot(x, y, z);
+  // `+ 0` normalizes any `-0` (from negating a 0 component) to `+0`.
+  return len > 1e-6 ? [x / len + 0, y / len + 0, z / len + 0] : [fallback[0], fallback[1], fallback[2]];
+};
+
+/**
+ * Extract a 3D listener's facing (`forward`) and `up` from a column-major world
+ * transform `matrix`: forward is the normalized `-Z` basis column (a camera looks
+ * down `-Z`), up is the normalized `+Y` basis column — so 3D audio tracks the
+ * listener's rotation, not just its position. Degenerate (scale-0) axes fall back
+ * to `(0,0,-1)` / `(0,1,0)`. Pure — the spatial-audio system's orientation logic,
+ * unit-tested.
+ */
+export const listenerAxes = (matrix: ArrayLike<number>): ListenerAxes => ({
+  forward: normalize3(-(matrix[8] ?? 0), -(matrix[9] ?? 0), -(matrix[10] ?? 1), [0, 0, -1]),
+  up: normalize3(matrix[4] ?? 0, matrix[5] ?? 1, matrix[6] ?? 0, [0, 1, 0]),
+});
+
 /**
  * How distance attenuation falls off, matching the Web Audio `PannerNode`
  * distance models:

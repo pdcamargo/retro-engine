@@ -1,6 +1,6 @@
 export type { AudioBackend, BusEffect, PannerConfig, PlayOptions, VoiceId } from './audio-backend';
-export type { DistanceModel } from './spatial';
-export { attenuationForDistance, panForOffset } from './spatial';
+export type { DistanceModel, ListenerAxes } from './spatial';
+export { attenuationForDistance, listenerAxes, panForOffset } from './spatial';
 export {
   AUDIO_CLIP_ASSET_KIND,
   AUDIO_CLIP_EXTENSIONS,

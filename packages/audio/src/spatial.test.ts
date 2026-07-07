@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 
-import { attenuationForDistance, panForOffset } from './spatial';
+import { attenuationForDistance, listenerAxes, panForOffset } from './spatial';
 
 describe('panForOffset', () => {
   it('is centered when the source is at the listener', () => {
@@ -84,5 +84,32 @@ describe('attenuationForDistance', () => {
     expect(attenuationForDistance(5, 0, 100, 1, 'inverse')).toBe(1);
     expect(attenuationForDistance(5, 0, 100, 1, 'exponential')).toBe(1);
     expect(attenuationForDistance(5, 1, 100, 0, 'inverse')).toBe(1);
+  });
+});
+
+describe('listenerAxes', () => {
+  const identity = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+
+  it('faces -Z with +Y up for an identity transform', () => {
+    const a = listenerAxes(identity);
+    expect(a.forward).toEqual([0, 0, -1]);
+    expect(a.up).toEqual([0, 1, 0]);
+  });
+
+  it('tracks a 180° yaw (forward flips to +Z)', () => {
+    // R_y(180°), column-major: -X and -Z basis.
+    const yaw180 = [-1, 0, 0, 0, 0, 1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1];
+    const a = listenerAxes(yaw180);
+    expect(a.forward[0]).toBeCloseTo(0, 10);
+    expect(a.forward[2]).toBeCloseTo(1, 10); // now faces +Z
+    expect(a.up).toEqual([0, 1, 0]);
+  });
+
+  it('normalizes scaled basis columns', () => {
+    // Z basis scaled ×2, Y basis scaled ×3 → still unit forward / up.
+    const scaled = [1, 0, 0, 0, 0, 3, 0, 0, 0, 0, 2, 0, 0, 0, 0, 1];
+    const a = listenerAxes(scaled);
+    expect(a.forward).toEqual([0, 0, -1]);
+    expect(a.up).toEqual([0, 1, 0]);
   });
 });

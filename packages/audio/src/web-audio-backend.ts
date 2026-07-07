@@ -173,6 +173,22 @@ export class WebAudioBackend implements AudioBackend {
     }
   }
 
+  setListenerOrientation(fx: number, fy: number, fz: number, ux: number, uy: number, uz: number): void {
+    const l = this.ctx.listener as AudioListener & {
+      setOrientation?: (fx: number, fy: number, fz: number, ux: number, uy: number, uz: number) => void;
+    };
+    if (l.forwardX != null) {
+      l.forwardX.value = fx;
+      l.forwardY.value = fy;
+      l.forwardZ.value = fz;
+      l.upX.value = ux;
+      l.upY.value = uy;
+      l.upZ.value = uz;
+    } else if (typeof l.setOrientation === 'function') {
+      l.setOrientation(fx, fy, fz, ux, uy, uz); // deprecated fallback
+    }
+  }
+
   isPlaying(voice: VoiceId): boolean {
     return this.voices.has(voice);
   }

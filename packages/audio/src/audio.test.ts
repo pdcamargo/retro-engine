@@ -48,6 +48,10 @@ class MockBackend implements AudioBackend {
   setListenerPosition(x: number, y: number, z: number): void {
     this.listenerPositions.push([x, y, z]);
   }
+  readonly listenerOrientations: number[][] = [];
+  setListenerOrientation(fx: number, fy: number, fz: number, ux: number, uy: number, uz: number): void {
+    this.listenerOrientations.push([fx, fy, fz, ux, uy, uz]);
+  }
   isPlaying(): boolean {
     return true;
   }
@@ -223,6 +227,8 @@ describe('Audio facade', () => {
     expect(backend.positions).toContainEqual([voice, 3, 4, 5]);
     audio.setListenerPosition(1, 2, 3);
     expect(backend.listenerPositions).toContainEqual([1, 2, 3]);
+    audio.setListenerOrientation(0, 0, -1, 0, 1, 0);
+    expect(backend.listenerOrientations).toContainEqual([0, 0, -1, 0, 1, 0]);
   });
 });
 
@@ -307,6 +313,12 @@ class StubAudioListener {
   readonly positionX = new StubParam(0);
   readonly positionY = new StubParam(0);
   readonly positionZ = new StubParam(0);
+  readonly forwardX = new StubParam(0);
+  readonly forwardY = new StubParam(0);
+  readonly forwardZ = new StubParam(-1);
+  readonly upX = new StubParam(0);
+  readonly upY = new StubParam(1);
+  readonly upZ = new StubParam(0);
 }
 class StubAudioContext {
   state = 'running';
@@ -505,6 +517,12 @@ describe('WebAudioBackend — mixer buses', () => {
     expect([ctx.listener.positionX.value, ctx.listener.positionY.value, ctx.listener.positionZ.value]).toEqual([
       1, 2, 3,
     ]);
+
+    backend.setListenerOrientation(0, 0, 1, 0, 1, 0); // faced +Z, up +Y
+    expect([ctx.listener.forwardX.value, ctx.listener.forwardY.value, ctx.listener.forwardZ.value]).toEqual([
+      0, 0, 1,
+    ]);
+    expect([ctx.listener.upX.value, ctx.listener.upY.value, ctx.listener.upZ.value]).toEqual([0, 1, 0]);
 
     // setSpatialPosition on a non-3D voice is a safe no-op.
     const plain = backend.play(new AudioClip(new Uint8Array([2])))!;

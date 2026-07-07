@@ -125,6 +125,19 @@ export interface AudioBackend {
   setSpatialPosition(voice: VoiceId, x: number, y: number, z: number): void;
   /** Set the listener's world position, shared by every 3D voice. */
   setListenerPosition(x: number, y: number, z: number): void;
+  /**
+   * Set the listener's orientation — the direction it faces (`forward`) and its
+   * `up` vector — so 3D panning tracks the listener's rotation. Vectors need not
+   * be normalized.
+   */
+  setListenerOrientation(
+    forwardX: number,
+    forwardY: number,
+    forwardZ: number,
+    upX: number,
+    upY: number,
+    upZ: number,
+  ): void;
   /** Whether `voice` is still playing. */
   isPlaying(voice: VoiceId): boolean;
   /** Set the master gain applied to every voice, `[0, ∞)` (typically `[0, 1]`). */

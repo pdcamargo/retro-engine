@@ -19,7 +19,7 @@ import { reconcileAudio } from './audio-playback';
 import { Audio } from './audio-resource';
 import { AudioListener, AudioSource, AudioVoices } from './audio-source';
 import { NullAudioBackend } from './null-audio-backend';
-import { attenuationForDistance, panForOffset } from './spatial';
+import { attenuationForDistance, listenerAxes, panForOffset } from './spatial';
 import { WebAudioBackend } from './web-audio-backend';
 
 /**
@@ -149,17 +149,26 @@ export class AudioPlugin implements PluginObject {
         let lx = 0;
         let ly = 0;
         let lz = 0;
-        let hasListener = false;
+        let listenerMatrix: ArrayLike<number> | undefined;
         for (const [, transform] of listeners as Iterable<readonly [AudioListener, GlobalTransform]>) {
           lx = transform.matrix[12] ?? 0;
           ly = transform.matrix[13] ?? 0;
           lz = transform.matrix[14] ?? 0;
-          hasListener = true;
+          listenerMatrix = transform.matrix;
           break;
         }
-        if (!hasListener) return;
-        // Shared listener position for any 3D voices this frame.
+        if (listenerMatrix === undefined) return;
+        // Shared listener position + orientation for any 3D voices this frame.
         (audio as Audio).setListenerPosition(lx, ly, lz);
+        const axes = listenerAxes(listenerMatrix);
+        (audio as Audio).setListenerOrientation(
+          axes.forward[0],
+          axes.forward[1],
+          axes.forward[2],
+          axes.up[0],
+          axes.up[1],
+          axes.up[2],
+        );
         for (const row of (sources as { entries(): Iterable<readonly unknown[]> }).entries()) {
           const source = row[1] as AudioSource;
           if (!source.spatial) continue;

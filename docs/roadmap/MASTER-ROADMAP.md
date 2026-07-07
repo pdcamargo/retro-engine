@@ -296,8 +296,9 @@ foundation.**
       `maxDistance`. Unit-tested. (4d) **3D positional mode** (ADR-0171) — `AudioSource.spatialMode:
       '2d'|'3d'`; a `'3d'` voice uses a Web Audio `PannerNode` (elevation/front-back/HRTF, panning +
       attenuation internal), `PlayOptions.panner`, `setSpatialPosition`/`setListenerPosition`, the
-      `audio-spatial` system driving positions; 2D path unchanged. Unit-tested. Remaining: listener
-      orientation, cones, Doppler, reverb/sidechain.
+      `audio-spatial` system driving positions; 2D path unchanged. **Listener orientation** ✅ — forward/up
+      derived from the `AudioListener`'s transform (pure `listenerAxes`) → `setListenerOrientation`, so 3D
+      panning tracks camera rotation. Unit-tested. Remaining: source cones, Doppler, reverb/sidechain.
       _Links:_ [audio-mixer-buses.md](audio-mixer-buses.md) · [audio.md](audio.md)
 - [ ] **Windowing** — 🟡 **read side + cursor control shipped**: `Window` resource (logical + physical size +
       dpr, mirrored from the surface) + `WindowResized` event + `syncWindow` + opt-in `WindowPlugin`

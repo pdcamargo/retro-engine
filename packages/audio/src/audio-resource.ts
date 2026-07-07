@@ -77,6 +77,11 @@ export class Audio {
     this.backend.setListenerPosition(x, y, z);
   }
 
+  /** Set the listener's orientation (facing + up), so 3D panning tracks its rotation. */
+  setListenerOrientation(fx: number, fy: number, fz: number, ux: number, uy: number, uz: number): void {
+    this.backend.setListenerOrientation(fx, fy, fz, ux, uy, uz);
+  }
+
   /** Whether `voice` is still playing. */
   isPlaying(voice: VoiceId): boolean {
     return this.backend.isPlaying(voice);

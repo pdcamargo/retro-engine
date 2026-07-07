@@ -34,6 +34,8 @@ export class NullAudioBackend implements AudioBackend {
 
   setListenerPosition(): void {}
 
+  setListenerOrientation(): void {}
+
   isPlaying(): boolean {
     return false;
   }

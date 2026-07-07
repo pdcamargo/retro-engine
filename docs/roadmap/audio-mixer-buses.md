@@ -61,7 +61,11 @@ out`) that does panning + distance attenuation itself; `PlayOptions.panner` /
 `PannerConfig`, `AudioBackend.setSpatialPosition` / `setListenerPosition`, the
 `audio-spatial` system driving voice + listener positions from `GlobalTransform`.
 `panningModel` defaults `'HRTF'`; reuses the ADR-0168 distance fields. 2D path
-unchanged; Null no-ops. Unit + stub-context tested.
+unchanged; Null no-ops. **Listener orientation ✅** — the `audio-spatial` system
+derives forward/up from the `AudioListener`'s `GlobalTransform` (pure
+`listenerAxes`) and drives `setListenerOrientation` (modern `forwardX`/`upX`
+params + `setOrientation` fallback), so 3D panning tracks camera rotation. Unit +
+stub-context tested.
 
-**Remaining:** listener orientation (forward/up), source directionality (cone),
-Doppler (velocity), reverb/sidechain sends.
+**Remaining:** source directionality (cone), Doppler (velocity), reverb/sidechain
+sends.

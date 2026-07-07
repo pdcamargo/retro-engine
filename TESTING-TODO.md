@@ -1968,3 +1968,23 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
 - Roadmap: MASTER-ROADMAP "Audio mixer buses" now notes Phase 4d (3D positional) shipped.
 
 ---
+
+## ✅ P1 — Audio: 3D listener orientation (tracks camera rotation) (unit-verified)
+
+- **New:** `@retro-engine/audio`. Completes 3D positional audio (ADR-0171). The listener now faces where the
+  `AudioListener`'s transform points — a source to the camera's right correctly moves to the left ear when
+  the camera turns 180°. New `AudioBackend.setListenerOrientation(fx,fy,fz,ux,uy,uz)` (WebAudio sets the
+  modern `forwardX`/`upX` params + `setOrientation` fallback; Null no-ops). The `audio-spatial` system
+  derives forward/up via pure `listenerAxes(matrix)` (normalized `-Z`/`+Y` basis columns of the listener's
+  GlobalTransform) and sets it once per frame.
+- **Verified:** `spatial.test.ts` (+3): `listenerAxes` for identity (faces -Z, up +Y), 180° yaw (forward
+  flips to +Z), scaled bases (still unit). `audio.test.ts`: facade forwards orientation; WebAudioBackend sets
+  the listener forward/up params. 48 audio tests. Full audio gate green: typecheck, lint (0/0), build.
+- **HOW to test:** a `spatialMode: '3d'` source + an `AudioListener` on a rotating camera → the sound's
+  apparent direction rotates with the camera (before this, it was stuck to the world axes). **Browser-confirm
+  by ear.**
+- **NOTE:** No new ADR (completes the listener-orientation follow-up ADR-0171 listed). Remaining audio
+  spatial: source cones, Doppler, reverb/sidechain.
+- Roadmap: MASTER-ROADMAP "Audio mixer buses" Phase 4d now includes listener orientation ✅.
+
+---
