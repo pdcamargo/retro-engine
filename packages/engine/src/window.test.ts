@@ -8,6 +8,7 @@ import {
   ResMut,
   type WindowBackend,
   Window,
+  WindowMode,
   WindowPlugin,
   WindowResized,
   syncWindow,
@@ -73,22 +74,31 @@ describe('WindowPlugin (integration)', () => {
     expect(resizes).toHaveLength(1);
   });
 
-  it('inserts CursorOptions and applies grab changes to the backend once each', () => {
+  it('inserts CursorOptions + WindowMode and applies grab / fullscreen changes once each', () => {
     const calls: [boolean, CursorGrab][] = [];
-    const backend: WindowBackend = { applyCursor: (v, g) => calls.push([v, g]) };
+    const fullscreens: boolean[] = [];
+    const backend: WindowBackend = {
+      applyCursor: (v, g) => calls.push([v, g]),
+      setFullscreen: (f) => fullscreens.push(f),
+    };
     const app = new App({ renderer: makeHeadlessRenderer() });
     app.addPlugin(new WindowPlugin({ backend }));
     expect(app.getResource(CursorOptions)).toBeInstanceOf(CursorOptions);
+    expect(app.getResource(WindowMode)).toBeInstanceOf(WindowMode);
 
-    app.advanceFrame(0); // defaults (visible/none) match the initial snapshot → no call
+    app.advanceFrame(0); // defaults match the initial snapshots → no calls
     expect(calls).toHaveLength(0);
+    expect(fullscreens).toHaveLength(0);
 
-    app.addSystem('update', [ResMut(CursorOptions)], (c) => {
+    app.addSystem('update', [ResMut(CursorOptions), ResMut(WindowMode)], (c, m) => {
       (c as CursorOptions).grab = 'locked';
+      (m as WindowMode).fullscreen = true;
     });
     app.advanceFrame(16);
     expect(calls).toEqual([[true, 'locked']]);
-    app.advanceFrame(32); // steady 'locked' → not re-applied
+    expect(fullscreens).toEqual([true]);
+    app.advanceFrame(32); // steady → not re-applied
     expect(calls).toHaveLength(1);
+    expect(fullscreens).toHaveLength(1);
   });
 });

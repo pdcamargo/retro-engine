@@ -1885,3 +1885,25 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
 - Roadmap: MASTER-ROADMAP "CSS Grid for the UI layout engine" now 🟡 Phases 1–3e shipped. Box unchecked.
 
 ---
+
+## ✅ P1 — Windowing: fullscreen toggle (unit-verified)
+
+- **New:** `@retro-engine/engine`. Extends the ADR-0170 `WindowBackend` seam with fullscreen. A `WindowMode`
+  resource (`fullscreen: boolean`, runtime — not serialized) is the game-facing API; `WindowPlugin` applies
+  it each frame via `WindowBackend.setFullscreen` (Fullscreen API in `DomWindowBackend`, no-op in headless).
+  Pure `reconcileWindowMode` applies only on change (same idiom as `reconcileCursor`); the existing
+  `cursor-apply` system now reconciles both cursor + mode.
+- **Verified:** `cursor.test.ts` (+2): `reconcileWindowMode` applies fullscreen only on change + updates the
+  snapshot; `DomWindowBackend.setFullscreen(true)` requests fullscreen on the element (stub); headless no-op.
+  `window.test.ts` (+): `WindowPlugin({ backend })` inserts `WindowMode` and applies a `fullscreen = true`
+  change to the backend once (steady state not re-applied). 1280 engine tests. Full engine gate green:
+  typecheck, lint (0/0), build.
+- **HOW to test:** `app.addPlugin(new WindowPlugin({ cursorTarget: canvas }))`, then a system that toggles
+  `Res(WindowMode).fullscreen` on F11 → the window enters/leaves fullscreen. **Browser-confirm** the actual
+  fullscreen (the reconcile + backend selection are unit-covered; the DOM effect is thin glue). Fullscreen
+  entry requires a user gesture (browser rule) — toggle from a key/click.
+- **NOTE:** No new ADR (ADR-0170 named fullscreen as this seam's home). Remaining windowing: present-mode
+  (vsync, renderer-side), multi-window.
+- Roadmap: MASTER-ROADMAP "Windowing" now 🟡 read + cursor + fullscreen. Box unchecked.
+
+---

@@ -146,10 +146,11 @@ These do not exist in the runtime and are the reason a complete game can't ship 
   **spatial audio** (stereo panning + distance attenuation off the `AudioListener` — linear / inverse /
   exponential falloff models, ADR-0165/0168) are shipped. Remaining are P1/P2: full 3D `PannerNode`
   (elevation/HRTF), reverb/sidechain, studio audio preview. → roadmap/audio.md
-- 🟡 **Windowing** — read side + cursor control shipped. `Window` resource (logical/physical size + dpr,
-  mirrored from the surface) + `WindowResized` event + opt-in `WindowPlugin`; write side via a `WindowBackend`
-  HAL + `CursorOptions` resource (cursor visibility + Pointer Lock / mouselook, ADR-0170). Remaining:
-  fullscreen + present-mode(vsync), multi-window, monitor enumeration. → roadmap (Windowing item)
+- 🟡 **Windowing** — read side + cursor control + fullscreen shipped. `Window` resource (logical/physical
+  size + dpr, mirrored from the surface) + `WindowResized` event + opt-in `WindowPlugin`; write side via a
+  `WindowBackend` HAL + `CursorOptions` (cursor visibility + Pointer Lock / mouselook) + `WindowMode`
+  (fullscreen) resources (ADR-0170). Remaining: present-mode(vsync), multi-window, monitor enumeration.
+  → roadmap (Windowing item)
 - ✅ **Physics** — `@retro-engine/physics-core` + `@retro-engine/physics-rapier` (ADR-0148). Contract
   (`PhysicsBackend` + `PhysicsCapabilities` + `NullPhysicsBackend`); Avian-shaped `2d`/`3d` components
   (`RigidBody`, `Collider`, `LinearVelocity`, `AngularVelocity`, `ExternalForce`, `Restitution`/`Friction`/

@@ -1,10 +1,13 @@
 import {
   type AppliedCursor,
+  type AppliedWindowMode,
   CursorOptions,
   DomWindowBackend,
   HeadlessWindowBackend,
   reconcileCursor,
+  reconcileWindowMode,
   type WindowBackend,
+  WindowMode,
 } from './cursor';
 import type { App } from './index';
 import { MessageWriter } from './messages';
@@ -118,6 +121,7 @@ export class WindowPlugin implements PluginObject {
   build(app: App): void {
     if (app.getResource(Window) === undefined) app.insertResource(new Window());
     if (app.getResource(CursorOptions) === undefined) app.insertResource(new CursorOptions());
+    if (app.getResource(WindowMode) === undefined) app.insertResource(new WindowMode());
     app.addMessage(WindowResized);
     app.addSystem(
       'first',
@@ -133,15 +137,17 @@ export class WindowPlugin implements PluginObject {
       { label: 'window-sync' },
     );
 
-    // Apply cursor visibility / grab to the window when the setting changes.
-    // Runs in `last`, after gameplay has settled `CursorOptions` this frame.
+    // Apply cursor visibility / grab + fullscreen to the window when the settings
+    // change. Runs in `last`, after gameplay has settled them this frame.
     const backend = this.backend;
-    const applied: AppliedCursor = { visible: true, grab: 'none' };
+    const appliedCursor: AppliedCursor = { visible: true, grab: 'none' };
+    const appliedMode: AppliedWindowMode = { fullscreen: false };
     app.addSystem(
       'last',
-      [Res(CursorOptions)],
-      (opts) => {
-        reconcileCursor(opts as CursorOptions, applied, backend);
+      [Res(CursorOptions), Res(WindowMode)],
+      (opts, mode) => {
+        reconcileCursor(opts as CursorOptions, appliedCursor, backend);
+        reconcileWindowMode(mode as WindowMode, appliedMode, backend);
       },
       { label: 'cursor-apply' },
     );

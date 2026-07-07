@@ -32,6 +32,25 @@ export class CursorOptions {
 }
 
 /**
+ * Desired window display mode, read/written via `Res(WindowMode)` / `ResMut`. Set
+ * `fullscreen` from game code (typically in response to a click / a menu toggle,
+ * since browsers only enter fullscreen during a user gesture); {@link WindowPlugin}
+ * applies changes to the window each frame. Runtime state (a live setting), not
+ * serialized.
+ *
+ * @example
+ * ```ts
+ * app.addSystem('update', [Res(KeyboardInput), ResMut(WindowMode)], (keys, mode) => {
+ *   if (keys.justPressed('F11')) mode.fullscreen = !mode.fullscreen;
+ * });
+ * ```
+ */
+export class WindowMode {
+  /** Whether the window is (requested to be) fullscreen. */
+  fullscreen = false;
+}
+
+/**
  * The window hardware-abstraction seam for **writing** host window state (the
  * counterpart to the read-only {@link Window} sync). Decouples cursor / pointer
  * control from the DOM so the engine runs headless (a no-op backend) and a
@@ -41,11 +60,14 @@ export class CursorOptions {
 export interface WindowBackend {
   /** Apply the desired cursor visibility + grab mode to the window. */
   applyCursor(visible: boolean, grab: CursorGrab): void;
+  /** Enter or leave fullscreen. */
+  setFullscreen(fullscreen: boolean): void;
 }
 
 /** No-op {@link WindowBackend} for headless environments (tests, server worlds). */
 export class HeadlessWindowBackend implements WindowBackend {
   applyCursor(_visible: boolean, _grab: CursorGrab): void {}
+  setFullscreen(_fullscreen: boolean): void {}
 }
 
 /**
@@ -63,6 +85,14 @@ export class DomWindowBackend implements WindowBackend {
       this.element.requestPointerLock?.();
     } else if (typeof document !== 'undefined' && document.pointerLockElement === this.element) {
       document.exitPointerLock?.();
+    }
+  }
+
+  setFullscreen(fullscreen: boolean): void {
+    if (fullscreen) {
+      void this.element.requestFullscreen?.();
+    } else if (typeof document !== 'undefined' && document.fullscreenElement !== null) {
+      void document.exitFullscreen?.();
     }
   }
 }
@@ -88,4 +118,25 @@ export const reconcileCursor = (
   applied.visible = desired.visible;
   applied.grab = desired.grab;
   backend.applyCursor(desired.visible, desired.grab);
+};
+
+/** The last window mode pushed to a backend, so {@link reconcileWindowMode} only re-applies on change. */
+export interface AppliedWindowMode {
+  fullscreen: boolean;
+}
+
+/**
+ * Push `desired` window mode to `backend` only when it differs from `applied`
+ * (updated in place). Idempotent per frame; pure over its inputs, so it
+ * unit-tests with a mock backend — the fullscreen counterpart to
+ * {@link reconcileCursor}.
+ */
+export const reconcileWindowMode = (
+  desired: WindowMode,
+  applied: AppliedWindowMode,
+  backend: WindowBackend,
+): void => {
+  if (applied.fullscreen === desired.fullscreen) return;
+  applied.fullscreen = desired.fullscreen;
+  backend.setFullscreen(desired.fullscreen);
 };

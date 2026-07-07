@@ -135,12 +135,14 @@ export type { FrameTimeStats } from './frame-time-window';
 export { FrameTimeWindow, frameTimeStats } from './frame-time-window';
 export type { WindowPluginOptions } from './window';
 export { syncWindow, Window, WindowPlugin, WindowResized } from './window';
-export type { AppliedCursor, CursorGrab, WindowBackend } from './cursor';
+export type { AppliedCursor, AppliedWindowMode, CursorGrab, WindowBackend } from './cursor';
 export {
   CursorOptions,
   DomWindowBackend,
   HeadlessWindowBackend,
   reconcileCursor,
+  reconcileWindowMode,
+  WindowMode,
 } from './cursor';
 export { composeTransformInto, decomposeTransformInto, GlobalTransform, Transform } from './transform';
 export type { ChildBuilder } from './hierarchy';

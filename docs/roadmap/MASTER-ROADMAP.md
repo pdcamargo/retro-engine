@@ -300,9 +300,10 @@ foundation.**
       (`'first'`-stage sync, headless-safe). **Write side** (ADR-0170): a `WindowBackend` HAL
       (`DomWindowBackend` + `HeadlessWindowBackend`) + a `CursorOptions` resource (`visible`, `grab:
       'none'|'locked'`) for cursor hiding + Pointer Lock (mouselook), applied on change via pure
-      `reconcileCursor` (`cursor-apply` system, `cursorTarget` canvas from the host). Unit + integration
-      tested (mock backend). Remaining: fullscreen + present-mode(vsync) controls, multi-window. Box unchecked
-      pending user confirmation (§3).
+      `reconcileCursor` (`cursor-apply` system, `cursorTarget` canvas from the host). **Fullscreen** ✅ — a
+      `WindowMode` resource (`fullscreen`) + `WindowBackend.setFullscreen` (Fullscreen API in the DOM backend)
+      + pure `reconcileWindowMode`, applied by the same system. Unit + integration tested (mock backend).
+      Remaining: present-mode(vsync) control, multi-window. Box unchecked pending user confirmation (§3).
 - [ ] **Diagnostics store** — 🟡 **core + asset counts + windowed frame-time stats + in-game overlay shipped**:
       `DiagnosticsStore` (EMA `frameTimeMs` + derived `fps`, `entityCount`, `assetCount`, `frameCount`, plus
       windowed `min`/`max`/`avgFrameTimeMs` + `onePercentLowFps` — the "1% low" stutter metric, via a new
