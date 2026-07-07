@@ -1,7 +1,18 @@
 import { describe, expect, it } from 'bun:test';
 
-import { App, MessageReader, Window, WindowPlugin, WindowResized, syncWindow } from './index';
-import { makeCapturingRenderer, makeStubCanvas } from './test-utils';
+import {
+  App,
+  type CursorGrab,
+  CursorOptions,
+  MessageReader,
+  ResMut,
+  type WindowBackend,
+  Window,
+  WindowPlugin,
+  WindowResized,
+  syncWindow,
+} from './index';
+import { makeCapturingRenderer, makeHeadlessRenderer, makeStubCanvas } from './test-utils';
 
 describe('syncWindow', () => {
   it('records physical size + dpr and derives the logical size', () => {
@@ -60,5 +71,24 @@ describe('WindowPlugin (integration)', () => {
     // Steady size → no further WindowResized.
     app.advanceFrame(16);
     expect(resizes).toHaveLength(1);
+  });
+
+  it('inserts CursorOptions and applies grab changes to the backend once each', () => {
+    const calls: [boolean, CursorGrab][] = [];
+    const backend: WindowBackend = { applyCursor: (v, g) => calls.push([v, g]) };
+    const app = new App({ renderer: makeHeadlessRenderer() });
+    app.addPlugin(new WindowPlugin({ backend }));
+    expect(app.getResource(CursorOptions)).toBeInstanceOf(CursorOptions);
+
+    app.advanceFrame(0); // defaults (visible/none) match the initial snapshot → no call
+    expect(calls).toHaveLength(0);
+
+    app.addSystem('update', [ResMut(CursorOptions)], (c) => {
+      (c as CursorOptions).grab = 'locked';
+    });
+    app.advanceFrame(16);
+    expect(calls).toEqual([[true, 'locked']]);
+    app.advanceFrame(32); // steady 'locked' → not re-applied
+    expect(calls).toHaveLength(1);
   });
 });

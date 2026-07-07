@@ -1821,3 +1821,27 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
 - Roadmap: MASTER-ROADMAP "Audio mixer buses" 🟡 now notes Phase 4c falloff models shipped. Box unchecked.
 
 ---
+
+## ✅ P1 — Windowing: cursor control (visibility + pointer lock / mouselook) (unit-verified)
+
+- **New:** `@retro-engine/engine` (ADR-0170). The write side of windowing. A `WindowBackend` HAL
+  (`DomWindowBackend` + `HeadlessWindowBackend`, mirroring InputBackend/AudioBackend) + a `CursorOptions`
+  resource (`visible`, `grab: 'none'|'locked'`, runtime — not serialized). `WindowPlugin` now takes
+  `{ backend?, cursorTarget? }`; with a `cursorTarget` (the canvas) it uses the DOM backend, else headless
+  (no-op). A `cursor-apply` system (`last` stage) reconciles `CursorOptions` → backend on change via pure
+  `reconcileCursor`. `DomWindowBackend` toggles `element.style.cursor` + drives Pointer Lock.
+- **Verified:** `cursor.test.ts` (new, 3): `reconcileCursor` applies only on change + updates the snapshot;
+  `DomWindowBackend` toggles cursor + requests pointer lock (stub element); headless no-op. `window.test.ts`
+  (+1): `WindowPlugin({ backend })` inserts `CursorOptions` and applies a `grab='locked'` change to the
+  backend exactly once (steady state not re-applied). 1281 engine tests. Full engine gate green: typecheck,
+  lint (0/0), build.
+- **HOW to test:** `app.addPlugin(new WindowPlugin({ cursorTarget: canvas }))`, then a system that sets
+  `Res(CursorOptions).grab = 'locked'` on a mouse click → the pointer locks (cursor hidden, `MouseMotion`
+  gives raw deltas for mouselook); set `visible = false` to hide the cursor. **Browser-confirm** the actual
+  lock/hide (the reconcile logic + backend selection are unit-covered; the DOM effect is thin glue like the
+  input listeners). Pointer lock requires a user gesture (browser rule) — set grab from a click.
+- **NOTE:** Remaining windowing: fullscreen + present-mode(vsync), multi-window — the `WindowBackend` seam is
+  where those land.
+- Roadmap: MASTER-ROADMAP "Windowing" now 🟡 read side + cursor control. Box unchecked.
+
+---

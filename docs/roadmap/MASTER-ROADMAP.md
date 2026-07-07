@@ -290,10 +290,14 @@ foundation.**
       gained a `model` param (default `'linear'`, existing calls unchanged), inverse/exponential ignore
       `maxDistance`. Unit-tested. Remaining: full 3D `PannerNode` (elevation/HRTF), Doppler, reverb/sidechain.
       _Links:_ [audio-mixer-buses.md](audio-mixer-buses.md) · [audio.md](audio.md)
-- [ ] **Windowing** — 🟡 **read side shipped**: `Window` resource (logical + physical size + dpr, mirrored
-      from the surface) + `WindowResized` event + `syncWindow` + opt-in `WindowPlugin` (`'first'`-stage sync,
-      headless-safe). Unit + integration tested. Remaining: cursor/fullscreen/present-mode(vsync) controls,
-      multi-window. Box unchecked pending user confirmation (§3).
+- [ ] **Windowing** — 🟡 **read side + cursor control shipped**: `Window` resource (logical + physical size +
+      dpr, mirrored from the surface) + `WindowResized` event + `syncWindow` + opt-in `WindowPlugin`
+      (`'first'`-stage sync, headless-safe). **Write side** (ADR-0170): a `WindowBackend` HAL
+      (`DomWindowBackend` + `HeadlessWindowBackend`) + a `CursorOptions` resource (`visible`, `grab:
+      'none'|'locked'`) for cursor hiding + Pointer Lock (mouselook), applied on change via pure
+      `reconcileCursor` (`cursor-apply` system, `cursorTarget` canvas from the host). Unit + integration
+      tested (mock backend). Remaining: fullscreen + present-mode(vsync) controls, multi-window. Box unchecked
+      pending user confirmation (§3).
 - [ ] **Diagnostics store** — 🟡 **core + asset counts + windowed frame-time stats + in-game overlay shipped**:
       `DiagnosticsStore` (EMA `frameTimeMs` + derived `fps`, `entityCount`, `assetCount`, `frameCount`, plus
       windowed `min`/`max`/`avgFrameTimeMs` + `onePercentLowFps` — the "1% low" stutter metric, via a new

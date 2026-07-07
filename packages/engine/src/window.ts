@@ -1,7 +1,15 @@
+import {
+  type AppliedCursor,
+  CursorOptions,
+  DomWindowBackend,
+  HeadlessWindowBackend,
+  reconcileCursor,
+  type WindowBackend,
+} from './cursor';
 import type { App } from './index';
 import { MessageWriter } from './messages';
 import type { PluginObject } from './plugin';
-import { ResMut } from './system-param';
+import { Res, ResMut } from './system-param';
 
 /**
  * The application window / drawing surface as the engine sees it, kept in sync
@@ -67,20 +75,49 @@ const currentDevicePixelRatio = (): number =>
     ? globalThis.window.devicePixelRatio
     : 1;
 
+/** Options for {@link WindowPlugin}. */
+export interface WindowPluginOptions {
+  /**
+   * Backend for **writing** window state (cursor visibility / pointer lock).
+   * Defaults to a {@link DomWindowBackend} on {@link WindowPluginOptions.cursorTarget}
+   * when one is given, otherwise a {@link HeadlessWindowBackend} (so cursor control
+   * no-ops headless and until a target is supplied).
+   */
+  readonly backend?: WindowBackend;
+  /**
+   * Element cursor / pointer-lock operations target — typically the game canvas.
+   * Ignored when {@link WindowPluginOptions.backend} is supplied.
+   */
+  readonly cursorTarget?: HTMLElement;
+}
+
 /**
  * Opt-in plugin that inserts a {@link Window} resource and keeps it in sync with
  * the drawing surface every frame (a `'first'`-stage system, before gameplay
- * reads it), emitting {@link WindowResized} whenever the logical size changes.
- * Headless-safe: with no surface the system no-ops and the resource stays at its
- * defaults.
+ * reads it), emitting {@link WindowResized} whenever the logical size changes. It
+ * also inserts a {@link CursorOptions} resource and applies cursor visibility /
+ * pointer lock to the window each frame through a {@link WindowBackend}.
+ * Headless-safe: with no surface the sync no-ops, and with no cursor target the
+ * cursor backend no-ops.
  */
 export class WindowPlugin implements PluginObject {
+  private readonly backend: WindowBackend;
+
+  constructor(options: WindowPluginOptions = {}) {
+    this.backend =
+      options.backend ??
+      (options.cursorTarget !== undefined
+        ? new DomWindowBackend(options.cursorTarget)
+        : new HeadlessWindowBackend());
+  }
+
   name(): string {
     return 'WindowPlugin';
   }
 
   build(app: App): void {
     if (app.getResource(Window) === undefined) app.insertResource(new Window());
+    if (app.getResource(CursorOptions) === undefined) app.insertResource(new CursorOptions());
     app.addMessage(WindowResized);
     app.addSystem(
       'first',
@@ -95,5 +132,23 @@ export class WindowPlugin implements PluginObject {
       },
       { label: 'window-sync' },
     );
+
+    // Apply cursor visibility / grab to the window when the setting changes.
+    // Runs in `last`, after gameplay has settled `CursorOptions` this frame.
+    const backend = this.backend;
+    const applied: AppliedCursor = { visible: true, grab: 'none' };
+    app.addSystem(
+      'last',
+      [Res(CursorOptions)],
+      (opts) => {
+        reconcileCursor(opts as CursorOptions, applied, backend);
+      },
+      { label: 'cursor-apply' },
+    );
+  }
+
+  /** The active window backend, for teardown or advanced use. */
+  getBackend(): WindowBackend {
+    return this.backend;
   }
 }
