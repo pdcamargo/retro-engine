@@ -44,6 +44,10 @@ class MockBackend implements AudioBackend {
   setSpatialPosition(voice: VoiceId, x: number, y: number, z: number): void {
     this.positions.push([voice, x, y, z]);
   }
+  readonly sourceOrientations: [VoiceId, number, number, number][] = [];
+  setSourceOrientation(voice: VoiceId, x: number, y: number, z: number): void {
+    this.sourceOrientations.push([voice, x, y, z]);
+  }
   readonly listenerPositions: [number, number, number][] = [];
   setListenerPosition(x: number, y: number, z: number): void {
     this.listenerPositions.push([x, y, z]);
@@ -220,11 +224,22 @@ describe('Audio facade', () => {
     const backend = new MockBackend();
     const audio = new Audio(backend, new AudioClips());
     const voice = audio.play(new AudioClip(new Uint8Array([1])), {
-      panner: { panningModel: 'HRTF', distanceModel: 'inverse', refDistance: 1, maxDistance: 50, rolloff: 1 },
+      panner: {
+        panningModel: 'HRTF',
+        distanceModel: 'inverse',
+        refDistance: 1,
+        maxDistance: 50,
+        rolloff: 1,
+        coneInnerAngle: 360,
+        coneOuterAngle: 360,
+        coneOuterGain: 0,
+      },
     })!;
     expect(backend.playCalls[0]!.options?.panner?.panningModel).toBe('HRTF');
     audio.setSpatialPosition(voice, 3, 4, 5);
     expect(backend.positions).toContainEqual([voice, 3, 4, 5]);
+    audio.setSourceOrientation(voice, 0, 0, -1);
+    expect(backend.sourceOrientations).toContainEqual([voice, 0, 0, -1]);
     audio.setListenerPosition(1, 2, 3);
     expect(backend.listenerPositions).toContainEqual([1, 2, 3]);
     audio.setListenerOrientation(0, 0, -1, 0, 1, 0);
@@ -298,9 +313,15 @@ class StubPannerNode3d {
   refDistance = 1;
   maxDistance = 10000;
   rolloffFactor = 1;
+  coneInnerAngle = 360;
+  coneOuterAngle = 360;
+  coneOuterGain = 0;
   readonly positionX = new StubParam(0);
   readonly positionY = new StubParam(0);
   readonly positionZ = new StubParam(0);
+  readonly orientationX = new StubParam(1);
+  readonly orientationY = new StubParam(0);
+  readonly orientationZ = new StubParam(0);
   readonly outputs: object[] = [];
   connect(target: object): void {
     this.outputs.push(target);
@@ -495,7 +516,16 @@ describe('WebAudioBackend — mixer buses', () => {
     const master = ctx.created[0]!;
 
     const voice = backend.play(new AudioClip(new Uint8Array([1])), {
-      panner: { panningModel: 'HRTF', distanceModel: 'inverse', refDistance: 2, maxDistance: 50, rolloff: 1.5 },
+      panner: {
+        panningModel: 'HRTF',
+        distanceModel: 'inverse',
+        refDistance: 2,
+        maxDistance: 50,
+        rolloff: 1.5,
+        coneInnerAngle: 90,
+        coneOuterAngle: 180,
+        coneOuterGain: 0.2,
+      },
     })!;
     // No 2D stereo panner for a 3D voice.
     expect(ctx.panners).toHaveLength(0);
@@ -506,12 +536,16 @@ describe('WebAudioBackend — mixer buses', () => {
     expect(p3d.refDistance).toBe(2);
     expect(p3d.maxDistance).toBe(50);
     expect(p3d.rolloffFactor).toBe(1.5);
+    expect([p3d.coneInnerAngle, p3d.coneOuterAngle, p3d.coneOuterGain]).toEqual([90, 180, 0.2]);
     // Chain: volume gain → panner3d → master.
     expect(voiceGain.outputs).toContain(p3d);
     expect(p3d.outputs).toContain(master);
 
     backend.setSpatialPosition(voice, 3, 4, 5);
     expect([p3d.positionX.value, p3d.positionY.value, p3d.positionZ.value]).toEqual([3, 4, 5]);
+
+    backend.setSourceOrientation(voice, 0, 0, -1);
+    expect([p3d.orientationX.value, p3d.orientationY.value, p3d.orientationZ.value]).toEqual([0, 0, -1]);
 
     backend.setListenerPosition(1, 2, 3);
     expect([ctx.listener.positionX.value, ctx.listener.positionY.value, ctx.listener.positionZ.value]).toEqual([

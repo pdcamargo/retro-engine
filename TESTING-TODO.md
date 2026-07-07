@@ -2098,3 +2098,24 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
 - Roadmap: MASTER-ROADMAP "Texture import settings" now notes Phase (3) manifest bake ✅.
 
 ---
+
+## ✅ P1 — Audio: 3D source directivity cones (unit-verified)
+
+- **New:** `@retro-engine/audio`. A 3D spatial `AudioSource` can be directional (speaker/TV/NPC louder in
+  front): `coneInnerAngle`/`coneOuterAngle`/`coneOuterGain` (Web Audio semantics, defaults 360/360/0 =
+  omnidirectional → existing 3D sources unchanged). `PannerConfig` carries them; the WebAudio backend sets
+  them on the PannerNode; the `audio-spatial` system drives the panner's facing from the source's
+  `GlobalTransform` (-Z) via new `AudioBackend.setSourceOrientation` (Null no-ops). Reflected as 3 numbers.
+- **Verified:** `audio.test.ts`: facade forwards `setSourceOrientation`; WebAudioBackend sets cone params
+  (90/180/0.2) on the panner + `setSourceOrientation` sets orientationX/Y/Z. Stub `AudioContext` panner
+  extended with cone + orientation params. 48 audio tests. Full audio gate green: typecheck, lint (0/0),
+  build.
+- **HOW to test:** `new AudioSource(clip, { spatial: true, spatialMode: '3d', coneInnerAngle: 60,
+  coneOuterAngle: 120, coneOuterGain: 0.1 })` on a rotating source with an `AudioListener` → the sound is
+  loud when the source faces the listener, quieter when it faces away. **Browser-confirm by ear.**
+- **NOTE:** No new ADR (completes the ADR-0171 cone follow-up). 3D spatial audio is now complete (position +
+  listener orientation + source cones). Remaining audio: reverb (ConvolverNode + IR asset), sidechain;
+  Doppler is deprecated in Web Audio (skip).
+- Roadmap: MASTER-ROADMAP "Audio mixer buses" 3D positional now includes source cones ✅.
+
+---

@@ -15,6 +15,15 @@ export interface PannerConfig {
   readonly refDistance: number;
   readonly maxDistance: number;
   readonly rolloff: number;
+  /**
+   * Directivity cone (matching Web Audio): full volume within `coneInnerAngle°`
+   * of the source's facing, fading to `coneOuterGain` beyond `coneOuterAngle°`.
+   * Defaults `360` / `360` / `0` are omnidirectional (no directional effect); the
+   * source facing is driven by {@link AudioBackend.setSourceOrientation}.
+   */
+  readonly coneInnerAngle: number;
+  readonly coneOuterAngle: number;
+  readonly coneOuterGain: number;
 }
 
 /**
@@ -123,6 +132,11 @@ export interface AudioBackend {
    * with a {@link PlayOptions.panner}, or an unknown id.
    */
   setSpatialPosition(voice: VoiceId, x: number, y: number, z: number): void;
+  /**
+   * Set a **3D** voice's facing direction (the source's `forward`), used by its
+   * directivity cone. No-op for a voice without a {@link PlayOptions.panner}.
+   */
+  setSourceOrientation(voice: VoiceId, x: number, y: number, z: number): void;
   /** Set the listener's world position, shared by every 3D voice. */
   setListenerPosition(x: number, y: number, z: number): void;
   /**

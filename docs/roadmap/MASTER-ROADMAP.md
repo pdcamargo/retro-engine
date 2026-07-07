@@ -307,7 +307,10 @@ foundation.**
       attenuation internal), `PlayOptions.panner`, `setSpatialPosition`/`setListenerPosition`, the
       `audio-spatial` system driving positions; 2D path unchanged. **Listener orientation** ✅ — forward/up
       derived from the `AudioListener`'s transform (pure `listenerAxes`) → `setListenerOrientation`, so 3D
-      panning tracks camera rotation. Unit-tested. Remaining: source cones, Doppler, reverb/sidechain.
+      panning tracks camera rotation. **Source cones** ✅ — `AudioSource.coneInnerAngle`/`coneOuterAngle`/
+      `coneOuterGain` (default omnidirectional) make a 3D source directional; `setSourceOrientation` drives
+      the panner's facing from the source's transform. Unit-tested. Remaining: reverb (`ConvolverNode`),
+      sidechain (Doppler is deprecated in Web Audio). 3D spatial audio is otherwise complete.
       _Links:_ [audio-mixer-buses.md](audio-mixer-buses.md) · [audio.md](audio.md)
 - [ ] **Windowing** — 🟡 **read side + cursor control shipped**: `Window` resource (logical + physical size +
       dpr, mirrored from the surface) + `WindowResized` event + `syncWindow` + opt-in `WindowPlugin`

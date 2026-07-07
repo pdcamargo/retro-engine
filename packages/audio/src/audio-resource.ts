@@ -72,6 +72,11 @@ export class Audio {
     this.backend.setSpatialPosition(voice, x, y, z);
   }
 
+  /** Set a 3D voice's facing direction, used by its directivity cone (no-op for a non-3D voice). */
+  setSourceOrientation(voice: VoiceId, x: number, y: number, z: number): void {
+    this.backend.setSourceOrientation(voice, x, y, z);
+  }
+
   /** Set the listener's world position, shared by every 3D voice. */
   setListenerPosition(x: number, y: number, z: number): void {
     this.backend.setListenerPosition(x, y, z);

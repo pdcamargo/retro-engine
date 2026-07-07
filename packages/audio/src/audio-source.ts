@@ -34,6 +34,9 @@ export interface AudioSourceOptions {
   readonly rolloff?: number;
   readonly distanceModel?: DistanceModel;
   readonly spatialMode?: SpatialMode;
+  readonly coneInnerAngle?: number;
+  readonly coneOuterAngle?: number;
+  readonly coneOuterGain?: number;
 }
 
 /**
@@ -107,6 +110,15 @@ export class AudioSource {
    * {@link AudioSource.spatial}.
    */
   spatialMode: SpatialMode;
+  /**
+   * Directivity cone for a `'3d'` source (degrees + gain): full volume within
+   * `coneInnerAngle` of the source's facing (its `-Z`), fading to `coneOuterGain`
+   * beyond `coneOuterAngle`. Defaults `360`/`360`/`0` = omnidirectional. Only
+   * meaningful for a 3D spatial source.
+   */
+  coneInnerAngle: number;
+  coneOuterAngle: number;
+  coneOuterGain: number;
 
   /** Runtime: set by {@link AudioSource.play} to (re)start on the next frame. Not serialized. */
   playRequested = false;
@@ -134,6 +146,9 @@ export class AudioSource {
     this.rolloff = options.rolloff ?? 1;
     this.distanceModel = options.distanceModel ?? 'linear';
     this.spatialMode = options.spatialMode ?? '2d';
+    this.coneInnerAngle = options.coneInnerAngle ?? 360;
+    this.coneOuterAngle = options.coneOuterAngle ?? 360;
+    this.coneOuterGain = options.coneOuterGain ?? 0;
   }
 
   /** Request a (re)start of this source on the next audio update. */

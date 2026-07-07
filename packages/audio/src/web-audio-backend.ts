@@ -80,6 +80,9 @@ export class WebAudioBackend implements AudioBackend {
       panner3d.refDistance = cfg.refDistance;
       panner3d.maxDistance = Math.max(cfg.refDistance, cfg.maxDistance);
       panner3d.rolloffFactor = cfg.rolloff;
+      panner3d.coneInnerAngle = cfg.coneInnerAngle;
+      panner3d.coneOuterAngle = cfg.coneOuterAngle;
+      panner3d.coneOuterGain = cfg.coneOuterGain;
       gain.connect(panner3d);
       panner3d.connect(out);
     } else if (options?.spatial === true) {
@@ -157,6 +160,15 @@ export class WebAudioBackend implements AudioBackend {
       p.positionX.value = x;
       p.positionY.value = y;
       p.positionZ.value = z;
+    }
+  }
+
+  setSourceOrientation(voice: VoiceId, x: number, y: number, z: number): void {
+    const p = this.voices.get(voice)?.panner3d;
+    if (p != null) {
+      p.orientationX.value = x;
+      p.orientationY.value = y;
+      p.orientationZ.value = z;
     }
   }
 

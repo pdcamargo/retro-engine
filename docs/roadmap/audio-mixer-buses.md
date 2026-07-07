@@ -65,7 +65,11 @@ unchanged; Null no-ops. **Listener orientation ✅** — the `audio-spatial` sys
 derives forward/up from the `AudioListener`'s `GlobalTransform` (pure
 `listenerAxes`) and drives `setListenerOrientation` (modern `forwardX`/`upX`
 params + `setOrientation` fallback), so 3D panning tracks camera rotation. Unit +
-stub-context tested.
+stub-context tested. **Source cones ✅** — `AudioSource.coneInnerAngle`/
+`coneOuterAngle`/`coneOuterGain` (defaults `360`/`360`/`0` = omnidirectional) make a
+3D source directional; `PannerConfig` carries them, `setSourceOrientation` drives
+the panner's facing from the source's transform `-Z`. Unit + stub-context tested.
 
-**Remaining:** source directionality (cone), Doppler (velocity), reverb/sidechain
-sends.
+**Remaining:** Doppler (deprecated in Web Audio — likely skip), reverb
+(`ConvolverNode` + IR asset), sidechain ducking. 3D spatial audio (position +
+listener orientation + source cones) is otherwise complete.

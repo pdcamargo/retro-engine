@@ -102,6 +102,9 @@ export class AudioPlugin implements PluginObject {
         rolloff: t.number,
         distanceModel: t.enum('linear', 'inverse', 'exponential'),
         spatialMode: t.enum('2d', '3d'),
+        coneInnerAngle: t.number,
+        coneOuterAngle: t.number,
+        coneOuterGain: t.number,
         playRequested: t.boolean.skip(),
         stopRequested: t.boolean.skip(),
         started: t.boolean.skip(),
@@ -177,8 +180,11 @@ export class AudioPlugin implements PluginObject {
           const m = (row[2] as GlobalTransform).matrix;
           const sx = m[12] ?? 0;
           if (source.spatialMode === '3d') {
-            // The PannerNode computes pan + distance attenuation from world position.
+            // The PannerNode computes pan + distance attenuation from world position;
+            // its cone uses the source's facing (the transform's -Z).
             (audio as Audio).setSpatialPosition(active.voice, sx, m[13] ?? 0, m[14] ?? 0);
+            const fwd = listenerAxes(m).forward;
+            (audio as Audio).setSourceOrientation(active.voice, fwd[0], fwd[1], fwd[2]);
             continue;
           }
           const distance = Math.hypot(sx - lx, (m[13] ?? 0) - ly, (m[14] ?? 0) - lz);

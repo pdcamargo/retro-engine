@@ -34,6 +34,9 @@ const startVoice = (
             refDistance: source.refDistance,
             maxDistance: source.maxDistance,
             rolloff: source.rolloff,
+            coneInnerAngle: source.coneInnerAngle,
+            coneOuterAngle: source.coneOuterAngle,
+            coneOuterGain: source.coneOuterGain,
           },
         }
       : { spatial: true }
