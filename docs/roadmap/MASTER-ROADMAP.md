@@ -264,10 +264,13 @@ foundation.**
       agnostic + stale-focus clearing; **`:focused`/`:checked` `.rss` pseudo-classes now driven by live
       state** (`UiFocus` / `UiToggle`), so a focus ring is authored in `.rss` (`*:focus`, `Toggle:checked`)
       with no hardcoded border code; **focus activation** (`UiActivate` → `UiClicked` on the focused node,
-      so Enter/South drives the click path). Focus is complete (navigate + ring + activate). Remaining
-      widgets: text-input (the `@retro-engine/input` `ReceivedCharacters` stream that feeds it is now
-      shipped — ADR-0169), scrollview, dropdown/tabs; data binding; virtualized list/tree views; screen
-      management.
+      so Enter/South drives the click path). Focus is complete (navigate + ring + activate). **Text input**
+      ✅ — `UiTextInput` + `UiTextInputPlugin`: click-to-focus, the focused field folds typed chars
+      (`ReceivedCharacters`, ADR-0169) + caret keys (Backspace/Delete/arrows/Home/End) into its value,
+      mirrored into `UiText` (`placeholder` while empty), emits `UiTextChanged`; pure `insertText`/
+      `applyEditKey`/`applyTextInputFrame`, unit-tested. (Caret rendering + held-key repeat + selection →
+      follow-ups.) Remaining widgets: scrollview (needs clipping), dropdown/tabs; data binding; virtualized
+      list/tree views; screen management.
       _Links:_ [in-game-ui-depth.md](in-game-ui-depth.md) · [ui-system.md](ui-system.md)
 - [ ] **Audio mixer buses** — 🟡 **Phases 1–4 shipped** (ADR-0159/0162/0164/0165/0168): (1) named buses +
       per-bus volume; (2) submix trees — `Audio.setBusOutput(bus, output)` routes bus→bus, facade owns the

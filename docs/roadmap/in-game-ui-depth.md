@@ -18,8 +18,15 @@ More interactive widgets, each an authored component that reuses the picking /
   value in `[min, max]` while held (driven off `UiPointer.pressed`), emits
   `UiSliderChanged`. Pure `computeSliderValue` + unit tests. (Visual fill is
   composed by the game / a follow-up — the widget owns the value.)
-- **Text input** — focus, caret, key capture, editable string. The biggest
-  widget (keyboard routing + focus management + caret rendering).
+- **Text input** ✅ (value + editing) — `UiTextInput` (value + caret,
+  reflection-registered, auto-attaches `Interactable` + `Focusable`) +
+  `UiTextInputPlugin`: click-to-focus, then the focused field folds the frame's
+  typed characters (`ReceivedCharacters`, ADR-0169) and caret keys (Backspace/
+  Delete/arrows/Home/End) into the value, mirrored into the node's `UiText`
+  (`placeholder` shows while empty); emits `UiTextChanged`. Pure `insertText` /
+  `applyEditKey` / `applyTextInputFrame` (caret keys before this frame's text),
+  unit-tested. **Remaining:** caret rendering (a caret quad + blink), held-key
+  repeat, text selection/clipboard, multi-keystroke IME (input-side follow-up).
 - **Scrollview** — clipped content + scroll offset from wheel / drag; depends on
   clipping (a `.rss` remaining item) landing first.
 - **Dropdown / tabs** — composite widgets built from the above + panels.

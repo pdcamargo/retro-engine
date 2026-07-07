@@ -134,9 +134,14 @@ and a HUD (text + bars) from ECS components + `.rss`, with gamepad navigation.
   export): a 2×2 procedural checkerboard chip drew (`imageInstances === 1`), which
   a solid quad can't fake. Bench: `ui-image-pack`. This closes the AC's
   panel/label/button/**image** minimal-widget set.
-- Remaining (4c+): interactive widget components (toggle/slider/scrollview/
-  text-input/dropdown/tabs) with `Message<T>`; keyboard/gamepad focus routing;
-  a full menu/HUD sample scene styled by `.rss`.
+- **Interactive widgets ✅ (P1, in-game-ui-depth.md).** `UiToggle`, `UiSlider`, and
+  `UiTextInput` all reuse the picking / `UiClicked` / focus machinery with pure,
+  unit-tested cores. `UiTextInput` (+ `UiTextInputPlugin`) is click-to-focus and
+  folds typed characters (`ReceivedCharacters`, ADR-0169) + caret keys into its
+  value, mirrored into the node's `UiText`; emits `UiTextChanged`.
+- Remaining (4c+): scrollview (needs clipping), dropdown/tabs; text-input caret
+  rendering + held-key repeat + selection; a full menu/HUD sample scene styled by
+  `.rss`.
 
 ### Later (P1+)
 

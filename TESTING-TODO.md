@@ -1756,3 +1756,26 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
   notes the widget's input prerequisite is met. Box unchecked.
 
 ---
+
+## ✅ P1 — In-game UI depth: text-input widget (UiTextInput) (unit-verified)
+
+- **New:** `@retro-engine/ui`. The biggest in-game-ui-depth widget. `UiTextInput` (value + caret,
+  reflection-registered — value/maxLength/placeholder authored, cursor `.skip()`; auto-attaches
+  `Interactable` + `Focusable`) + `UiTextInputPlugin`: clicking a field focuses it (sets `UiFocus.current`),
+  and the focused field folds this frame's typed characters (`ReceivedCharacters`, ADR-0169) and caret keys
+  (Backspace/Delete/arrows/Home/End from `KeyboardInput`) into the value, mirroring it into the node's
+  `UiText` for rendering (`placeholder` shows while empty). Emits `UiTextChanged`.
+- **Verified:** `ui-text-input.test.ts` (new, 13): `insertText` (insert/append/maxLength-truncate/clamped
+  caret), `applyEditKey` (backspace/delete/arrows/home/end edges), `applyTextInputFrame` (caret keys apply
+  before this frame's text; maxLength), component caret default + requires. 170 ui tests. Full ui gate green:
+  typecheck, lint (0/0), build.
+- **HOW to test:** add `InputPlugin` + `UiInteractionPlugin` + `UiFocusPlugin` + `UiTextInputPlugin`, spawn
+  `new UiTextInput({ placeholder: 'name…' })` alongside a `UiText({ font })`; click it, type → the text
+  appears; Backspace/arrows/Home/End edit; `MessageReader(UiTextChanged)` sees each change.
+- **NOTE:** Caret rendering (a blinking caret quad), held-key repeat (one edit per press for now), and text
+  selection/clipboard are follow-ups; multi-keystroke IME is out of scope (input-side). No per-widget ADR
+  (reuses the established widget pattern, like toggle/slider). Best confirmed in a browser via the sample
+  export once caret rendering lands; the editing logic is fully unit-covered.
+- Roadmap: MASTER-ROADMAP "In-game UI depth" now lists text-input ✅. Box unchecked.
+
+---
