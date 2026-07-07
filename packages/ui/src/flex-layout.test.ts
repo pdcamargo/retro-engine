@@ -383,6 +383,46 @@ describe('FlexLayoutEngine — display: grid', () => {
     expect(r[1]).toEqual({ x: 100, y: 80, width: 40, height: 40 });
   });
 
+  it('spreads fixed tracks with justify-content: space-between', () => {
+    // 3×20px cols (used 60) in 200 wide, gap 0 → leftover 140, spread as 70 between.
+    const r = rects(
+      node(
+        {
+          width: 200,
+          height: 20,
+          display: 'grid',
+          gridTemplateColumns: '20px 20px 20px',
+          gridTemplateRows: '20px',
+          justifyContent: 'space-between',
+        },
+        [node({}), node({}), node({})],
+      ),
+    );
+    expect(r[0]!.x).toBe(0);
+    expect(r[1]!.x).toBe(90); // 20 + 70
+    expect(r[2]!.x).toBe(180); // 90 + 20 + 70
+  });
+
+  it('spreads fixed tracks with justify-content: space-evenly', () => {
+    // leftover 140 / (3+1) = 35 leading + 35 between.
+    const r = rects(
+      node(
+        {
+          width: 200,
+          height: 20,
+          display: 'grid',
+          gridTemplateColumns: '20px 20px 20px',
+          gridTemplateRows: '20px',
+          justifyContent: 'space-evenly',
+        },
+        [node({}), node({}), node({})],
+      ),
+    );
+    expect(r[0]!.x).toBe(35);
+    expect(r[1]!.x).toBe(90); // 35 + 20 + 35
+    expect(r[2]!.x).toBe(145); // 90 + 20 + 35
+  });
+
   it('pushes a fixed track block to the far edge (flex-end content)', () => {
     const r = rects(
       node(

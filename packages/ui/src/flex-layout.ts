@@ -339,15 +339,39 @@ function placeInCell(
 }
 
 /**
- * Leading offset that positions a grid's track block (`used` pixels) within the
- * container's `available` content space per `justify-content` / `align-content`:
- * `center` centers it, `flex-end` pushes it to the far edge, everything else
- * (incl. the `space-*` modes) starts at 0 — track-level space distribution is a
- * later phase. Only bites when the tracks don't fill the container.
+ * Distribute a grid's `n` tracks (total `used` pixels, `baseGap` between them)
+ * within the container's `available` content space per `justify-content` /
+ * `align-content`, returning a leading offset + the effective inter-track gap:
+ * `flex-start`/`center`/`flex-end` shift the block (gap unchanged); the `space-*`
+ * modes widen the gap uniformly (plus a leading offset for around/evenly). Only
+ * bites when the tracks don't fill the container (fr tracks fill it → no leftover).
  */
-function contentOffset(mode: JustifyContent, used: number, available: number): number {
-  const leftover = Math.max(0, available - used);
-  return mode === 'center' ? leftover / 2 : mode === 'flex-end' ? leftover : 0;
+function contentDistribution(
+  mode: JustifyContent,
+  n: number,
+  used: number,
+  available: number,
+  baseGap: number,
+): { leading: number; gap: number } {
+  const leftover = Math.max(0, available - used - baseGap * Math.max(0, n - 1));
+  switch (mode) {
+    case 'center':
+      return { leading: leftover / 2, gap: baseGap };
+    case 'flex-end':
+      return { leading: leftover, gap: baseGap };
+    case 'space-between':
+      return { leading: 0, gap: baseGap + (n > 1 ? leftover / (n - 1) : 0) };
+    case 'space-around': {
+      const per = n > 0 ? leftover / n : 0;
+      return { leading: per / 2, gap: baseGap + per };
+    }
+    case 'space-evenly': {
+      const per = leftover / (n + 1);
+      return { leading: per, gap: baseGap + per };
+    }
+    default:
+      return { leading: 0, gap: baseGap }; // flex-start
+  }
 }
 
 /**
@@ -396,19 +420,33 @@ function layoutGrid(
     { width: contentW, height: contentH },
   );
 
-  // Auto-place each in-flow child (honoring its column/row span) into the grid.
+  // Distribute the whole track block within the content box when it doesn't fill
+  // it (justify-content = column axis, align-content = row axis): a leading offset
+  // plus, for the `space-*` modes, a widened inter-track gap.
+  const distX = contentDistribution(
+    s.justifyContent,
+    grid.columnSizes.length,
+    grid.columnSizes.reduce((a, b) => a + b, 0),
+    contentW,
+    s.gap,
+  );
+  const distY = contentDistribution(
+    s.alignContent,
+    grid.rowSizes.length,
+    grid.rowSizes.reduce((a, b) => a + b, 0),
+    contentH,
+    s.gap,
+  );
+  const contentOffsetX = distX.leading;
+  const contentOffsetY = distY.leading;
+
+  // Auto-place each in-flow child (honoring its column/row span) into the grid,
+  // using the distribution's effective gaps so `space-*` spreads the tracks.
   const placed = placeGridItems(
-    { columnSizes: grid.columnSizes, rowSizes: grid.rowSizes, columnGap: s.gap, rowGap: s.gap },
+    { columnSizes: grid.columnSizes, rowSizes: grid.rowSizes, columnGap: distX.gap, rowGap: distY.gap },
     gridItems,
     flow,
   );
-
-  // Distribute the whole track block within the content box when it doesn't fill
-  // it (justify-content = column axis, align-content = row axis).
-  const usedW = grid.columnSizes.reduce((a, b) => a + b, 0) + s.gap * Math.max(0, grid.columnSizes.length - 1);
-  const usedH = grid.rowSizes.reduce((a, b) => a + b, 0) + s.gap * Math.max(0, grid.rowSizes.length - 1);
-  const contentOffsetX = contentOffset(s.justifyContent, usedW, contentW);
-  const contentOffsetY = contentOffset(s.alignContent, usedH, contentH);
 
   const results = new Map<LayoutNode, LayoutResult>();
   inFlow.forEach((child, i) => {

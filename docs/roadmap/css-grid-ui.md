@@ -71,5 +71,9 @@ authoring).
   implemented by transposing onto the tested row-major placer (`gridTrackCount(fixed,
   items, flow)` + a `flow` arg on `placeGridItems`), so the row path is untouched.
   `.rss` `grid-auto-flow` / `grid-auto-columns`. Unit-tested.
-- **Remaining:** `auto` / `minmax()` tracks (needs the child intrinsic-measure
-  hook); `space-between`/`around`/`evenly` track spacing.
+- **Content distribution — all six modes ✅** — `justify-content`/`align-content`
+  now also honor `space-between`/`around`/`evenly` (a `contentDistribution` helper
+  folds all modes into a leading offset + an effective inter-track gap, reusing the
+  gap/offset placement path). Unit-tested. Content distribution is complete.
+- **Remaining:** `auto` / `minmax()` tracks — the last piece, needing the child
+  intrinsic-measure hook + the iterative CSS track-sizing algorithm.

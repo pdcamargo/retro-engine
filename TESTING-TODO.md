@@ -2009,3 +2009,25 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
 - Roadmap: MASTER-ROADMAP "CSS Grid for the UI layout engine" now 🟡 Phases 1–3f shipped. Box unchecked.
 
 ---
+
+## ✅ P1 — CSS Grid for the UI, Phase 3g: content distribution space-* modes (unit-verified)
+
+- **New:** `@retro-engine/ui` (ADR-0167). Completes grid content distribution: `justify-content` /
+  `align-content` now honor `space-between`/`space-around`/`space-evenly` (previously only
+  start/center/end). When tracks don't fill the container, leftover is distributed as a uniformly-widened
+  inter-track gap (+ a leading offset for around/evenly). Folded all six modes into one `contentDistribution`
+  helper (leading offset + effective gap), reusing the existing gap/offset placement path — no per-cell-index
+  bookkeeping needed.
+- **Verified:** `flex-layout.test.ts` (+2): space-between (3×20px cols in 200 → 70 between: x=0/90/180),
+  space-evenly (35 leading + 35 between: x=35/90/145); existing start/center/end tests unchanged. 186 ui
+  tests. Full ui gate green: typecheck, lint (0/0), build.
+- **HOW to test:** `.toolbar { display: grid; grid-template-columns: 20px 20px 20px; justify-content:
+  space-between }` in a wider container → the 3 cells spread with equal gaps between them (only when the
+  tracks are narrower than the container; fr tracks fill it → no-op).
+- **NOTE:** Additive under ADR-0167. **Only remaining grid feature is `auto`/`minmax` track SIZING** (the
+  hard one — needs child intrinsic-measure + the iterative CSS track-sizing algorithm). Grid is otherwise
+  feature-complete (placement: row/column flow, spanning, explicit lines, auto-tracks, alignment; content
+  distribution: all 6 modes).
+- Roadmap: MASTER-ROADMAP "CSS Grid for the UI layout engine" now 🟡 Phases 1–3g shipped. Box unchecked.
+
+---
