@@ -1255,3 +1255,24 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
   inserts, spatial panning) tracked in `audio-mixer-buses.md`. Box unchecked pending your confirmation.
 
 ---
+
+## ✅ P1 — ECS ordering depth, Phase 4: exclusive world() systems (unit + integration verified)
+
+- **New:** `@retro-engine/engine` (ADR-0160). `world(): Param<World>` resolves to the stage's live `World`
+  for immediate structural edits (spawn/despawn/insert/remove) with same-frame read-back — no `Commands`
+  deferral. A system carrying `world()` must declare no other params (it holds the whole world);
+  registration throws otherwise, via a new optional `Param.exclusive` flag. Lowercase factory matches
+  `key`/`gamepadAxis` and dodges the `World`-class name collision. Single-thread runner needs no scheduling
+  change; the flag is the seam a future parallel scheduler reads.
+- **Verified:** `schedule.test.ts` (+4, 27 total): an exclusive startup system spawns 2 entities that a
+  later same-frame `update` query sees (proves immediate, not deferred); despawn + spawn through the
+  exclusive world; a `world()` + `Query` system throws at registration; a bare `world()` system is allowed.
+  Full engine gate green: typecheck, lint (626 files), 1238 tests, build. Changeset added.
+- **HOW to test:** `app.addSystem('startup', [world()], (w) => { const e = w.spawn(new Transform()); w.insertBundle(e, [new Health(100)]); })`
+  → entity + components exist immediately, visible to later systems the same frame. Mixing `world()` with
+  any other param throws.
+- Roadmap: MASTER-ROADMAP "ECS ordering depth" now 🟡 Phases 1, 2, 2b, 4 shipped; remaining (ambiguity
+  detection — needs per-param access metadata; state-transition ordering) tracked in `ecs-ordering-depth.md`.
+  Box unchecked pending your confirmation.
+
+---

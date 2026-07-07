@@ -115,6 +115,7 @@ export {
   ResAdded,
   ResMut,
   RunCondition,
+  world,
 } from './system-param';
 export type { SetOrdering, SystemOrigin } from './schedule';
 export type { StageGroup, SystemInfo } from './schedule-info';
@@ -1890,6 +1891,11 @@ export class App {
           `App.addSystem: param scoped to stage '${p.scope}' cannot be used in stage '${stage}'`,
         );
       }
+    }
+    if (params.some((p) => p.exclusive) && params.length > 1) {
+      throw new Error(
+        `App.addSystem: an exclusive param (world()) must be a system's only param — it holds the whole World`,
+      );
     }
     if (options?.set !== undefined && stage !== 'render') {
       throw new Error(

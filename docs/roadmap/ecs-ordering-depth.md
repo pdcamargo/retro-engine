@@ -41,12 +41,16 @@ metadata (reads/writes which resource + component types) surfaced from the
 conflicting pair + the contended type. Non-fatal; an `ambiguousWith` escape hatch
 silences intentional cases.
 
-## Phase 4 — Exclusive systems (`&mut World`)
+## Phase 4 — Exclusive systems (`&mut World`) ✅ (ADR-0160)
 
-A system param granting exclusive `&mut World` access (run alone, no other param
-resolution). Structural world edits (spawn/despawn/insert with immediate effect)
-without going through `Commands`. Ordering: exclusive systems are apply points,
-so they interact with command-flush timing — sequence carefully.
+`world(): Param<World>` resolves to the stage's live `World` for immediate
+structural edits (spawn/despawn/insert/remove) with same-frame read-back, no
+`Commands` deferral. Guardrail: a system with `world()` must declare no other
+param (the `Param.exclusive` flag, validated at registration). Lowercase factory
+matches `key`/`gamepadAxis` and avoids the `World`-class collision. Single-thread
+runner needs no scheduling change; the flag is the seam a parallel scheduler would
+read. Unit tested (immediate spawn seen by a later system; despawn/mutate; mixed-
+param rejection).
 
 ## Phase 5 — Explicit state-transition ordering
 

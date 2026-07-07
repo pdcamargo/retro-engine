@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'bun:test';
 
 
-import { App, RunCondition, system } from './index';
+import { App, Query, RunCondition, system, world } from './index';
 
 import { makeHeadlessRenderer } from './test-utils';
+
+class Marker {
+  constructor(public value = 0) {}
+}
 
 describe('Stage union', () => {
   it('runs the Main schedule in order: first → startup (first frame only) → preUpdate → update → postUpdate → last', () => {
@@ -358,5 +362,50 @@ describe('SystemSet + configureSet (ADR-0158)', () => {
     b = false;
     app.advanceFrame(16);
     expect(trace).toEqual([]); // second condition fails → gated
+  });
+});
+
+describe('exclusive world() systems (ADR-0160)', () => {
+  it('resolves to the live World and applies structural changes immediately', () => {
+    const app = new App({ renderer: makeHeadlessRenderer() });
+    let seenByLater = -1;
+    // An exclusive system spawns two entities directly (no Commands).
+    app.addSystem('startup', [world()], (w) => {
+      w.spawn(new Marker(1));
+      w.spawn(new Marker(2));
+    });
+    // A later same-frame system sees them via a query — proving the spawn was
+    // immediate, not deferred to a command flush.
+    app.addSystem('update', [Query([Marker])], (rows) => {
+      seenByLater = [...rows].length;
+    });
+
+    app.advanceFrame(0);
+    expect(app.world.entityCount).toBe(2);
+    expect(seenByLater).toBe(2);
+  });
+
+  it('can despawn and mutate through the exclusive world', () => {
+    const app = new App({ renderer: makeHeadlessRenderer() });
+    const e = app.world.spawn(new Marker(5));
+    app.addSystem('update', [world()], (w) => {
+      w.despawn(e);
+      w.spawn(new Marker(9));
+    });
+
+    app.advanceFrame(0);
+    expect(app.world.entityCount).toBe(1); // one despawned, one spawned
+  });
+
+  it('rejects an exclusive system that declares any other param', () => {
+    const app = new App({ renderer: makeHeadlessRenderer() });
+    expect(() => app.addSystem('update', [world(), Query([Marker])], () => undefined)).toThrow(
+      /exclusive param.*only param/,
+    );
+  });
+
+  it('allows a bare world() system (no other params)', () => {
+    const app = new App({ renderer: makeHeadlessRenderer() });
+    expect(() => app.addSystem('update', [world()], () => undefined)).not.toThrow();
   });
 });

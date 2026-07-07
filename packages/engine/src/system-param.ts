@@ -83,10 +83,15 @@ export interface ResolveCtx {
  *
  * Optional `scope` restricts the param to one stage. Registration throws if a
  * scoped param appears in the wrong stage.
+ *
+ * Optional `exclusive` marks a param that grants whole-`World` mutable access
+ * ({@link world}); a system carrying one must declare no other params, so it
+ * runs alone with unaliased access. Registration throws otherwise.
  */
 export interface Param<out T = unknown> {
   resolve(ctx: ResolveCtx): T;
   readonly scope?: Stage;
+  readonly exclusive?: boolean;
 }
 
 /**
@@ -117,6 +122,31 @@ export const RenderCtx: Param<RenderContext> = {
     return ctx.render;
   },
 };
+
+/**
+ * Exclusive-access param: resolves to the whole {@link World} with mutable
+ * access, for a system that needs to make structural changes **immediately**
+ * (spawn / despawn / insert / remove) rather than deferring them through
+ * {@link Commands}. Useful for complex spawn logic, tooling, and one-shot setup
+ * where reading back the change within the same system matters.
+ *
+ * A system using `world()` must declare **no other params** — it holds the
+ * entire world, so any other param would alias it. Registration throws
+ * otherwise. Resolves to the stage's world (the main world for main stages, the
+ * render world in the `'render'` stage).
+ *
+ * @example
+ * ```ts
+ * app.addSystem('startup', [world()], (w) => {
+ *   const player = w.spawn(new Transform());
+ *   w.insertBundle(player, [new Health(100)]);
+ * });
+ * ```
+ */
+export const world = (): Param<World> => ({
+  exclusive: true,
+  resolve: (ctx) => ctx.world,
+});
 
 /**
  * Wraps a {@link Param} so it resolves against the main `World`
