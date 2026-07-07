@@ -36,6 +36,10 @@ class MockBackend implements AudioBackend {
   setPan(voice: VoiceId, pan: number): void {
     this.pans.push([voice, pan]);
   }
+  readonly spatialGains: [VoiceId, number][] = [];
+  setSpatialGain(voice: VoiceId, gain: number): void {
+    this.spatialGains.push([voice, gain]);
+  }
   isPlaying(): boolean {
     return true;
   }
@@ -189,13 +193,15 @@ describe('Audio facade', () => {
     expect(backend.busEffects[backend.busEffects.length - 1]).toEqual(['music', null]);
   });
 
-  it('forwards a spatial route on play and pan to the backend', () => {
+  it('forwards a spatial route on play and pan + spatial gain to the backend', () => {
     const backend = new MockBackend();
     const audio = new Audio(backend, new AudioClips());
     const voice = audio.play(new AudioClip(new Uint8Array([1])), { spatial: true })!;
     expect(backend.playCalls[0]!.options?.spatial).toBe(true);
     audio.setPan(voice, -0.5);
     expect(backend.pans).toContainEqual([voice, -0.5]);
+    audio.setSpatialGain(voice, 0.25);
+    expect(backend.spatialGains).toContainEqual([voice, 0.25]);
   });
 });
 
@@ -387,29 +393,37 @@ describe('WebAudioBackend — mixer buses', () => {
     expect((fx as { outputs: object[] }).outputs).toContain(voiceBus); // effect → voice submix
   });
 
-  it('inserts a stereo panner only for a spatial voice, and setPan drives it', () => {
+  it('inserts a spatial-gain + panner chain only for a spatial voice, and setPan/setSpatialGain drive them', () => {
     const ctx = new StubAudioContext();
     const backend = new WebAudioBackend(ctx as unknown as AudioContext);
     const master = ctx.created[0]!;
 
-    // Non-spatial voice → no panner (gain → master).
+    // Non-spatial voice → no panner/spatial gain (gain → master).
     const plain = backend.play(new AudioClip(new Uint8Array([1])))!;
     expect(ctx.panners).toHaveLength(0);
     backend.setPan(plain, 0.9); // no-op, no panner — must not throw
+    backend.setSpatialGain(plain, 0.5); // no-op, no spatial gain — must not throw
     const plainGain = ctx.created[ctx.created.length - 1]!;
     expect(plainGain.outputs).toContain(master);
 
-    // Spatial voice → a panner between the gain and master.
+    // Spatial voice → volume gain → spatial gain → panner → master.
     const spatial = backend.play(new AudioClip(new Uint8Array([2])), { spatial: true })!;
     const panner = ctx.panners[ctx.panners.length - 1]!;
-    const spatialGain = ctx.created[ctx.created.length - 1]!;
+    const spatialGain = ctx.created[ctx.created.length - 1]!; // last gain created is the spatial gain
+    const volumeGain = ctx.created[ctx.created.length - 2]!; // the one before it is the volume gain
+    expect(volumeGain.outputs).toContain(spatialGain);
+    expect(volumeGain.outputs).not.toContain(master);
     expect(spatialGain.outputs).toContain(panner);
-    expect(spatialGain.outputs).not.toContain(master);
     expect(panner.outputs).toContain(master);
 
     backend.setPan(spatial, -0.5);
     expect(panner.pan.value).toBe(-0.5);
     backend.setPan(spatial, -3); // clamps to [-1, 1]
     expect(panner.pan.value).toBe(-1);
+
+    backend.setSpatialGain(spatial, 0.3);
+    expect(spatialGain.gain.value).toBe(0.3);
+    backend.setSpatialGain(spatial, -2); // clamps at 0
+    expect(spatialGain.gain.value).toBe(0);
   });
 });

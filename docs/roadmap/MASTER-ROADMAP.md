@@ -257,14 +257,18 @@ foundation.**
       widgets: text-input, scrollview, dropdown/tabs; data binding; virtualized list/tree views; screen
       management.
       _Links:_ [in-game-ui-depth.md](in-game-ui-depth.md) · [ui-system.md](ui-system.md)
-- [ ] **Audio mixer buses** — 🟡 **Phases 1–3 shipped** (ADR-0159/0162/0164): (1) named buses + per-bus
-      volume; (2) submix trees — `Audio.setBusOutput(bus, output)` routes bus→bus, facade owns the graph +
-      rejects cycles; (3) effect inserts — `Audio.setBusEffect(bus, {filter|compressor} | null)` inserts a
-      `BiquadFilterNode`/`DynamicsCompressorNode` between a bus's gain and output via one `rebuildBus` that
-      composes with submix routing; headless parity; `busEffect` query; (4) **spatial stereo panning**
-      (ADR-0165) — `AudioSource.spatial` + `panWidth`, a per-voice `StereoPannerNode`, an `audio-spatial`
-      system panning by world X vs. the `AudioListener` (pure `panForOffset`), non-spatial audio unchanged.
-      Unit + stub-context tested. Remaining: distance attenuation, full 3D `PannerNode`, reverb/sidechain.
+- [ ] **Audio mixer buses** — 🟡 **Phases 1–4 shipped** (ADR-0159/0162/0164/0165/0168): (1) named buses +
+      per-bus volume; (2) submix trees — `Audio.setBusOutput(bus, output)` routes bus→bus, facade owns the
+      graph + rejects cycles; (3) effect inserts — `Audio.setBusEffect(bus, {filter|compressor} | null)`
+      inserts a `BiquadFilterNode`/`DynamicsCompressorNode` between a bus's gain and output via one
+      `rebuildBus` that composes with submix routing; headless parity; `busEffect` query; (4a) **spatial
+      stereo panning** (ADR-0165) — `AudioSource.spatial` + `panWidth`, a per-voice `StereoPannerNode`, an
+      `audio-spatial` system panning by world X vs. the `AudioListener` (pure `panForOffset`); (4b) **distance
+      attenuation** (ADR-0168) — `AudioSource.refDistance`/`maxDistance`/`rolloff`, the Web Audio linear model
+      on a separate per-voice `spatialGain` node (`gain → spatialGain → panner → out`, so it never fights
+      volume sync), pure `attenuationForDistance`, the same system driving `setSpatialGain` by 3D distance;
+      non-spatial audio unchanged. Unit + stub-context tested. Remaining: inverse/exponential falloff, full 3D
+      `PannerNode`, Doppler, reverb/sidechain.
       _Links:_ [audio-mixer-buses.md](audio-mixer-buses.md) · [audio.md](audio.md)
 - [ ] **Windowing** — 🟡 **read side shipped**: `Window` resource (logical + physical size + dpr, mirrored
       from the surface) + `WindowResized` event + `syncWindow` + opt-in `WindowPlugin` (`'first'`-stage sync,

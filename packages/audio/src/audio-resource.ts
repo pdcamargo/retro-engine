@@ -59,6 +59,14 @@ export class Audio {
     this.backend.setPan(voice, pan);
   }
 
+  /**
+   * Set a live voice's distance-attenuation gain (typically `[0, 1]`), applied
+   * independently of its volume (no-op for a non-spatial voice).
+   */
+  setSpatialGain(voice: VoiceId, gain: number): void {
+    this.backend.setSpatialGain(voice, gain);
+  }
+
   /** Whether `voice` is still playing. */
   isPlaying(voice: VoiceId): boolean {
     return this.backend.isPlaying(voice);

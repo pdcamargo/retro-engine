@@ -32,14 +32,21 @@ stub-context tested (incl. effect surviving a submix reroute).
 **Remaining:** multi-effect chains per bus, live param automation, reverb
 (`ConvolverNode`) sends, sidechain ducking.
 
-## Phase 4 — spatial panning 🟡 (ADR-0165)
+## Phase 4 — spatial audio 🟡 (ADR-0165, ADR-0168)
 
-**Done (pan):** `AudioSource.spatial` + `panWidth`; a per-spatial-voice
-`StereoPannerNode` (`PlayOptions.spatial`, `Audio.setPan`); the `audio-spatial`
-system pans each spatial voice by its world X vs. the first transform-bearing
-`AudioListener`, via pure `panForOffset`. Non-spatial audio is unchanged (no
-panner). Unit + stub-context tested.
+**4a — panning ✅ (ADR-0165):** `AudioSource.spatial` + `panWidth`; a
+per-spatial-voice `StereoPannerNode` (`PlayOptions.spatial`, `Audio.setPan`); the
+`audio-spatial` system pans each spatial voice by its world X vs. the first
+transform-bearing `AudioListener`, via pure `panForOffset`. Non-spatial audio is
+unchanged (no panner). Unit + stub-context tested.
 
-**Remaining (4b):** distance attenuation (needs a falloff model + a combine with
-the volume-sync path), a full 3D `PannerNode` mode (elevation/HRTF/rolloff),
-Doppler.
+**4b — distance attenuation ✅ (ADR-0168):** `AudioSource.refDistance`/
+`maxDistance`/`rolloff`; the Web Audio **linear** model on a separate per-voice
+`spatialGain` node (`gain → spatialGain → panner → out`) so attenuation never
+fights the reconciler's volume sync — resolving the exact combine ADR-0165 flagged.
+Pure `attenuationForDistance` (`rolloff: 0` / degenerate range → no attenuation);
+the same system computes the full 3D source↔listener distance and drives
+`Audio.setSpatialGain`. Unit + stub-context tested.
+
+**Remaining (4c):** inverse/exponential falloff models, a full 3D `PannerNode`
+mode (elevation/HRTF), Doppler.

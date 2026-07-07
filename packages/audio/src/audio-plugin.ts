@@ -19,7 +19,7 @@ import { reconcileAudio } from './audio-playback';
 import { Audio } from './audio-resource';
 import { AudioListener, AudioSource, AudioVoices } from './audio-source';
 import { NullAudioBackend } from './null-audio-backend';
-import { panForOffset } from './spatial';
+import { attenuationForDistance, panForOffset } from './spatial';
 import { WebAudioBackend } from './web-audio-backend';
 
 /**
@@ -97,6 +97,9 @@ export class AudioPlugin implements PluginObject {
         bus: t.string,
         spatial: t.boolean,
         panWidth: t.number,
+        refDistance: t.number,
+        maxDistance: t.number,
+        rolloff: t.number,
         playRequested: t.boolean.skip(),
         stopRequested: t.boolean.skip(),
         started: t.boolean.skip(),
@@ -133,17 +136,22 @@ export class AudioPlugin implements PluginObject {
       { name: 'audio-playback', after: ['audio'] },
     );
 
-    // Stereo-pan spatial sources by their world X relative to the first
-    // AudioListener that has a transform. Uses the current GlobalTransform
-    // (a frame of latency is inaudible); runs after playback so voices exist.
+    // Stereo-pan + distance-attenuate spatial sources by their world position
+    // relative to the first AudioListener that has a transform. Uses the current
+    // GlobalTransform (a frame of latency is inaudible); runs after playback so
+    // voices exist.
     app.addSystem(
       'postUpdate',
       [Query([AudioSource, GlobalTransform]), Query([AudioListener, GlobalTransform]), Res(AudioVoices), ResMut(Audio)],
       (sources, listeners, voices, audio) => {
-        let listenerX = 0;
+        let lx = 0;
+        let ly = 0;
+        let lz = 0;
         let hasListener = false;
         for (const [, transform] of listeners as Iterable<readonly [AudioListener, GlobalTransform]>) {
-          listenerX = transform.matrix[12] ?? 0;
+          lx = transform.matrix[12] ?? 0;
+          ly = transform.matrix[13] ?? 0;
+          lz = transform.matrix[14] ?? 0;
           hasListener = true;
           break;
         }
@@ -153,8 +161,14 @@ export class AudioPlugin implements PluginObject {
           if (!source.spatial) continue;
           const active = (voices as AudioVoices).get(row[0] as never);
           if (active === undefined) continue;
-          const worldX = (row[2] as GlobalTransform).matrix[12] ?? 0;
-          (audio as Audio).setPan(active.voice, panForOffset(worldX, listenerX, source.panWidth));
+          const m = (row[2] as GlobalTransform).matrix;
+          const sx = m[12] ?? 0;
+          const distance = Math.hypot(sx - lx, (m[13] ?? 0) - ly, (m[14] ?? 0) - lz);
+          (audio as Audio).setPan(active.voice, panForOffset(sx, lx, source.panWidth));
+          (audio as Audio).setSpatialGain(
+            active.voice,
+            attenuationForDistance(distance, source.refDistance, source.maxDistance, source.rolloff),
+          );
         }
       },
       { name: 'audio-spatial', after: ['audio-playback'] },

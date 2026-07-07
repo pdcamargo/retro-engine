@@ -28,6 +28,8 @@ export class NullAudioBackend implements AudioBackend {
 
   setPan(): void {}
 
+  setSpatialGain(): void {}
+
   isPlaying(): boolean {
     return false;
   }

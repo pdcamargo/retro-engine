@@ -1668,3 +1668,26 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
 - Roadmap: MASTER-ROADMAP "CSS Grid for the UI layout engine" now 🟡 Phases 1–3a shipped. Box unchecked.
 
 ---
+
+## ✅ P1 — Audio mixer buses, Phase 4b: distance attenuation (unit-verified)
+
+- **New:** `@retro-engine/audio` (ADR-0168). A spatial `AudioSource` now fades with distance from the
+  `AudioListener`, not just pans. Fields `refDistance`/`maxDistance`/`rolloff` (defaults `1`/`100`/`1`,
+  reflected). Web Audio **linear** model `1 - rolloff*(d-ref)/(max-ref)` (d clamped to `[ref,max]`) via new
+  pure `attenuationForDistance`; `rolloff: 0` (or a degenerate `max<=ref` range) → no attenuation (pan-only).
+  Rides its own per-voice gain node (`gain → spatialGain → panner → out`) so it never fights the reconciler's
+  live volume sync — `AudioBackend.setSpatialGain` / `Audio.setSpatialGain` drive it (no-op for non-spatial /
+  Null backend). The `audio-spatial` system computes the full 3D source↔listener distance.
+- **Verified:** `spatial.test.ts` (+6): full volume within ref; linear fade to silence at max; floor held past
+  max; rolloff-0 / degenerate-range disable; over-steep clamp to 0. `audio.test.ts`: WebAudioBackend spatial
+  chain is now `volumeGain → spatialGain → panner → master`, `setSpatialGain` drives + clamps the node,
+  non-spatial `setSpatialGain` is a safe no-op; facade forwards `setSpatialGain`. 40 audio tests. Full audio
+  gate green: typecheck, lint (0/0), build. Changeset.
+- **HOW to test:** `new AudioSource(clip, { spatial: true, maxDistance: 20 })` on a moving entity with an
+  `AudioListener` on the camera → the sound is full-volume near the listener and inaudible ~20 units away;
+  set `rolloff: 0` for pan-only (no fade).
+- **NOTE:** Phase 4c (inverse/exponential falloff, full 3D `PannerNode`/HRTF, Doppler, reverb/sidechain)
+  remains — tracked in `audio-mixer-buses.md`.
+- Roadmap: MASTER-ROADMAP "Audio mixer buses" now 🟡 Phases 1–4 shipped. Box unchecked.
+
+---

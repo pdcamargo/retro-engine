@@ -87,6 +87,12 @@ export interface AudioBackend {
    * id.
    */
   setPan(voice: VoiceId, pan: number): void;
+  /**
+   * Set a live voice's distance-attenuation gain, `[0, ∞)` (typically `[0, 1]`),
+   * applied independently of its {@link AudioBackend.setVolume} gain. No-op for a
+   * voice that was not started with `spatial: true`, or an unknown id.
+   */
+  setSpatialGain(voice: VoiceId, gain: number): void;
   /** Whether `voice` is still playing. */
   isPlaying(voice: VoiceId): boolean;
   /** Set the master gain applied to every voice, `[0, ∞)` (typically `[0, 1]`). */

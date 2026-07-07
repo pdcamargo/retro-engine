@@ -18,6 +18,9 @@ export interface AudioSourceOptions {
   readonly bus?: string;
   readonly spatial?: boolean;
   readonly panWidth?: number;
+  readonly refDistance?: number;
+  readonly maxDistance?: number;
+  readonly rolloff?: number;
 }
 
 /**
@@ -62,6 +65,22 @@ export class AudioSource {
    * left/right. Only meaningful when {@link AudioSource.spatial}.
    */
   panWidth: number;
+  /**
+   * Distance (world units) within which a spatial source plays at full volume;
+   * attenuation begins beyond it. Only meaningful when {@link AudioSource.spatial}.
+   */
+  refDistance: number;
+  /**
+   * Distance (world units) at which a spatial source reaches its quietest; it does
+   * not fade further past this. Only meaningful when {@link AudioSource.spatial}.
+   */
+  maxDistance: number;
+  /**
+   * How steeply a spatial source fades between `refDistance` and `maxDistance`
+   * (linear model). `1` fades to silence at `maxDistance`; `0` disables distance
+   * attenuation (pan-only). Only meaningful when {@link AudioSource.spatial}.
+   */
+  rolloff: number;
 
   /** Runtime: set by {@link AudioSource.play} to (re)start on the next frame. Not serialized. */
   playRequested = false;
@@ -84,6 +103,9 @@ export class AudioSource {
     this.bus = options.bus ?? '';
     this.spatial = options.spatial ?? false;
     this.panWidth = options.panWidth ?? 10;
+    this.refDistance = options.refDistance ?? 1;
+    this.maxDistance = options.maxDistance ?? 100;
+    this.rolloff = options.rolloff ?? 1;
   }
 
   /** Request a (re)start of this source on the next audio update. */

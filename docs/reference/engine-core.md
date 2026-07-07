@@ -139,7 +139,10 @@ These do not exist in the runtime and are the reason a complete game can't ship 
   an `Audio` resource (play/stop/volume/pitch/loop, one-shot + looping, autoplay-resume), and
   component-based `AudioSource` + `AudioListener` (reflection-registered) with an ECS playback system
   (`reconcileAudio`: playOnAdd, despawnOnEnd, live volume sync). `AudioPlugin` is opt-in + headless-safe.
-  Remaining are P1/P2: mixer buses, spatial panning, studio audio preview. → roadmap/audio.md
+  **Mixer buses** (named buses + per-bus volume, submix trees, filter/compressor effect inserts) and
+  **spatial audio** (stereo panning + linear distance attenuation off the `AudioListener`, ADR-0165/0168)
+  are shipped. Remaining are P1/P2: inverse/3D `PannerNode` falloff, reverb/sidechain, studio audio preview.
+  → roadmap/audio.md
 - ❌/🟡 **Windowing** — only a raw canvas + `ResizeObserver` + surface configure on the App. No `Window`
   resource, monitor/cursor/fullscreen control, multi-window, or window events.
 - ✅ **Physics** — `@retro-engine/physics-core` + `@retro-engine/physics-rapier` (ADR-0148). Contract
