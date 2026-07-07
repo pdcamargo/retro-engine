@@ -32,4 +32,22 @@ describe('AssetStores', () => {
     stores.register('Tex', new Assets<Tex>() as Assets<unknown>);
     expect(() => stores.handleFor('Tex', generateAssetGuid())).toThrow(/not present in its store/);
   });
+
+  it('totals loaded assets across stores, counting a shared store once', () => {
+    const stores = new AssetStores();
+    expect(stores.totalAssetCount()).toBe(0);
+
+    const tex = new Assets<Tex>();
+    tex.add({ id: 1 });
+    tex.add({ id: 2 });
+    const mesh = new Assets<Tex>();
+    mesh.add({ id: 3 });
+    stores.register('Tex', tex as Assets<unknown>);
+    stores.register('Mesh', mesh as Assets<unknown>);
+    expect(stores.totalAssetCount()).toBe(3);
+
+    // A store bound under a second key is not double-counted.
+    stores.register('TexAlias', tex as Assets<unknown>);
+    expect(stores.totalAssetCount()).toBe(3);
+  });
 });

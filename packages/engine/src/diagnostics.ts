@@ -1,3 +1,4 @@
+import { AssetStores } from './asset/asset-stores';
 import type { App } from './index';
 import type { PluginObject } from './plugin';
 import { Res, ResMut } from './system-param';
@@ -16,6 +17,8 @@ export class DiagnosticsStore {
   fps = 0;
   /** Live entity count at the last update. */
   entityCount = 0;
+  /** Total loaded assets across every registered store at the last update. */
+  assetCount = 0;
   /** Total frames advanced since the store was inserted. */
   frameCount = 0;
 }
@@ -24,18 +27,22 @@ export class DiagnosticsStore {
 const SMOOTHING = 0.1;
 
 /**
- * Fold one frame into `store`: bump the frame count, snapshot the entity count,
- * and — for a real (non-zero) delta — update the smoothed frame time and derived
- * FPS. Uses the **real** clock delta so diagnostics reflect wall-clock cost, not
- * paused/scaled gameplay time. Pure; the plugin calls it each frame.
+ * Fold one frame into `store`: bump the frame count, snapshot the entity count
+ * (and asset count when provided), and — for a real (non-zero) delta — update the
+ * smoothed frame time and derived FPS. Uses the **real** clock delta so
+ * diagnostics reflect wall-clock cost, not paused/scaled gameplay time. Pure; the
+ * plugin calls it each frame. `assetCount` is optional so callers that don't track
+ * assets leave the field untouched.
  */
 export const updateDiagnostics = (
   store: DiagnosticsStore,
   realDeltaSeconds: number,
   entityCount: number,
+  assetCount?: number,
 ): void => {
   store.frameCount += 1;
   store.entityCount = entityCount;
+  if (assetCount !== undefined) store.assetCount = assetCount;
   const dtMs = realDeltaSeconds * 1000;
   if (dtMs <= 0) return;
   store.frameTimeMs = store.frameTimeMs === 0 ? dtMs : store.frameTimeMs + (dtMs - store.frameTimeMs) * SMOOTHING;
@@ -59,7 +66,13 @@ export class DiagnosticsPlugin implements PluginObject {
       'last',
       [Res(Time), ResMut(DiagnosticsStore)],
       (time, store) => {
-        updateDiagnostics(store as DiagnosticsStore, (time as Time).real.delta, app.world.entityCount);
+        const assetCount = app.getResource(AssetStores)?.totalAssetCount() ?? 0;
+        updateDiagnostics(
+          store as DiagnosticsStore,
+          (time as Time).real.delta,
+          app.world.entityCount,
+          assetCount,
+        );
       },
       { label: 'diagnostics-update' },
     );

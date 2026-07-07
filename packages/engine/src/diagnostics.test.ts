@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'bun:test';
 
+import { Assets } from '@retro-engine/assets';
+
 import { App, DiagnosticsPlugin, DiagnosticsStore, updateDiagnostics } from './index';
+import { AssetStores } from './asset/asset-stores';
 import { makeHeadlessRenderer } from './test-utils';
 
 class Tag {}
+class Tex {}
 
 describe('updateDiagnostics', () => {
   it('smooths frame time toward the sample and derives fps', () => {
@@ -29,6 +33,15 @@ describe('updateDiagnostics', () => {
     expect(store.frameTimeMs).toBe(0);
     expect(store.fps).toBe(0);
   });
+
+  it('records the asset count when given, and leaves it untouched when omitted', () => {
+    const store = new DiagnosticsStore();
+    updateDiagnostics(store, 0.016, 3, 12);
+    expect(store.assetCount).toBe(12);
+    // A later 3-arg call must not clobber the last known asset count.
+    updateDiagnostics(store, 0.016, 3);
+    expect(store.assetCount).toBe(12);
+  });
 });
 
 describe('DiagnosticsPlugin (integration)', () => {
@@ -52,5 +65,24 @@ describe('DiagnosticsPlugin (integration)', () => {
     app.world.spawn(new Tag());
     app.advanceFrame(48);
     expect(store.entityCount).toBe(baseline + 1);
+  });
+
+  it('reports the total loaded asset count from AssetStores', () => {
+    const app = new App({ renderer: makeHeadlessRenderer() });
+    app.addPlugin(new DiagnosticsPlugin());
+    const stores = new AssetStores();
+    const tex = new Assets<Tex>();
+    tex.add(new Tex());
+    tex.add(new Tex());
+    stores.register('Tex', tex as Assets<unknown>);
+    app.insertResource(stores);
+
+    app.advanceFrame(0);
+    const store = app.getResource(DiagnosticsStore)!;
+    expect(store.assetCount).toBe(2);
+
+    tex.add(new Tex());
+    app.advanceFrame(16);
+    expect(store.assetCount).toBe(3);
   });
 });

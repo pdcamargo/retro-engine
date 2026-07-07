@@ -54,6 +54,22 @@ export class AssetStores {
   }
 
   /**
+   * Total number of loaded assets across every registered store. Distinct stores
+   * are counted once even if bound under several asset-type keys. Used by the
+   * diagnostics overlay; O(number of stores).
+   */
+  totalAssetCount(): number {
+    let total = 0;
+    const seen = new Set<Assets<unknown>>();
+    for (const store of this.stores.values()) {
+      if (seen.has(store)) continue;
+      seen.add(store);
+      total += store.size;
+    }
+    return total;
+  }
+
+  /**
    * Resolve the live handle for `guid` in the store bound to `assetType`.
    *
    * Throws if `assetType` has no registered store (a wiring gap — the component

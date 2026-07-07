@@ -1361,3 +1361,21 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
   panning) tracked in `audio-mixer-buses.md`. Box unchecked pending your confirmation.
 
 ---
+
+## ✅ P1 — Diagnostics: asset counts (unit + integration verified)
+
+- **New:** `@retro-engine/engine`. `DiagnosticsStore.assetCount` — total loaded assets across every
+  registered `AssetStores` store, refreshed each frame by `DiagnosticsPlugin` (alongside fps/frameTimeMs/
+  entityCount). New `AssetStores.totalAssetCount()` sums `store.size` over distinct stores (a store bound
+  under several asset-type keys is counted once). `updateDiagnostics` gained an optional `assetCount` arg
+  (omitting it leaves the field untouched → existing 3-arg callers unaffected).
+- **Verified:** `diagnostics.test.ts` (+2): `updateDiagnostics` records assetCount when given / leaves it on
+  omit; plugin integration reports 2 then 3 as a store grows. `asset-stores.test.ts` (+1): totals across
+  stores, counts a shared store once. Full engine gate green: typecheck, lint (626 files), 1245 tests,
+  build. Changeset added.
+- **HOW to test:** with `DiagnosticsPlugin` + asset stores registered, `Res(DiagnosticsStore).assetCount`
+  tracks the number of loaded assets each frame.
+- Roadmap: MASTER-ROADMAP "Diagnostics store" now 🟡 core + asset counts shipped; only the on-screen overlay
+  (studio panel / in-game UI) remains. Box unchecked pending your confirmation.
+
+---
