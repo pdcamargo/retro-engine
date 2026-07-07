@@ -1929,3 +1929,17 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
 - Roadmap: MASTER-ROADMAP "Export — Web follow-ups" now notes jsimgui tree-shaken ✅.
 
 ---
+
+## ✅ P1 — renderer-webgl2: imgui subpath isolation (symmetric to WebGPU) (gate-verified)
+
+- **New:** `@retro-engine/renderer-webgl2`. Same refactor as the WebGPU imgui subpath, applied pre-emptively:
+  `createImGuiOverlay` moved from the index to a `@retro-engine/renderer-webgl2/imgui` subpath so a future
+  WebGL2 game bundle won't drag in the editor-only jsimgui WASM. No consumer imports webgl2's imgui yet
+  (webgl2 is a stub), so zero breakage — pure hygiene ahead of the WebGL2 export path.
+- **Verified:** typecheck + lint (0/0) + build green (webgl2 has no importers to break). Full repo gate green
+  on push.
+- **NOTE:** No ADR (identical packaging hygiene to the WebGPU change; no new decision). When the WebGL2
+  studio/editor path lands, import `createImGuiOverlay` from `@retro-engine/renderer-webgl2/imgui`.
+- Closes the webgl2 parallel follow-up flagged in the previous (WebGPU imgui) entry.
+
+---

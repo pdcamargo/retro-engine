@@ -94,4 +94,9 @@ export const createWebGL2Renderer = (_canvas: HTMLCanvasElement): Renderer => {
   };
 };
 
-export { createImGuiOverlay } from './imgui-overlay';
+// `createImGuiOverlay` is intentionally NOT re-exported here: it pulls the
+// editor-only `@mori2003/jsimgui` (a multi-MB WASM lib), and this index is on the
+// shipped-game path (`bootWebGame` imports the renderer factory from it). Keeping
+// it out of the module graph means game bundles never include ImGui. Editor / dev
+// hosts import it from the `@retro-engine/renderer-webgl2/imgui` subpath instead
+// (mirrors renderer-webgpu; ADR / TESTING-TODO parallel to the WebGPU change).
