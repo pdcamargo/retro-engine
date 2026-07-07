@@ -144,7 +144,7 @@ export const placeGridItems = (grid: GridTracks, items: readonly GridItem[]): La
   const rows = grid.rowSizes.length;
   const colOff = trackOffsets(grid.columnSizes, grid.columnGap);
   const rowOff = trackOffsets(grid.rowSizes, grid.rowGap);
-  const occupied = new Array<boolean>(cols * rows).fill(false);
+  const occupied: boolean[] = Array.from({ length: cols * rows }, () => false);
 
   const fits = (c: number, r: number, cs: number, rs: number): boolean => {
     if (c + cs > cols || r + rs > rows) return false;
