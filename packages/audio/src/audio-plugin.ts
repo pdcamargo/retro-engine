@@ -101,6 +101,7 @@ export class AudioPlugin implements PluginObject {
         maxDistance: t.number,
         rolloff: t.number,
         distanceModel: t.enum('linear', 'inverse', 'exponential'),
+        spatialMode: t.enum('2d', '3d'),
         playRequested: t.boolean.skip(),
         stopRequested: t.boolean.skip(),
         started: t.boolean.skip(),
@@ -157,6 +158,8 @@ export class AudioPlugin implements PluginObject {
           break;
         }
         if (!hasListener) return;
+        // Shared listener position for any 3D voices this frame.
+        (audio as Audio).setListenerPosition(lx, ly, lz);
         for (const row of (sources as { entries(): Iterable<readonly unknown[]> }).entries()) {
           const source = row[1] as AudioSource;
           if (!source.spatial) continue;
@@ -164,6 +167,11 @@ export class AudioPlugin implements PluginObject {
           if (active === undefined) continue;
           const m = (row[2] as GlobalTransform).matrix;
           const sx = m[12] ?? 0;
+          if (source.spatialMode === '3d') {
+            // The PannerNode computes pan + distance attenuation from world position.
+            (audio as Audio).setSpatialPosition(active.voice, sx, m[13] ?? 0, m[14] ?? 0);
+            continue;
+          }
           const distance = Math.hypot(sx - lx, (m[13] ?? 0) - ly, (m[14] ?? 0) - lz);
           (audio as Audio).setPan(active.voice, panForOffset(sx, lx, source.panWidth));
           (audio as Audio).setSpatialGain(

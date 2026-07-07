@@ -30,6 +30,10 @@ export class NullAudioBackend implements AudioBackend {
 
   setSpatialGain(): void {}
 
+  setSpatialPosition(): void {}
+
+  setListenerPosition(): void {}
+
   isPlaying(): boolean {
     return false;
   }

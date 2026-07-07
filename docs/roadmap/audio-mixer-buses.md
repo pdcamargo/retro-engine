@@ -55,5 +55,13 @@ the same system computes the full 3D source↔listener distance and drives
 callers are unchanged). Inverse/exponential ignore `maxDistance` (never reach
 zero). Unit-tested.
 
-**Remaining:** a full 3D `PannerNode` mode (elevation/HRTF), Doppler,
-reverb/sidechain sends.
+**4d — 3D positional mode ✅ (ADR-0171):** `AudioSource.spatialMode: '2d'|'3d'`
+(default `'2d'`). A `'3d'` voice uses a Web Audio `PannerNode` (`gain → panner →
+out`) that does panning + distance attenuation itself; `PlayOptions.panner` /
+`PannerConfig`, `AudioBackend.setSpatialPosition` / `setListenerPosition`, the
+`audio-spatial` system driving voice + listener positions from `GlobalTransform`.
+`panningModel` defaults `'HRTF'`; reuses the ADR-0168 distance fields. 2D path
+unchanged; Null no-ops. Unit + stub-context tested.
+
+**Remaining:** listener orientation (forward/up), source directionality (cone),
+Doppler (velocity), reverb/sidechain sends.

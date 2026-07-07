@@ -293,7 +293,11 @@ foundation.**
       non-spatial audio unchanged. Unit + stub-context tested. (4c) **falloff models** — `AudioSource.distanceModel`
       selects `'linear'`/`'inverse'`/`'exponential'` (Web Audio `PannerNode` models); `attenuationForDistance`
       gained a `model` param (default `'linear'`, existing calls unchanged), inverse/exponential ignore
-      `maxDistance`. Unit-tested. Remaining: full 3D `PannerNode` (elevation/HRTF), Doppler, reverb/sidechain.
+      `maxDistance`. Unit-tested. (4d) **3D positional mode** (ADR-0171) — `AudioSource.spatialMode:
+      '2d'|'3d'`; a `'3d'` voice uses a Web Audio `PannerNode` (elevation/front-back/HRTF, panning +
+      attenuation internal), `PlayOptions.panner`, `setSpatialPosition`/`setListenerPosition`, the
+      `audio-spatial` system driving positions; 2D path unchanged. Unit-tested. Remaining: listener
+      orientation, cones, Doppler, reverb/sidechain.
       _Links:_ [audio-mixer-buses.md](audio-mixer-buses.md) · [audio.md](audio.md)
 - [ ] **Windowing** — 🟡 **read side + cursor control shipped**: `Window` resource (logical + physical size +
       dpr, mirrored from the surface) + `WindowResized` event + `syncWindow` + opt-in `WindowPlugin`

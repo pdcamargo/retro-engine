@@ -12,8 +12,10 @@ interface Voice {
    * spatial system's per-frame attenuation never fights live volume sync.
    */
   readonly spatialGain: GainNode | null;
-  /** Stereo panner for a spatial voice, or `null` for a centered one. */
+  /** Stereo panner for a 2D spatial voice, or `null`. */
   readonly panner: StereoPannerNode | null;
+  /** 3D positional panner (does panning + distance attenuation itself), or `null`. */
+  readonly panner3d: PannerNode | null;
   readonly loop: boolean;
   readonly pitch: number;
   stopped: boolean;
@@ -63,12 +65,24 @@ export class WebAudioBackend implements AudioBackend {
     const gain = this.ctx.createGain();
     gain.gain.value = options?.volume ?? 1;
     const out = options?.bus !== undefined ? this.bus(options.bus) : this.master;
-    // A spatial voice gets a distance-attenuation gain then a stereo panner
-    // between its volume gain and the output (gain → spatialGain → panner → out);
-    // a centered voice connects straight through (no per-voice spatial cost).
+    // A 3D voice gets a PannerNode (gain → panner3d → out) that does panning +
+    // distance attenuation itself. A 2D spatial voice gets a distance-attenuation
+    // gain then a stereo panner (gain → spatialGain → panner → out). A centered
+    // voice connects straight through (no per-voice spatial cost).
     let spatialGain: GainNode | null = null;
     let panner: StereoPannerNode | null = null;
-    if (options?.spatial === true) {
+    let panner3d: PannerNode | null = null;
+    if (options?.panner !== undefined) {
+      const cfg = options.panner;
+      panner3d = this.ctx.createPanner();
+      panner3d.panningModel = cfg.panningModel;
+      panner3d.distanceModel = cfg.distanceModel;
+      panner3d.refDistance = cfg.refDistance;
+      panner3d.maxDistance = Math.max(cfg.refDistance, cfg.maxDistance);
+      panner3d.rolloffFactor = cfg.rolloff;
+      gain.connect(panner3d);
+      panner3d.connect(out);
+    } else if (options?.spatial === true) {
       spatialGain = this.ctx.createGain();
       panner = this.ctx.createStereoPanner();
       gain.connect(spatialGain);
@@ -83,6 +97,7 @@ export class WebAudioBackend implements AudioBackend {
       gain,
       spatialGain,
       panner,
+      panner3d,
       loop: options?.loop ?? false,
       pitch: options?.pitch ?? 1,
       stopped: false,
@@ -134,6 +149,28 @@ export class WebAudioBackend implements AudioBackend {
   setSpatialGain(voice: VoiceId, gain: number): void {
     const v = this.voices.get(voice);
     if (v?.spatialGain != null) v.spatialGain.gain.value = gain < 0 ? 0 : gain;
+  }
+
+  setSpatialPosition(voice: VoiceId, x: number, y: number, z: number): void {
+    const p = this.voices.get(voice)?.panner3d;
+    if (p != null) {
+      p.positionX.value = x;
+      p.positionY.value = y;
+      p.positionZ.value = z;
+    }
+  }
+
+  setListenerPosition(x: number, y: number, z: number): void {
+    const l = this.ctx.listener as AudioListener & {
+      setPosition?: (x: number, y: number, z: number) => void;
+    };
+    if (l.positionX != null) {
+      l.positionX.value = x;
+      l.positionY.value = y;
+      l.positionZ.value = z;
+    } else if (typeof l.setPosition === 'function') {
+      l.setPosition(x, y, z); // deprecated fallback for older engines
+    }
   }
 
   isPlaying(voice: VoiceId): boolean {
@@ -246,6 +283,7 @@ export class WebAudioBackend implements AudioBackend {
     voice.gain.disconnect();
     if (voice.spatialGain !== null) voice.spatialGain.disconnect();
     if (voice.panner !== null) voice.panner.disconnect();
+    if (voice.panner3d !== null) voice.panner3d.disconnect();
     this.voices.delete(id);
   }
 

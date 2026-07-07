@@ -40,6 +40,14 @@ class MockBackend implements AudioBackend {
   setSpatialGain(voice: VoiceId, gain: number): void {
     this.spatialGains.push([voice, gain]);
   }
+  readonly positions: [VoiceId, number, number, number][] = [];
+  setSpatialPosition(voice: VoiceId, x: number, y: number, z: number): void {
+    this.positions.push([voice, x, y, z]);
+  }
+  readonly listenerPositions: [number, number, number][] = [];
+  setListenerPosition(x: number, y: number, z: number): void {
+    this.listenerPositions.push([x, y, z]);
+  }
   isPlaying(): boolean {
     return true;
   }
@@ -203,6 +211,19 @@ describe('Audio facade', () => {
     audio.setSpatialGain(voice, 0.25);
     expect(backend.spatialGains).toContainEqual([voice, 0.25]);
   });
+
+  it('forwards 3D spatial position + listener position to the backend', () => {
+    const backend = new MockBackend();
+    const audio = new Audio(backend, new AudioClips());
+    const voice = audio.play(new AudioClip(new Uint8Array([1])), {
+      panner: { panningModel: 'HRTF', distanceModel: 'inverse', refDistance: 1, maxDistance: 50, rolloff: 1 },
+    })!;
+    expect(backend.playCalls[0]!.options?.panner?.panningModel).toBe('HRTF');
+    audio.setSpatialPosition(voice, 3, 4, 5);
+    expect(backend.positions).toContainEqual([voice, 3, 4, 5]);
+    audio.setListenerPosition(1, 2, 3);
+    expect(backend.listenerPositions).toContainEqual([1, 2, 3]);
+  });
 });
 
 /** Minimal Web Audio graph stub: records gain nodes and their connections. */
@@ -265,12 +286,36 @@ class StubPannerNode {
     this.outputs.length = 0;
   }
 }
+class StubPannerNode3d {
+  panningModel = '';
+  distanceModel = '';
+  refDistance = 1;
+  maxDistance = 10000;
+  rolloffFactor = 1;
+  readonly positionX = new StubParam(0);
+  readonly positionY = new StubParam(0);
+  readonly positionZ = new StubParam(0);
+  readonly outputs: object[] = [];
+  connect(target: object): void {
+    this.outputs.push(target);
+  }
+  disconnect(): void {
+    this.outputs.length = 0;
+  }
+}
+class StubAudioListener {
+  readonly positionX = new StubParam(0);
+  readonly positionY = new StubParam(0);
+  readonly positionZ = new StubParam(0);
+}
 class StubAudioContext {
   state = 'running';
   readonly destination = { id: 'destination' };
   readonly created: StubGainNode[] = [];
   readonly filters: StubFilterNode[] = [];
   readonly panners: StubPannerNode[] = [];
+  readonly panners3d: StubPannerNode3d[] = [];
+  readonly listener = new StubAudioListener();
   createGain(): StubGainNode {
     const g = new StubGainNode();
     this.created.push(g);
@@ -279,6 +324,11 @@ class StubAudioContext {
   createStereoPanner(): StubPannerNode {
     const p = new StubPannerNode();
     this.panners.push(p);
+    return p;
+  }
+  createPanner(): StubPannerNode3d {
+    const p = new StubPannerNode3d();
+    this.panners3d.push(p);
     return p;
   }
   createBufferSource(): StubBufferSource {
@@ -425,5 +475,39 @@ describe('WebAudioBackend — mixer buses', () => {
     expect(spatialGain.gain.value).toBe(0.3);
     backend.setSpatialGain(spatial, -2); // clamps at 0
     expect(spatialGain.gain.value).toBe(0);
+  });
+
+  it('builds a 3D PannerNode voice from a panner config and drives its position + the listener', () => {
+    const ctx = new StubAudioContext();
+    const backend = new WebAudioBackend(ctx as unknown as AudioContext);
+    const master = ctx.created[0]!;
+
+    const voice = backend.play(new AudioClip(new Uint8Array([1])), {
+      panner: { panningModel: 'HRTF', distanceModel: 'inverse', refDistance: 2, maxDistance: 50, rolloff: 1.5 },
+    })!;
+    // No 2D stereo panner for a 3D voice.
+    expect(ctx.panners).toHaveLength(0);
+    const p3d = ctx.panners3d[ctx.panners3d.length - 1]!;
+    const voiceGain = ctx.created[ctx.created.length - 1]!;
+    expect(p3d.panningModel).toBe('HRTF');
+    expect(p3d.distanceModel).toBe('inverse');
+    expect(p3d.refDistance).toBe(2);
+    expect(p3d.maxDistance).toBe(50);
+    expect(p3d.rolloffFactor).toBe(1.5);
+    // Chain: volume gain → panner3d → master.
+    expect(voiceGain.outputs).toContain(p3d);
+    expect(p3d.outputs).toContain(master);
+
+    backend.setSpatialPosition(voice, 3, 4, 5);
+    expect([p3d.positionX.value, p3d.positionY.value, p3d.positionZ.value]).toEqual([3, 4, 5]);
+
+    backend.setListenerPosition(1, 2, 3);
+    expect([ctx.listener.positionX.value, ctx.listener.positionY.value, ctx.listener.positionZ.value]).toEqual([
+      1, 2, 3,
+    ]);
+
+    // setSpatialPosition on a non-3D voice is a safe no-op.
+    const plain = backend.play(new AudioClip(new Uint8Array([2])))!;
+    expect(() => backend.setSpatialPosition(plain, 9, 9, 9)).not.toThrow();
   });
 });

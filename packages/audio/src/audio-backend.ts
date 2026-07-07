@@ -1,4 +1,21 @@
 import type { AudioClip } from './audio-clip';
+import type { DistanceModel } from './spatial';
+
+/**
+ * Configuration for a **3D** spatial voice, driven by a Web Audio `PannerNode`
+ * which computes panning *and* distance attenuation internally from the voice's
+ * position relative to the listener. `panningModel` picks the spatialization
+ * algorithm (`'HRTF'` = binaural/realistic, `'equalpower'` = cheap); `distanceModel`
+ * + `refDistance` / `maxDistance` / `rolloff` are the same falloff parameters as
+ * the 2D path (see the `spatial` distance fields), applied by the panner.
+ */
+export interface PannerConfig {
+  readonly panningModel: 'HRTF' | 'equalpower';
+  readonly distanceModel: DistanceModel;
+  readonly refDistance: number;
+  readonly maxDistance: number;
+  readonly rolloff: number;
+}
 
 /**
  * A described effect insert on a mixer bus, applied between the bus's gain and
@@ -50,10 +67,17 @@ export interface PlayOptions {
   readonly bus?: string;
   /**
    * Give this voice a stereo panner so its left/right position can be driven with
-   * {@link AudioBackend.setPan} (a spatial `AudioSource`). Omitted plays centered
-   * with no panner. Default `false`.
+   * {@link AudioBackend.setPan} (a 2D spatial `AudioSource`). Omitted plays
+   * centered with no panner. Default `false`.
    */
   readonly spatial?: boolean;
+  /**
+   * Give this voice a **3D** `PannerNode` instead of the 2D stereo path, driven by
+   * {@link AudioBackend.setSpatialPosition} + {@link AudioBackend.setListenerPosition}.
+   * The panner does panning + distance attenuation itself, so this is mutually
+   * exclusive with {@link PlayOptions.spatial}. Omitted → not a 3D voice.
+   */
+  readonly panner?: PannerConfig;
 }
 
 /**
@@ -93,6 +117,14 @@ export interface AudioBackend {
    * voice that was not started with `spatial: true`, or an unknown id.
    */
   setSpatialGain(voice: VoiceId, gain: number): void;
+  /**
+   * Set a **3D** voice's world position (the panner computes pan + distance
+   * attenuation from it relative to the listener). No-op for a voice not started
+   * with a {@link PlayOptions.panner}, or an unknown id.
+   */
+  setSpatialPosition(voice: VoiceId, x: number, y: number, z: number): void;
+  /** Set the listener's world position, shared by every 3D voice. */
+  setListenerPosition(x: number, y: number, z: number): void;
   /** Whether `voice` is still playing. */
   isPlaying(voice: VoiceId): boolean;
   /** Set the master gain applied to every voice, `[0, ∞)` (typically `[0, 1]`). */

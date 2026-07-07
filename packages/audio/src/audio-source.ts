@@ -6,6 +6,16 @@ import type { VoiceId } from './audio-backend';
 import type { AudioClip } from './audio-clip';
 import type { DistanceModel } from './spatial';
 
+/**
+ * How a spatial source is spatialized:
+ * - `'2d'` — stereo pan by horizontal offset + a distance-attenuation gain (the
+ *   default; cheap, right for 2D games).
+ * - `'3d'` — a Web Audio `PannerNode` positioned in 3D relative to the listener
+ *   (elevation, front/back, HRTF). Uses the same `refDistance`/`maxDistance`/
+ *   `rolloff`/`distanceModel` for its internal falloff.
+ */
+export type SpatialMode = '2d' | '3d';
+
 /** An empty clip handle — the default until a real one is assigned; never resolves. */
 const EMPTY_CLIP: Handle<AudioClip> = makeHandle<AudioClip>(asAssetIndex(0));
 
@@ -23,6 +33,7 @@ export interface AudioSourceOptions {
   readonly maxDistance?: number;
   readonly rolloff?: number;
   readonly distanceModel?: DistanceModel;
+  readonly spatialMode?: SpatialMode;
 }
 
 /**
@@ -90,6 +101,12 @@ export class AudioSource {
    * {@link AudioSource.spatial}.
    */
   distanceModel: DistanceModel;
+  /**
+   * `'2d'` stereo pan + attenuation (default) or `'3d'` full positional audio via
+   * a Web Audio `PannerNode` (elevation / front-back / HRTF). Only meaningful when
+   * {@link AudioSource.spatial}.
+   */
+  spatialMode: SpatialMode;
 
   /** Runtime: set by {@link AudioSource.play} to (re)start on the next frame. Not serialized. */
   playRequested = false;
@@ -116,6 +133,7 @@ export class AudioSource {
     this.maxDistance = options.maxDistance ?? 100;
     this.rolloff = options.rolloff ?? 1;
     this.distanceModel = options.distanceModel ?? 'linear';
+    this.spatialMode = options.spatialMode ?? '2d';
   }
 
   /** Request a (re)start of this source on the next audio update. */

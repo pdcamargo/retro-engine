@@ -25,12 +25,25 @@ const startVoice = (
 ): void => {
   const existing = voices.get(entity);
   if (existing !== undefined) audio.stop(existing.voice);
+  const spatialOpts = source.spatial
+    ? source.spatialMode === '3d'
+      ? {
+          panner: {
+            panningModel: 'HRTF' as const,
+            distanceModel: source.distanceModel,
+            refDistance: source.refDistance,
+            maxDistance: source.maxDistance,
+            rolloff: source.rolloff,
+          },
+        }
+      : { spatial: true }
+    : {};
   const voice = audio.play(source.clip, {
     volume: source.volume,
     pitch: source.pitch,
     loop: source.loop,
     ...(source.bus !== '' ? { bus: source.bus } : {}),
-    ...(source.spatial ? { spatial: true } : {}),
+    ...spatialOpts,
   });
   if (voice !== null) voices.set(entity, { voice, despawnOnEnd: source.despawnOnEnd });
   else voices.delete(entity);

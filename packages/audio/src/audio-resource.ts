@@ -67,6 +67,16 @@ export class Audio {
     this.backend.setSpatialGain(voice, gain);
   }
 
+  /** Set a 3D voice's world position (no-op for a non-3D voice). */
+  setSpatialPosition(voice: VoiceId, x: number, y: number, z: number): void {
+    this.backend.setSpatialPosition(voice, x, y, z);
+  }
+
+  /** Set the listener's world position, shared by every 3D voice. */
+  setListenerPosition(x: number, y: number, z: number): void {
+    this.backend.setListenerPosition(x, y, z);
+  }
+
   /** Whether `voice` is still playing. */
   isPlaying(voice: VoiceId): boolean {
     return this.backend.isPlaying(voice);

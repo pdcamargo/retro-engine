@@ -1943,3 +1943,28 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
 - Closes the webgl2 parallel follow-up flagged in the previous (WebGPU imgui) entry.
 
 ---
+
+## ✅ P1 — Audio: 3D positional mode (PannerNode) (unit-verified)
+
+- **New:** `@retro-engine/audio` (ADR-0171). A spatial `AudioSource` can opt into full 3D positional audio
+  (elevation, front/back, HRTF) via `spatialMode: '2d'|'3d'` (default `'2d'`). A `'3d'` voice uses a Web
+  Audio `PannerNode` (`gain → panner → out`) that does panning + distance attenuation itself; the 2D path
+  (StereoPanner + attenuation gain) is untouched. New HAL: `PlayOptions.panner`/`PannerConfig`,
+  `setSpatialPosition`/`setListenerPosition`. The `audio-spatial` system drives each 3D voice's position from
+  its `GlobalTransform` + the shared listener from the `AudioListener`. `panningModel` defaults `'HRTF'`;
+  reuses the ADR-0168 `refDistance`/`maxDistance`/`rolloff`/`distanceModel` for the panner's falloff. Null
+  backend no-ops.
+- **Verified:** `audio.test.ts`: facade forwards 3D position + listener position; WebAudioBackend builds a
+  `PannerNode` voice from a panner config (panningModel/distanceModel/ref/max/rolloff set, chain
+  gain→panner3d→master), `setSpatialPosition` sets positionX/Y/Z, `setListenerPosition` sets the listener,
+  non-3D `setSpatialPosition` is a safe no-op. 45 audio tests (stub `AudioContext` extended with
+  createPanner + listener). Full audio gate green: typecheck, lint (0/0), build.
+- **HOW to test:** `new AudioSource(clip, { spatial: true, spatialMode: '3d', maxDistance: 50 })` on a moving
+  3D entity with an `AudioListener` on the camera → the sound is spatialized in 3D (above/below, in
+  front/behind, HRTF), fading with distance. **Browser-confirm by ear** (the graph wiring + position driving
+  are unit-covered via the stub; the actual HRTF spatialization needs listening).
+- **NOTE:** ADR-0171. Remaining audio spatial: listener orientation (forward/up), source cones, Doppler,
+  reverb/sidechain. 2D remains the default (right for 2D games).
+- Roadmap: MASTER-ROADMAP "Audio mixer buses" now notes Phase 4d (3D positional) shipped.
+
+---
