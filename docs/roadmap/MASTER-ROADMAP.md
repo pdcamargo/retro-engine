@@ -242,12 +242,13 @@ foundation.**
       _Links:_ [input-system.md](input-system.md)
 - [ ] **CSS Grid for the UI layout engine** — pure-TS grid behind the `LayoutEngine` interface (Taffy-WASM
       only as a fallback escape hatch). _Links:_ [ui-system.md](ui-system.md)
-- [ ] **In-game UI depth** — 🟡 **Phase 1 in progress**: `UiToggle` (checkbox — flips `checked` on click,
-      emits `UiToggled`) and `UiSlider` (drag → value in `[min,max]` off `UiPointer.pressed`, emits
-      `UiSliderChanged`) shipped, both reusing the `Interactable`/`UiClicked` foundation with pure,
-      unit-tested logic (`applyToggleClicks`, `computeSliderValue`). Remaining widgets: text-input,
-      scrollview, dropdown/tabs; then focus + spatial navigation, data binding, virtualized list/tree
-      views, screen management. _Links:_ [in-game-ui-depth.md](in-game-ui-depth.md) · [ui-system.md](ui-system.md)
+- [ ] **In-game UI depth** — 🟡 **Phases 1 (partial) + 2 shipped**: widgets `UiToggle` (checkbox) +
+      `UiSlider` (drag→value) reuse the `Interactable`/`UiClicked` foundation with pure, unit-tested logic;
+      **focus + spatial navigation** (ADR-0163) — `UiFocus` resource + `Focusable` marker + message-driven
+      `UiNavigate` (tab order via paint order; directional via a pure nearest-neighbour cost), device-
+      agnostic + stale-focus clearing. Remaining widgets: text-input, scrollview, dropdown/tabs; focus
+      activation + ring (2b); data binding; virtualized list/tree views; screen management.
+      _Links:_ [in-game-ui-depth.md](in-game-ui-depth.md) · [ui-system.md](ui-system.md)
 - [ ] **Audio mixer buses** — 🟡 **Phases 1–2 shipped** (ADR-0159, ADR-0162): (1) named buses + per-bus
       volume (`PlayOptions.bus`, `Audio.setBusVolume`/`busVolume`, `AudioSource.bus`; `voice.gain → bus →
       master`, string-keyed, headless parity); (2) submix trees — `Audio.setBusOutput(bus, output)` routes a

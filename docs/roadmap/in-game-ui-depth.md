@@ -24,11 +24,16 @@ More interactive widgets, each an authored component that reuses the picking /
   clipping (a `.rss` remaining item) landing first.
 - **Dropdown / tabs** — composite widgets built from the above + panels.
 
-## Phase 2 — Focus + spatial navigation
+## Phase 2 — Focus + spatial navigation ✅ (ADR-0163)
 
-A focus resource (which node has focus), Tab-order traversal, and D-pad/stick
-spatial navigation between focusable nodes (gamepad-friendly menus). Ties into the
-input action map.
+`UiFocus` resource (single focused entity) + `Focusable` marker + message-driven
+`UiNavigate` (game maps its input → a direction). `'next'`/`'prev'` walk tab order
+(paint order); `'up/down/left/right'` pick the nearest neighbour by a pure
+axis+perpendicular cost. `UiFocusPlugin` consumes `UiNavigate`, moves focus,
+clears stale focus. Pure `tabNavigate`/`spatialNavigate` unit-tested.
+
+**Remaining (2b):** activate the focused widget (Enter/Space/South → click it) +
+a focus-ring visual. Both build on `UiFocus`.
 
 ## Phase 3 — Data binding
 

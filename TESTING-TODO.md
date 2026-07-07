@@ -1398,3 +1398,25 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
   studio diagnostics panel (studio-blocked) remains. Box unchecked pending your confirmation.
 
 ---
+
+## ✅ P1 — In-game UI depth, Phase 2: focus + spatial navigation (unit-verified)
+
+- **New:** `@retro-engine/ui` (ADR-0163). `UiFocus` resource (single focused entity) + `Focusable` marker
+  + `UiNavigate` message. Game maps its input (Tab/arrows/d-pad/stick) to a `UiNavigate(direction)`;
+  `UiFocusPlugin` consumes it. `'next'`/`'prev'` = tab order (layout paint order); `'up/down/left/right'` =
+  nearest neighbour by a pure axis-distance + perpendicular-penalty cost (aligned beats skewed). Focus
+  pointing at a node no longer `Focusable` (despawned/un-marked) self-clears. `Focusable` reflection-
+  registered. Device-agnostic (no InputPlugin dependency — the message is the seam).
+- **Verified:** `focus-nav.test.ts` (+9): `tabNavigate` next/prev with wrap, entry on null/unknown, empty→
+  null; `spatialNavigate` 2×2 grid moves each direction, null when nothing in-direction, prefers aligned
+  over skewed, entry on null focus, empty→null. Full ui gate green: typecheck, lint (60 files), 119 tests,
+  build. Changeset added. NOTE: nav math fully unit-tested; the plugin's message→focus wiring follows the
+  codebase pure-function pattern.
+- **HOW to test:** `app.addPlugin(new UiFocusPlugin())`, spawn `Focusable` nodes, emit `UiNavigate('next')`
+  / `UiNavigate('right')` from input → `Res(UiFocus).current` moves accordingly (Tab cycles; arrows pick
+  spatial neighbours).
+- Roadmap: MASTER-ROADMAP "In-game UI depth" now 🟡 Phase 1 (toggle+slider) + Phase 2 (focus/nav) shipped;
+  remaining: focus activation + ring (2b), text-input/scrollview/dropdown/tabs, data binding, virtualized
+  views, screens. Box unchecked pending your confirmation.
+
+---
