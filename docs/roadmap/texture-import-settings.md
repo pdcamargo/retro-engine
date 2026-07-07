@@ -12,13 +12,19 @@ settings (`.meta`)" roadmap item (flagged high-value for crisp pixel-art).
 default for every image (pixel-art → `{ filter: 'nearest' }`; data maps →
 `{ colorSpace: 'linear' }`). Unit-tested; backward compatible.
 
-## Phase 2 — per-asset `.meta` overrides
+## Phase 2 — per-asset `.meta` overrides ✅ (ADR-0166)
 
-A `<file>.meta` sidecar carrying `TextureImportSettings`, parsed by the asset
-server and threaded to the importer via `LoadContext` (a new `settings` field),
-so one texture can override the project default. This is the assets-pipeline
-half: `.meta` schema + parse + `LoadContext.settings` + the importer reading it.
-Ties into the manifest (bake settings into the packed manifest entry).
+A `<name>.meta` sidecar (UTF-8 JSON of `TextureImportSettings`) overrides the
+importer default for one texture. Implemented **importer-local**: the image
+importer reads its own sibling `.meta` through the `LoadContext.read` it is handed
+(`parseTextureMeta` keeps only valid fields; a missing/malformed sidecar is
+silently ignored) and merges it over the default. No asset-server or
+`LoadContext`-shape change — lower risk than pre-threading a settings field. Pure
+parser + sibling-path + importer tests.
+
+**Remaining:** bake `.meta` settings into the packed manifest entry for the
+bundle/web path (so a baked build carries per-asset settings without a loose
+sidecar).
 
 ## Phase 3 — mipmaps, max size, PPU
 

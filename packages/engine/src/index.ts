@@ -439,9 +439,11 @@ export {
   imageFromDecoded,
   ImagePlugin,
   Images,
+  parseTextureMeta,
   RenderImages,
   resolveTextureColorSpace,
   resolveTextureSampler,
+  textureMetaSibling,
 } from './image';
 export {
   asAssetIndex,

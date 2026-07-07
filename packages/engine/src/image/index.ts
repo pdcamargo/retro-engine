@@ -5,7 +5,12 @@ export { createHdrImporter, decodeRadianceHdr, decodeRadianceHdrPreview } from '
 export type { DecodedRgba, RgbaImageDecoder } from './image-importer';
 export { createImageImporter, createImageBitmapRgbaDecoder, imageFromDecoded } from './image-importer';
 export type { TextureFilter, TextureImportSettings, TextureWrap } from './texture-import-settings';
-export { resolveTextureColorSpace, resolveTextureSampler } from './texture-import-settings';
+export {
+  parseTextureMeta,
+  resolveTextureColorSpace,
+  resolveTextureSampler,
+  textureMetaSibling,
+} from './texture-import-settings';
 export { Images } from './images';
 export { ExtractedImageAssetEvents, ImagePlugin, RenderImages } from './image-plugin';
 export type { RenderImage } from './render-image';

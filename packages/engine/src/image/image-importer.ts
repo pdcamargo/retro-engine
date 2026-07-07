@@ -1,10 +1,12 @@
-import type { AssetImporter } from '@retro-engine/assets';
+import type { AssetImporter, LoadContext } from '@retro-engine/assets';
 
 import { Image } from './image';
 import {
+  parseTextureMeta,
   resolveTextureColorSpace,
   resolveTextureSampler,
   type TextureImportSettings,
+  textureMetaSibling,
 } from './texture-import-settings';
 
 /** RGBA8 pixels decoded from an encoded image (PNG / JPEG / WebP). */
@@ -70,11 +72,12 @@ export const imageFromDecoded = (decoded: DecodedRgba, settings: TextureImportSe
  * an `rgba8unorm` {@link Image}, so a dropped-in texture can be referenced by a
  * material.
  *
- * `settings` are the **default** texture import settings applied to every image
- * this importer produces — e.g. a pixel-art project registers the importer with
- * `{ filter: 'nearest' }`. Per-asset overrides (a `.meta` sidecar) are a later
- * phase; until then a data map (normal / metallic-roughness) needs its own
- * importer registration with `{ colorSpace: 'linear' }`.
+ * `settings` are the **default** texture import settings for every image this
+ * importer produces — e.g. a pixel-art project registers with `{ filter:
+ * 'nearest' }`. A per-asset `<name>.meta` sidecar (UTF-8 JSON) overrides the
+ * default for a single texture: the importer reads it via the load context and
+ * merges the recognized fields on top. A missing or malformed `.meta` leaves the
+ * default untouched (silently), so most textures need no sidecar.
  *
  * @param decode override the pixel decoder (defaults to {@link createImageBitmapRgbaDecoder}).
  * @param settings default import settings for every produced image.
@@ -84,5 +87,21 @@ export const createImageImporter =
     decode: RgbaImageDecoder = createImageBitmapRgbaDecoder,
     settings: TextureImportSettings = {},
   ): AssetImporter<Image> =>
-  async (bytes) =>
-    imageFromDecoded(await decode(bytes), settings);
+  async (bytes, ctx) => {
+    const effective = { ...settings, ...(await readMetaSettings(ctx)) };
+    return imageFromDecoded(await decode(bytes), effective);
+  };
+
+/**
+ * Read + parse a texture's `<name>.meta` sidecar through the load context.
+ * Returns `{}` when there is no context, no sibling, or the sidecar is
+ * unreadable / not valid JSON — a `.meta` is optional, never fatal.
+ */
+const readMetaSettings = async (ctx: LoadContext | undefined): Promise<TextureImportSettings> => {
+  if (ctx?.path === undefined || typeof ctx.read !== 'function') return {};
+  try {
+    return parseTextureMeta(await ctx.read(textureMetaSibling(ctx.path)));
+  } catch {
+    return {};
+  }
+};

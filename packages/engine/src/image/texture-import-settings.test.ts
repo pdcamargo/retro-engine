@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'bun:test';
 
-import { resolveTextureColorSpace, resolveTextureSampler } from './texture-import-settings';
+import {
+  parseTextureMeta,
+  resolveTextureColorSpace,
+  resolveTextureSampler,
+  textureMetaSibling,
+} from './texture-import-settings';
+
+const meta = (obj: unknown): Uint8Array => new TextEncoder().encode(JSON.stringify(obj));
 
 describe('resolveTextureSampler', () => {
   it('defaults to linear filtering, clamped wrap', () => {
@@ -31,5 +38,37 @@ describe('resolveTextureColorSpace', () => {
 
   it('honors an explicit linear color space (data maps)', () => {
     expect(resolveTextureColorSpace({ colorSpace: 'linear' })).toBe('linear');
+  });
+});
+
+describe('parseTextureMeta', () => {
+  it('parses recognized fields', () => {
+    expect(parseTextureMeta(meta({ filter: 'nearest', wrap: 'repeat', colorSpace: 'linear' }))).toEqual({
+      filter: 'nearest',
+      wrap: 'repeat',
+      colorSpace: 'linear',
+    });
+  });
+
+  it('drops unknown / invalid fields rather than throwing (partial meta stays usable)', () => {
+    expect(parseTextureMeta(meta({ filter: 'sparkly', wrap: 'repeat', extra: 1 }))).toEqual({
+      wrap: 'repeat',
+    });
+  });
+
+  it('returns empty for a non-object payload', () => {
+    expect(parseTextureMeta(meta(42))).toEqual({});
+    expect(parseTextureMeta(meta(null))).toEqual({});
+  });
+
+  it('throws only on non-JSON bytes', () => {
+    expect(() => parseTextureMeta(new TextEncoder().encode('{not json'))).toThrow();
+  });
+});
+
+describe('textureMetaSibling', () => {
+  it('is the basename + .meta, relative to the asset dir', () => {
+    expect(textureMetaSibling('textures/wood.png')).toBe('wood.png.meta');
+    expect(textureMetaSibling('hero.png')).toBe('hero.png.meta');
   });
 });

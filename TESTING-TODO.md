@@ -1534,3 +1534,24 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
   confirmation.
 
 ---
+
+## ✅ P1 — Texture import settings, Phase 2: per-asset `.meta` overrides (unit-verified)
+
+- **New:** `@retro-engine/engine` (ADR-0166). A `<name>.meta` sidecar (UTF-8 JSON of TextureImportSettings)
+  overrides the importer default for one texture. The image importer reads its own sibling `.meta` via the
+  `LoadContext.read` it's handed (`textureMetaSibling(path)` → basename+'.meta'), parses with
+  `parseTextureMeta` (keeps only valid filter/wrap/colorSpace, throws only on non-JSON), and merges over the
+  default. Missing/malformed sidecar → silently ignored (importer-local try/catch). No asset-server or
+  LoadContext-shape change → lower risk than pre-threading a settings field.
+- **Verified:** `texture-import-settings.test.ts` (+6): parse recognized/invalid/non-object/non-JSON;
+  sibling-path. `image-importer.test.ts` (+2): a `.meta` sidecar (via stub ctx.read) flips filter+colorSpace;
+  absent sidecar (read rejects) keeps the importer default. Full engine gate green: typecheck, lint, 1258
+  tests, build. Changeset.
+- **HOW to test:** drop `wood.png.meta` = `{ "filter": "nearest", "colorSpace": "linear" }` next to
+  `wood.png`; importing `wood.png` yields a nearest-filtered linear image (overriding the project default).
+- **NOTE:** loose-file/disk path only for now; baking `.meta` into the packed manifest (bundle/web export)
+  is the remaining follow-up. Phase 3 (mipmaps/max-size/PPU) still open.
+- Roadmap: MASTER-ROADMAP "Texture import settings" now 🟡 Phases 1–2 shipped. Box unchecked pending
+  your confirmation.
+
+---

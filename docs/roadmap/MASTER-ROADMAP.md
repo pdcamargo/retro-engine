@@ -294,8 +294,11 @@ foundation.**
 - [ ] **Texture import settings (`.meta`)** — 🟡 **Phase 1 shipped** (ADR-0166): `TextureImportSettings`
       (filter/wrap/colorSpace) + pure `resolveTextureSampler`/`resolveTextureColorSpace` + `imageFromDecoded`;
       `createImageImporter(decode, settings?)` applies a project-wide default (pixel-art → `{ filter:
-      'nearest' }`; data maps → `{ colorSpace: 'linear' }`), unit-tested + backward-compatible. Remaining:
-      per-asset `.meta` overrides via `LoadContext` (Phase 2); mipmaps/trilinear, max-size, PPU (Phase 3).
+      'nearest' }`; data maps → `{ colorSpace: 'linear' }`), unit-tested + backward-compatible. (2)
+      per-asset `<name>.meta` overrides — the image importer reads its own sibling `.meta` (JSON of
+      `TextureImportSettings`) via `LoadContext.read` and merges over the default; importer-local (no
+      asset-server change), missing/malformed sidecar ignored, unit-tested. Remaining: bake `.meta` into the
+      packed manifest for the bundle path; mipmaps/trilinear, max-size, PPU (Phase 3).
       _Links:_ [texture-import-settings.md](texture-import-settings.md)
 - [ ] **Sprite definitions (`.meta`, Unity-style)** — single/multiple mode, grid + manual-rect slicing,
       pivot/border(9-slice)/PPU; sliced sprites minted as sub-assets via composite GUID (ADR-0126),

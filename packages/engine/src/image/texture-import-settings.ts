@@ -57,3 +57,38 @@ export const resolveTextureSampler = (settings: TextureImportSettings = {}): Sam
 /** The color-space interpretation for a texture's bytes; defaults to `'srgb'`. */
 export const resolveTextureColorSpace = (settings: TextureImportSettings = {}): ImageColorSpace =>
   settings.colorSpace ?? 'srgb';
+
+const FILTERS: readonly TextureFilter[] = ['nearest', 'linear'];
+const WRAPS: readonly TextureWrap[] = ['repeat', 'clamp', 'mirror'];
+const COLOR_SPACES: readonly ImageColorSpace[] = ['srgb', 'linear'];
+
+/**
+ * Parse a texture `.meta` sidecar (UTF-8 JSON) into {@link TextureImportSettings},
+ * keeping only recognized fields with valid values — an unknown or malformed
+ * field is dropped rather than throwing, so a partial or hand-edited `.meta`
+ * still yields usable settings (merge the result over the importer default).
+ * Throws only if the bytes are not valid JSON.
+ */
+export const parseTextureMeta = (bytes: Uint8Array): TextureImportSettings => {
+  const raw: unknown = JSON.parse(new TextDecoder().decode(bytes));
+  if (typeof raw !== 'object' || raw === null) return {};
+  const obj = raw as Record<string, unknown>;
+  const out: {
+    filter?: TextureFilter;
+    wrap?: TextureWrap;
+    colorSpace?: ImageColorSpace;
+  } = {};
+  if (FILTERS.includes(obj.filter as TextureFilter)) out.filter = obj.filter as TextureFilter;
+  if (WRAPS.includes(obj.wrap as TextureWrap)) out.wrap = obj.wrap as TextureWrap;
+  if (COLOR_SPACES.includes(obj.colorSpace as ImageColorSpace)) {
+    out.colorSpace = obj.colorSpace as ImageColorSpace;
+  }
+  return out;
+};
+
+/** The sibling `.meta` path for an asset location (`textures/wood.png` → `wood.png.meta`). */
+export const textureMetaSibling = (assetPath: string): string => {
+  const slash = assetPath.lastIndexOf('/');
+  const base = slash === -1 ? assetPath : assetPath.slice(slash + 1);
+  return `${base}.meta`;
+};
