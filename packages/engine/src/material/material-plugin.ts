@@ -899,6 +899,10 @@ class MaterialPluginState<M extends Material> {
     const aoTargets = app.getResource(ViewAoTargets);
     const entries: InstanceEntry[] = [];
     for (const view of cameras.views) {
+      // Only 3D cameras drain ViewPhases3d; a Camera2d in the same world would
+      // otherwise accrue phase items its Core2d sub-graph never reads (symmetric
+      // to SpritePlugin.queueSprites filtering Core2dLabel).
+      if (view.subGraph !== Core3dLabel) continue;
       const cameraEntity = view.sourceEntity;
       const colorFormat = view.mainColorTarget.format;
       const depthFormat = view.depth?.format;

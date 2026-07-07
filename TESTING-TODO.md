@@ -1497,3 +1497,21 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
   attenuation, full 3D PannerNode, reverb/sidechain) tracked in `audio-mixer-buses.md`. Box unchecked.
 
 ---
+
+## ✅ P1 bug — MaterialPlugin.queueMaterials3d camera sub-graph filter (fix verified by suite + precedent; studio perf-confirm pending)
+
+- **Fixed:** `@retro-engine/engine` `material-plugin.ts` `queueMaterials3d` now skips views whose
+  `subGraph !== Core3dLabel`, so a `Camera2d` sharing the world stops accruing inert `PhaseItem3d` entries
+  (wasted work = 2D-cameras × 3D-renderables/frame). One line, symmetric to the already-tested
+  `SpritePlugin.queueSprites` `Core2dLabel` filter.
+- **Verified:** full engine gate green (typecheck, lint, 1245 tests, build) — the filter only skips 2D
+  cameras, which never had valid 3D draws, so no existing 3D test regressed. A bespoke 2D+3D-camera
+  isolation test needs heavy render-world scaffolding (upload a mesh, populate SortedCameras with two
+  sub-graphs, snapshot `ViewPhases3d` mid-render-stage before it clears) — disproportionate for a one-line
+  inert-perf fix; the identical sprite-side filter is unit-tested. Changeset (patch) added.
+- **HOW to test (studio):** a scene with a Camera2d + Camera3d + 3D meshes renders correctly; the 2D
+  camera's `ViewPhases3d` lists stay empty (no wasted 3D queue work).
+- **Bug file kept** (`docs/bugs/material-plugin-camera-subgraph-filter.md`), status flipped to "fixed in
+  code, pending confirmation" — delete after you confirm in the studio.
+
+---

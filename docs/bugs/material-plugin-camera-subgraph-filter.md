@@ -1,5 +1,11 @@
 # `MaterialPlugin.queueMaterials3d` lacks a camera sub-graph filter
 
+> **Status: fixed in code, pending confirmation.** `queueMaterials3d` now skips
+> views whose `subGraph !== Core3dLabel` (symmetric to `SpritePlugin.queueSprites`'
+> `Core2dLabel` filter), so a `Camera2d` sharing the world no longer accrues inert
+> `PhaseItem3d` entries. Full engine suite green. Delete this file once confirmed
+> in the studio (a 2D+3D scene renders correctly with no wasted 3D queue work).
+
 `MaterialPlugin<M>`'s queue system (`packages/engine/src/material/material-plugin.ts:400`) iterates *every* entry in `SortedCameras.views` and pushes a `PhaseItem3d` into `ViewPhases3d` keyed by every camera's `sourceEntity`. There is no filter on `camera.subGraph`.
 
 When the same world hosts a `Camera2d` and a `Camera3d`, the 2D camera's entity id receives `PhaseItem3d` entries that are never drained (the Core2d sub-graph runs `OpaquePass2dNode` / `TransparentPass2dNode`, which read `ViewPhases2d`, not `ViewPhases3d`). The wasted CPU work is bounded by `(2D cameras) × (3D renderables)` per frame — not visible at sub-thousand renderable counts, but real.
