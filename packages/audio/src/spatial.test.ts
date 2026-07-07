@@ -61,4 +61,28 @@ describe('attenuationForDistance', () => {
   it('clamps the result to [0, 1] for an over-steep rolloff', () => {
     expect(attenuationForDistance(5, 0, 10, 4)).toBe(0); // 1 - 4*0.5 = -1 → 0
   });
+
+  it('inverse model: ref/(ref + rolloff*(d-ref)), never reaching zero', () => {
+    // ref=1, rolloff=1: at d=1 → 1; d=2 → 1/2; d=3 → 1/3.
+    expect(attenuationForDistance(1, 1, 100, 1, 'inverse')).toBeCloseTo(1, 10);
+    expect(attenuationForDistance(2, 1, 100, 1, 'inverse')).toBeCloseTo(0.5, 10);
+    expect(attenuationForDistance(3, 1, 100, 1, 'inverse')).toBeCloseTo(1 / 3, 10);
+    // Full volume within the reference distance.
+    expect(attenuationForDistance(0.5, 1, 100, 1, 'inverse')).toBeCloseTo(1, 10);
+    // Ignores maxDistance (keeps falling past it).
+    expect(attenuationForDistance(200, 1, 100, 1, 'inverse')).toBeGreaterThan(0);
+  });
+
+  it('exponential model: (d/ref)^(-rolloff)', () => {
+    // ref=2, rolloff=2: d=2 → 1; d=4 → (2)^-2 = 0.25; d=8 → (4)^-2 = 0.0625.
+    expect(attenuationForDistance(2, 2, 100, 2, 'exponential')).toBeCloseTo(1, 10);
+    expect(attenuationForDistance(4, 2, 100, 2, 'exponential')).toBeCloseTo(0.25, 10);
+    expect(attenuationForDistance(8, 2, 100, 2, 'exponential')).toBeCloseTo(0.0625, 10);
+  });
+
+  it('ratio models disable for a non-positive reference distance or rolloff', () => {
+    expect(attenuationForDistance(5, 0, 100, 1, 'inverse')).toBe(1);
+    expect(attenuationForDistance(5, 0, 100, 1, 'exponential')).toBe(1);
+    expect(attenuationForDistance(5, 1, 100, 0, 'inverse')).toBe(1);
+  });
 });

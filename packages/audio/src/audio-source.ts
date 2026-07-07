@@ -4,6 +4,7 @@ import { asAssetIndex, makeHandle } from '@retro-engine/engine';
 
 import type { VoiceId } from './audio-backend';
 import type { AudioClip } from './audio-clip';
+import type { DistanceModel } from './spatial';
 
 /** An empty clip handle — the default until a real one is assigned; never resolves. */
 const EMPTY_CLIP: Handle<AudioClip> = makeHandle<AudioClip>(asAssetIndex(0));
@@ -21,6 +22,7 @@ export interface AudioSourceOptions {
   readonly refDistance?: number;
   readonly maxDistance?: number;
   readonly rolloff?: number;
+  readonly distanceModel?: DistanceModel;
 }
 
 /**
@@ -76,11 +78,18 @@ export class AudioSource {
    */
   maxDistance: number;
   /**
-   * How steeply a spatial source fades between `refDistance` and `maxDistance`
-   * (linear model). `1` fades to silence at `maxDistance`; `0` disables distance
-   * attenuation (pan-only). Only meaningful when {@link AudioSource.spatial}.
+   * How steeply a spatial source fades with distance. `0` disables distance
+   * attenuation (pan-only). For the linear model, `1` fades to silence at
+   * `maxDistance`. Only meaningful when {@link AudioSource.spatial}.
    */
   rolloff: number;
+  /**
+   * Which distance-falloff curve to use (`'linear'` / `'inverse'` /
+   * `'exponential'`, matching Web Audio). Default `'linear'`. `'inverse'` /
+   * `'exponential'` ignore `maxDistance`. Only meaningful when
+   * {@link AudioSource.spatial}.
+   */
+  distanceModel: DistanceModel;
 
   /** Runtime: set by {@link AudioSource.play} to (re)start on the next frame. Not serialized. */
   playRequested = false;
@@ -106,6 +115,7 @@ export class AudioSource {
     this.refDistance = options.refDistance ?? 1;
     this.maxDistance = options.maxDistance ?? 100;
     this.rolloff = options.rolloff ?? 1;
+    this.distanceModel = options.distanceModel ?? 'linear';
   }
 
   /** Request a (re)start of this source on the next audio update. */

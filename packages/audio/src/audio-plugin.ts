@@ -100,6 +100,7 @@ export class AudioPlugin implements PluginObject {
         refDistance: t.number,
         maxDistance: t.number,
         rolloff: t.number,
+        distanceModel: t.enum('linear', 'inverse', 'exponential'),
         playRequested: t.boolean.skip(),
         stopRequested: t.boolean.skip(),
         started: t.boolean.skip(),
@@ -167,7 +168,7 @@ export class AudioPlugin implements PluginObject {
           (audio as Audio).setPan(active.voice, panForOffset(sx, lx, source.panWidth));
           (audio as Audio).setSpatialGain(
             active.voice,
-            attenuationForDistance(distance, source.refDistance, source.maxDistance, source.rolloff),
+            attenuationForDistance(distance, source.refDistance, source.maxDistance, source.rolloff, source.distanceModel),
           );
         }
       },

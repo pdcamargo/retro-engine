@@ -1802,3 +1802,22 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
   notes held-key repeat ✅.
 
 ---
+
+## ✅ P1 — Audio mixer buses, Phase 4c: inverse + exponential distance models (unit-verified)
+
+- **New:** `@retro-engine/audio`. Completes the distance-falloff models ADR-0168 deferred. `AudioSource.
+  distanceModel` selects `'linear'` (default, unchanged), `'inverse'` (`ref/(ref+rolloff·(d−ref))`,
+  physically-plausible 1/d), or `'exponential'` (`(d/ref)^(−rolloff)`, steeper) — matching Web Audio's
+  `PannerNode` models (formulas confirmed against MDN). `attenuationForDistance` gained a trailing `model`
+  param (defaults `'linear'`, so existing calls are unchanged). Reflected as `t.enum`.
+- **Verified:** `spatial.test.ts` (+3): inverse (1, 0.5, 1/3 at d=1/2/3; full within ref; keeps falling past
+  maxDistance), exponential ((d/ref)^-rolloff at ref=2/rolloff=2), and ratio-model disable for non-positive
+  ref/rolloff. 43 audio tests. Full audio gate green: typecheck, lint (0/0), build.
+- **HOW to test:** `new AudioSource(clip, { spatial: true, distanceModel: 'inverse', refDistance: 2 })` on a
+  moving entity with an `AudioListener` → the sound fades on a 1/d curve (vs. the bounded linear ramp);
+  `'exponential'` with a higher `rolloff` fades faster. Inverse/exponential never fully reach silence.
+- **NOTE:** No ADR (completes a follow-up ADR-0168 explicitly listed; additive field + formulas). Remaining
+  audio spatial: full 3D `PannerNode` (elevation/HRTF), Doppler, reverb/sidechain.
+- Roadmap: MASTER-ROADMAP "Audio mixer buses" 🟡 now notes Phase 4c falloff models shipped. Box unchecked.
+
+---

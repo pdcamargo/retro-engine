@@ -48,5 +48,12 @@ Pure `attenuationForDistance` (`rolloff: 0` / degenerate range → no attenuatio
 the same system computes the full 3D source↔listener distance and drives
 `Audio.setSpatialGain`. Unit + stub-context tested.
 
-**Remaining (4c):** inverse/exponential falloff models, a full 3D `PannerNode`
-mode (elevation/HRTF), Doppler.
+**4c — falloff models ✅:** `AudioSource.distanceModel` selects `'linear'`
+(default), `'inverse'` (`ref/(ref+rolloff·(d−ref))`), or `'exponential'`
+(`(d/ref)^(−rolloff)`), matching the Web Audio `PannerNode` models;
+`attenuationForDistance` gained a `model` param (defaults `'linear'`, so existing
+callers are unchanged). Inverse/exponential ignore `maxDistance` (never reach
+zero). Unit-tested.
+
+**Remaining:** a full 3D `PannerNode` mode (elevation/HRTF), Doppler,
+reverb/sidechain sends.

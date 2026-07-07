@@ -285,8 +285,10 @@ foundation.**
       attenuation** (ADR-0168) — `AudioSource.refDistance`/`maxDistance`/`rolloff`, the Web Audio linear model
       on a separate per-voice `spatialGain` node (`gain → spatialGain → panner → out`, so it never fights
       volume sync), pure `attenuationForDistance`, the same system driving `setSpatialGain` by 3D distance;
-      non-spatial audio unchanged. Unit + stub-context tested. Remaining: inverse/exponential falloff, full 3D
-      `PannerNode`, Doppler, reverb/sidechain.
+      non-spatial audio unchanged. Unit + stub-context tested. (4c) **falloff models** — `AudioSource.distanceModel`
+      selects `'linear'`/`'inverse'`/`'exponential'` (Web Audio `PannerNode` models); `attenuationForDistance`
+      gained a `model` param (default `'linear'`, existing calls unchanged), inverse/exponential ignore
+      `maxDistance`. Unit-tested. Remaining: full 3D `PannerNode` (elevation/HRTF), Doppler, reverb/sidechain.
       _Links:_ [audio-mixer-buses.md](audio-mixer-buses.md) · [audio.md](audio.md)
 - [ ] **Windowing** — 🟡 **read side shipped**: `Window` resource (logical + physical size + dpr, mirrored
       from the surface) + `WindowResized` event + `syncWindow` + opt-in `WindowPlugin` (`'first'`-stage sync,
