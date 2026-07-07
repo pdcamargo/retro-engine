@@ -1,6 +1,32 @@
 import type { AudioClip } from './audio-clip';
 
 /**
+ * A described effect insert on a mixer bus, applied between the bus's gain and
+ * its output. Serializable by shape (no live audio nodes), so a backend builds
+ * the concrete node and a headless backend ignores it.
+ *
+ * - `filter` — a biquad filter (low/high/band-pass) at `frequency` Hz with an
+ *   optional resonance `q`. The staple "muffle everything on this bus" effect.
+ * - `compressor` — a dynamics compressor; all fields optional (Web Audio
+ *   defaults apply). Tames peaks / glues a submix.
+ */
+export type BusEffect =
+  | {
+      readonly kind: 'filter';
+      readonly type: 'lowpass' | 'highpass' | 'bandpass';
+      readonly frequency: number;
+      readonly q?: number;
+    }
+  | {
+      readonly kind: 'compressor';
+      readonly threshold?: number;
+      readonly knee?: number;
+      readonly ratio?: number;
+      readonly attack?: number;
+      readonly release?: number;
+    };
+
+/**
  * Opaque handle to one playing sound instance ("voice"), returned by
  * {@link AudioBackend.play}. Use it to stop or adjust that instance. A one-shot
  * voice becomes invalid once it finishes; a looping voice stays valid until
@@ -69,6 +95,12 @@ export interface AudioBackend {
    * and rejects cycles.
    */
   configureBus(bus: string, output: string): void;
+  /**
+   * Insert `effect` on a bus (between its gain and its output), or remove any
+   * effect when `null`. Composes with {@link AudioBackend.configureBus} routing.
+   * A headless backend ignores it.
+   */
+  setBusEffect(bus: string, effect: BusEffect | null): void;
   /** Release all resources (stop everything, close the context). */
   destroy(): void;
 }

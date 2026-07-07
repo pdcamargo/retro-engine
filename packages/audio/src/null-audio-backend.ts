@@ -48,5 +48,7 @@ export class NullAudioBackend implements AudioBackend {
 
   configureBus(): void {}
 
+  setBusEffect(): void {}
+
   destroy(): void {}
 }

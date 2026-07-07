@@ -2,7 +2,7 @@ import { describe, expect, it } from 'bun:test';
 
 import type { Handle, LoadContext } from '@retro-engine/engine';
 
-import type { AudioBackend, PlayOptions, VoiceId } from './audio-backend';
+import type { AudioBackend, BusEffect, PlayOptions, VoiceId } from './audio-backend';
 import { AudioClip, createAudioClipImporter } from './audio-clip';
 import { Audio } from './audio-resource';
 import { AudioClips } from './audio-plugin';
@@ -50,6 +50,10 @@ class MockBackend implements AudioBackend {
   readonly busRoutes: [string, string][] = [];
   configureBus(bus: string, output: string): void {
     this.busRoutes.push([bus, output]);
+  }
+  readonly busEffects: [string, BusEffect | null][] = [];
+  setBusEffect(bus: string, effect: BusEffect | null): void {
+    this.busEffects.push([bus, effect]);
   }
   destroy(): void {}
 }
@@ -165,6 +169,21 @@ describe('Audio facade', () => {
     audio.setBusOutput('dialogue', '');
     expect(audio.busOutput('dialogue')).toBe('');
   });
+
+  it('tracks a bus effect insert and clears it, delegating to the backend', () => {
+    const backend = new MockBackend();
+    const audio = new Audio(backend, new AudioClips());
+    expect(audio.busEffect('music')).toBeNull();
+
+    const filter: BusEffect = { kind: 'filter', type: 'lowpass', frequency: 800 };
+    audio.setBusEffect('music', filter);
+    expect(audio.busEffect('music')).toEqual(filter);
+    expect(backend.busEffects).toContainEqual(['music', filter]);
+
+    audio.setBusEffect('music', null);
+    expect(audio.busEffect('music')).toBeNull();
+    expect(backend.busEffects[backend.busEffects.length - 1]).toEqual(['music', null]);
+  });
 });
 
 /** Minimal Web Audio graph stub: records gain nodes and their connections. */
@@ -191,10 +210,37 @@ class StubBufferSource {
   start(): void {}
   stop(): void {}
 }
+class StubFilterNode {
+  type = 'lowpass';
+  readonly frequency = new StubParam(350);
+  readonly Q = new StubParam(1);
+  readonly outputs: object[] = [];
+  connect(target: object): void {
+    this.outputs.push(target);
+  }
+  disconnect(): void {
+    this.outputs.length = 0;
+  }
+}
+class StubCompressorNode {
+  readonly threshold = new StubParam(-24);
+  readonly knee = new StubParam(30);
+  readonly ratio = new StubParam(12);
+  readonly attack = new StubParam(0.003);
+  readonly release = new StubParam(0.25);
+  readonly outputs: object[] = [];
+  connect(target: object): void {
+    this.outputs.push(target);
+  }
+  disconnect(): void {
+    this.outputs.length = 0;
+  }
+}
 class StubAudioContext {
   state = 'running';
   readonly destination = { id: 'destination' };
   readonly created: StubGainNode[] = [];
+  readonly filters: StubFilterNode[] = [];
   createGain(): StubGainNode {
     const g = new StubGainNode();
     this.created.push(g);
@@ -202,6 +248,14 @@ class StubAudioContext {
   }
   createBufferSource(): StubBufferSource {
     return new StubBufferSource();
+  }
+  createBiquadFilter(): StubFilterNode {
+    const f = new StubFilterNode();
+    this.filters.push(f);
+    return f;
+  }
+  createDynamicsCompressor(): StubCompressorNode {
+    return new StubCompressorNode();
   }
   decodeAudioData(): Promise<unknown> {
     return Promise.resolve({});
@@ -264,5 +318,43 @@ describe('WebAudioBackend — mixer buses', () => {
     backend.configureBus('dialogue', ''); // back to master
     expect(dialogueBus.outputs).toContain(master);
     expect(dialogueBus.outputs).not.toContain(voiceBus);
+  });
+
+  it('inserts a filter effect between the bus gain and its output, then removes it', () => {
+    const ctx = new StubAudioContext();
+    const backend = new WebAudioBackend(ctx as unknown as AudioContext);
+    const master = ctx.created[0]!;
+    backend.setBusVolume('music', 1); // create the music bus (gain → master)
+    const musicBus = ctx.created[ctx.created.length - 1]!;
+
+    backend.setBusEffect('music', { kind: 'filter', type: 'lowpass', frequency: 900, q: 0.7 });
+    const filter = ctx.filters[ctx.filters.length - 1]!;
+    expect(filter.type).toBe('lowpass');
+    expect(filter.frequency.value).toBe(900);
+    expect(filter.Q.value).toBe(0.7);
+    // Chain is now gain → filter → master (not gain → master directly).
+    expect(musicBus.outputs).toContain(filter);
+    expect(musicBus.outputs).not.toContain(master);
+    expect(filter.outputs).toContain(master);
+
+    // Removing the effect reconnects the gain straight to master.
+    backend.setBusEffect('music', null);
+    expect(musicBus.outputs).toContain(master);
+    expect(musicBus.outputs).not.toContain(filter);
+  });
+
+  it('keeps the effect in the chain across a submix reroute (gain → effect → target)', () => {
+    const ctx = new StubAudioContext();
+    const backend = new WebAudioBackend(ctx as unknown as AudioContext);
+    backend.setBusVolume('voice', 1);
+    const voiceBus = ctx.created[ctx.created.length - 1]!;
+    backend.setBusVolume('dialogue', 1);
+    const dialogueBus = ctx.created[ctx.created.length - 1]!;
+
+    backend.setBusEffect('dialogue', { kind: 'compressor', ratio: 8 });
+    backend.configureBus('dialogue', 'voice'); // reroute after the effect is set
+    const fx = dialogueBus.outputs[0]!;
+    expect(dialogueBus.outputs).toHaveLength(1); // gain → effect only
+    expect((fx as { outputs: object[] }).outputs).toContain(voiceBus); // effect → voice submix
   });
 });

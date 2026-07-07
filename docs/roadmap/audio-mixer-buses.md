@@ -19,12 +19,18 @@ HAL's `configureBus(bus, output)` is a mechanical GainNode reconnect
 (`WebAudioBackend` rewires the one output edge; `Null` no-ops). `busOutput(bus)`
 reads the current target. Unit + stub-context tested.
 
-## Phase 3 — bus effect inserts
+## Phase 3 — bus effect inserts ✅ (ADR-0164)
 
-An effect chain on a bus (low-pass filter, compressor/limiter, reverb send). Needs
-a small effect-node abstraction over Web Audio's `BiquadFilterNode` /
-`DynamicsCompressorNode` / `ConvolverNode`, capability-described so the Null
-backend no-ops. This is where "duck music under dialogue" (sidechain) would land.
+`Audio.setBusEffect(bus, effect | null)` inserts a described `BusEffect`
+(`{ kind: 'filter', type, frequency, q? }` or `{ kind: 'compressor', … }`)
+between a bus's gain and its output. `WebAudioBackend` builds a `BiquadFilterNode`
+/ `DynamicsCompressorNode` and funnels both effect changes and submix reroutes
+through one `rebuildBus` (`gain → [effect] → output`), so they compose;
+`NullAudioBackend` no-ops. `Audio.busEffect(bus)` reads the spec. Unit +
+stub-context tested (incl. effect surviving a submix reroute).
+
+**Remaining:** multi-effect chains per bus, live param automation, reverb
+(`ConvolverNode`) sends, sidechain ducking.
 
 ## Phase 4 — spatial panning
 

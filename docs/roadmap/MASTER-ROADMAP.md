@@ -253,12 +253,13 @@ foundation.**
       widgets: text-input, scrollview, dropdown/tabs; data binding; virtualized list/tree views; screen
       management.
       _Links:_ [in-game-ui-depth.md](in-game-ui-depth.md) · [ui-system.md](ui-system.md)
-- [ ] **Audio mixer buses** — 🟡 **Phases 1–2 shipped** (ADR-0159, ADR-0162): (1) named buses + per-bus
-      volume (`PlayOptions.bus`, `Audio.setBusVolume`/`busVolume`, `AudioSource.bus`; `voice.gain → bus →
-      master`, string-keyed, headless parity); (2) submix trees — `Audio.setBusOutput(bus, output)` routes a
-      bus into another bus (`dialogue` → `voice` → master), facade owns the graph + rejects cycles, HAL
-      `configureBus` does the GainNode reconnect. Unit + stub-context tested. Remaining: effect inserts
-      (filter/compressor/reverb), spatial panning. _Links:_ [audio-mixer-buses.md](audio-mixer-buses.md) · [audio.md](audio.md)
+- [ ] **Audio mixer buses** — 🟡 **Phases 1–3 shipped** (ADR-0159/0162/0164): (1) named buses + per-bus
+      volume; (2) submix trees — `Audio.setBusOutput(bus, output)` routes bus→bus, facade owns the graph +
+      rejects cycles; (3) effect inserts — `Audio.setBusEffect(bus, {filter|compressor} | null)` inserts a
+      `BiquadFilterNode`/`DynamicsCompressorNode` between a bus's gain and output via one `rebuildBus` that
+      composes with submix routing; headless parity; `busEffect` query. Unit + stub-context tested.
+      Remaining: multi-effect chains, reverb sends, sidechain ducking, spatial panning.
+      _Links:_ [audio-mixer-buses.md](audio-mixer-buses.md) · [audio.md](audio.md)
 - [ ] **Windowing** — 🟡 **read side shipped**: `Window` resource (logical + physical size + dpr, mirrored
       from the surface) + `WindowResized` event + `syncWindow` + opt-in `WindowPlugin` (`'first'`-stage sync,
       headless-safe). Unit + integration tested. Remaining: cursor/fullscreen/present-mode(vsync) controls,

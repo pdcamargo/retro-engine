@@ -1,5 +1,5 @@
 import type { AudioClip } from './audio-clip';
-import type { AudioBackend, PlayOptions, VoiceId } from './audio-backend';
+import type { AudioBackend, BusEffect, PlayOptions, VoiceId } from './audio-backend';
 
 /** Internal per-voice bookkeeping. */
 interface Voice {
@@ -24,6 +24,9 @@ export class WebAudioBackend implements AudioBackend {
   private readonly ctx: AudioContext;
   private readonly master: GainNode;
   private readonly buses = new Map<string, GainNode>();
+  /** Per-bus output target (`''` = master) and effect node, for chain rebuilds. */
+  private readonly busOutputs = new Map<string, string>();
+  private readonly busEffects = new Map<string, AudioNode>();
   private readonly decodeCache = new Map<AudioClip, AudioBuffer>();
   private readonly decoding = new Map<AudioClip, Promise<AudioBuffer | null>>();
   private readonly voices = new Map<VoiceId, Voice>();
@@ -120,15 +123,22 @@ export class WebAudioBackend implements AudioBackend {
   }
 
   configureBus(bus: string, output: string): void {
-    const node = this.bus(bus);
-    // A bus has exactly one output edge; drop it and rewire to the new target.
-    // Voices feed the bus as inputs and are unaffected by disconnecting outputs.
-    node.disconnect();
-    node.connect(output === '' ? this.master : this.bus(output));
+    this.busOutputs.set(bus, output);
+    this.rebuildBus(bus);
+  }
+
+  setBusEffect(bus: string, effect: BusEffect | null): void {
+    const old = this.busEffects.get(bus);
+    if (old !== undefined) old.disconnect();
+    if (effect === null) this.busEffects.delete(bus);
+    else this.busEffects.set(bus, this.makeEffect(effect));
+    this.rebuildBus(bus);
   }
 
   destroy(): void {
     this.stopAll();
+    for (const fx of this.busEffects.values()) fx.disconnect();
+    this.busEffects.clear();
     for (const bus of this.buses.values()) bus.disconnect();
     this.buses.clear();
     this.detachResume();
@@ -144,6 +154,44 @@ export class WebAudioBackend implements AudioBackend {
       this.buses.set(name, node);
     }
     return node;
+  }
+
+  /**
+   * Rewire a bus's output chain to `gain → [effect] → output` (output = its
+   * target bus, or master). A bus has exactly one output edge, so dropping and
+   * re-adding is safe; voices feed the gain as inputs and are unaffected.
+   */
+  private rebuildBus(name: string): void {
+    const gain = this.bus(name);
+    gain.disconnect();
+    const outName = this.busOutputs.get(name) ?? '';
+    const out = outName === '' ? this.master : this.bus(outName);
+    const effect = this.busEffects.get(name);
+    if (effect !== undefined) {
+      gain.connect(effect);
+      effect.disconnect();
+      effect.connect(out);
+    } else {
+      gain.connect(out);
+    }
+  }
+
+  /** Build the concrete Web Audio node for a described {@link BusEffect}. */
+  private makeEffect(effect: BusEffect): AudioNode {
+    if (effect.kind === 'filter') {
+      const f = this.ctx.createBiquadFilter();
+      f.type = effect.type;
+      f.frequency.value = effect.frequency;
+      if (effect.q !== undefined) f.Q.value = effect.q;
+      return f;
+    }
+    const c = this.ctx.createDynamicsCompressor();
+    if (effect.threshold !== undefined) c.threshold.value = effect.threshold;
+    if (effect.knee !== undefined) c.knee.value = effect.knee;
+    if (effect.ratio !== undefined) c.ratio.value = effect.ratio;
+    if (effect.attack !== undefined) c.attack.value = effect.attack;
+    if (effect.release !== undefined) c.release.value = effect.release;
+    return c;
   }
 
   private startVoice(id: VoiceId, voice: Voice, buffer: AudioBuffer): void {

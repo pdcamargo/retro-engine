@@ -1458,3 +1458,22 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
   your confirmation.
 
 ---
+
+## ✅ P1 — Audio mixer buses, Phase 3: bus effect inserts (unit + stub-context verified)
+
+- **New:** `@retro-engine/audio` (ADR-0164). `Audio.setBusEffect(bus, effect | null)` inserts a described
+  `BusEffect` (`{kind:'filter', type, frequency, q?}` or `{kind:'compressor', threshold?/knee?/ratio?/
+  attack?/release?}`) between a bus's gain and its output. `WebAudioBackend` builds a `BiquadFilterNode`/
+  `DynamicsCompressorNode` and routes BOTH effect changes and submix reroutes through one `rebuildBus`
+  (`gain → [effect] → output`), so effects + submix compose; `NullAudioBackend` no-ops. `Audio.busEffect(bus)`
+  reads the spec. Web Audio node params confirmed against MDN (§2).
+- **Verified:** `audio.test.ts` (+3): facade tracks/clears the effect + delegates to backend; WebAudio stub —
+  a filter inserts between the music-bus gain and master (with type/frequency/Q set) and removing it
+  reconnects gain→master; a compressor on `dialogue` survives a reroute to the `voice` submix
+  (`gain → effect → voice`). Full audio gate green: typecheck, lint (13 files), 27 tests, build. Changeset.
+- **HOW to test:** `audio.setBusEffect('music', { kind:'filter', type:'lowpass', frequency:700 })` muffles the
+  music bus; `{ kind:'compressor' }` on a submix tames its peaks; `null` removes it.
+- Roadmap: MASTER-ROADMAP "Audio mixer buses" now 🟡 Phases 1–3 shipped; remaining (multi-effect chains,
+  reverb sends, sidechain ducking, spatial panning) tracked in `audio-mixer-buses.md`. Box unchecked.
+
+---

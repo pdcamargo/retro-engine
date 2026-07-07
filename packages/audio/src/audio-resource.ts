@@ -1,7 +1,7 @@
 import type { Assets, Handle } from '@retro-engine/engine';
 
 import { AudioClip } from './audio-clip';
-import type { AudioBackend, PlayOptions, VoiceId } from './audio-backend';
+import type { AudioBackend, BusEffect, PlayOptions, VoiceId } from './audio-backend';
 
 /**
  * The ECS-facing audio facade, read via `Res(Audio)` / `ResMut(Audio)`. Wraps
@@ -20,6 +20,8 @@ import type { AudioBackend, PlayOptions, VoiceId } from './audio-backend';
 export class Audio {
   /** Bus → its output bus name. Absent (or `''`) means the bus routes to master. */
   private readonly busGraph = new Map<string, string>();
+  /** Bus → its current effect insert, for the {@link Audio.busEffect} query. */
+  private readonly busEffectMap = new Map<string, BusEffect>();
 
   constructor(
     private readonly backend: AudioBackend,
@@ -98,6 +100,21 @@ export class Audio {
   /** The bus `bus` routes into, or `''` when it routes to master. */
   busOutput(bus: string): string {
     return this.busGraph.get(bus) ?? '';
+  }
+
+  /**
+   * Insert an effect on a bus (a filter or compressor, between its gain and its
+   * output), or remove it with `null`. See {@link BusEffect}.
+   */
+  setBusEffect(bus: string, effect: BusEffect | null): void {
+    if (effect === null) this.busEffectMap.delete(bus);
+    else this.busEffectMap.set(bus, effect);
+    this.backend.setBusEffect(bus, effect);
+  }
+
+  /** The effect inserted on `bus`, or `null` if none. */
+  busEffect(bus: string): BusEffect | null {
+    return this.busEffectMap.get(bus) ?? null;
   }
 
   /** Whether routing `bus` → `output` would close a cycle through the current graph. */
