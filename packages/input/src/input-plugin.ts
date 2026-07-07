@@ -219,7 +219,7 @@ export const applyInputFrame = (
   for (const ev of backend.drain()) {
     switch (ev.kind) {
       case 'key-down':
-        keyboard.press(ev.code);
+        keyboard.press(ev.code, ev.repeat);
         break;
       case 'key-up':
         keyboard.release(ev.code);

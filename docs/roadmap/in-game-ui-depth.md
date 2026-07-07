@@ -25,8 +25,10 @@ More interactive widgets, each an authored component that reuses the picking /
   Delete/arrows/Home/End) into the value, mirrored into the node's `UiText`
   (`placeholder` shows while empty); emits `UiTextChanged`. Pure `insertText` /
   `applyEditKey` / `applyTextInputFrame` (caret keys before this frame's text),
-  unit-tested. **Remaining:** caret rendering (a caret quad + blink), held-key
-  repeat, text selection/clipboard, multi-keystroke IME (input-side follow-up).
+  unit-tested. **Held-key repeat ✅** — caret keys use `justPressedOrRepeated`, so
+  holding Backspace/Delete/an arrow repeats at the OS cadence (typed characters
+  already repeat via `ReceivedCharacters`). **Remaining:** caret rendering (a caret
+  quad + blink), text selection/clipboard, multi-keystroke IME (input-side).
 - **Scrollview** — clipped content + scroll offset from wheel / drag; depends on
   clipping (a `.rss` remaining item) landing first.
 - **Dropdown / tabs** — composite widgets built from the above + panels.

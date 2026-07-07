@@ -74,7 +74,8 @@ export class UiTextInputPlugin implements PluginObject {
         const chars = app.getResource(ReceivedCharacters);
         const editKeys: TextEditKey[] = [];
         if (keyboard !== undefined) {
-          for (const [code, edit] of EDIT_KEYS) if (keyboard.justPressed(code)) editKeys.push(edit);
+          // justPressed || repeated → caret keys repeat while held, at the OS cadence.
+          for (const [code, edit] of EDIT_KEYS) if (keyboard.justPressedOrRepeated(code)) editKeys.push(edit);
         }
         const before: TextEditState = { value: input.value, cursor: input.cursor };
         const state = applyTextInputFrame(before, editKeys, chars?.text() ?? '', input.maxLength);

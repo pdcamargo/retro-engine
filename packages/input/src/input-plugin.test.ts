@@ -73,12 +73,17 @@ describe('applyInputFrame — keyboard', () => {
     expect(f.keyboard.justPressed('KeyW')).toBe(false);
   });
 
-  it('key-repeat does not re-fire justPressed', () => {
+  it('key-repeat does not re-fire justPressed but sets repeated', () => {
     const f = makeFrame();
     f.step([{ kind: 'key-down', code: 'KeyW', repeat: false }]);
     f.step([{ kind: 'key-down', code: 'KeyW', repeat: true }]);
     expect(f.keyboard.justPressed('KeyW')).toBe(false);
+    expect(f.keyboard.repeated('KeyW')).toBe(true);
+    expect(f.keyboard.justPressedOrRepeated('KeyW')).toBe(true);
     expect(f.keyboard.pressed('KeyW')).toBe(true);
+    // A frame with no key-down clears repeated.
+    f.step();
+    expect(f.keyboard.repeated('KeyW')).toBe(false);
   });
 
   it('key-up releases; justReleased only on the release frame', () => {

@@ -20,6 +20,36 @@ describe('ButtonInput — press / release', () => {
     expect(input.justPressed('KeyW')).toBe(false);
   });
 
+  it('a repeat press marks repeated (not justPressed) and holds pressed', () => {
+    const input = new ButtonInput<string>();
+    input.press('Backspace'); // initial press
+    input.clear();
+    input.press('Backspace', true); // OS auto-repeat
+    expect(input.pressed('Backspace')).toBe(true);
+    expect(input.justPressed('Backspace')).toBe(false);
+    expect(input.repeated('Backspace')).toBe(true);
+    expect(input.justPressedOrRepeated('Backspace')).toBe(true);
+  });
+
+  it('the initial (non-repeat) press is justPressed and justPressedOrRepeated, not repeated', () => {
+    const input = new ButtonInput<string>();
+    input.press('Backspace');
+    expect(input.repeated('Backspace')).toBe(false);
+    expect(input.justPressed('Backspace')).toBe(true);
+    expect(input.justPressedOrRepeated('Backspace')).toBe(true);
+  });
+
+  it('clear drops the repeated set', () => {
+    const input = new ButtonInput<string>();
+    input.press('Backspace');
+    input.clear();
+    input.press('Backspace', true);
+    expect(input.repeated('Backspace')).toBe(true);
+    input.clear();
+    expect(input.repeated('Backspace')).toBe(false);
+    expect(input.pressed('Backspace')).toBe(true); // still held
+  });
+
   it('release marks justReleased and clears pressed', () => {
     const input = new ButtonInput<string>();
     input.press('KeyW');

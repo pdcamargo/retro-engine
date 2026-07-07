@@ -18,16 +18,20 @@ export class ButtonInput<T> {
   private readonly _pressed = new Set<T>();
   private readonly _justPressed = new Set<T>();
   private readonly _justReleased = new Set<T>();
+  private readonly _repeated = new Set<T>();
 
   /**
    * Register a press. Adds to the held set and — only if the input was not
-   * already held — to the just-pressed set, so key-repeat events do not
-   * re-fire `justPressed`.
+   * already held — to the just-pressed set, so key-repeat events do not re-fire
+   * `justPressed`. Pass `repeat: true` for an auto-repeat event (a held key's
+   * OS-cadence re-fire): it lands in the repeated set (see {@link repeated}) and
+   * never re-fires `justPressed`.
    */
-  press(input: T): void {
+  press(input: T, repeat = false): void {
+    if (repeat) this._repeated.add(input);
     if (!this._pressed.has(input)) {
       this._pressed.add(input);
-      this._justPressed.add(input);
+      if (!repeat) this._justPressed.add(input);
     }
   }
 
@@ -75,6 +79,21 @@ export class ButtonInput<T> {
     return false;
   }
 
+  /**
+   * Whether `input` fired an auto-repeat this frame (a held key's OS-cadence
+   * re-fire). Distinct from `justPressed` (which fires only on the initial
+   * press); use `justPressed || repeated` for "act now, then repeat while held"
+   * behavior — see {@link justPressedOrRepeated}.
+   */
+  repeated(input: T): boolean {
+    return this._repeated.has(input);
+  }
+
+  /** Whether `input` was pressed this frame or fired an auto-repeat — the "act now, then repeat" test. */
+  justPressedOrRepeated(input: T): boolean {
+    return this._justPressed.has(input) || this._repeated.has(input);
+  }
+
   /** Whether `input` was released this frame. */
   justReleased(input: T): boolean {
     return this._justReleased.has(input);
@@ -101,31 +120,38 @@ export class ButtonInput<T> {
     return this._justReleased.values();
   }
 
+  /** All inputs that fired an auto-repeat this frame. */
+  getRepeated(): IterableIterator<T> {
+    return this._repeated.values();
+  }
+
   /**
-   * Clear the two transient sets (`justPressed`, `justReleased`) while leaving
-   * the held set intact. Called once per frame before that frame's events are
-   * applied.
+   * Clear the transient sets (`justPressed`, `justReleased`, `repeated`) while
+   * leaving the held set intact. Called once per frame before that frame's
+   * events are applied.
    */
   clear(): void {
     this._justPressed.clear();
     this._justReleased.clear();
+    this._repeated.clear();
   }
 
   /**
-   * Forget a single input entirely — remove it from all three sets. Use to
-   * consume an input so later systems in the same frame do not also react to
-   * it.
+   * Forget a single input entirely — remove it from every set. Use to consume an
+   * input so later systems in the same frame do not also react to it.
    */
   reset(input: T): void {
     this._pressed.delete(input);
     this._justPressed.delete(input);
     this._justReleased.delete(input);
+    this._repeated.delete(input);
   }
 
-  /** Forget every input across all three sets. */
+  /** Forget every input across all sets. */
   resetAll(): void {
     this._pressed.clear();
     this._justPressed.clear();
     this._justReleased.clear();
+    this._repeated.clear();
   }
 }

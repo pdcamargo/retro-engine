@@ -243,6 +243,9 @@ foundation.**
       (layout/Shift-aware via `KeyboardEvent.key`, distinct from the physical `KeyboardInput`), a `char` raw
       event from the DOM backend, pure `charFromKeyDown` filter (single printable chars, drops Ctrl/Meta
       chords, allows AltGr). Unit-tested. Unblocks the UI text-input widget. (IME/CJK composition → follow-up.)
+      (e) **key auto-repeat** — ✅ **shipped**: `ButtonInput` surfaces the DOM's repeat `keydown` as a
+      per-frame `repeated(code)` set + `justPressedOrRepeated` ("act now, then repeat while held", OS cadence,
+      no engine timer). Used by the UI text-input widget (held Backspace/arrows repeat). Unit-tested.
       _Links:_ [input-system.md](input-system.md)
 - [ ] **CSS Grid for the UI layout engine** — 🟡 **Phases 1–3b shipped, grid usable** (ADR-0167): (1) pure
       track-sizing + cell-geometry core; (2) `UiStyle` `display`/`gridTemplate*` + `FlexLayoutEngine` grid

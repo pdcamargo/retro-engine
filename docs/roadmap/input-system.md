@@ -78,6 +78,15 @@ chords (Ctrl/Meta), allowing AltGr. `InputPlugin` clears + fills it each frame.
 Unit-tested. IME composition (CJK) is a follow-up. Unblocks the UI text-input
 widget.
 
+### Key auto-repeat ✅
+
+`ButtonInput` surfaces the DOM's auto-repeat `keydown` (the raw `key-down` event
+already carried a `repeat` flag): a repeat lands in a per-frame **repeated** set
+(`repeated(code)`) without re-firing `justPressed`, and `justPressedOrRepeated`
+combines the two — the "act now, then repeat while held" test. OS cadence, so no
+engine timer and it honors the user's system key-repeat settings. Used by the UI
+text-input widget (held Backspace/arrows repeat). Unit-tested.
+
 ### Phase 5 — Studio integration
 
 - Input binding editor panel (edit the `ActionMap`, live-rebind), MCP command to

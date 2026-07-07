@@ -1779,3 +1779,26 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
 - Roadmap: MASTER-ROADMAP "In-game UI depth" now lists text-input ✅. Box unchecked.
 
 ---
+
+## ✅ P1 — Input: OS key auto-repeat on ButtonInput (unit-verified)
+
+- **New:** `@retro-engine/input` + `@retro-engine/ui`. `ButtonInput` now surfaces the DOM's auto-repeat
+  `keydown` (the raw `key-down` event already carried `repeat`): `press(code, repeat)` routes a repeat into a
+  per-frame `repeated(code)` set without re-firing `justPressed`; `justPressedOrRepeated(code)` combines the
+  two ("act now, then repeat while held"). OS cadence — no engine timer, honors system key-repeat settings.
+  `UiTextInput` now uses it, so holding Backspace/Delete/arrows repeats (typed chars already repeated via
+  `ReceivedCharacters`). `getRepeated()`, and `clear`/`reset`/`resetAll` handle the new set.
+- **Verified:** `button-input.test.ts` (+3): repeat press → repeated (not justPressed), held; initial press
+  is justPressed not repeated; clear drops repeated but keeps held. `input-plugin.test.ts` (+): a `key-down
+  repeat:true` sets `repeated`/`justPressedOrRepeated`, clears next frame. 253 input+ui tests. Both gates
+  green: typecheck, lint (0/0), build.
+- **HOW to test:** in a text field, hold Backspace → characters delete repeatedly at the OS repeat rate
+  (before this, held Backspace deleted one char). Generally, `Res(KeyboardInput).justPressedOrRepeated(code)`
+  fires on the initial press and then at the OS repeat cadence while held.
+- **NOTE:** No ADR (small additive — exposes the already-captured `repeat` flag via the existing per-frame-set
+  pattern; documented in the changeset + input-system.md). Best confirmed by holding a key in a browser; the
+  set logic + event flow are unit-covered.
+- Roadmap: MASTER-ROADMAP "Input follow-ups" now lists (e) key auto-repeat; "In-game UI depth" text-input
+  notes held-key repeat ✅.
+
+---
