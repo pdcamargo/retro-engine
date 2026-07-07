@@ -42,6 +42,14 @@ export interface RegisteredSystem {
   readonly before?: readonly string[];
   readonly after?: readonly string[];
   /**
+   * Instance-level ordering edges keyed by {@link SystemId}: this system runs
+   * after every listed system present in the same stage. Distinct from
+   * label-keyed `after` — used by `App.addSystems({ chain: true })` to sequence
+   * a batch by identity without touching each system's `label`. Ids absent from
+   * the stage are ignored (same forgiving semantics as unmatched labels).
+   */
+  readonly afterIds?: readonly SystemId[];
+  /**
    * Render sub-set this system belongs to. Set only for `'render'`-stage
    * systems; ignored elsewhere. `undefined` on render-stage systems defaults
    * to {@link RenderSet.Render} at frame-loop time, preserving the
@@ -113,8 +121,10 @@ export class StageSystems {
  *   (edge A → each L-labelled system).
  * - `A.after  = ['L']` → A must run after every system with `label === 'L'`
  *   (edge each L-labelled system → A).
+ * - `A.afterIds = [id]` → A must run after the system with that id, if present
+ *   (edge that-system → A). Used for identity-based chaining.
  *
- * Labels referenced but not present in the input are silently ignored
+ * Labels (or ids) referenced but not present in the input are silently ignored
  * (forward references resolve when the labelled system registers later).
  * Tie-break is registration order: among nodes with zero remaining in-degree,
  * the earliest-registered runs first.
@@ -129,8 +139,10 @@ export const topoSort = (
   if (n === 0) return [];
 
   const byLabel = new Map<string, number[]>();
+  const byId = new Map<SystemId, number>();
   for (let i = 0; i < n; i++) {
     const s = systems[i]!;
+    byId.set(s.id, i);
     const lbl = s.label;
     if (lbl !== undefined) {
       const arr = byLabel.get(lbl);
@@ -165,6 +177,12 @@ export const topoSort = (
         for (const u of sources) {
           if (u !== i) addEdge(u, i);
         }
+      }
+    }
+    if (s.afterIds) {
+      for (const id of s.afterIds) {
+        const u = byId.get(id);
+        if (u !== undefined && u !== i) addEdge(u, i);
       }
     }
   }

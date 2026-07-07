@@ -1136,6 +1136,51 @@ export interface AddSystemOptions {
 }
 
 /**
+ * One system in an {@link App.addSystems} batch, produced by the {@link system}
+ * helper. Opaque — its param types are erased at this boundary (the helper
+ * type-checks the `fn` against its `params` when the spec is created).
+ */
+export interface SystemSpec {
+  readonly params: readonly Param<unknown>[];
+  readonly fn: (...args: unknown[]) => void;
+  readonly options?: AddSystemOptions;
+}
+
+/** Options for {@link App.addSystems}. */
+export interface AddSystemsOptions {
+  /**
+   * Run each system after the previous one in the batch (ordered by identity),
+   * turning the batch into a strict sequence. Defaults to `false` — an unchained
+   * batch is a grouping convenience equivalent to N {@link App.addSystem} calls.
+   */
+  readonly chain?: boolean;
+}
+
+/**
+ * Build a {@link SystemSpec} for {@link App.addSystems}. Captures a single
+ * system's `params` tuple, its `fn` (type-checked to receive one argument per
+ * param, in order), and optional per-system {@link AddSystemOptions}. Registers
+ * nothing on its own — pass the specs to `addSystems`.
+ *
+ * @example
+ * ```ts
+ * app.addSystems('update', [
+ *   system([ResMut(Score)], (score) => score.value += 1),
+ *   system([Res(Score)], (score) => render(score.value)),
+ * ], { chain: true });
+ * ```
+ */
+export const system = <const Ps extends readonly Param<unknown>[]>(
+  params: Ps,
+  fn: (...args: ParamValues<Ps>) => void,
+  options?: AddSystemOptions,
+): SystemSpec => ({
+  params,
+  fn: fn as (...args: unknown[]) => void,
+  ...(options !== undefined ? { options } : {}),
+});
+
+/**
  * Holds a `World`, accepts plugins, and runs a stop-able frame loop.
  *
  * Systems register through a single signature — a stage name, a tuple of param
@@ -1753,6 +1798,58 @@ export class App {
     fn: (...args: ParamValues<Ps>) => void,
     options?: AddSystemOptions,
   ): this {
+    this.registerSystem(stage, params, fn as (...args: unknown[]) => void, options);
+    // A newly added label may resolve a forward-reference constraint in a
+    // sibling stage — labels are stage-local, so no cross-stage invalidation
+    // is needed.
+    return this;
+  }
+
+  /**
+   * Register several systems against `stage` in one call. Each entry is built
+   * with the {@link system} helper (which preserves per-system param typing).
+   * Systems register in array order, so their tie-break order is the batch
+   * order. With `{ chain: true }`, each system after the first runs **after**
+   * the previous one in the batch (ordered by identity, independent of any
+   * `label` the systems carry) — the batch becomes a strict sequence.
+   *
+   * Same per-system validation as {@link App.addSystem} (param-stage scope, the
+   * render-only `set` option), and the same eager cycle check: a batch that
+   * introduces an ordering cycle throws at the offending registration.
+   *
+   * @example
+   * ```ts
+   * app.addSystems('update', [
+   *   system([ResMut(Input)], readInput),
+   *   system([Res(Input), ResMut(Velocity)], applyInput),
+   *   system([Res(Velocity), ResMut(Transform)], integrate),
+   * ], { chain: true }); // readInput → applyInput → integrate
+   * ```
+   */
+  addSystems(stage: Stage, specs: readonly SystemSpec[], options?: AddSystemsOptions): this {
+    const chain = options?.chain ?? false;
+    let prev: SystemId | undefined;
+    for (const spec of specs) {
+      const afterIds = chain && prev !== undefined ? [prev] : undefined;
+      prev = this.registerSystem(stage, spec.params, spec.fn, spec.options, afterIds);
+    }
+    return this;
+  }
+
+  /**
+   * Build a {@link RegisteredSystem} from raw parts and push it onto `stage`,
+   * returning its freshly-assigned id. Shared by {@link App.addSystem} and
+   * {@link App.addSystems}; `afterIds` carries identity-based ordering edges
+   * (used by chaining). Throws on a bad param scope, a misplaced `set` option,
+   * or an ordering cycle (the push rolls back before re-throwing).
+   */
+  private registerSystem(
+    stage: Stage,
+    params: readonly Param<unknown>[],
+    fn: (...args: unknown[]) => void,
+    options: AddSystemOptions | undefined,
+    afterIds?: readonly SystemId[],
+  ): SystemId {
     for (const p of params) {
       if (p.scope !== undefined && p.scope !== stage) {
         throw new Error(
@@ -1774,7 +1871,7 @@ export class App {
     const entry: RegisteredSystem = {
       id,
       params,
-      fn: fn as (...args: unknown[]) => void,
+      fn,
       name,
       origin,
       originPlugin,
@@ -1783,12 +1880,10 @@ export class App {
       ...(options?.before !== undefined ? { before: options.before } : {}),
       ...(options?.after !== undefined ? { after: options.after } : {}),
       ...(options?.set !== undefined ? { set: options.set } : {}),
+      ...(afterIds !== undefined && afterIds.length > 0 ? { afterIds } : {}),
     };
     this.stages[stage].push(entry);
-    // A newly added label may resolve a forward-reference constraint in a
-    // sibling stage — labels are stage-local, so no cross-stage invalidation
-    // is needed.
-    return this;
+    return id;
   }
 
   /**

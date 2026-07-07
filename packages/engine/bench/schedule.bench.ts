@@ -7,7 +7,7 @@ import { bench, summary } from 'mitata';
 import { App } from '@retro-engine/engine';
 import type { SystemId } from '@retro-engine/engine';
 
-import { type RegisteredSystem, runStage, StageSystems } from '../src/schedule';
+import { type RegisteredSystem, runStage, StageSystems, topoSort } from '../src/schedule';
 
 import { makeHeadlessRenderer, silentLogger } from './helpers';
 
@@ -30,6 +30,26 @@ const makeStage = (count: number): StageSystems => {
   return stage;
 };
 
+// A fully chained batch (ADR-0157): every system carries one identity-based
+// `afterIds` edge to its predecessor — the worst-case linear dependency graph
+// the topo sort re-runs on each registration. Isolates the id-edge cost.
+const makeChainedSystems = (count: number): RegisteredSystem[] => {
+  const out: RegisteredSystem[] = [];
+  for (let i = 0; i < count; i += 1) {
+    const id = (2_000_000 + i) as SystemId;
+    out.push({
+      id,
+      params: [],
+      fn: () => undefined,
+      name: `chain-sys-${i}`,
+      origin: 'user',
+      originPlugin: null,
+      ...(i > 0 ? { afterIds: [(2_000_000 + i - 1) as SystemId] } : {}),
+    });
+  }
+  return out;
+};
+
 const counts = [16, 64, 256];
 
 for (const count of counts) {
@@ -48,6 +68,15 @@ for (const count of counts) {
       });
       const stage = makeStage(count);
       yield () => runStage(stage, app, 'update');
+    });
+  });
+}
+
+for (const count of counts) {
+  summary(() => {
+    bench(`topoSort (chain of ${count})`, function* () {
+      const systems = makeChainedSystems(count);
+      yield () => topoSort(systems);
     });
   });
 }

@@ -1171,3 +1171,25 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
   your confirmation.
 
 ---
+
+## ✅ P1 — ECS ordering depth, Phase 1: batch registration + `.chain()` (unit + integration verified)
+
+- **New:** `@retro-engine/engine` (ADR-0157, roadmap `ecs-ordering-depth.md`). `App.addSystems(stage, specs,
+  { chain })` registers a group of systems together; the `system(params, fn, options?)` helper builds each
+  spec (preserving per-system param typing). With `{ chain: true }` each system runs after the previous —
+  ordered by **system identity** (new internal `RegisteredSystem.afterIds` edge), so it composes with any
+  `label`/`before`/`after` the systems carry and won't false-cycle on shared labels. One topo pass resolves
+  both edge kinds; cycles still caught eagerly at registration.
+- **Verified:** `schedule.test.ts` (+5, 14 total): batch array-order; chain strict sequence; chain-by-identity
+  (three same-labelled systems sequence without a cycle — the key proof it's id-keyed not label-keyed); chain
+  composes with a label + external `after`; a chain that conflicts with a label constraint throws
+  `ordering cycle`. Full engine gate green: typecheck, lint (626 files), 1225 tests, build; new
+  `topoSort (chain of N)` bench runs (16/64/256). Changeset added.
+- **HOW to test:** `app.addSystems('update', [system([ResMut(A)], fa), system([Res(A)], fb)], { chain: true })`
+  → `fa` always runs before `fb`, no labels needed. Without `{ chain: true }` it's just a grouping of
+  addSystem calls (registration order preserved).
+- Roadmap: MASTER-ROADMAP "ECS ordering depth" now 🟡 Phase 1 shipped; remaining phases (SystemSet, ambiguity
+  detection, exclusive `&mut World`, state-transition ordering) tracked in `ecs-ordering-depth.md`. Box
+  unchecked pending your confirmation.
+
+---

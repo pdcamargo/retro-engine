@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 
 
-import { App, RunCondition } from './index';
+import { App, RunCondition, system } from './index';
 
 import { makeHeadlessRenderer } from './test-utils';
 
@@ -136,5 +136,88 @@ describe('Ordering within a stage', () => {
 
     app.advanceFrame(0);
     expect(trace).toEqual(['a', 'c']);
+  });
+});
+
+describe('addSystems + chain (ADR-0157)', () => {
+  it('registers a batch in array order (no chain is a grouping convenience)', () => {
+    const app = new App({ renderer: makeHeadlessRenderer() });
+    const trace: string[] = [];
+    app.addSystems('update', [
+      system([], () => trace.push('a')),
+      system([], () => trace.push('b')),
+      system([], () => trace.push('c')),
+    ]);
+
+    app.advanceFrame(0);
+    expect(trace).toEqual(['a', 'b', 'c']);
+  });
+
+  it('chain: each system runs after the previous in the batch', () => {
+    const app = new App({ renderer: makeHeadlessRenderer() });
+    const trace: string[] = [];
+    app.addSystems(
+      'update',
+      [
+        system([], () => trace.push('first')),
+        system([], () => trace.push('second')),
+        system([], () => trace.push('third')),
+      ],
+      { chain: true },
+    );
+
+    app.advanceFrame(0);
+    expect(trace).toEqual(['first', 'second', 'third']);
+  });
+
+  it('chains by identity — same-labelled systems sequence without a cycle', () => {
+    const app = new App({ renderer: makeHeadlessRenderer() });
+    const trace: string[] = [];
+    // All three carry the SAME label; a label-keyed `after` would be ambiguous
+    // or cyclic. Identity-based chain edges order them 1 → 2 → 3 cleanly.
+    app.addSystems(
+      'update',
+      [
+        system([], () => trace.push('1'), { label: 'step' }),
+        system([], () => trace.push('2'), { label: 'step' }),
+        system([], () => trace.push('3'), { label: 'step' }),
+      ],
+      { chain: true },
+    );
+
+    app.advanceFrame(0);
+    expect(trace).toEqual(['1', '2', '3']);
+  });
+
+  it('chain composes with a label and an external after constraint', () => {
+    const app = new App({ renderer: makeHeadlessRenderer() });
+    const trace: string[] = [];
+    // Registered first, but constrained to run after the chained 'b'.
+    app.addSystem('update', [], () => trace.push('post'), { after: ['b'] });
+    app.addSystems(
+      'update',
+      [system([], () => trace.push('a')), system([], () => trace.push('b'), { label: 'b' })],
+      { chain: true },
+    );
+
+    app.advanceFrame(0);
+    // chain gives a → b; the label constraint puts post after b.
+    expect(trace).toEqual(['a', 'b', 'post']);
+  });
+
+  it('detects a cycle when a chain conflicts with a label constraint', () => {
+    const app = new App({ renderer: makeHeadlessRenderer() });
+    // chain makes Y run after X (by id); X also declares after:['y'] and Y is
+    // labelled 'y' → X after Y and Y after X → cycle, caught at registration.
+    expect(() =>
+      app.addSystems(
+        'update',
+        [
+          system([], () => undefined, { after: ['y'] }),
+          system([], () => undefined, { label: 'y' }),
+        ],
+        { chain: true },
+      ),
+    ).toThrow(/ordering cycle/);
   });
 });
