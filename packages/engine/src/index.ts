@@ -104,7 +104,18 @@ export type { Plugin, PluginFn, PluginObject, PluginsState } from './plugin';
 export type { PluginGroup } from './plugin-group';
 export { PluginGroupBuilder } from './plugin-group';
 export type { Param, ParamValues, ResolveCtx, SystemId } from './system-param';
-export { ChangedRes, Extract, Query, RenderCtx, Res, ResAdded, ResMut, RunCondition } from './system-param';
+export {
+  ChangedRes,
+  Extract,
+  Local,
+  LocalState,
+  Query,
+  RenderCtx,
+  Res,
+  ResAdded,
+  ResMut,
+  RunCondition,
+} from './system-param';
 export type { SystemOrigin } from './schedule';
 export type { StageGroup, SystemInfo } from './schedule-info';
 export type { SystemTiming } from './system-profiler';

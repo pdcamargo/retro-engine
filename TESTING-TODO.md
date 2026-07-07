@@ -1063,3 +1063,18 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
 - Roadmap: MASTER-ROADMAP P1 Diagnostics 🟡 (core shipped), box unchecked pending your confirmation.
 
 ---
+
+## ✅ P1 — `Local<T>` system param (per-system persistent state) (unit-verified)
+
+- **New:** `@retro-engine/engine` `Local(factory)` → a `LocalState<T>` (`.current`) — per-system persistent
+  state (accumulators, frame counters, private caches), lazily seeded on first run and carried across
+  frames; each `Local(...)` owns a distinct slot (no cross-system sharing). Bevy's `Local<T>` analog.
+- **Verified:** `local-param.test.ts` (3 tests, App+`advanceFrame`): factory seed + write persistence across
+  frames (`10 → 11 → 12 → 13`), two systems with independent slots, a non-primitive array slot growing
+  across frames. engine typecheck/lint/tests green. Changeset added.
+- **HOW to test:** `app.addSystem('update', [Local(() => 0)], (n) => { n.current += 1; })` → `n.current`
+  increments once per frame and persists.
+- Roadmap: MASTER-ROADMAP P1 System-param sugar 🟡 (Local shipped; reader/writer/trigger sugar remain),
+  system-params.md item 1 ✅. Box unchecked pending your confirmation.
+
+---

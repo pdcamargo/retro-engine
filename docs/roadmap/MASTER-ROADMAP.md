@@ -248,7 +248,9 @@ foundation.**
 - [ ] **ECS ordering depth** — `SystemSet` + set-level config/run-conditions + `.chain()` + ambiguity
       detection; exclusive systems (`&mut World` param); explicit state-transition ordering.
       _Links:_ [system-params.md](system-params.md) · [`../backlog/explicit-state-transition-ordering.md`](../backlog/explicit-state-transition-ordering.md)
-- [ ] **System-param sugar** — `Local<T>`, reader/writer/trigger sugar. _Links:_ [system-params.md](system-params.md)
+- [ ] **System-param sugar** — 🟡 **`Local<T>` shipped** (`Local(factory)` → per-system persistent
+      `LocalState<T>`, lazily seeded, per-system slot; unit-tested). Remaining: reader/writer/trigger sugar.
+      Box unchecked pending user confirmation (§3). _Links:_ [system-params.md](system-params.md)
 - [ ] **Texture import settings (`.meta`)** — filter (nearest/point·bilinear·trilinear), wrap, color space
       (sRGB/linear), mipmaps, max size, PPU; consumed by `RenderImage` sampler/upload. **High-value + cheap
       — required for crisp pixel-art; consider pulling into P0.**

@@ -11,7 +11,7 @@ This roadmap captures **additional param kinds** that don't ship in M2 but are l
 
 ## Phases
 
-1. **`Local<T>`** — per-system persistent state, initialized lazily on first run (default-constructed or via a factory). Used for accumulators (frame counters), incremental algorithms, system-private caches. Bevy's analog: `Local<T>`.
+1. **`Local<T>`** — ✅ **shipped (2026-07-06):** `Local(factory)` → a per-system `LocalState<T>` (`.current`), lazily seeded on first run and persisted across frames; each `Local(...)` owns a distinct slot (no cross-system sharing). Used for accumulators (frame counters), incremental algorithms, system-private caches. Bevy's analog: `Local<T>`.
 2. **`MessageReader<T>` / `MessageWriter<T>`** — frame-buffered message channels. Designed in `docs/roadmap/observers-and-events.md`; this is the param-shaped surface for it.
 3. **`Trigger<E>`** — observer system param. Carries the event payload + target entity. Same `observers-and-events.md` initiative.
 4. **`NextState<S>`** — state-transition request resource. M2 ships this for free as `ResMut<NextState<S>>`, but a dedicated param shape (`NextState<GameState>` directly) is cleaner sugar.

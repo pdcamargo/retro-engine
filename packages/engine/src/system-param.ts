@@ -253,6 +253,41 @@ export function ResMut<T extends object>(ctor: new (...a: any[]) => T): Param<T>
 }
 
 /**
+ * A per-system persistent state slot resolved by {@link Local}. The wrapped value
+ * lives in `.current` — read and write it freely; it survives across frames and is
+ * private to the single system that declared the `Local`.
+ */
+export class LocalState<T> {
+  constructor(public current: T) {}
+}
+
+/**
+ * Declares **per-system persistent local state** — an accumulator, frame counter,
+ * or system-private cache. Lazily initialized on the system's first run via
+ * `factory` (Bevy's `Local<T>`); the same {@link LocalState} instance is then
+ * handed back on every subsequent run, so writes to `.current` persist.
+ *
+ * Each `Local(...)` call returns a distinct param with its own slot, so two
+ * systems declaring `Local(() => 0)` do not share state.
+ *
+ * @example
+ * ```ts
+ * app.addSystem('update', [Local(() => 0)], (frame) => {
+ *   frame.current += 1; // increments once per frame, persists across frames
+ * });
+ * ```
+ */
+export const Local = <T>(factory: () => T): Param<LocalState<T>> => {
+  let state: LocalState<T> | undefined;
+  return {
+    resolve(): LocalState<T> {
+      state ??= new LocalState(factory());
+      return state;
+    },
+  };
+};
+
+/**
  * A composable gate that decides whether a system runs on a given tick.
  * Wrap any `(app) => boolean` predicate, then combine with `.and(...)`,
  * `.or(...)`, `.not()`. Conditions are evaluated once per system per stage
