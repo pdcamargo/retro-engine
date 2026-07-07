@@ -89,6 +89,8 @@ export { applyToggleClicks, UiToggle, UiToggled } from './interaction/ui-toggle'
 export type { UiSliderOptions } from './interaction/ui-slider';
 export { computeSliderValue, UiSlider, UiSliderChanged } from './interaction/ui-slider';
 export { DiagnosticsOverlayPlugin, DiagnosticsText, formatDiagnostics } from './diagnostics-overlay';
+export type { GridLayout, GridSpec, GridTrack } from './grid-layout';
+export { computeGridLayout, resolveGridTracks } from './grid-layout';
 export type { FocusNode, NavDirection } from './focus/focus-nav';
 export { spatialNavigate, tabNavigate } from './focus/focus-nav';
 export { Focusable, UiFocus, UiNavigate } from './focus/ui-focus';

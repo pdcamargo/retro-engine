@@ -1593,3 +1593,21 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
 - Roadmap: MASTER-ROADMAP "Sprite definitions" now 🟡 slicing + model/resolver in place. Box unchecked.
 
 ---
+
+## ✅ P1 — CSS Grid for the UI, Phase 1: track sizing + cell geometry (unit-verified)
+
+- **New:** `@retro-engine/ui` `grid-layout.ts` (ADR-0167, roadmap `css-grid-ui.md`). Pure grid core behind
+  the `LayoutEngine` seam: `GridTrack` (`px`/`fr`), `resolveGridTracks(tracks, available, gap)` (px reserve →
+  gap reserve → fr split by fraction, clamped at 0), `computeGridLayout(spec, available)` → resolved
+  column/row sizes + one row-major `LayoutRect` per cell. No `UiStyle`/ECS change yet.
+- **Verified:** `grid-layout.test.ts` (+7): px tracks; 1fr/1fr and 1fr/3fr distribution; px+gap reserved
+  before fr; over-full → fr clamped to 0; 2×2 fr grid with gaps → correct cell offsets/sizes; mixed px+fr.
+  Full ui gate green: typecheck, lint, 132 tests, build. Changeset.
+- **HOW to test:** `computeGridLayout({ columns:[{kind:'fr',value:1},{kind:'fr',value:1}], rows:[...], columnGap:10 }, { width, height })`
+  → `.cells[i]` are the per-cell rects; a consumer places children into them.
+- **NOTE:** pure algorithm only. Phase 2 (UiStyle `display:grid` + `grid-template-*` + `.rss` parse +
+  layout-engine display-dispatch placing children) and Phase 3 (placement/spanning, `auto`/`minmax`,
+  alignment) remain — tracked in `css-grid-ui.md`.
+- Roadmap: MASTER-ROADMAP "CSS Grid for the UI layout engine" now 🟡 Phase 1 shipped. Box unchecked.
+
+---

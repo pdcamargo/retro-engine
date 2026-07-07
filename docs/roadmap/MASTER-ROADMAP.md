@@ -240,8 +240,11 @@ foundation.**
       `PinchGesture` messages, tunable `TouchGestureConfig`; 8 unit tests);
       (c) **studio binding editor** (Phase 5, BLOCKED — studio) — edit the `ActionMap` live + an MCP command.
       _Links:_ [input-system.md](input-system.md)
-- [ ] **CSS Grid for the UI layout engine** — pure-TS grid behind the `LayoutEngine` interface (Taffy-WASM
-      only as a fallback escape hatch). _Links:_ [ui-system.md](ui-system.md)
+- [ ] **CSS Grid for the UI layout engine** — 🟡 **Phase 1 shipped** (ADR-0167): pure track-sizing +
+      cell-geometry core (`GridTrack` px/fr, `resolveGridTracks`, `computeGridLayout` → cell rects),
+      unit-tested, behind the `LayoutEngine` seam. Remaining: `UiStyle` `display`/`grid-template` fields +
+      `.rss` parsing + layout-engine display-dispatch (Phase 2); explicit placement/spanning, `auto`/
+      `minmax`, grid alignment (Phase 3). _Links:_ [css-grid-ui.md](css-grid-ui.md) · [ui-system.md](ui-system.md)
 - [ ] **In-game UI depth** — 🟡 **Phases 1 (partial) + 2 shipped**: widgets `UiToggle` (checkbox) +
       `UiSlider` (drag→value) reuse the `Interactable`/`UiClicked` foundation with pure, unit-tested logic;
       **focus + spatial navigation** (ADR-0163) — `UiFocus` resource + `Focusable` marker + message-driven
