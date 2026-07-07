@@ -15,13 +15,16 @@ export class DiagnosticsText {}
 
 /**
  * Format a diagnostics snapshot into a compact single line, e.g.
- * `FPS 60  16.7ms  ents 42  assets 12`. FPS is rounded; frame time keeps one
- * decimal. Pure — the overlay system's only formatting logic, unit-tested.
+ * `FPS 60 (low 42)  16.7ms  ents 42  assets 12`. FPS and the 1%-low FPS are
+ * rounded; frame time keeps one decimal. The `(low N)` is the "1% low" stutter
+ * metric ({@link DiagnosticsStoreType.onePercentLowFps}), shown once the window
+ * has samples. Pure — the overlay system's only formatting logic, unit-tested.
  */
 export const formatDiagnostics = (store: DiagnosticsStoreType): string => {
   const fps = Math.round(store.fps);
   const ms = store.frameTimeMs.toFixed(1);
-  return `FPS ${fps}  ${ms}ms  ents ${store.entityCount}  assets ${store.assetCount}`;
+  const low = store.onePercentLowFps > 0 ? ` (low ${Math.round(store.onePercentLowFps)})` : '';
+  return `FPS ${fps}${low}  ${ms}ms  ents ${store.entityCount}  assets ${store.assetCount}`;
 };
 
 /**

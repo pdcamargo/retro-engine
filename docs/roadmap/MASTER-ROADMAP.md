@@ -294,12 +294,14 @@ foundation.**
       from the surface) + `WindowResized` event + `syncWindow` + opt-in `WindowPlugin` (`'first'`-stage sync,
       headless-safe). Unit + integration tested. Remaining: cursor/fullscreen/present-mode(vsync) controls,
       multi-window. Box unchecked pending user confirmation (§3).
-- [ ] **Diagnostics store** — 🟡 **core + asset counts + in-game overlay shipped**: `DiagnosticsStore` (EMA
-      `frameTimeMs` + derived `fps`, `entityCount`, `assetCount`, `frameCount`) + `updateDiagnostics` + opt-in
-      `DiagnosticsPlugin` (real clock delta, `World.entityCount`, `AssetStores.totalAssetCount()`). In-game
-      overlay: `@retro-engine/ui` `DiagnosticsOverlayPlugin` + `DiagnosticsText` marker + pure
-      `formatDiagnostics` rewrite a tagged `UiText` each frame. Unit + integration tested. Remaining: a
-      studio diagnostics panel (studio-blocked). Box unchecked pending user confirmation (§3).
+- [ ] **Diagnostics store** — 🟡 **core + asset counts + windowed frame-time stats + in-game overlay shipped**:
+      `DiagnosticsStore` (EMA `frameTimeMs` + derived `fps`, `entityCount`, `assetCount`, `frameCount`, plus
+      windowed `min`/`max`/`avgFrameTimeMs` + `onePercentLowFps` — the "1% low" stutter metric, via a new
+      `FrameTimeWindow` ring + pure `frameTimeStats`) + `updateDiagnostics` + opt-in `DiagnosticsPlugin` (real
+      clock delta, `World.entityCount`, `AssetStores.totalAssetCount()`). In-game overlay: `@retro-engine/ui`
+      `DiagnosticsOverlayPlugin` + `DiagnosticsText` marker + pure `formatDiagnostics` (now shows `(low N)`)
+      rewrite a tagged `UiText` each frame. Unit + integration tested + benched. Remaining: a studio
+      diagnostics panel (studio-blocked). Box unchecked pending user confirmation (§3).
 - [ ] **ECS ordering depth** — 🟡 **Phases 1, 2, 2b, 4 shipped** (ADR-0157, ADR-0158, ADR-0160): (1) batch
       registration `App.addSystems` + the `system()` spec helper + `.chain()` (identity-based `afterIds`
       edges); (2) named multi-membership `SystemSet` (`{ inSet }`) + `App.configureSet(stage, set, { before,

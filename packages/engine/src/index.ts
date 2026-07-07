@@ -131,6 +131,8 @@ export { NextState, State } from './state';
 export type { FixedClock, RealClock, VirtualClock } from './time';
 export { Time } from './time';
 export { DiagnosticsPlugin, DiagnosticsStore, updateDiagnostics } from './diagnostics';
+export type { FrameTimeStats } from './frame-time-window';
+export { FrameTimeWindow, frameTimeStats } from './frame-time-window';
 export { syncWindow, Window, WindowPlugin, WindowResized } from './window';
 export { composeTransformInto, decomposeTransformInto, GlobalTransform, Transform } from './transform';
 export type { ChildBuilder } from './hierarchy';

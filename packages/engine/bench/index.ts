@@ -14,6 +14,7 @@ import './schedule.bench';
 import './calculate-bounds.bench';
 import './commands.bench';
 import './resource-change.bench';
+import './diagnostics.bench';
 import './template-spawn.bench';
 import './observer-binding.bench';
 import './save-promote.bench';

@@ -42,6 +42,25 @@ describe('updateDiagnostics', () => {
     updateDiagnostics(store, 0.016, 3);
     expect(store.assetCount).toBe(12);
   });
+
+  it('tracks windowed frame-time stats + a 1%-low FPS that a slow tail drags down', () => {
+    const store = new DiagnosticsStore();
+    for (let i = 0; i < 96; i++) updateDiagnostics(store, 0.016, 1); // steady 16ms
+    for (let i = 0; i < 4; i++) updateDiagnostics(store, 0.1, 1); // a 100ms slow tail
+    expect(store.minFrameTimeMs).toBeCloseTo(16, 5);
+    expect(store.maxFrameTimeMs).toBeCloseTo(100, 5);
+    expect(store.avgFrameTimeMs).toBeGreaterThan(16);
+    // 1% low reflects the slow tail (~10 fps), far below the smoothed fps.
+    expect(store.onePercentLowFps).toBeCloseTo(10, 0);
+    expect(store.onePercentLowFps).toBeLessThan(store.fps);
+  });
+
+  it('leaves the window untouched on a zero-delta frame', () => {
+    const store = new DiagnosticsStore();
+    updateDiagnostics(store, 0, 1);
+    expect(store.frames.size).toBe(0);
+    expect(store.onePercentLowFps).toBe(0);
+  });
 });
 
 describe('DiagnosticsPlugin (integration)', () => {

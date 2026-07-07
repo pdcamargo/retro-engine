@@ -1,4 +1,5 @@
 import { AssetStores } from './asset/asset-stores';
+import { FrameTimeWindow } from './frame-time-window';
 import type { App } from './index';
 import type { PluginObject } from './plugin';
 import { Res, ResMut } from './system-param';
@@ -21,6 +22,16 @@ export class DiagnosticsStore {
   assetCount = 0;
   /** Total frames advanced since the store was inserted. */
   frameCount = 0;
+  /** Fastest frame time (ms) over the recent window. */
+  minFrameTimeMs = 0;
+  /** Slowest frame time (ms) over the recent window. */
+  maxFrameTimeMs = 0;
+  /** Mean frame time (ms) over the recent window. */
+  avgFrameTimeMs = 0;
+  /** "1% low" FPS — `1000 / p99` frame time over the window; the stutter metric. */
+  onePercentLowFps = 0;
+  /** Rolling window of recent real frame times feeding the stats above. */
+  readonly frames = new FrameTimeWindow();
 }
 
 /** EMA weight for the new sample. Smooths jitter while staying responsive. */
@@ -47,6 +58,12 @@ export const updateDiagnostics = (
   if (dtMs <= 0) return;
   store.frameTimeMs = store.frameTimeMs === 0 ? dtMs : store.frameTimeMs + (dtMs - store.frameTimeMs) * SMOOTHING;
   store.fps = store.frameTimeMs > 0 ? 1000 / store.frameTimeMs : 0;
+  store.frames.push(dtMs);
+  const stats = store.frames.stats();
+  store.minFrameTimeMs = stats.min;
+  store.maxFrameTimeMs = stats.max;
+  store.avgFrameTimeMs = stats.avg;
+  store.onePercentLowFps = stats.p99 > 0 ? 1000 / stats.p99 : 0;
 };
 
 /**

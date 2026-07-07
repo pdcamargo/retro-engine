@@ -16,7 +16,17 @@ describe('formatDiagnostics', () => {
     expect(formatDiagnostics(store)).toBe('FPS 60  16.8ms  ents 42  assets 12');
   });
 
-  it('handles the cold-start zero state', () => {
+  it('appends the 1%-low FPS once the window has samples', () => {
+    const store = new DiagnosticsStore();
+    store.fps = 59.6;
+    store.frameTimeMs = 16.78;
+    store.entityCount = 42;
+    store.assetCount = 12;
+    store.onePercentLowFps = 41.5;
+    expect(formatDiagnostics(store)).toBe('FPS 60 (low 42)  16.8ms  ents 42  assets 12');
+  });
+
+  it('handles the cold-start zero state (no low readout yet)', () => {
     expect(formatDiagnostics(new DiagnosticsStore())).toBe('FPS 0  0.0ms  ents 0  assets 0');
   });
 });
