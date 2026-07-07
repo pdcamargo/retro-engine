@@ -1342,3 +1342,22 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
   scrollview/dropdown/tabs + focus/nav/data-binding/virtualized-views/screens remain). Box unchecked.
 
 ---
+
+## ✅ P1 — Audio mixer buses, Phase 2: submix trees (bus → bus) (unit + stub-context verified)
+
+- **New:** `@retro-engine/audio` (ADR-0162). `Audio.setBusOutput(bus, output)` routes a bus into another
+  bus (submix), or back to master when `output=''`. `Audio` owns the bus graph (`Map<bus, output>`) and
+  rejects cycles — including a direct self-route — throwing and leaving the graph unchanged. `busOutput(bus)`
+  reads the target. The HAL gained `configureBus(bus, output)`: `WebAudioBackend` disconnects the bus's one
+  output edge and reconnects to the target bus/master (voices are inputs, unaffected); `NullAudioBackend`
+  no-ops. Bus gains compose multiplicatively down the chain.
+- **Verified:** `audio.test.ts` (+2): facade routes dialogue→voice, voice→master, rejects voice→dialogue
+  (cycle) + self-route with graph unchanged after throw; WebAudio stub — the dialogue bus node connects to
+  the voice bus node (not master), then reconnects to master on reset. Full audio gate green: typecheck,
+  lint (13 files), 24 tests, build. Changeset added.
+- **HOW to test:** `audio.setBusOutput('dialogue', 'voice'); audio.setBusOutput('announcer', 'voice');
+  audio.setBusVolume('voice', 0.5)` → both dialogue and announcer voices duck together, music untouched.
+- Roadmap: MASTER-ROADMAP "Audio mixer buses" now 🟡 Phases 1–2 shipped; remaining (effect inserts, spatial
+  panning) tracked in `audio-mixer-buses.md`. Box unchecked pending your confirmation.
+
+---

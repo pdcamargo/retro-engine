@@ -18,6 +18,9 @@ import type { AudioBackend, PlayOptions, VoiceId } from './audio-backend';
  * ```
  */
 export class Audio {
+  /** Bus → its output bus name. Absent (or `''`) means the bus routes to master. */
+  private readonly busGraph = new Map<string, string>();
+
   constructor(
     private readonly backend: AudioBackend,
     private readonly clips: Assets<AudioClip>,
@@ -76,6 +79,37 @@ export class Audio {
   /** The current gain of a mixer bus, or `1` for one never set. */
   busVolume(bus: string): number {
     return this.backend.busVolume(bus);
+  }
+
+  /**
+   * Route `bus`'s output into another bus (a submix, e.g. `dialogue` → `voice`),
+   * or back to master when `output` is `''`. Rejects a routing that would form a
+   * cycle (throws, leaving the graph unchanged), so submix trees stay acyclic.
+   */
+  setBusOutput(bus: string, output: string): void {
+    if (output !== '' && this.wouldCycle(bus, output)) {
+      throw new Error(`Audio.setBusOutput: routing '${bus}' -> '${output}' would form a bus cycle`);
+    }
+    if (output === '') this.busGraph.delete(bus);
+    else this.busGraph.set(bus, output);
+    this.backend.configureBus(bus, output);
+  }
+
+  /** The bus `bus` routes into, or `''` when it routes to master. */
+  busOutput(bus: string): string {
+    return this.busGraph.get(bus) ?? '';
+  }
+
+  /** Whether routing `bus` → `output` would close a cycle through the current graph. */
+  private wouldCycle(bus: string, output: string): boolean {
+    const seen = new Set<string>();
+    let cur = output;
+    while (cur !== '' && !seen.has(cur)) {
+      if (cur === bus) return true;
+      seen.add(cur);
+      cur = this.busGraph.get(cur) ?? '';
+    }
+    return false;
   }
 
   /** Resume the audio context (browsers start suspended until a user gesture). */

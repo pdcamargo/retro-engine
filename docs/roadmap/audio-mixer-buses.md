@@ -10,11 +10,14 @@ route `voice.gain → bus → master`; per-voice/bus/master gains multiply. Stri
 keyed, lazily created; headless (Null) parity. Reflection schema updated. Unit +
 stub-context tested.
 
-## Phase 2 — submix trees (bus → bus)
+## Phase 2 — submix trees (bus → bus) ✅ (ADR-0162)
 
-Let a bus target another bus instead of master, forming a submix tree (e.g.
-`dialogue` + `announcer` → `voice` → master). Cycle-guard the routing. Decide the
-API: `configureBus(name, { output })` on the HAL + `Audio`.
+`Audio.setBusOutput(bus, output)` routes a bus into another bus (or master when
+`''`), forming a submix tree (`dialogue`/`announcer` → `voice` → master). The
+`Audio` resource owns the bus graph + rejects cycles (including self-routes); the
+HAL's `configureBus(bus, output)` is a mechanical GainNode reconnect
+(`WebAudioBackend` rewires the one output edge; `Null` no-ops). `busOutput(bus)`
+reads the current target. Unit + stub-context tested.
 
 ## Phase 3 — bus effect inserts
 

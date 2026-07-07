@@ -248,11 +248,12 @@ foundation.**
       unit-tested logic (`applyToggleClicks`, `computeSliderValue`). Remaining widgets: text-input,
       scrollview, dropdown/tabs; then focus + spatial navigation, data binding, virtualized list/tree
       views, screen management. _Links:_ [in-game-ui-depth.md](in-game-ui-depth.md) · [ui-system.md](ui-system.md)
-- [ ] **Audio mixer buses** — 🟡 **Phase 1 shipped** (ADR-0159): named buses + per-bus volume
-      (`PlayOptions.bus`, `Audio.setBusVolume`/`busVolume`, `AudioSource.bus`; `voice.gain → bus → master`,
-      string-keyed + lazily created, headless parity, reflection schema updated; unit + stub-context tested).
-      Remaining: submix trees (bus→bus), effect inserts (filter/compressor/reverb), spatial panning.
-      _Links:_ [audio-mixer-buses.md](audio-mixer-buses.md) · [audio.md](audio.md)
+- [ ] **Audio mixer buses** — 🟡 **Phases 1–2 shipped** (ADR-0159, ADR-0162): (1) named buses + per-bus
+      volume (`PlayOptions.bus`, `Audio.setBusVolume`/`busVolume`, `AudioSource.bus`; `voice.gain → bus →
+      master`, string-keyed, headless parity); (2) submix trees — `Audio.setBusOutput(bus, output)` routes a
+      bus into another bus (`dialogue` → `voice` → master), facade owns the graph + rejects cycles, HAL
+      `configureBus` does the GainNode reconnect. Unit + stub-context tested. Remaining: effect inserts
+      (filter/compressor/reverb), spatial panning. _Links:_ [audio-mixer-buses.md](audio-mixer-buses.md) · [audio.md](audio.md)
 - [ ] **Windowing** — 🟡 **read side shipped**: `Window` resource (logical + physical size + dpr, mirrored
       from the surface) + `WindowResized` event + `syncWindow` + opt-in `WindowPlugin` (`'first'`-stage sync,
       headless-safe). Unit + integration tested. Remaining: cursor/fullscreen/present-mode(vsync) controls,

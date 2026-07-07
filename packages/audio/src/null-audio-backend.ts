@@ -46,5 +46,7 @@ export class NullAudioBackend implements AudioBackend {
     return this.busVolumes.get(bus) ?? 1;
   }
 
+  configureBus(): void {}
+
   destroy(): void {}
 }

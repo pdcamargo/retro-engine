@@ -119,6 +119,14 @@ export class WebAudioBackend implements AudioBackend {
     return this.buses.get(bus)?.gain.value ?? 1;
   }
 
+  configureBus(bus: string, output: string): void {
+    const node = this.bus(bus);
+    // A bus has exactly one output edge; drop it and rewire to the new target.
+    // Voices feed the bus as inputs and are unaffected by disconnecting outputs.
+    node.disconnect();
+    node.connect(output === '' ? this.master : this.bus(output));
+  }
+
   destroy(): void {
     this.stopAll();
     for (const bus of this.buses.values()) bus.disconnect();

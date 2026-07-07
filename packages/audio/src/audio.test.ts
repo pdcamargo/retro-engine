@@ -47,6 +47,10 @@ class MockBackend implements AudioBackend {
   busVolume(bus: string): number {
     return this.buses.get(bus) ?? 1;
   }
+  readonly busRoutes: [string, string][] = [];
+  configureBus(bus: string, output: string): void {
+    this.busRoutes.push([bus, output]);
+  }
   destroy(): void {}
 }
 
@@ -137,6 +141,30 @@ describe('Audio facade', () => {
     expect(audio.busVolume('music')).toBe(0.3);
     expect(audio.busVolume('unset')).toBe(1);
   });
+
+  it('routes a bus into a submix and back to master, rejecting cycles', () => {
+    const backend = new MockBackend();
+    const audio = new Audio(backend, new AudioClips());
+
+    audio.setBusOutput('dialogue', 'voice');
+    expect(audio.busOutput('dialogue')).toBe('voice');
+    expect(backend.busRoutes).toContainEqual(['dialogue', 'voice']);
+
+    // voice → master is fine; dialogue → voice → master is an acyclic tree.
+    audio.setBusOutput('voice', '');
+    expect(audio.busOutput('voice')).toBe('');
+
+    // voice → dialogue would close dialogue → voice → dialogue: rejected.
+    expect(() => audio.setBusOutput('voice', 'dialogue')).toThrow(/cycle/);
+    expect(audio.busOutput('voice')).toBe(''); // graph unchanged after the throw
+
+    // A direct self-route is a cycle too.
+    expect(() => audio.setBusOutput('sfx', 'sfx')).toThrow(/cycle/);
+
+    // Reset to master.
+    audio.setBusOutput('dialogue', '');
+    expect(audio.busOutput('dialogue')).toBe('');
+  });
 });
 
 /** Minimal Web Audio graph stub: records gain nodes and their connections. */
@@ -218,5 +246,23 @@ describe('WebAudioBackend — mixer buses', () => {
     backend.play(new AudioClip(new Uint8Array([1])));
     const voiceGain = ctx.created[ctx.created.length - 1]!;
     expect(voiceGain.outputs).toContain(master);
+  });
+
+  it('reroutes a bus into a submix bus, then back to master', () => {
+    const ctx = new StubAudioContext();
+    const backend = new WebAudioBackend(ctx as unknown as AudioContext);
+    const master = ctx.created[0]!;
+    backend.setBusVolume('voice', 1); // creates the voice bus, wired to master
+    const voiceBus = ctx.created[ctx.created.length - 1]!;
+
+    backend.configureBus('dialogue', 'voice'); // dialogue → voice (submix)
+    const dialogueBus = ctx.created[ctx.created.length - 1]!;
+    expect(dialogueBus).not.toBe(voiceBus);
+    expect(dialogueBus.outputs).toContain(voiceBus);
+    expect(dialogueBus.outputs).not.toContain(master);
+
+    backend.configureBus('dialogue', ''); // back to master
+    expect(dialogueBus.outputs).toContain(master);
+    expect(dialogueBus.outputs).not.toContain(voiceBus);
   });
 });

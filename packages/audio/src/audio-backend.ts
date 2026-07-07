@@ -62,6 +62,13 @@ export interface AudioBackend {
   setBusVolume(bus: string, volume: number): void;
   /** The current gain of a mixer bus, or `1` for a bus that has never been set. */
   busVolume(bus: string): number;
+  /**
+   * Route a bus's output to another bus (a submix), or to master when `output`
+   * is `''`. Both buses are created if needed. This is the mechanical reconnect
+   * only — callers route through the `Audio` resource, which owns the bus graph
+   * and rejects cycles.
+   */
+  configureBus(bus: string, output: string): void;
   /** Release all resources (stop everything, close the context). */
   destroy(): void;
 }
