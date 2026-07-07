@@ -4,7 +4,7 @@ import type {
   LayoutNode,
   LayoutResult,
 } from './layout-engine';
-import { computeGridLayout, parseGridTemplate } from './grid-layout';
+import { computeGridLayout, parseGridTemplate, placeGridItems } from './grid-layout';
 import { type AlignItems, isReverse, isRow, type UiStyle } from './ui-style';
 
 const clamp = (v: number, min: number, max: number | undefined): number =>
@@ -340,16 +340,18 @@ function layoutGrid(
     { width: contentW, height: contentH },
   );
 
+  // Auto-place each in-flow child (honoring its column/row span) into the grid.
+  const placed = placeGridItems(
+    { columnSizes: grid.columnSizes, rowSizes: grid.rowSizes, columnGap: s.gap, rowGap: s.gap },
+    inFlow.map((c) => ({ colSpan: c.style.gridColumnSpan, rowSpan: c.style.gridRowSpan })),
+  );
+
   const results = new Map<LayoutNode, LayoutResult>();
   inFlow.forEach((child, i) => {
-    const cell = grid.cells[i];
-    if (cell === undefined) {
-      results.set(child, offsetResult(layoutNode(child, 0, 0), s.padding.left, s.padding.top));
-      return;
-    }
+    const rect = placed[i]!;
     results.set(
       child,
-      offsetResult(layoutNode(child, cell.width, cell.height), s.padding.left + cell.x, s.padding.top + cell.y),
+      offsetResult(layoutNode(child, rect.width, rect.height), s.padding.left + rect.x, s.padding.top + rect.y),
     );
   });
 

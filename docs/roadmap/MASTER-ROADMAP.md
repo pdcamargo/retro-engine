@@ -242,9 +242,10 @@ foundation.**
       _Links:_ [input-system.md](input-system.md)
 - [ ] **CSS Grid for the UI layout engine** — 🟡 **Phases 1–2b shipped, grid usable** (ADR-0167): (1) pure
       track-sizing + cell-geometry core; (2) `UiStyle` `display`/`gridTemplate*` + `FlexLayoutEngine` grid
-      branch placing children into cells; (2b) `.rss` authoring (`display: grid`, `grid-template-columns/rows`
-      in the style resolver). Layout + resolver unit-tested. Remaining (Phase 3): explicit placement/spanning,
-      `auto`/`minmax` tracks, grid alignment, auto-rows. _Links:_ [css-grid-ui.md](css-grid-ui.md) · [ui-system.md](ui-system.md)
+      branch placing children into cells; (2b) `.rss` authoring; (3a) **spanning + sparse auto-placement**
+      (`placeGridItems` occupancy algorithm, `UiStyle` `gridColumnSpan`/`gridRowSpan`, `.rss`
+      `grid-column`/`grid-row: span N`). Layout + resolver unit-tested. Remaining (Phase 3b): explicit line
+      placement, `auto`/`minmax` tracks, grid alignment, auto-rows. _Links:_ [css-grid-ui.md](css-grid-ui.md) · [ui-system.md](ui-system.md)
 - [ ] **In-game UI depth** — 🟡 **Phases 1 (partial) + 2 shipped**: widgets `UiToggle` (checkbox) +
       `UiSlider` (drag→value) reuse the `Interactable`/`UiClicked` foundation with pure, unit-tested logic;
       **focus + spatial navigation** (ADR-0163) — `UiFocus` resource + `Focusable` marker + message-driven

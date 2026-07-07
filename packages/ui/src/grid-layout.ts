@@ -41,6 +41,12 @@ export interface GridSpec {
   readonly rowGap?: number;
 }
 
+/** A placed grid item's span (in tracks). `1` (the default) is a single cell. */
+export interface GridItem {
+  readonly colSpan?: number;
+  readonly rowSpan?: number;
+}
+
 /** The resolved geometry of a grid: pixel sizes of every column / row and each cell's rect. */
 export interface GridLayout {
   readonly columnSizes: readonly number[];
@@ -100,4 +106,75 @@ export const computeGridLayout = (
     y += rowSizes[r]! + rowGap;
   }
   return { columnSizes, rowSizes, cells };
+};
+
+/** Track start offsets: `offsets[i]` is the pixel position where track `i` begins. */
+const trackOffsets = (sizes: readonly number[], gap: number): number[] => {
+  const offsets: number[] = [0];
+  for (let i = 0; i < sizes.length; i += 1) offsets.push(offsets[i]! + sizes[i]! + gap);
+  return offsets;
+};
+
+/** Total pixel size of `span` tracks starting at `start`, including the gaps between them. */
+const spanSize = (sizes: readonly number[], gap: number, start: number, span: number): number => {
+  let total = gap * (span - 1);
+  for (let i = 0; i < span; i += 1) total += sizes[start + i]!;
+  return total;
+};
+
+/** The resolved track sizes + gaps of a grid, the input `placeGridItems` needs. */
+export interface GridTracks {
+  readonly columnSizes: readonly number[];
+  readonly rowSizes: readonly number[];
+  readonly columnGap: number;
+  readonly rowGap: number;
+}
+
+/**
+ * Place `items` into a resolved grid by CSS-style sparse auto-placement: scan
+ * cells row-major and drop each item at the first free top-left cell where its
+ * `colSpan × rowSpan` block fits and is unoccupied, marking those cells used.
+ * Returns one `LayoutRect` per item (spanning rect); an item that fits nowhere
+ * (grid full, or larger than the grid) gets a zero-size rect. Pure — the
+ * placement half of grid layout, unit-tested. Spans are clamped to `≥ 1` and to
+ * the grid's track counts.
+ */
+export const placeGridItems = (grid: GridTracks, items: readonly GridItem[]): LayoutRect[] => {
+  const cols = grid.columnSizes.length;
+  const rows = grid.rowSizes.length;
+  const colOff = trackOffsets(grid.columnSizes, grid.columnGap);
+  const rowOff = trackOffsets(grid.rowSizes, grid.rowGap);
+  const occupied = new Array<boolean>(cols * rows).fill(false);
+
+  const fits = (c: number, r: number, cs: number, rs: number): boolean => {
+    if (c + cs > cols || r + rs > rows) return false;
+    for (let rr = r; rr < r + rs; rr += 1) {
+      for (let cc = c; cc < c + cs; cc += 1) if (occupied[rr * cols + cc]) return false;
+    }
+    return true;
+  };
+
+  const rects: LayoutRect[] = [];
+  for (const item of items) {
+    const cs = Math.max(1, Math.min(cols, item.colSpan ?? 1));
+    const rs = Math.max(1, Math.min(rows, item.rowSpan ?? 1));
+    let placed = false;
+    for (let r = 0; r < rows && !placed; r += 1) {
+      for (let c = 0; c < cols && !placed; c += 1) {
+        if (!fits(c, r, cs, rs)) continue;
+        for (let rr = r; rr < r + rs; rr += 1) {
+          for (let cc = c; cc < c + cs; cc += 1) occupied[rr * cols + cc] = true;
+        }
+        rects.push({
+          x: colOff[c]!,
+          y: rowOff[r]!,
+          width: spanSize(grid.columnSizes, grid.columnGap, c, cs),
+          height: spanSize(grid.rowSizes, grid.rowGap, r, rs),
+        });
+        placed = true;
+      }
+    }
+    if (!placed) rects.push({ x: 0, y: 0, width: 0, height: 0 });
+  }
+  return rects;
 };

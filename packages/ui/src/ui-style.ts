@@ -62,6 +62,10 @@ export interface UiStyle {
   readonly gridTemplateColumns: string;
   /** Grid row tracks, same syntax as {@link gridTemplateColumns}. */
   readonly gridTemplateRows: string;
+  /** Columns this node spans when it is a grid item (CSS `grid-column: span N`). Default `1`. */
+  readonly gridColumnSpan: number;
+  /** Rows this node spans when it is a grid item (CSS `grid-row: span N`). Default `1`. */
+  readonly gridRowSpan: number;
   readonly flexDirection: FlexDirection;
   readonly justifyContent: JustifyContent;
   readonly alignItems: AlignItems;
@@ -115,6 +119,8 @@ export const defaultUiStyle = (): UiStyle => ({
   display: 'flex',
   gridTemplateColumns: '',
   gridTemplateRows: '',
+  gridColumnSpan: 1,
+  gridRowSpan: 1,
   flexDirection: 'row',
   justifyContent: 'flex-start',
   alignItems: 'stretch',

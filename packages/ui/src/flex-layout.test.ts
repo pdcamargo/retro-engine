@@ -234,4 +234,17 @@ describe('FlexLayoutEngine — display: grid', () => {
     expect(r[1]!.width).toBe(0);
     expect(r[1]!.height).toBe(0);
   });
+
+  it('spans a grid child across columns; later children fill remaining cells', () => {
+    const r = rects(
+      node({ width: 200, height: 200, display: 'grid', gridTemplateColumns: '1fr 1fr', gridTemplateRows: '1fr 1fr' }, [
+        node({ gridColumnSpan: 2 }), // spans both columns of row 0
+        node({}),
+        node({}),
+      ]),
+    );
+    expect(r[0]).toEqual({ x: 0, y: 0, width: 200, height: 100 });
+    expect(r[1]).toEqual({ x: 0, y: 100, width: 100, height: 100 });
+    expect(r[2]).toEqual({ x: 100, y: 100, width: 100, height: 100 });
+  });
 });

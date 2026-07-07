@@ -1649,3 +1649,22 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
   unchecked pending your confirmation.
 
 ---
+
+## ✅ P1 — CSS Grid for the UI, Phase 3a: item spanning + auto-placement (unit-verified)
+
+- **New:** `@retro-engine/ui` (ADR-0167). `placeGridItems(tracks, items)` — CSS-style sparse auto-placement:
+  scans cells row-major, drops each item at the first free top-left cell where its `colSpan × rowSpan` block
+  fits (occupancy grid), sizing the rect across spanned tracks + gaps; overflow → 0×0. `UiStyle`
+  `gridColumnSpan`/`gridRowSpan` (default 1, reflected); `.rss` `grid-column`/`grid-row: span N` (or bare N)
+  via `spanCount`. The layout engine places grid children through `placeGridItems`.
+- **Verified:** `grid-layout.test.ts` (+5): sequential placement; col/row span sizing; occupancy skip;
+  gap-in-span; grid-full overflow. `flex-layout.test.ts` (+1): a `gridColumnSpan:2` child spans row 0, later
+  children fill row 1. `rss-resolve.test.ts` (+1): `grid-column: span 2` / `grid-row: 3` → spans 2/3. Full ui
+  gate green: typecheck, lint, 146 tests, build. Changeset.
+- **HOW to test:** `.hero { grid-column: span 2; grid-row: span 2 }` in a grid → the hero covers a 2×2 block,
+  other items flow around it.
+- **NOTE:** Phase 3b (explicit line placement `1 / 3`, `auto`/`minmax` tracks, grid alignment, auto-rows)
+  remains — tracked in `css-grid-ui.md`.
+- Roadmap: MASTER-ROADMAP "CSS Grid for the UI layout engine" now 🟡 Phases 1–3a shipped. Box unchecked.
+
+---

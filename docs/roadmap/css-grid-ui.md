@@ -33,6 +33,12 @@ authoring).
 
 ## Phase 3 — placement + `auto`/`minmax` + alignment
 
-Explicit placement (`grid-column` / `grid-row`) and spanning; `auto` and
-`minmax()` tracks (using the child intrinsic-measure hook); grid-level
-`justify-items` / `align-items` / `justify-content` / `align-content`.
+- **Spanning + auto-placement ✅** — `placeGridItems` does CSS-style sparse
+  auto-placement (occupancy grid; each item dropped at the first free top-left
+  cell its `colSpan × rowSpan` block fits), `UiStyle` `gridColumnSpan`/
+  `gridRowSpan`, `.rss` `grid-column`/`grid-row: span N`, wired into the layout
+  engine. Unit-tested (spanning, wrapping, occupancy skip, gap in span, overflow).
+- **Remaining:** explicit line placement (`grid-column: 1 / 3`); `auto` /
+  `minmax()` tracks (needs the child intrinsic-measure hook); grid-level
+  `justify-items` / `align-items` / `justify-content` / `align-content`; grid
+  auto-rows (implicit tracks for overflow).

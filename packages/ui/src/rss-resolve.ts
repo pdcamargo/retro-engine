@@ -76,6 +76,17 @@ const len = (value: string): number => {
 
 const dim = (value: string): Dimension => (value.trim() === 'auto' ? undefined : len(value));
 
+/**
+ * Grid-item span from a `grid-column` / `grid-row` value: `span N` or a bare `N`
+ * (both → `N`); anything else → `1`. (Explicit line placement like `1 / 3` is a
+ * later phase.)
+ */
+const spanCount = (value: string): number => {
+  const v = value.trim();
+  const n = Number.parseInt(v.startsWith('span') ? v.slice(4).trim() : v, 10);
+  return Number.isFinite(n) && n >= 1 ? n : 1;
+};
+
 const edges = (value: string): Partial<Edges> => {
   const p = value.split(/\s+/).map(len);
   const top = p[0] ?? 0;
@@ -167,6 +178,8 @@ const mapDeclarations = (props: Record<string, string>): UiStyleInit => {
       case 'display': init.display = value as Display; break;
       case 'grid-template-columns': init.gridTemplateColumns = value; break;
       case 'grid-template-rows': init.gridTemplateRows = value; break;
+      case 'grid-column': init.gridColumnSpan = spanCount(value); break;
+      case 'grid-row': init.gridRowSpan = spanCount(value); break;
       case 'flex-direction': init.flexDirection = value as FlexDirection; break;
       case 'justify-content': init.justifyContent = value as JustifyContent; break;
       case 'align-items': init.alignItems = value as AlignItems; break;

@@ -88,6 +88,13 @@ describe('resolveUiStyle (declaration mapping)', () => {
     expect(style.gridTemplateColumns).toBe('1fr 2fr 40px');
     expect(style.gridTemplateRows).toBe('1fr 1fr');
   });
+
+  it('maps grid-column / grid-row span (span keyword or bare number)', () => {
+    const rules = parseRss(`.a { grid-column: span 2; grid-row: 3; }`);
+    const style = resolveUiStyle(rules, node({ classes: ['a'] }));
+    expect(style.gridColumnSpan).toBe(2);
+    expect(style.gridRowSpan).toBe(3);
+  });
 });
 
 describe('rss → layout (end to end)', () => {
