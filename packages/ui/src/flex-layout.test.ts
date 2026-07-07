@@ -304,6 +304,28 @@ describe('FlexLayoutEngine — display: grid', () => {
     expect(r[0]).toEqual({ x: 30, y: 80, width: 40, height: 20 });
   });
 
+  it('sizes minmax(px, fr) columns end-to-end (grows with room, floors when tight)', () => {
+    const grid = (width: number) =>
+      rects(
+        node(
+          {
+            width,
+            height: 40,
+            display: 'grid',
+            gridTemplateColumns: 'minmax(100px, 1fr) 1fr',
+            gridTemplateRows: '40px',
+          },
+          [node({}), node({})],
+        ),
+      );
+    // Roomy: both 1fr → 200 each; the 100px floor doesn't bind.
+    expect(grid(400)[0]!.width).toBe(200);
+    expect(grid(400)[1]!.width).toBe(200);
+    // Tight: the minmax floors at 100, the other 1fr gets the remaining 20.
+    expect(grid(120)[0]!.width).toBe(100);
+    expect(grid(120)[1]!.width).toBe(20);
+  });
+
   it('fills columns first with grid-auto-flow: column + implicit auto-columns', () => {
     const r = rects(
       node(

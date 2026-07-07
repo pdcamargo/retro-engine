@@ -5,28 +5,53 @@ import type { LayoutRect } from './layout-engine';
  * - `{ kind: 'px', value }` — a fixed pixel size.
  * - `{ kind: 'fr', value }` — a fraction of the leftover space (CSS `fr`),
  *   distributed among all `fr` tracks in proportion to their values.
+ * - `{ kind: 'minmax', min, maxKind, maxValue }` — CSS `minmax(<px>, <px|fr>)`:
+ *   a track sized at least `min` px. With an `fr` max it grows like that `fr`
+ *   track but never below `min`; with a `px` max it takes `min` (content-based
+ *   growth within `[min, max]` waits for `auto` sizing).
  *
- * (`auto` / `minmax` / content-based sizing are a later phase.)
+ * (`auto` / content-based sizing are a later phase.)
  */
-export type GridTrack = { readonly kind: 'px'; readonly value: number } | { readonly kind: 'fr'; readonly value: number };
+export type GridTrack =
+  | { readonly kind: 'px'; readonly value: number }
+  | { readonly kind: 'fr'; readonly value: number }
+  | { readonly kind: 'minmax'; readonly min: number; readonly maxKind: 'px' | 'fr'; readonly maxValue: number };
+
+/** Parse one simple track token (`<n>fr` or `<n>px` / bare `<n>`), or `null`. */
+const parseSimpleTrack = (token: string): { kind: 'px' | 'fr'; value: number } | null => {
+  if (token.endsWith('fr')) {
+    const v = Number.parseFloat(token.slice(0, -2));
+    return Number.isFinite(v) ? { kind: 'fr', value: v } : null;
+  }
+  const v = Number.parseFloat(token.endsWith('px') ? token.slice(0, -2) : token);
+  return Number.isFinite(v) ? { kind: 'px', value: v } : null;
+};
+
+/** Parse one track token: a `minmax(a, b)` or a simple `<n>fr` / `<n>px`. `null` if unrecognized. */
+const parseTrack = (token: string): GridTrack | null => {
+  if (token.startsWith('minmax(') && token.endsWith(')')) {
+    const parts = token.slice(7, -1).split(',');
+    if (parts.length !== 2) return null;
+    const min = parseSimpleTrack(parts[0]!.trim());
+    const max = parseSimpleTrack(parts[1]!.trim());
+    if (min === null || max === null || min.kind !== 'px') return null;
+    return { kind: 'minmax', min: min.value, maxKind: max.kind, maxValue: max.value };
+  }
+  return parseSimpleTrack(token);
+};
 
 /**
  * Parse a CSS-like track template into {@link GridTrack}s: whitespace-separated
- * tokens where `<n>fr` is a fraction and `<n>px` / a bare `<n>` is a fixed pixel
- * size (e.g. `"1fr 2fr 40px"` → `[fr 1, fr 2, px 40]`). Unrecognized tokens are
- * skipped, so an empty or malformed template yields no tracks. Pure.
+ * tokens where `<n>fr` is a fraction, `<n>px` / a bare `<n>` is a fixed pixel
+ * size, and `minmax(<px>, <px|fr>)` is a floored track (e.g.
+ * `"minmax(120px, 1fr) 1fr 40px"`). `minmax(...)` is kept whole even with an inner
+ * space after the comma. Unrecognized tokens are skipped. Pure.
  */
 export const parseGridTemplate = (template: string): GridTrack[] => {
   const out: GridTrack[] = [];
-  for (const token of template.trim().split(/\s+/)) {
-    if (token === '') continue;
-    if (token.endsWith('fr')) {
-      const v = Number.parseFloat(token.slice(0, -2));
-      if (Number.isFinite(v)) out.push({ kind: 'fr', value: v });
-    } else {
-      const v = Number.parseFloat(token.endsWith('px') ? token.slice(0, -2) : token);
-      if (Number.isFinite(v)) out.push({ kind: 'px', value: v });
-    }
+  for (const token of template.trim().match(/minmax\([^)]*\)|\S+/g) ?? []) {
+    const track = parseTrack(token);
+    if (track !== null) out.push(track);
   }
   return out;
 };
@@ -62,11 +87,32 @@ export interface GridLayout {
   readonly cells: readonly LayoutRect[];
 }
 
+/** Per-track resolution state during {@link resolveGridTracks}. */
+interface TrackResolve {
+  /** Fixed pixel size (`px` tracks, and `minmax(px,px)` which takes its min). */
+  readonly fixed: number;
+  /** `fr` flex factor (plain `fr`, or a `minmax(px, Nfr)` growing as `N`); `0` if not flexible. */
+  readonly flex: number;
+  /** Lower bound the flexible size may not drop below (a `minmax` min); `0` otherwise. */
+  readonly floor: number;
+}
+
+const classifyTrack = (t: GridTrack): TrackResolve => {
+  if (t.kind === 'px') return { fixed: Math.max(0, t.value), flex: 0, floor: 0 };
+  if (t.kind === 'fr') return { fixed: 0, flex: Math.max(0, t.value), floor: 0 };
+  const min = Math.max(0, t.min);
+  return t.maxKind === 'fr'
+    ? { fixed: 0, flex: Math.max(0, t.maxValue), floor: min }
+    : { fixed: min, flex: 0, floor: 0 }; // minmax(px, px) → its min (no growth source yet)
+};
+
 /**
- * Resolve a track template into pixel sizes for `available` space: fixed `px`
- * tracks take their size, then the leftover (after gaps) is split among `fr`
- * tracks in proportion to their fractions. Leftover is clamped at `0` (an
- * over-full template gives `fr` tracks `0`). Pure.
+ * Resolve a track template into pixel sizes for `available` space: fixed (`px`,
+ * `minmax(px,px)`) tracks take their size, then the leftover (after gaps) is split
+ * among `fr` tracks in proportion to their fractions — but a `minmax(px, Nfr)`
+ * track never shrinks below its `min` (CSS floored-`fr`). Floored tracks that the
+ * plain split would starve are frozen at their min and the rest re-split (the
+ * iterative CSS algorithm). Leftover is clamped at `0`. Pure.
  */
 export const resolveGridTracks = (
   tracks: readonly GridTrack[],
@@ -75,15 +121,36 @@ export const resolveGridTracks = (
 ): number[] => {
   if (tracks.length === 0) return [];
   const totalGap = gap * (tracks.length - 1);
-  let pxSum = 0;
-  let frSum = 0;
-  for (const t of tracks) {
-    if (t.kind === 'px') pxSum += Math.max(0, t.value);
-    else frSum += Math.max(0, t.value);
+  const parts = tracks.map(classifyTrack);
+  const fixedSum = parts.reduce((s, p) => s + p.fixed, 0);
+  const free = Math.max(0, available - fixedSum - totalGap);
+
+  // Iteratively freeze floored fr tracks whose fair share would fall below their
+  // floor, reserving the floor and re-splitting the rest among the others.
+  const frozen = parts.map((p) => p.flex === 0); // non-flex are already "resolved"
+  const frozenSize = parts.map((p) => (p.flex === 0 ? p.fixed : 0));
+  for (;;) {
+    let activeFlex = 0;
+    let reservedFloor = 0;
+    for (let i = 0; i < parts.length; i += 1) {
+      if (frozen[i]) continue;
+      activeFlex += parts[i]!.flex;
+    }
+    for (let i = 0; i < parts.length; i += 1) if (frozen[i] && parts[i]!.floor > 0) reservedFloor += frozenSize[i]!;
+    const perFr = activeFlex > 0 ? Math.max(0, free - reservedFloor) / activeFlex : 0;
+    let changed = false;
+    for (let i = 0; i < parts.length; i += 1) {
+      if (frozen[i]) continue;
+      if (parts[i]!.floor > 0 && parts[i]!.flex * perFr < parts[i]!.floor) {
+        frozen[i] = true;
+        frozenSize[i] = parts[i]!.floor;
+        changed = true;
+      }
+    }
+    if (!changed) {
+      return parts.map((p, i) => (frozen[i] ? frozenSize[i]! : p.flex * perFr));
+    }
   }
-  const free = Math.max(0, available - pxSum - totalGap);
-  const perFr = frSum > 0 ? free / frSum : 0;
-  return tracks.map((t) => (t.kind === 'px' ? Math.max(0, t.value) : Math.max(0, t.value) * perFr));
 };
 
 /**

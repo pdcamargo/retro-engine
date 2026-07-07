@@ -2031,3 +2031,23 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
 - Roadmap: MASTER-ROADMAP "CSS Grid for the UI layout engine" now 🟡 Phases 1–3g shipped. Box unchecked.
 
 ---
+
+## ✅ P1 — CSS Grid for the UI, Phase 3h: minmax(px, fr) track sizing (unit + e2e verified)
+
+- **New:** `@retro-engine/ui` (ADR-0167). Grid tracks can be `minmax(<px>, <px|fr>)`. `minmax(120px, 1fr)`
+  grows like `1fr` but never below 120px (CSS floored-fr: starved floored tracks freeze at their min, the
+  rest re-split — iterative). `minmax(px,px)` takes its min. `GridTrack` gains a `minmax` variant;
+  `parseGridTemplate` keeps `minmax(...)` whole (even with the comma space); `resolveGridTracks` runs the
+  freeze resolution. Authored via the existing `gridTemplateColumns`/`Rows` strings — no new style fields,
+  reflection, or `.rss` changes.
+- **Verified:** `grid-layout.test.ts` (+5): resolveGridTracks minmax grows with room (200/200), floors when
+  tight (100/20), minmax(px,px)=min; parseGridTemplate minmax(px,fr)/(px,px) tokenization. `flex-layout.test.ts`
+  (+1): end-to-end `gridTemplateColumns: 'minmax(100px, 1fr) 1fr'` — 200/200 at width 400, 100/20 at width
+  120. 191 ui tests. Full ui gate green: typecheck, lint (0/0), build. Plain px/fr behavior unchanged.
+- **HOW to test:** `.responsive { display: grid; grid-template-columns: minmax(120px, 1fr) 1fr }` → the first
+  column grows with the container but stops shrinking at 120px (responsive-with-floor).
+- **NOTE:** Additive under ADR-0167. **Only `auto` (content-sized) tracks remain** for grid — deferred (needs
+  child intrinsic-measure + the placement↔sizing chicken-egg). Grid is otherwise feature-complete.
+- Roadmap: MASTER-ROADMAP "CSS Grid for the UI layout engine" now 🟡 Phases 1–3h shipped. Box unchecked.
+
+---

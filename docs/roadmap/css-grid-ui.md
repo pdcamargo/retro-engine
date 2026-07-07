@@ -75,5 +75,11 @@ authoring).
   now also honor `space-between`/`around`/`evenly` (a `contentDistribution` helper
   folds all modes into a leading offset + an effective inter-track gap, reusing the
   gap/offset placement path). Unit-tested. Content distribution is complete.
-- **Remaining:** `auto` / `minmax()` tracks — the last piece, needing the child
-  intrinsic-measure hook + the iterative CSS track-sizing algorithm.
+- **`minmax(px, fr)` track sizing ✅** — `GridTrack` gains a `minmax` variant;
+  `parseGridTemplate` keeps `minmax(...)` whole, `resolveGridTracks` runs the
+  iterative CSS floored-`fr` algorithm (freeze starved floored tracks at their min,
+  re-split the rest). `minmax(px,px)` → its min. Authored via the template strings,
+  no new style fields. Unit + end-to-end layout tested.
+- **Remaining:** `auto` (content-sized) tracks — the last piece, needing the child
+  intrinsic-measure hook + the placement-vs-sizing chicken-and-egg. `minmax` with a
+  `px`/`fr` bound is done; only content-based sizing is deferred.

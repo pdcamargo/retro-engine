@@ -38,6 +38,23 @@ describe('resolveGridTracks', () => {
   it('leaves fr tracks at zero when there are no fractions to size against', () => {
     expect(resolveGridTracks([], 100, 0)).toEqual([]);
   });
+
+  it('grows a minmax(px, fr) track as an fr when there is room', () => {
+    const mm = { kind: 'minmax' as const, min: 100, maxKind: 'fr' as const, maxValue: 1 };
+    // Plenty of room: minmax(100px,1fr) + 1fr over 400 → 200 each (floor 100 does not bind).
+    expect(resolveGridTracks([mm, fr(1)], 400, 0)).toEqual([200, 200]);
+  });
+
+  it('floors a minmax(px, fr) track at its min when space is tight, re-splitting the rest', () => {
+    const mm = { kind: 'minmax' as const, min: 100, maxKind: 'fr' as const, maxValue: 1 };
+    // 120 wide: fair share would be 60 < 100 → freeze at 100; the other 1fr gets 20.
+    expect(resolveGridTracks([mm, fr(1)], 120, 0)).toEqual([100, 20]);
+  });
+
+  it('treats minmax(px, px) as its fixed min', () => {
+    const mm = { kind: 'minmax' as const, min: 50, maxKind: 'px' as const, maxValue: 100 };
+    expect(resolveGridTracks([mm, fr(1)], 200, 0)).toEqual([50, 150]);
+  });
 });
 
 describe('parseGridTemplate', () => {
@@ -66,6 +83,17 @@ describe('parseGridTemplate', () => {
     expect(parseGridTemplate('1fr auto 2fr')).toEqual([
       { kind: 'fr', value: 1 },
       { kind: 'fr', value: 2 },
+    ]);
+  });
+
+  it('parses minmax(px, fr) / minmax(px, px), keeping the token whole across the comma space', () => {
+    expect(parseGridTemplate('minmax(120px, 1fr) 1fr 40px')).toEqual([
+      { kind: 'minmax', min: 120, maxKind: 'fr', maxValue: 1 },
+      { kind: 'fr', value: 1 },
+      { kind: 'px', value: 40 },
+    ]);
+    expect(parseGridTemplate('minmax(50px,200px)')).toEqual([
+      { kind: 'minmax', min: 50, maxKind: 'px', maxValue: 200 },
     ]);
   });
 });

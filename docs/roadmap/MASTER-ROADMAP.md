@@ -266,8 +266,10 @@ foundation.**
       fills columns first (transposed onto the tested row-major placer via `gridTrackCount`/`placeGridItems`
       `flow` arg), `.rss` `grid-auto-flow`/`grid-auto-columns`; (3g) **content distribution complete** —
       `justify-content`/`align-content` now also honor `space-between`/`around`/`evenly` (a `contentDistribution`
-      helper → leading offset + effective gap). Layout + resolver unit-tested. **Only remaining grid piece:
-      `auto`/`minmax` track sizing** (needs the child intrinsic-measure hook + iterative CSS track sizing).
+      helper → leading offset + effective gap); (3h) **`minmax(px, fr)` track sizing** — `GridTrack` `minmax`
+      variant + iterative CSS floored-`fr` resolution (`minmax(120px,1fr)` grows as fr but never below 120px),
+      authored via the template strings. Layout + resolver unit-tested. **Only remaining grid piece: `auto`
+      (content-sized) tracks** (needs child intrinsic-measure + the placement↔sizing chicken-egg).
       _Links:_ [css-grid-ui.md](css-grid-ui.md) · [ui-system.md](ui-system.md)
 - [ ] **In-game UI depth** — 🟡 **Phases 1 (partial) + 2 shipped**: widgets `UiToggle` (checkbox) +
       `UiSlider` (drag→value) reuse the `Interactable`/`UiClicked` foundation with pure, unit-tested logic;
