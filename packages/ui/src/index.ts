@@ -88,3 +88,4 @@ export type { UiToggleOptions } from './interaction/ui-toggle';
 export { applyToggleClicks, UiToggle, UiToggled } from './interaction/ui-toggle';
 export type { UiSliderOptions } from './interaction/ui-slider';
 export { computeSliderValue, UiSlider, UiSliderChanged } from './interaction/ui-slider';
+export { DiagnosticsOverlayPlugin, DiagnosticsText, formatDiagnostics } from './diagnostics-overlay';

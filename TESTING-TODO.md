@@ -1379,3 +1379,22 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
   (studio panel / in-game UI) remains. Box unchecked pending your confirmation.
 
 ---
+
+## ✅ P1 — Diagnostics: in-game overlay (unit-verified; visual check pending)
+
+- **New:** `@retro-engine/ui`. `DiagnosticsOverlayPlugin` rewrites any `UiText` tagged with the new
+  `DiagnosticsText` marker to the live `DiagnosticsStore` readout each frame (`FPS 60  16.8ms  ents 42
+  assets 12`), in `last` after `diagnostics-update`. Formatting is a pure `formatDiagnostics(store)`. Lives
+  in the ui package (which depends on engine, so it reads `DiagnosticsStore`); the user owns placement +
+  font, the widget owns the text. `DiagnosticsText` reflection-registered.
+- **Verified:** `diagnostics-overlay.test.ts` (+3): `formatDiagnostics` output (rounded fps, 1-decimal ms)
+  + cold-start zero state; marker instantiation. Full ui gate green: typecheck, lint (56 files), 110 tests,
+  build. Changeset added. NOTE: formatting fully unit-tested; the plugin's tagged-UiText update wiring
+  follows the codebase pure-function pattern — a live on-screen eyeball is still worth a look (studio down).
+- **HOW to test:** `app.addPlugin(new DiagnosticsPlugin()); app.addPlugin(new DiagnosticsOverlayPlugin());`
+  then `cmd.spawn(new UiNode({ position: 'absolute', left: 8, top: 8 }), new UiText({ text: '', font }),
+  new DiagnosticsText())` → the node shows live FPS / frame time / entity + asset counts.
+- Roadmap: MASTER-ROADMAP "Diagnostics store" now 🟡 core + asset counts + in-game overlay shipped; only a
+  studio diagnostics panel (studio-blocked) remains. Box unchecked pending your confirmation.
+
+---
