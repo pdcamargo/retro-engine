@@ -82,6 +82,20 @@ export interface SetOrdering {
 }
 
 /**
+ * The minimal orderable shape {@link topoSort} needs: a unique `id` plus the
+ * optional label / set / edge metadata. Both {@link RegisteredSystem} (main
+ * schedule) and the state-transition records satisfy it, so one sort serves both.
+ */
+export interface OrderableSystem {
+  readonly id: SystemId;
+  readonly label?: string;
+  readonly before?: readonly string[];
+  readonly after?: readonly string[];
+  readonly afterIds?: readonly SystemId[];
+  readonly sets?: readonly string[];
+}
+
+/**
  * Per-stage system collection plus a memoised topological order. Mutating the
  * collection invalidates the cache; the runner rebuilds via {@link topoSort}
  * on next access.
@@ -212,10 +226,11 @@ export class StageSystems {
  * Throws `Error` if a cycle exists. The message names the labels (or
  * registration positions) of the systems left in the cycle.
  */
-export const topoSort = (
-  systems: readonly RegisteredSystem[],
+export const topoSort = <T extends OrderableSystem>(
+  systems: readonly T[],
   setOrdering?: ReadonlyMap<string, SetOrdering>,
-): RegisteredSystem[] => {
+  context = 'App.addSystem',
+): T[] => {
   const n = systems.length;
   if (n === 0) return [];
 
@@ -298,7 +313,7 @@ export const topoSort = (
     if (inDeg[i] === 0) ready.push(i);
   }
 
-  const out: RegisteredSystem[] = [];
+  const out: T[] = [];
   let head = 0;
   while (head < ready.length) {
     const u = ready[head++]!;
@@ -315,7 +330,7 @@ export const topoSort = (
       if (inDeg[i]! > 0) cycle.push(systems[i]!.label ?? `<system #${i}>`);
     }
     throw new Error(
-      `App.addSystem: ordering cycle in before/after constraints — involves: ${cycle.join(', ')}`,
+      `${context}: ordering cycle in before/after constraints — involves: ${cycle.join(', ')}`,
     );
   }
 

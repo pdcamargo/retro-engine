@@ -250,3 +250,55 @@ describe('State-scoped resources', () => {
     expect(app.getResource(ScoreTracker)).toBeUndefined();
   });
 });
+
+describe('state-transition system ordering (ADR-0161)', () => {
+  it('orders OnEnter systems by before/after regardless of registration order', () => {
+    const app = new App({ renderer: makeHeadlessRenderer() });
+    const trace: string[] = [];
+    app.initState(GameState, GameState.Boot);
+    // Registered spawn-first, but it must run after 'setup' via the constraint.
+    app.onEnter(GameState.Boot, [], () => trace.push('spawn'), { after: ['setup'] });
+    app.onEnter(GameState.Boot, [], () => trace.push('setup'), { label: 'setup' });
+    app.advanceFrame(0);
+    expect(trace).toEqual(['setup', 'spawn']);
+  });
+
+  it('preserves registration order for unconstrained transition systems', () => {
+    const app = new App({ renderer: makeHeadlessRenderer() });
+    const trace: string[] = [];
+    app.initState(GameState, GameState.Boot);
+    app.onEnter(GameState.Boot, [], () => trace.push('1'));
+    app.onEnter(GameState.Boot, [], () => trace.push('2'));
+    app.onEnter(GameState.Boot, [], () => trace.push('3'));
+    app.advanceFrame(0);
+    expect(trace).toEqual(['1', '2', '3']);
+  });
+
+  it('detects an ordering cycle among transition systems at registration', () => {
+    const app = new App({ renderer: makeHeadlessRenderer() });
+    app.initState(GameState, GameState.Boot);
+    app.onEnter(GameState.Boot, [], () => undefined, { label: 'a', after: ['b'] });
+    expect(() =>
+      app.onEnter(GameState.Boot, [], () => undefined, { label: 'b', after: ['a'] }),
+    ).toThrow(/ordering cycle/);
+  });
+
+  it('orders OnExit systems by before/after when the state transitions out', () => {
+    const app = new App({ renderer: makeHeadlessRenderer() });
+    const trace: string[] = [];
+    app.initState(GameState, GameState.Boot);
+    // Registered late-first; the constraint puts exit-early ahead.
+    app.onExit(GameState.Boot, [], () => trace.push('exit-late'), { after: ['exit-early'] });
+    app.onExit(GameState.Boot, [], () => trace.push('exit-early'), { label: 'exit-early' });
+
+    app.advanceFrame(0); // initial OnEnter(Boot)
+    // Queue Boot → Playing once we're in Boot, mirroring the driver test above.
+    app.addSystem('preUpdate', [ResMut(NextState(GameState))], (next) => {
+      if (app.getResource(State(GameState))?.current === GameState.Boot) {
+        (next as { set(v: GameState): void }).set(GameState.Playing);
+      }
+    });
+    app.advanceFrame(16); // OnExit(Boot) fires, in constraint order
+    expect(trace).toEqual(['exit-early', 'exit-late']);
+  });
+});

@@ -52,8 +52,15 @@ runner needs no scheduling change; the flag is the seam a parallel scheduler wou
 read. Unit tested (immediate spawn seen by a later system; despawn/mutate; mixed-
 param rejection).
 
-## Phase 5 — Explicit state-transition ordering
+## Phase 5 — Explicit state-transition ordering 🟡 (ADR-0161)
 
-From `docs/backlog/explicit-state-transition-ordering.md`: let user systems order
-relative to the `StateTransition` apply point within a stage, rather than relying
-on stage placement. Ties into Phase 2 (a built-in `StateTransition` set).
+**Done (5a):** `onEnter`/`onExit`/`onTransition` accept `label`/`before`/`after`
+(`StateSystemOptions`), ordered by the same (now-generic) `topoSort` as the main
+schedule, with eager cycle detection. Purely additive — unconstrained transition
+systems keep registration order. Unit tested.
+
+**Remaining (5b):** the backlog item's teardown-last guarantee — `App.addScene`'s
+despawn `OnExit` must run after **all** user `OnExit` regardless of registration
+order (ADR-0062 caveat). Needs a framework-vs-user phase split or a reserved
+"runs last" slot. `docs/backlog/explicit-state-transition-ordering.md` stays open
+until this lands.

@@ -265,9 +265,11 @@ foundation.**
       (2b) set-level `runIf` gating a whole group (own + set conditions AND-ed; shared `setConditionsPass`
       applied in both the main-stage and render runners); (4) exclusive `world()` systems (ADR-0160) — a
       `Param<World>` for immediate structural edits with same-frame read-back, guarded to be a system's only
-      param. Registration-time ordering + `SystemInfo.sets` for tooling; unit tested + topo benched.
-      Remaining: ambiguity detection (needs per-param access metadata — a prerequisite); explicit
-      state-transition ordering.
+      param. (5a) explicit state-transition ordering (ADR-0161) — `onEnter`/`onExit`/`onTransition` accept
+      `label`/`before`/`after` via the now-generic `topoSort`, eager cycle detection, additive.
+      Registration-time ordering + `SystemInfo.sets` for tooling; unit tested + topo benched. Remaining:
+      ambiguity detection (needs per-param access metadata — a prerequisite); state-transition teardown-last
+      guarantee (Phase 5b — scene despawn after all user `OnExit`).
       _Links:_ [ecs-ordering-depth.md](ecs-ordering-depth.md) · [system-params.md](system-params.md) · [`../backlog/explicit-state-transition-ordering.md`](../backlog/explicit-state-transition-ordering.md)
 - [ ] **System-param sugar** — 🟢 **substantially complete**: all the useful sugar ships — `Local<T>`
       (this session), `MessageReader`/`MessageWriter`, `Trigger` (observers), and `NextState` (state.ts).

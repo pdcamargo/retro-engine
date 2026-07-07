@@ -56,6 +56,7 @@ import {
   runStateTransition,
   StateRegistry,
 } from './state';
+import type { StateSystemOptions } from './state';
 import type { Param, ParamValues, ResolveCtx, SystemId } from './system-param';
 import { RunCondition } from './system-param';
 import { Time } from './time';
@@ -125,7 +126,7 @@ export type { RenderSetName } from './render-set';
 export { RenderSet } from './render-set';
 export { RemovedComponents } from './change-detection';
 export { anyWithComponent, inState, resourceChanged, resourceExists } from './run-conditions';
-export type { NextStateInstance, StateInstance } from './state';
+export type { NextStateInstance, StateInstance, StateSystemOptions } from './state';
 export { NextState, State } from './state';
 export type { FixedClock, RealClock, VirtualClock } from './time';
 export { Time } from './time';
@@ -1718,7 +1719,7 @@ export class App {
     value: S,
     params: Ps,
     fn: (...args: ParamValues<Ps>) => void,
-    options?: { runIf?: RunCondition },
+    options?: StateSystemOptions,
   ): this {
     registerOnExit(this, this.stateRegistry, value, params, fn, options);
     return this;
@@ -1734,7 +1735,7 @@ export class App {
     to: S,
     params: Ps,
     fn: (...args: ParamValues<Ps>) => void,
-    options?: { runIf?: RunCondition },
+    options?: StateSystemOptions,
   ): this {
     registerOnTransition(this, this.stateRegistry, from, to, params, fn, options);
     return this;
@@ -1749,7 +1750,7 @@ export class App {
     value: S,
     params: Ps,
     fn: (...args: ParamValues<Ps>) => void,
-    options?: { runIf?: RunCondition },
+    options?: StateSystemOptions,
   ): this {
     registerOnEnter(this, this.stateRegistry, value, params, fn, options);
     return this;

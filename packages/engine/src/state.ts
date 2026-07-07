@@ -1,6 +1,20 @@
+import { topoSort } from './schedule';
 import type { App, Stage } from './index';
 import type { Param, ParamValues, ResolveCtx, SystemId } from './system-param';
 import type { RunCondition } from './system-param';
+
+/**
+ * Ordering + gating options for a state-transition system
+ * (`onEnter` / `onExit` / `onTransition`). `label` / `before` / `after` order
+ * systems within the same transition phase, exactly like {@link AddSystemOptions}
+ * does within a stage (cycle-detected at registration); `runIf` gates it.
+ */
+export interface StateSystemOptions {
+  readonly runIf?: RunCondition;
+  readonly label?: string;
+  readonly before?: readonly string[];
+  readonly after?: readonly string[];
+}
 
 /**
  * Per-type identity is recovered through the user's state class constructor
@@ -109,7 +123,25 @@ interface StateSystemRecord {
   readonly params: ReadonlyArray<Param<unknown>>;
   readonly fn: (...args: unknown[]) => void;
   readonly runIf?: RunCondition;
+  readonly label?: string;
+  readonly before?: readonly string[];
+  readonly after?: readonly string[];
 }
+
+/**
+ * Append `rec` to a transition-phase list, then topo-validate the list so an
+ * ordering cycle is caught at registration — the record is rolled back and the
+ * error re-thrown, mirroring `App.addSystem`'s eager check.
+ */
+const pushOrdered = (arr: StateSystemRecord[], rec: StateSystemRecord, context: string): void => {
+  arr.push(rec);
+  try {
+    topoSort(arr, undefined, context);
+  } catch (err) {
+    arr.pop();
+    throw err;
+  }
+};
 
 /**
  * Per-`App` registry holding state-type metadata, per-value transition system
@@ -137,13 +169,13 @@ export class StateRegistry {
 
   addOnEnter(value: object, rec: StateSystemRecord): void {
     const arr = this.onEnterMap.get(value);
-    if (arr) arr.push(rec);
+    if (arr) pushOrdered(arr, rec, 'App.onEnter');
     else this.onEnterMap.set(value, [rec]);
   }
 
   addOnExit(value: object, rec: StateSystemRecord): void {
     const arr = this.onExitMap.get(value);
-    if (arr) arr.push(rec);
+    if (arr) pushOrdered(arr, rec, 'App.onExit');
     else this.onExitMap.set(value, [rec]);
   }
 
@@ -154,7 +186,7 @@ export class StateRegistry {
       this.onTransitionMap.set(from, row);
     }
     const arr = row.get(to);
-    if (arr) arr.push(rec);
+    if (arr) pushOrdered(arr, rec, 'App.onTransition');
     else row.set(to, [rec]);
   }
 
@@ -198,12 +230,15 @@ const buildRecord = <const Ps extends readonly Param<unknown>[]>(
   app: App,
   params: Ps,
   fn: (...args: ParamValues<Ps>) => void,
-  options: { runIf?: RunCondition } | undefined,
+  options: StateSystemOptions | undefined,
 ): StateSystemRecord => ({
   id: app.mintSystemId(),
   params,
   fn: fn as (...args: unknown[]) => void,
   ...(options?.runIf !== undefined ? { runIf: options.runIf } : {}),
+  ...(options?.label !== undefined ? { label: options.label } : {}),
+  ...(options?.before !== undefined ? { before: options.before } : {}),
+  ...(options?.after !== undefined ? { after: options.after } : {}),
 });
 
 /** Register a system to run when the state transitions **out of** `value`. */
@@ -213,7 +248,7 @@ export const registerOnExit = <S extends object, const Ps extends readonly Param
   value: S,
   params: Ps,
   fn: (...args: ParamValues<Ps>) => void,
-  options?: { runIf?: RunCondition },
+  options?: StateSystemOptions,
 ): void => {
   checkNoStageScope(params, 'onExit');
   registry.addOnExit(value, buildRecord(app, params, fn, options));
@@ -226,7 +261,7 @@ export const registerOnEnter = <S extends object, const Ps extends readonly Para
   value: S,
   params: Ps,
   fn: (...args: ParamValues<Ps>) => void,
-  options?: { runIf?: RunCondition },
+  options?: StateSystemOptions,
 ): void => {
   checkNoStageScope(params, 'onEnter');
   registry.addOnEnter(value, buildRecord(app, params, fn, options));
@@ -247,7 +282,7 @@ export const registerOnTransition = <
   to: S,
   params: Ps,
   fn: (...args: ParamValues<Ps>) => void,
-  options?: { runIf?: RunCondition },
+  options?: StateSystemOptions,
 ): void => {
   checkNoStageScope(params, 'onTransition');
   registry.addOnTransition(from, to, buildRecord(app, params, fn, options));
@@ -335,7 +370,11 @@ const invokeStateSystem = (rec: StateSystemRecord, app: App): void => {
 };
 
 const runRecords = (recs: readonly StateSystemRecord[], app: App): void => {
-  for (const rec of recs) invokeStateSystem(rec, app);
+  // Order by any label / before / after constraints (registration order is the
+  // tie-break, so unconstrained systems behave as before). Cheap: transition
+  // lists are small and only run on an actual state change.
+  const ordered = recs.length > 1 ? topoSort(recs, undefined, 'state transition') : recs;
+  for (const rec of ordered) invokeStateSystem(rec, app);
 };
 
 /**

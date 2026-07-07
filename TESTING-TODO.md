@@ -1276,3 +1276,25 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
   Box unchecked pending your confirmation.
 
 ---
+
+## ✅ P1 — ECS ordering depth, Phase 5a: explicit state-transition ordering (unit + integration verified)
+
+- **New:** `@retro-engine/engine` (ADR-0161). `onEnter`/`onExit`/`onTransition` accept `label`/`before`/
+  `after` (new `StateSystemOptions`) so transition systems in the same phase order independent of
+  registration order. `topoSort` was generalized (`OrderableSystem` shape + error-context param) so ONE
+  sort serves both the main schedule and transition records — no duplicated algorithm. Eager cycle
+  detection at the register call site (record rolled back on cycle). Purely additive: unconstrained
+  transition systems keep registration order → scene teardown timing unchanged.
+- **Verified:** `state.test.ts` (+4): OnEnter ordered by before/after regardless of registration; unconstrained
+  preserves registration order; a cycle throws at registration; OnExit ordered when transitioning Boot→Playing.
+  `schedule.test.ts` still green (topoSort generic refactor). Full engine gate green: typecheck, lint (626
+  files), 1242 tests, build. Changeset added.
+- **HOW to test:** `app.onEnter(S, [...], spawn, { label: 'spawn' })` + `app.onEnter(S, [...], focus, { after: ['spawn'] })`
+  → spawn runs before focus even if registered in the other order; a before/after cycle throws immediately.
+- **NOTE (Phase 5b still open):** the backlog `explicit-state-transition-ordering.md` also wants scene
+  teardown (`App.addScene`'s despawn OnExit) guaranteed to run after ALL user OnExit regardless of
+  registration order. That needs a framework-vs-user phase split and is NOT done — the backlog file stays.
+- Roadmap: MASTER-ROADMAP "ECS ordering depth" now has Phases 1, 2, 2b, 4, 5a shipped; remaining: ambiguity
+  detection (blocked on per-param access metadata), Phase 5b teardown-last. Box unchecked pending confirmation.
+
+---
