@@ -41,7 +41,7 @@ import type { ParamSchema, Template } from './prefab/template';
 import { TemplateRegistry } from './prefab/template-registry';
 import { EMPTY_SLOT_VALUES } from './render-graph/slot';
 import { RenderGraph } from './render-graph/render-graph';
-import type { RegisteredSystem, SystemOrigin } from './schedule';
+import type { RegisteredSystem, SetOrdering, SystemOrigin } from './schedule';
 import { runStage, StageSystems } from './schedule';
 import type { SystemInfo, StageGroup } from './schedule-info';
 import { SystemProfiler } from './system-profiler';
@@ -116,7 +116,7 @@ export {
   ResMut,
   RunCondition,
 } from './system-param';
-export type { SystemOrigin } from './schedule';
+export type { SetOrdering, SystemOrigin } from './schedule';
 export type { StageGroup, SystemInfo } from './schedule-info';
 export type { SystemTiming } from './system-profiler';
 export { SystemProfiler } from './system-profiler';
@@ -1126,6 +1126,13 @@ export interface AddSystemOptions {
    */
   readonly after?: readonly string[];
   /**
+   * Named set(s) this system joins. A set is a reusable ordering handle a
+   * system can share with others (unlike its single `label`): other systems can
+   * target the set name via `before` / `after`, and {@link App.configureSet}
+   * applies set-level ordering to every member at once. Stage-local.
+   */
+  readonly inSet?: string | readonly string[];
+  /**
    * Render sub-set this system belongs to. Valid only when registering
    * against the `'render'` stage; passing it for any other stage throws at
    * registration. Omitting it on a render-stage system defaults to
@@ -1837,6 +1844,30 @@ export class App {
   }
 
   /**
+   * Configure set-level ordering for the named set within `stage`. Every system
+   * that joined the set (via {@link AddSystemOptions.inSet}) inherits the
+   * `before` / `after` constraints — one declaration orders a whole group,
+   * rather than repeating `after: [...]` on each member. `before` / `after`
+   * target other set names or labels in the same stage; forward references and
+   * unmatched names are ignored, exactly like per-system ordering.
+   *
+   * Repeated calls for the same set merge additively. Introducing an ordering
+   * cycle throws here (the offending config is rolled back), matching
+   * {@link App.addSystem}'s eager cycle check.
+   *
+   * @example
+   * ```ts
+   * app.addSystem('update', [ResMut(Velocity)], integrate, { inSet: 'physics' });
+   * app.addSystem('update', [Res(Velocity)], resolveContacts, { inSet: 'physics' });
+   * app.configureSet('update', 'physics', { after: ['input'] }); // both run after input
+   * ```
+   */
+  configureSet(stage: Stage, set: string, ordering: SetOrdering): this {
+    this.stages[stage].configureSet(set, ordering);
+    return this;
+  }
+
+  /**
    * Build a {@link RegisteredSystem} from raw parts and push it onto `stage`,
    * returning its freshly-assigned id. Shared by {@link App.addSystem} and
    * {@link App.addSystems}; `afterIds` carries identity-based ordering edges
@@ -1868,6 +1899,12 @@ export class App {
       options?.name ?? options?.label ?? (fn.name !== '' ? fn.name : undefined) ?? `system #${id}`;
     const origin = options?.origin ?? this.resolveBuildOrigin();
     const originPlugin = buildingPlugin?.name() ?? null;
+    const sets =
+      options?.inSet === undefined
+        ? undefined
+        : typeof options.inSet === 'string'
+          ? [options.inSet]
+          : options.inSet;
     const entry: RegisteredSystem = {
       id,
       params,
@@ -1879,6 +1916,7 @@ export class App {
       ...(options?.label !== undefined ? { label: options.label } : {}),
       ...(options?.before !== undefined ? { before: options.before } : {}),
       ...(options?.after !== undefined ? { after: options.after } : {}),
+      ...(sets !== undefined && sets.length > 0 ? { sets } : {}),
       ...(options?.set !== undefined ? { set: options.set } : {}),
       ...(afterIds !== undefined && afterIds.length > 0 ? { afterIds } : {}),
     };
@@ -1964,6 +2002,7 @@ export class App {
       hasRunCondition: sys.runIf !== undefined,
       ...(sys.set !== undefined ? { set: sys.set } : {}),
       ...(sys.label !== undefined ? { label: sys.label } : {}),
+      ...(sys.sets !== undefined ? { sets: sys.sets } : {}),
       ...(timing !== undefined ? { lastMs: timing.lastMs, avgMs: timing.avgMs } : {}),
     };
   }

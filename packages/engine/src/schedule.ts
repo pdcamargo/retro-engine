@@ -50,12 +50,30 @@ export interface RegisteredSystem {
    */
   readonly afterIds?: readonly SystemId[];
   /**
+   * Named sets this system belongs to. A set is a reusable ordering handle —
+   * unlike `label` (one per system), a system can join several. `before` /
+   * `after` can target a set name, and set-level ordering configured through
+   * `App.configureSet` applies to every member. Stage-local, like labels.
+   */
+  readonly sets?: readonly string[];
+  /**
    * Render sub-set this system belongs to. Set only for `'render'`-stage
    * systems; ignored elsewhere. `undefined` on render-stage systems defaults
    * to {@link RenderSet.Render} at frame-loop time, preserving the
    * single-pass shape that predates ADR-0019.
    */
   readonly set?: RenderSetName;
+}
+
+/**
+ * Set-level ordering configured through `App.configureSet`. `before` / `after`
+ * name other sets or labels in the same stage; every member of the configured
+ * set inherits the constraint. Merged additively across repeated configuration
+ * of the same set.
+ */
+export interface SetOrdering {
+  readonly before?: readonly string[];
+  readonly after?: readonly string[];
 }
 
 /**
@@ -70,12 +88,14 @@ export interface RegisteredSystem {
 export class StageSystems {
   readonly systems: RegisteredSystem[] = [];
   private cache: RegisteredSystem[] | null = null;
+  /** Set-level ordering for this stage, keyed by set name. Fed into every topo sort. */
+  private readonly setOrdering = new Map<string, SetOrdering>();
 
   push(sys: RegisteredSystem): void {
     this.systems.push(sys);
     this.cache = null;
     try {
-      this.cache = topoSort(this.systems);
+      this.cache = topoSort(this.systems, this.setOrdering);
     } catch (err) {
       this.systems.pop();
       this.cache = null;
@@ -83,8 +103,31 @@ export class StageSystems {
     }
   }
 
+  /**
+   * Add set-level ordering for `name` (merged additively with any prior config
+   * for the same set) and re-sort eagerly so a resulting cycle is reported at
+   * the `configureSet` call site. On a cycle the merge is rolled back.
+   */
+  configureSet(name: string, ordering: SetOrdering): void {
+    const prev = this.setOrdering.get(name);
+    const merged: SetOrdering = {
+      before: [...(prev?.before ?? []), ...(ordering.before ?? [])],
+      after: [...(prev?.after ?? []), ...(ordering.after ?? [])],
+    };
+    this.setOrdering.set(name, merged);
+    this.cache = null;
+    try {
+      this.cache = topoSort(this.systems, this.setOrdering);
+    } catch (err) {
+      if (prev === undefined) this.setOrdering.delete(name);
+      else this.setOrdering.set(name, prev);
+      this.cache = null;
+      throw err;
+    }
+  }
+
   ordered(): readonly RegisteredSystem[] {
-    if (this.cache === null) this.cache = topoSort(this.systems);
+    if (this.cache === null) this.cache = topoSort(this.systems, this.setOrdering);
     return this.cache;
   }
 
@@ -116,16 +159,21 @@ export class StageSystems {
 /**
  * Kahn's-algorithm topological sort over the given systems.
  *
+ * A "name" is a system's `label` or any of its set memberships (`sets`), so a
+ * `before` / `after` target matches both labelled systems and set members.
+ *
  * Edges:
- * - `A.before = ['L']` → A must run before every system with `label === 'L'`
- *   (edge A → each L-labelled system).
- * - `A.after  = ['L']` → A must run after every system with `label === 'L'`
- *   (edge each L-labelled system → A).
+ * - `A.before = ['N']` → A must run before every system named `N`
+ *   (edge A → each N-named system).
+ * - `A.after  = ['N']` → A must run after every system named `N`
+ *   (edge each N-named system → A).
  * - `A.afterIds = [id]` → A must run after the system with that id, if present
  *   (edge that-system → A). Used for identity-based chaining.
+ * - `setOrdering.get('S') = { before: ['N'] }` → every member of set `S` runs
+ *   before every system named `N` (and symmetrically for `after`).
  *
- * Labels (or ids) referenced but not present in the input are silently ignored
- * (forward references resolve when the labelled system registers later).
+ * Names (or ids) referenced but not present in the input are silently ignored
+ * (forward references resolve when the named system registers later).
  * Tie-break is registration order: among nodes with zero remaining in-degree,
  * the earliest-registered runs first.
  *
@@ -134,21 +182,23 @@ export class StageSystems {
  */
 export const topoSort = (
   systems: readonly RegisteredSystem[],
+  setOrdering?: ReadonlyMap<string, SetOrdering>,
 ): RegisteredSystem[] => {
   const n = systems.length;
   if (n === 0) return [];
 
-  const byLabel = new Map<string, number[]>();
+  const byName = new Map<string, number[]>();
   const byId = new Map<SystemId, number>();
+  const pushName = (name: string, i: number): void => {
+    const arr = byName.get(name);
+    if (arr) arr.push(i);
+    else byName.set(name, [i]);
+  };
   for (let i = 0; i < n; i++) {
     const s = systems[i]!;
     byId.set(s.id, i);
-    const lbl = s.label;
-    if (lbl !== undefined) {
-      const arr = byLabel.get(lbl);
-      if (arr) arr.push(i);
-      else byLabel.set(lbl, [i]);
-    }
+    if (s.label !== undefined) pushName(s.label, i);
+    if (s.sets) for (const setName of s.sets) pushName(setName, i);
   }
 
   const adj: number[][] = Array.from({ length: n }, () => []);
@@ -162,8 +212,8 @@ export const topoSort = (
   for (let i = 0; i < n; i++) {
     const s = systems[i]!;
     if (s.before) {
-      for (const lbl of s.before) {
-        const targets = byLabel.get(lbl);
+      for (const name of s.before) {
+        const targets = byName.get(name);
         if (!targets) continue;
         for (const t of targets) {
           if (t !== i) addEdge(i, t);
@@ -171,8 +221,8 @@ export const topoSort = (
       }
     }
     if (s.after) {
-      for (const lbl of s.after) {
-        const sources = byLabel.get(lbl);
+      for (const name of s.after) {
+        const sources = byName.get(name);
         if (!sources) continue;
         for (const u of sources) {
           if (u !== i) addEdge(u, i);
@@ -183,6 +233,29 @@ export const topoSort = (
       for (const id of s.afterIds) {
         const u = byId.get(id);
         if (u !== undefined && u !== i) addEdge(u, i);
+      }
+    }
+  }
+
+  // Set-level ordering: expand each configured set's before/after into edges on
+  // every member of that set.
+  if (setOrdering) {
+    for (const [setName, ord] of setOrdering) {
+      const members = byName.get(setName);
+      if (!members) continue;
+      if (ord.before) {
+        for (const name of ord.before) {
+          const targets = byName.get(name);
+          if (!targets) continue;
+          for (const m of members) for (const t of targets) if (m !== t) addEdge(m, t);
+        }
+      }
+      if (ord.after) {
+        for (const name of ord.after) {
+          const sources = byName.get(name);
+          if (!sources) continue;
+          for (const m of members) for (const u of sources) if (u !== m) addEdge(u, m);
+        }
       }
     }
   }

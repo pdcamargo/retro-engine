@@ -50,6 +50,30 @@ const makeChainedSystems = (count: number): RegisteredSystem[] => {
   return out;
 };
 
+// A stage split across a few sets with set-level ordering (ADR-0158): every
+// member gets its set's before/after expanded onto it. Exercises the set-edge
+// expansion (members × targets) the topo sort runs on each (re)sort.
+const makeSetSystems = (count: number): { systems: RegisteredSystem[]; sets: Map<string, { before?: string[]; after?: string[] }> } => {
+  const setNames = ['input', 'sim', 'render-prep'];
+  const systems: RegisteredSystem[] = [];
+  for (let i = 0; i < count; i += 1) {
+    const id = (3_000_000 + i) as SystemId;
+    systems.push({
+      id,
+      params: [],
+      fn: () => undefined,
+      name: `set-sys-${i}`,
+      origin: 'user',
+      originPlugin: null,
+      sets: [setNames[i % setNames.length]!],
+    });
+  }
+  const sets = new Map<string, { before?: string[]; after?: string[] }>([
+    ['sim', { after: ['input'], before: ['render-prep'] }],
+  ]);
+  return { systems, sets };
+};
+
 const counts = [16, 64, 256];
 
 for (const count of counts) {
@@ -77,6 +101,11 @@ for (const count of counts) {
     bench(`topoSort (chain of ${count})`, function* () {
       const systems = makeChainedSystems(count);
       yield () => topoSort(systems);
+    });
+
+    bench(`topoSort (${count} systems in sets)`, function* () {
+      const { systems, sets } = makeSetSystems(count);
+      yield () => topoSort(systems, sets);
     });
   });
 }

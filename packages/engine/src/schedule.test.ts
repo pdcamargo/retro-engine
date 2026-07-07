@@ -221,3 +221,80 @@ describe('addSystems + chain (ADR-0157)', () => {
     ).toThrow(/ordering cycle/);
   });
 });
+
+describe('SystemSet + configureSet (ADR-0158)', () => {
+  it('set-level after orders every member of a set after a target', () => {
+    const app = new App({ renderer: makeHeadlessRenderer() });
+    const trace: string[] = [];
+    // Two physics members, registered before 'input'; the set config puts both
+    // after input regardless of registration order.
+    app.addSystem('update', [], () => trace.push('integrate'), { inSet: 'physics' });
+    app.addSystem('update', [], () => trace.push('contacts'), { inSet: 'physics' });
+    app.addSystem('update', [], () => trace.push('input'), { label: 'input' });
+    app.configureSet('update', 'physics', { after: ['input'] });
+
+    app.advanceFrame(0);
+    expect(trace[0]).toBe('input');
+    expect(trace.slice(1).sort()).toEqual(['contacts', 'integrate']);
+  });
+
+  it('set-level before orders every member before a target', () => {
+    const app = new App({ renderer: makeHeadlessRenderer() });
+    const trace: string[] = [];
+    app.addSystem('update', [], () => trace.push('render-prep'), { label: 'render-prep' });
+    app.addSystem('update', [], () => trace.push('a'), { inSet: 'sim' });
+    app.addSystem('update', [], () => trace.push('b'), { inSet: 'sim' });
+    app.configureSet('update', 'sim', { before: ['render-prep'] });
+
+    app.advanceFrame(0);
+    expect(trace[trace.length - 1]).toBe('render-prep');
+    expect(trace.slice(0, 2).sort()).toEqual(['a', 'b']);
+  });
+
+  it('before / after can target a set name (runs relative to the whole set)', () => {
+    const app = new App({ renderer: makeHeadlessRenderer() });
+    const trace: string[] = [];
+    app.addSystem('update', [], () => trace.push('sim-a'), { inSet: 'sim' });
+    app.addSystem('update', [], () => trace.push('sim-b'), { inSet: 'sim' });
+    // A plain system that just declares `after: ['sim']` runs after both members.
+    app.addSystem('update', [], () => trace.push('after-sim'), { after: ['sim'] });
+
+    app.advanceFrame(0);
+    expect(trace[trace.length - 1]).toBe('after-sim');
+  });
+
+  it('a system in multiple sets inherits both sets’ ordering', () => {
+    const app = new App({ renderer: makeHeadlessRenderer() });
+    const trace: string[] = [];
+    app.addSystem('update', [], () => trace.push('early'), { label: 'early' });
+    app.addSystem('update', [], () => trace.push('late'), { label: 'late' });
+    app.addSystem('update', [], () => trace.push('mid'), { inSet: ['a', 'b'] });
+    app.configureSet('update', 'a', { after: ['early'] });
+    app.configureSet('update', 'b', { before: ['late'] });
+
+    app.advanceFrame(0);
+    expect(trace).toEqual(['early', 'mid', 'late']);
+  });
+
+  it('configureSet before its members register (forward reference)', () => {
+    const app = new App({ renderer: makeHeadlessRenderer() });
+    const trace: string[] = [];
+    app.configureSet('update', 'physics', { after: ['input'] });
+    app.addSystem('update', [], () => trace.push('step'), { inSet: 'physics' });
+    app.addSystem('update', [], () => trace.push('input'), { label: 'input' });
+
+    app.advanceFrame(0);
+    expect(trace).toEqual(['input', 'step']);
+  });
+
+  it('detects a cycle between two sets and rolls back the offending config', () => {
+    const app = new App({ renderer: makeHeadlessRenderer() });
+    app.addSystem('update', [], () => undefined, { inSet: 'a' });
+    app.addSystem('update', [], () => undefined, { inSet: 'b' });
+    app.configureSet('update', 'a', { after: ['b'] });
+    // b after a as well → a↔b cycle, thrown here and rolled back.
+    expect(() => app.configureSet('update', 'b', { after: ['a'] })).toThrow(/ordering cycle/);
+    // The rolled-back config leaves a runnable schedule.
+    expect(() => app.advanceFrame(0)).not.toThrow();
+  });
+});

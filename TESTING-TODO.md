@@ -1193,3 +1193,25 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
   unchecked pending your confirmation.
 
 ---
+
+## ✅ P1 — ECS ordering depth, Phase 2: named system sets + set-level ordering (unit + integration verified)
+
+- **New:** `@retro-engine/engine` (ADR-0158, roadmap `ecs-ordering-depth.md`). `AddSystemOptions.inSet`
+  (`string | string[]`) joins a system to reusable named set(s); `App.configureSet(stage, set, { before,
+  after })` orders the whole group with one declaration. The topo sort now indexes each system by its
+  `label` AND its set memberships under one `byName` map, so a per-system `before`/`after` target matches a
+  set name as well as a label (backward-compatible superset). Set config merges additively; cycles caught
+  eagerly + rolled back. `SystemInfo.sets` surfaces membership for the studio Systems panel. Ordering-only,
+  registration-time — zero per-frame cost (set-level `runIf` deferred to Phase 2b).
+- **Verified:** `schedule.test.ts` (+6, 20 total): set-level after/before order every member; `before/after`
+  can target a set name; a system in two sets inherits both; forward-ref (configureSet before members);
+  set-vs-set cycle throws + rolls back to a runnable schedule. Full engine gate green: typecheck, lint (626
+  files), 1231 tests, build; new `topoSort (N systems in sets)` bench runs. Changeset added.
+- **HOW to test:** `app.addSystem('update', [...], f, { inSet: 'physics' })` on several systems, then
+  `app.configureSet('update', 'physics', { after: ['input'] })` → all physics systems run after the
+  `input`-labelled system, verified by execution-order trace. `describeSchedule()` now includes `sets`.
+- Roadmap: MASTER-ROADMAP "ECS ordering depth" now 🟡 Phases 1–2 shipped; remaining (set-level runIf,
+  ambiguity detection, exclusive `&mut World`, state-transition ordering) tracked in `ecs-ordering-depth.md`.
+  Box unchecked pending your confirmation.
+
+---

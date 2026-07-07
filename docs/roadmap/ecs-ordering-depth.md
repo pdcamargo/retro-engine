@@ -12,13 +12,18 @@ composes with any labels the systems already carry. Topo sort handles both label
 and id edges through one pass. Unit + integration tested; topo-sort chain scaling
 benched.
 
-## Phase 2 — `SystemSet` + set-level config
+## Phase 2 — `SystemSet` + set-level ordering ✅ (ADR-0158)
 
-A named set a system can be assigned to (`{ inSet: MySet }`), with set-level
-`before`/`after`/`runIf` that apply to every member. Sets are the reusable,
-cross-plugin ordering handle labels only approximate today. Decide: string-keyed
-sets (cheap, matches labels) vs. typed set tokens (Bevy `SystemSet` enum). Likely
-generalize the existing label mechanism so a system can belong to multiple sets.
+Named, multi-membership sets: `{ inSet: 'physics' }` (or `['a','b']`) +
+`App.configureSet(stage, set, { before, after })`. The topo sort now indexes each
+system by its `label` **and** its set memberships under one `byName` map, so
+`before`/`after` targets match set names too, and set-level config expands onto
+every member. String-keyed (matches labels); registration-time only, so zero
+per-frame cost. `SystemInfo.sets` surfaces membership for tooling. Unit tested;
+set-edge topo scaling benched.
+
+**Deferred to Phase 2b:** set-level `runIf` (gating a whole group) — touches the
+per-frame `runStage` gate, cleanly separable, done next.
 
 ## Phase 3 — Ambiguity detection
 

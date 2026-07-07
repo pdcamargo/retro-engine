@@ -254,11 +254,13 @@ foundation.**
       `entityCount`, `frameCount`) + `updateDiagnostics` + opt-in `DiagnosticsPlugin` (updates each frame from
       the real clock delta + `World.entityCount`, added in O(1)). Unit + integration tested. Remaining: asset
       counts + an on-screen overlay (studio panel / in-game UI). Box unchecked pending user confirmation (§3).
-- [ ] **ECS ordering depth** — 🟡 **Phase 1 shipped** (ADR-0157): batch registration `App.addSystems` +
-      the `system()` spec helper + `.chain()` (identity-based `afterIds` edges, composes with existing
-      label/`before`/`after`; one topo pass, eager cycle check; unit + integration tested, topo-chain
-      benched). Remaining: `SystemSet` + set-level config/run-conditions; ambiguity detection; exclusive
-      systems (`&mut World` param); explicit state-transition ordering.
+- [ ] **ECS ordering depth** — 🟡 **Phases 1–2 shipped** (ADR-0157, ADR-0158): (1) batch registration
+      `App.addSystems` + the `system()` spec helper + `.chain()` (identity-based `afterIds` edges); (2)
+      named multi-membership `SystemSet` (`{ inSet }`) + `App.configureSet(stage, set, { before, after })`
+      — one `byName` topo index unifies labels and sets, so `before`/`after` target set names too;
+      registration-time only, `SystemInfo.sets` for tooling; unit tested + topo benched. Remaining:
+      set-level `runIf` (Phase 2b); ambiguity detection; exclusive systems (`&mut World` param); explicit
+      state-transition ordering.
       _Links:_ [ecs-ordering-depth.md](ecs-ordering-depth.md) · [system-params.md](system-params.md) · [`../backlog/explicit-state-transition-ordering.md`](../backlog/explicit-state-transition-ordering.md)
 - [ ] **System-param sugar** — 🟢 **substantially complete**: all the useful sugar ships — `Local<T>`
       (this session), `MessageReader`/`MessageWriter`, `Trigger` (observers), and `NextState` (state.ts).

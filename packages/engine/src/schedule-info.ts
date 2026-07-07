@@ -19,6 +19,8 @@ export interface SystemInfo {
   readonly set?: RenderSetName;
   /** Ordering label, if one was given. */
   readonly label?: string;
+  /** Named ordering sets this system joined, if any. */
+  readonly sets?: readonly string[];
   /** Origin bucket — `'engine'`, `'editor'`, or `'user'`. */
   readonly origin: SystemOrigin;
   /** Name of the registering plugin, or `null` when registered directly on the App. */
