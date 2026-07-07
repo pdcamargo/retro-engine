@@ -52,7 +52,14 @@ authoring).
   `gridRowCount`), and the layout engine grows the row template to `gridRowCount`
   before resolving geometry. `.rss` maps `grid-auto-rows`. Unit-tested (no-explicit-
   rows flow, fr + implicit-px interplay, span-aware row counting).
-- **Remaining:** explicit line placement (`grid-column: 1 / 3`); `auto` /
-  `minmax()` tracks (needs the child intrinsic-measure hook); grid-level
-  `justify-content` / `align-content` (distributing whole tracks); `grid-auto-flow:
-  column` + implicit *column* tracks.
+- **Explicit line placement ✅** — `UiStyle` `gridColumnStart`/`gridRowStart`
+  (1-based lines, `0` = auto); a two-pass `assignGridCells` places explicit items
+  (both axes set) first — reserving their cells (they may overlap, per CSS) — then
+  auto-flows the rest around them. Explicit rows count toward `gridRowCount` so
+  auto-rows hold them. `.rss` `grid-column`/`grid-row` parse the full CSS line
+  syntax (`N / M`, `N / span M`, bare `N` = a line) via `gridLine` (a bare number
+  is now correctly a line, not a span). Unit-tested (placement, clamp-to-width,
+  auto-flow-around, line parsing).
+- **Remaining:** `auto` / `minmax()` tracks (needs the child intrinsic-measure
+  hook); grid-level `justify-content` / `align-content` (distributing whole
+  tracks); `grid-auto-flow: column` + implicit *column* tracks.

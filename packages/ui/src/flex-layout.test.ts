@@ -342,6 +342,21 @@ describe('FlexLayoutEngine — display: grid', () => {
     expect(r[1]).toEqual({ x: 0, y: 70, width: 100, height: 30 });
   });
 
+  it('places an explicitly-positioned child at its grid lines; auto children flow around it', () => {
+    const r = rects(
+      node({ width: 200, height: 200, display: 'grid', gridTemplateColumns: '1fr 1fr', gridTemplateRows: '1fr 1fr' }, [
+        node({ gridColumnStart: 2, gridRowStart: 1 }), // explicit: col 2, row 1
+        node({}),
+        node({}),
+        node({}),
+      ]),
+    );
+    expect(r[0]).toEqual({ x: 100, y: 0, width: 100, height: 100 }); // explicit cell (col 1, row 0)
+    expect(r[1]).toEqual({ x: 0, y: 0, width: 100, height: 100 }); // auto → the free col 0 of row 0
+    expect(r[2]).toEqual({ x: 0, y: 100, width: 100, height: 100 }); // row 1
+    expect(r[3]).toEqual({ x: 100, y: 100, width: 100, height: 100 });
+  });
+
   it('mixes a stretched axis with an aligned axis (stretch width, center height)', () => {
     const r = rects(
       node(

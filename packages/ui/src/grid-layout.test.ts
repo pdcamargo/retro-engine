@@ -142,6 +142,24 @@ describe('placeGridItems', () => {
     expect(r[1]!.width).toBe(300);
     expect(r[2]).toEqual({ x: 0, y: 0, width: 0, height: 0 }); // grid full
   });
+
+  it('places an explicit item at its line, and auto items flow around it', () => {
+    // Explicit item at column line 2, row line 1 (0-based col 1, row 0); one auto item.
+    const r = placeGridItems(tracks, [{ colStart: 2, rowStart: 1 }, {}]);
+    expect(r[0]).toEqual({ x: 100, y: 0, width: 100, height: 100 }); // col 1, row 0
+    expect(r[1]).toEqual({ x: 0, y: 0, width: 100, height: 100 }); // auto → col 0 (skips the reserved cell)
+  });
+
+  it('honors an explicit start + span (grid-column: 1 / 3 style)', () => {
+    const r = placeGridItems(tracks, [{ colStart: 1, rowStart: 2, colSpan: 2 }]);
+    expect(r[0]).toEqual({ x: 0, y: 100, width: 200, height: 100 }); // cols 0-1 of row 1
+  });
+
+  it('clamps an explicit column so its span fits the grid width', () => {
+    // Start line 3 (col 2) with span 2 in a 3-col grid would overflow → clamped to col 1.
+    const r = placeGridItems(tracks, [{ colStart: 3, rowStart: 1, colSpan: 2 }]);
+    expect(r[0]).toEqual({ x: 100, y: 0, width: 200, height: 100 }); // cols 1-2
+  });
 });
 
 describe('gridRowCount', () => {
@@ -160,5 +178,10 @@ describe('gridRowCount', () => {
 
   it('is zero rows for zero columns', () => {
     expect(gridRowCount(0, [{}, {}])).toBe(0);
+  });
+
+  it('counts rows an explicit item reaches (so auto-rows can hold it)', () => {
+    expect(gridRowCount(2, [{ colStart: 1, rowStart: 3 }])).toBe(3); // explicit at row line 3
+    expect(gridRowCount(2, [{ colStart: 1, rowStart: 2, rowSpan: 2 }])).toBe(3); // rows 2-3
   });
 });

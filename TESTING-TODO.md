@@ -1845,3 +1845,26 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
 - Roadmap: MASTER-ROADMAP "Windowing" now 🟡 read side + cursor control. Box unchecked.
 
 ---
+
+## ✅ P1 — CSS Grid for the UI, Phase 3d: explicit line placement (unit-verified)
+
+- **New:** `@retro-engine/ui` (ADR-0167). Grid items can be placed at explicit grid lines, not just
+  auto-flowed. `UiStyle` `gridColumnStart`/`gridRowStart` (1-based lines, 0 = auto, reflected); when both set,
+  the item is placed there and auto items flow around it. Two-pass `assignGridCells` (explicit items reserved
+  first — may overlap per CSS — then sparse auto-flow); explicit rows count toward `gridRowCount` so auto-rows
+  hold them. `.rss` `grid-column`/`grid-row` parse full CSS line syntax (`N / M`, `N / span M`, bare `N`) via
+  new `gridLine`.
+- **Verified:** `grid-layout.test.ts` (+5): explicit item at its line + auto flow-around; explicit start+span;
+  clamp explicit column to fit width; `gridRowCount` counts explicit rows (2). `flex-layout.test.ts` (+1):
+  explicit child placed at cols/rows, auto children fill the rest. `rss-resolve.test.ts`: line/span/line-to-
+  line parsing. 176 ui tests. Full ui gate green: typecheck, lint (0/0), build.
+- **HOW to test:** `.hero { grid-column: 1 / 3; grid-row: 2 / span 2 }` in a grid → the hero occupies cols
+  1–2 of rows 2–3 exactly, and other items auto-flow around it.
+- **BEHAVIOR CHANGE (worth a glance):** a bare number in `.rss` (`grid-row: 3`) is now an explicit **line**
+  (span 1), matching CSS — previously it was misread as a *span* (span 3). Use `span N` for a span. If any
+  authored `.rss` relied on the old bare-number-as-span behavior, it needs updating to `span N`.
+- **NOTE:** Remaining grid: `auto`/`minmax` tracks, grid `justify-content`/`align-content`, `grid-auto-flow:
+  column`. Additive under ADR-0167 (no new ADR, like prior grid phases).
+- Roadmap: MASTER-ROADMAP "CSS Grid for the UI layout engine" now 🟡 Phases 1–3d shipped. Box unchecked.
+
+---

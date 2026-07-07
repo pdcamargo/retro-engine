@@ -87,6 +87,39 @@ const spanCount = (value: string): number => {
   return Number.isFinite(n) && n >= 1 ? n : 1;
 };
 
+/** A parsed `grid-column` / `grid-row`: an explicit 1-based `start` line (`0` = auto) + track `span`. */
+interface GridLine {
+  readonly start: number;
+  readonly span: number;
+}
+
+/**
+ * Parse a CSS `grid-column` / `grid-row` value into an explicit start line +
+ * span (matching CSS line semantics):
+ * - `span N` → auto start (`0`), span `N`.
+ * - `N` → start at line `N`, span `1` (a bare number is a **line**, not a span).
+ * - `N / M` → start `N`, span `M − N` (line-to-line).
+ * - `N / span M` → start `N`, span `M`.
+ * Unrecognized parts fall back to auto / span 1.
+ */
+const gridLine = (value: string): GridLine => {
+  const parts = value.split('/').map((p) => p.trim());
+  const line = (t: string): number => {
+    const n = Number.parseInt(t, 10);
+    return Number.isFinite(n) && n >= 1 ? n : 0;
+  };
+  const first = parts[0] ?? '';
+  if (parts.length < 2) {
+    return first.startsWith('span') ? { start: 0, span: spanCount(first) } : { start: line(first), span: 1 };
+  }
+  const start = line(first);
+  const end = parts[1]!;
+  if (end.startsWith('span')) return { start, span: spanCount(end) };
+  const endLine = Number.parseInt(end, 10);
+  if (start >= 1 && Number.isFinite(endLine) && endLine > start) return { start, span: endLine - start };
+  return { start, span: 1 };
+};
+
 /**
  * Normalize an item-alignment keyword to the engine's `flex-*` form: the CSS
  * grid keywords `start` / `end` map to `flex-start` / `flex-end`, while
@@ -189,8 +222,18 @@ const mapDeclarations = (props: Record<string, string>): UiStyleInit => {
       case 'display': init.display = value as Display; break;
       case 'grid-template-columns': init.gridTemplateColumns = value; break;
       case 'grid-template-rows': init.gridTemplateRows = value; break;
-      case 'grid-column': init.gridColumnSpan = spanCount(value); break;
-      case 'grid-row': init.gridRowSpan = spanCount(value); break;
+      case 'grid-column': {
+        const g = gridLine(value);
+        init.gridColumnStart = g.start;
+        init.gridColumnSpan = g.span;
+        break;
+      }
+      case 'grid-row': {
+        const g = gridLine(value);
+        init.gridRowStart = g.start;
+        init.gridRowSpan = g.span;
+        break;
+      }
       case 'grid-auto-rows': init.gridAutoRows = len(value); break;
       case 'flex-direction': init.flexDirection = value as FlexDirection; break;
       case 'justify-content': init.justifyContent = value as JustifyContent; break;

@@ -358,7 +358,12 @@ function layoutGrid(
   const s = node.style;
   const columns = parseGridTemplate(s.gridTemplateColumns);
   const rows = parseGridTemplate(s.gridTemplateRows);
-  const gridItems = inFlow.map((c) => ({ colSpan: c.style.gridColumnSpan, rowSpan: c.style.gridRowSpan }));
+  const gridItems = inFlow.map((c) => ({
+    colSpan: c.style.gridColumnSpan,
+    rowSpan: c.style.gridRowSpan,
+    colStart: c.style.gridColumnStart,
+    rowStart: c.style.gridRowStart,
+  }));
 
   // Generate implicit rows (CSS grid-auto-rows) so items past the explicit rows
   // flow into fixed-height rows instead of collapsing to zero size.

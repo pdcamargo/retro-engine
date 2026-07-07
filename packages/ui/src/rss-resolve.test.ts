@@ -89,11 +89,20 @@ describe('resolveUiStyle (declaration mapping)', () => {
     expect(style.gridTemplateRows).toBe('1fr 1fr');
   });
 
-  it('maps grid-column / grid-row span (span keyword or bare number)', () => {
-    const rules = parseRss(`.a { grid-column: span 2; grid-row: 3; }`);
-    const style = resolveUiStyle(rules, node({ classes: ['a'] }));
-    expect(style.gridColumnSpan).toBe(2);
-    expect(style.gridRowSpan).toBe(3);
+  it('maps grid-column / grid-row: span keyword, explicit line, and line/line', () => {
+    // `span N` → auto start + span N; a bare number is an explicit line (span 1).
+    const s1 = resolveUiStyle(parseRss(`.a { grid-column: span 2; grid-row: 3; }`), node({ classes: ['a'] }));
+    expect(s1.gridColumnSpan).toBe(2);
+    expect(s1.gridColumnStart).toBe(0); // auto
+    expect(s1.gridRowStart).toBe(3); // explicit line 3
+    expect(s1.gridRowSpan).toBe(1);
+
+    // `N / M` line-to-line → start N, span M − N.
+    const s2 = resolveUiStyle(parseRss(`.b { grid-column: 2 / 4; grid-row: 1 / span 2; }`), node({ classes: ['b'] }));
+    expect(s2.gridColumnStart).toBe(2);
+    expect(s2.gridColumnSpan).toBe(2); // 4 − 2
+    expect(s2.gridRowStart).toBe(1);
+    expect(s2.gridRowSpan).toBe(2); // explicit span
   });
 
   it('maps grid-auto-rows to a pixel height', () => {

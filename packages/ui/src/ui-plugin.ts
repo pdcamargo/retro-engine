@@ -57,6 +57,8 @@ export const uiNodeSchema: Schema<UiNode> = {
     gridTemplateRows: t.string,
     gridColumnSpan: t.number,
     gridRowSpan: t.number,
+    gridColumnStart: t.number,
+    gridRowStart: t.number,
     gridAutoRows: t.number,
     flexDirection: t.enum('row', 'row-reverse', 'column', 'column-reverse'),
     justifyContent: t.enum(

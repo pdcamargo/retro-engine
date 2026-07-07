@@ -67,6 +67,18 @@ export interface UiStyle {
   /** Rows this node spans when it is a grid item (CSS `grid-row: span N`). Default `1`. */
   readonly gridRowSpan: number;
   /**
+   * 1-based explicit column line to place this grid item at (CSS `grid-column:
+   * <line>`). `0` (the default) auto-places on the column axis. Explicit
+   * placement takes effect only when {@link gridRowStart} is also set.
+   */
+  readonly gridColumnStart: number;
+  /**
+   * 1-based explicit row line to place this grid item at (CSS `grid-row:
+   * <line>`). `0` (the default) auto-places on the row axis. Explicit placement
+   * takes effect only when {@link gridColumnStart} is also set.
+   */
+  readonly gridRowStart: number;
+  /**
    * Height in pixels of **implicit** grid rows — rows generated automatically
    * when items overflow the explicit {@link gridTemplateRows} (CSS
    * `grid-auto-rows`, fixed-size subset). `0` (the default) generates no implicit
@@ -142,6 +154,8 @@ export const defaultUiStyle = (): UiStyle => ({
   gridTemplateRows: '',
   gridColumnSpan: 1,
   gridRowSpan: 1,
+  gridColumnStart: 0,
+  gridRowStart: 0,
   gridAutoRows: 0,
   flexDirection: 'row',
   justifyContent: 'flex-start',

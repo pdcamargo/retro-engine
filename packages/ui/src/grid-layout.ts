@@ -41,10 +41,17 @@ export interface GridSpec {
   readonly rowGap?: number;
 }
 
-/** A placed grid item's span (in tracks). `1` (the default) is a single cell. */
+/**
+ * A grid item's placement inputs. `colSpan` / `rowSpan` are the track spans
+ * (default `1`). `colStart` / `rowStart` are 1-based **explicit** line positions
+ * (CSS `grid-column: <line>`): when both are set (`≥ 1`) the item is placed at
+ * that cell instead of auto-flowed; `0` / omitted means auto on that axis.
+ */
 export interface GridItem {
   readonly colSpan?: number;
   readonly rowSpan?: number;
+  readonly colStart?: number;
+  readonly rowStart?: number;
 }
 
 /** The resolved geometry of a grid: pixel sizes of every column / row and each cell's rect. */
@@ -138,24 +145,27 @@ interface GridCell {
   readonly rowSpan: number;
 }
 
+const UNPLACED: GridCell = { col: -1, row: 0, colSpan: 0, rowSpan: 0 };
+
 /**
- * Assign each item a cell by CSS-style sparse row-major auto-placement: scan
- * cells top-to-bottom, left-to-right and drop each item at the first free
- * top-left cell where its `colSpan × rowSpan` block fits, marking those cells
- * used. Rows grow up to `maxRows` (`Infinity` = unbounded, for implicit
+ * Assign each item a cell. Items with **both** an explicit `colStart` and
+ * `rowStart` (`≥ 1`) are placed there first (CSS explicit placement — they may
+ * overlap each other); the rest auto-flow by CSS-style sparse row-major
+ * placement, scanning top-to-bottom / left-to-right for the first free cell where
+ * their `colSpan × rowSpan` block fits and skipping cells the explicit items
+ * already occupy. Rows grow up to `maxRows` (`Infinity` = unbounded, for implicit
  * auto-rows); an item that fits within no allowed row is left unplaced
- * (`col: -1`). Column spans are clamped to `[1, colCount]`, row spans to `≥ 1`.
- * Returns the cells plus the number of rows actually used.
+ * (`col: -1`). Column spans are clamped to `[1, colCount]`, row spans to `≥ 1`;
+ * an explicit column is clamped so its span fits the width. Returns the cells
+ * (index-aligned to `items`) plus the number of rows actually used.
  */
 const assignGridCells = (
   colCount: number,
   items: readonly GridItem[],
   maxRows: number,
 ): { cells: GridCell[]; rowCount: number } => {
-  const cells: GridCell[] = [];
   if (colCount <= 0) {
-    for (let i = 0; i < items.length; i += 1) cells.push({ col: -1, row: 0, colSpan: 0, rowSpan: 0 });
-    return { cells, rowCount: 0 };
+    return { cells: items.map(() => UNPLACED), rowCount: 0 };
   }
 
   const occupied: boolean[] = [];
@@ -165,6 +175,9 @@ const assignGridCells = (
     while (occupied.length <= i) occupied.push(false);
     occupied[i] = true;
   };
+  const markBlock = (r: number, c: number, cs: number, rs: number): void => {
+    for (let rr = r; rr < r + rs; rr += 1) for (let cc = c; cc < c + cs; cc += 1) mark(rr, cc);
+  };
   const fits = (c: number, r: number, cs: number, rs: number): boolean => {
     if (c + cs > colCount || r + rs > maxRows) return false;
     for (let rr = r; rr < r + rs; rr += 1) {
@@ -173,25 +186,46 @@ const assignGridCells = (
     return true;
   };
 
+  const cells: (GridCell | null)[] = items.map(() => null);
   let rowCount = 0;
-  for (const item of items) {
+
+  // Pass 1: explicitly-positioned items (both axes). Placed at their line,
+  // reserving their cells so auto items flow around them.
+  items.forEach((item, i) => {
+    const colStart = item.colStart ?? 0;
+    const rowStart = item.rowStart ?? 0;
+    if (colStart < 1 || rowStart < 1) return;
     const cs = Math.max(1, Math.min(colCount, item.colSpan ?? 1));
     const rs = Math.max(1, item.rowSpan ?? 1);
-    let placed = false;
-    for (let r = 0; !placed && r + rs <= maxRows; r += 1) {
-      for (let c = 0; c < colCount && !placed; c += 1) {
+    const c = Math.max(0, Math.min(colStart - 1, colCount - cs));
+    const r = rowStart - 1;
+    if (r + rs > maxRows) {
+      cells[i] = UNPLACED; // beyond the grid's rows (no implicit rows to hold it)
+      return;
+    }
+    markBlock(r, c, cs, rs);
+    cells[i] = { col: c, row: r, colSpan: cs, rowSpan: rs };
+    rowCount = Math.max(rowCount, r + rs);
+  });
+
+  // Pass 2: auto-flow the remaining items into the first free fitting cell.
+  items.forEach((item, i) => {
+    if (cells[i] !== null) return;
+    const cs = Math.max(1, Math.min(colCount, item.colSpan ?? 1));
+    const rs = Math.max(1, item.rowSpan ?? 1);
+    for (let r = 0; r + rs <= maxRows; r += 1) {
+      for (let c = 0; c < colCount; c += 1) {
         if (!fits(c, r, cs, rs)) continue;
-        for (let rr = r; rr < r + rs; rr += 1) {
-          for (let cc = c; cc < c + cs; cc += 1) mark(rr, cc);
-        }
-        cells.push({ col: c, row: r, colSpan: cs, rowSpan: rs });
+        markBlock(r, c, cs, rs);
+        cells[i] = { col: c, row: r, colSpan: cs, rowSpan: rs };
         rowCount = Math.max(rowCount, r + rs);
-        placed = true;
+        return;
       }
     }
-    if (!placed) cells.push({ col: -1, row: 0, colSpan: 0, rowSpan: 0 });
-  }
-  return { cells, rowCount };
+    cells[i] = UNPLACED;
+  });
+
+  return { cells: cells.map((c) => c ?? UNPLACED), rowCount };
 };
 
 /**
