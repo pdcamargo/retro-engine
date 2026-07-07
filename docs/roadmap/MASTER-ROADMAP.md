@@ -291,9 +291,12 @@ foundation.**
       schedule-scoped resources, `QueryState`, exclusive `&mut World`) are explicitly "may not be needed" /
       niche and deferred until a real consumer asks. Box unchecked pending user confirmation (§3).
       _Links:_ [system-params.md](system-params.md)
-- [ ] **Texture import settings (`.meta`)** — filter (nearest/point·bilinear·trilinear), wrap, color space
-      (sRGB/linear), mipmaps, max size, PPU; consumed by `RenderImage` sampler/upload. **High-value + cheap
-      — required for crisp pixel-art; consider pulling into P0.**
+- [ ] **Texture import settings (`.meta`)** — 🟡 **Phase 1 shipped** (ADR-0166): `TextureImportSettings`
+      (filter/wrap/colorSpace) + pure `resolveTextureSampler`/`resolveTextureColorSpace` + `imageFromDecoded`;
+      `createImageImporter(decode, settings?)` applies a project-wide default (pixel-art → `{ filter:
+      'nearest' }`; data maps → `{ colorSpace: 'linear' }`), unit-tested + backward-compatible. Remaining:
+      per-asset `.meta` overrides via `LoadContext` (Phase 2); mipmaps/trilinear, max-size, PPU (Phase 3).
+      _Links:_ [texture-import-settings.md](texture-import-settings.md)
 - [ ] **Sprite definitions (`.meta`, Unity-style)** — single/multiple mode, grid + manual-rect slicing,
       pivot/border(9-slice)/PPU; sliced sprites minted as sub-assets via composite GUID (ADR-0126),
       feeding `TextureAtlasLayout` (ADR-0032) + 9-slice (ADR-0034). Authored via the Sprite Editor (Editor).

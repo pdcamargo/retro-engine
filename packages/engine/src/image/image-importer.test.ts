@@ -20,6 +20,23 @@ describe('createImageImporter', () => {
     expect(image.format).toBe('rgba8unorm');
     expect(image.colorSpace).toBe('srgb');
     expect(image.data[0]).toBe(255);
+    // Default sampler is linear (the base-color case).
+    expect(image.sampler.magFilter).toBe('linear');
+  });
+
+  it('applies default import settings (e.g. a pixel-art nearest/linear-data importer)', async () => {
+    const decode = async () => ({ data: new Uint8Array([1, 2, 3, 4]), width: 1, height: 1 });
+    const importer = createImageImporter(decode, {
+      filter: 'nearest',
+      wrap: 'repeat',
+      colorSpace: 'linear',
+    });
+    const image = await importer(new Uint8Array([0]), ctx);
+    expect(image.colorSpace).toBe('linear');
+    expect(image.sampler.magFilter).toBe('nearest');
+    expect(image.sampler.minFilter).toBe('nearest');
+    expect(image.sampler.addressModeU).toBe('repeat');
+    expect(image.sampler.addressModeV).toBe('repeat');
   });
 
   it('rejects when the decoded byte length does not match the dimensions', async () => {

@@ -423,6 +423,9 @@ export type {
   ImageDimension,
   RenderImage,
   RgbaImageDecoder,
+  TextureFilter,
+  TextureImportSettings,
+  TextureWrap,
 } from './image';
 export {
   bytesPerTexel,
@@ -433,9 +436,12 @@ export {
   decodeRadianceHdrPreview,
   ExtractedImageAssetEvents,
   Image,
+  imageFromDecoded,
   ImagePlugin,
   Images,
   RenderImages,
+  resolveTextureColorSpace,
+  resolveTextureSampler,
 } from './image';
 export {
   asAssetIndex,

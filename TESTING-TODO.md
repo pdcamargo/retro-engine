@@ -1515,3 +1515,22 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
   code, pending confirmation" — delete after you confirm in the studio.
 
 ---
+
+## ✅ P1 — Texture import settings, Phase 1: model + resolvers + importer default (unit-verified)
+
+- **New:** `@retro-engine/engine` (ADR-0166, roadmap `texture-import-settings.md`). `TextureImportSettings`
+  (`filter` nearest/linear, `wrap` repeat/clamp/mirror, `colorSpace` srgb/linear) + pure
+  `resolveTextureSampler` (filter→min/mag, wrap→both address modes) / `resolveTextureColorSpace` +
+  `imageFromDecoded(decoded, settings)`. `createImageImporter(decode, settings?)` applies settings as the
+  project-wide default for every image (backward-compatible — omitted = prior linear/sRGB behavior).
+- **Verified:** `texture-import-settings.test.ts` (+5) resolver mapping/defaults; `image-importer.test.ts`
+  (+1) an importer with `{ filter:'nearest', wrap:'repeat', colorSpace:'linear' }` produces an Image with
+  the right sampler + color space. Full engine gate green: typecheck, lint, 1251 tests, build. Changeset.
+- **HOW to test:** register the image loader with `createImageImporter(decode, { filter: 'nearest' })` →
+  every imported texture samples nearest (crisp pixel-art); `{ colorSpace: 'linear' }` for a normal/data map.
+- **NOTE:** this is a project-wide DEFAULT. Per-asset `.meta` overrides (via the asset server LoadContext)
+  are Phase 2; mipmaps/trilinear, max-size, PPU are Phase 3 — tracked in the slug.
+- Roadmap: MASTER-ROADMAP "Texture import settings" now 🟡 Phase 1 shipped. Box unchecked pending your
+  confirmation.
+
+---

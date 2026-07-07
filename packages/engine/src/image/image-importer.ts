@@ -1,6 +1,11 @@
 import type { AssetImporter } from '@retro-engine/assets';
 
 import { Image } from './image';
+import {
+  resolveTextureColorSpace,
+  resolveTextureSampler,
+  type TextureImportSettings,
+} from './texture-import-settings';
 
 /** RGBA8 pixels decoded from an encoded image (PNG / JPEG / WebP). */
 export interface DecodedRgba {
@@ -45,19 +50,39 @@ export const createImageBitmapRgbaDecoder: RgbaImageDecoder = async (bytes) => {
 };
 
 /**
+ * Build an `rgba8unorm` {@link Image} from decoded pixels, applying texture
+ * import `settings` (filter / wrap → sampler, `colorSpace`). Omitted settings
+ * default to a linear-filtered, clamped, sRGB color image — the common
+ * base-color case. Pure.
+ */
+export const imageFromDecoded = (decoded: DecodedRgba, settings: TextureImportSettings = {}): Image =>
+  Image.fromBytes({
+    data: decoded.data,
+    format: 'rgba8unorm',
+    width: decoded.width,
+    height: decoded.height,
+    colorSpace: resolveTextureColorSpace(settings),
+    sampler: resolveTextureSampler(settings),
+  });
+
+/**
  * Build an {@link AssetImporter} that decodes a loose PNG / JPEG / WebP file into
- * an sRGB color {@link Image} (`rgba8unorm`) — the common base-color case, so a
- * dropped-in texture can be referenced by a material.
+ * an `rgba8unorm` {@link Image}, so a dropped-in texture can be referenced by a
+ * material.
  *
- * Loose data maps (normal / metallic-roughness / occlusion) are linear, not
- * sRGB; loading those correctly is a per-asset import setting and not inferable
- * from the file alone, so this importer always produces a color image.
+ * `settings` are the **default** texture import settings applied to every image
+ * this importer produces — e.g. a pixel-art project registers the importer with
+ * `{ filter: 'nearest' }`. Per-asset overrides (a `.meta` sidecar) are a later
+ * phase; until then a data map (normal / metallic-roughness) needs its own
+ * importer registration with `{ colorSpace: 'linear' }`.
  *
  * @param decode override the pixel decoder (defaults to {@link createImageBitmapRgbaDecoder}).
+ * @param settings default import settings for every produced image.
  */
 export const createImageImporter =
-  (decode: RgbaImageDecoder = createImageBitmapRgbaDecoder): AssetImporter<Image> =>
-  async (bytes) => {
-    const { data, width, height } = await decode(bytes);
-    return Image.fromBytes({ data, format: 'rgba8unorm', colorSpace: 'srgb', width, height });
-  };
+  (
+    decode: RgbaImageDecoder = createImageBitmapRgbaDecoder,
+    settings: TextureImportSettings = {},
+  ): AssetImporter<Image> =>
+  async (bytes) =>
+    imageFromDecoded(await decode(bytes), settings);
