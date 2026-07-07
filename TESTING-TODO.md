@@ -1555,3 +1555,22 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
   your confirmation.
 
 ---
+
+## ✅ P1 — Sprite definitions: manual-rect slicing (`TextureAtlasLayout.fromRects`) (unit-verified)
+
+- **New:** `@retro-engine/engine` `TextureAtlasLayout.fromRects({ size, rects })` — builds an atlas layout
+  from hand-placed pixel rects (Unity "multiple" mode), normalizing each to UV against `size`,
+  order-preserving (index → rects[index]). The manual counterpart to the pre-existing `fromGrid`. Throws on
+  non-positive size/rect dims. `TextureAtlasRect` / `TextureAtlasFromRectsOptions` exported.
+- **Verified:** `texture-atlas-layout.test.ts` (+3): normalizes two irregular rects correctly; rejects
+  non-positive size + zero-dim rect; empty rects → empty layout. Full engine gate green: typecheck, lint,
+  1261 tests, build. Changeset.
+- **HOW to test:** `TextureAtlasLayout.fromRects({ size: vec2.create(100,50), rects: [{x,y,width,height},…] })`
+  → `.textures[i]` are the normalized UV rects for each sprite; feed to `TextureAtlas`.
+- **NOTE:** this fills the slicing-geometry gap (grid existed, manual-rect now, 9-slice existed). Sprite
+  definitions still needs the `.meta` model + resolver (Phase A), sub-asset minting via composite GUID
+  (Phase B), and the Sprite Editor UI (Phase C, studio-blocked) — tracked in `sprite-definitions.md`.
+- Roadmap: MASTER-ROADMAP "Sprite definitions" now 🟡 slicing geometry in place. Box unchecked pending
+  your confirmation.
+
+---

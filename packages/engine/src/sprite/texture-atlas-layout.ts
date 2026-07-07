@@ -27,6 +27,26 @@ export interface TextureAtlasFromGridOptions {
 }
 
 /**
+ * A hand-placed sub-rectangle in **source-image pixels**, for
+ * {@link TextureAtlasLayout.fromRects} — the manual counterpart to a grid tile.
+ * `(x, y)` is the top-left corner; `width` / `height` extend right / down.
+ */
+export interface TextureAtlasRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** Options for {@link TextureAtlasLayout.fromRects}. Pixels; normalised once at build time. */
+export interface TextureAtlasFromRectsOptions {
+  /** Source-image dimensions in pixels. Both components must be positive. */
+  size: Vec2;
+  /** Hand-authored sub-rects in source pixels, in the order sprites should index them. */
+  rects: readonly TextureAtlasRect[];
+}
+
+/**
  * CPU-side layout asset: a source-image size plus a list of sub-rectangles
  * carving the image into named cells, each rect stored in **normalised UV
  * space** (`[0, 1]` on both axes — the same shape {@link Sprite.rect} accepts).
@@ -137,5 +157,35 @@ export class TextureAtlasLayout {
       }
     }
     return new TextureAtlasLayout(size, textures);
+  }
+
+  /**
+   * Build a layout from hand-authored pixel rects (Unity-style "multiple" sprite
+   * mode — irregularly placed sprites on one sheet). Each rect is normalised to
+   * UV against `size`, preserving order so `TextureAtlas.index` maps to
+   * `rects[index]`. The manual counterpart to {@link TextureAtlasLayout.fromGrid}.
+   *
+   * Throws if `size` is non-positive or any rect has a non-positive dimension.
+   * Rects are not bounds-clamped to the image — an out-of-bounds rect normalises
+   * past `[0, 1]` (an authoring error the slicer surfaces rather than hides).
+   */
+  static fromRects(opts: TextureAtlasFromRectsOptions): TextureAtlasLayout {
+    const sizeX = opts.size[0] as number;
+    const sizeY = opts.size[1] as number;
+    if (!(sizeX > 0) || !(sizeY > 0)) {
+      throw new Error(`TextureAtlasLayout.fromRects: size components must be positive; got (${sizeX}, ${sizeY}).`);
+    }
+    const textures = opts.rects.map((r, i) => {
+      if (!(r.width > 0) || !(r.height > 0)) {
+        throw new Error(
+          `TextureAtlasLayout.fromRects: rect #${i} must have positive width/height; got (${r.width}, ${r.height}).`,
+        );
+      }
+      return new Rect(
+        vec2.create(r.x / sizeX, r.y / sizeY),
+        vec2.create((r.x + r.width) / sizeX, (r.y + r.height) / sizeY),
+      );
+    });
+    return new TextureAtlasLayout(vec2.create(sizeX, sizeY), textures);
   }
 }

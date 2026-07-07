@@ -120,3 +120,45 @@ describe('TextureAtlasLayout (sparse / hand-authored)', () => {
     expect(layout.textures[1]).toBe(b);
   });
 });
+
+describe('TextureAtlasLayout.fromRects', () => {
+  it('normalizes hand-placed pixel rects to UV, preserving order', () => {
+    // A 100×50 sheet with two irregular sprites.
+    const layout = TextureAtlasLayout.fromRects({
+      size: vec2.create(100, 50),
+      rects: [
+        { x: 0, y: 0, width: 40, height: 50 }, // left half-ish
+        { x: 50, y: 10, width: 50, height: 30 }, // offset on the right
+      ],
+    });
+    expect(layout.size[0]).toBe(100);
+    expect(layout.textures).toHaveLength(2);
+
+    expect(layout.textures[0]!.min[0]).toBe(0);
+    expect(layout.textures[0]!.max[0]).toBeCloseTo(0.4, 6);
+    expect(layout.textures[0]!.max[1]).toBe(1); // 50/50
+
+    expect(layout.textures[1]!.min[0]).toBe(0.5);
+    expect(layout.textures[1]!.min[1]).toBeCloseTo(0.2, 6); // 10/50
+    expect(layout.textures[1]!.max[0]).toBe(1); // (50+50)/100
+    expect(layout.textures[1]!.max[1]).toBeCloseTo(0.8, 6); // 40/50
+  });
+
+  it('rejects a non-positive source size or rect dimension', () => {
+    expect(() => TextureAtlasLayout.fromRects({ size: vec2.create(0, 50), rects: [] })).toThrow(
+      /size components must be positive/,
+    );
+    expect(() =>
+      TextureAtlasLayout.fromRects({
+        size: vec2.create(64, 64),
+        rects: [{ x: 0, y: 0, width: 0, height: 10 }],
+      }),
+    ).toThrow(/positive width\/height/);
+  });
+
+  it('produces an empty layout for no rects', () => {
+    const layout = TextureAtlasLayout.fromRects({ size: vec2.create(64, 64), rects: [] });
+    expect(layout.textures).toHaveLength(0);
+    expect(layout.size[0]).toBe(64);
+  });
+});

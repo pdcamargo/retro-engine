@@ -650,6 +650,8 @@ export type {
   SpriteOptions,
   SpriteSpecializeContext,
   TextureAtlasFromGridOptions,
+  TextureAtlasFromRectsOptions,
+  TextureAtlasRect,
   TextureSlicerOptions,
 } from './sprite';
 export {
