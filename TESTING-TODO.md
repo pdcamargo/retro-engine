@@ -1691,3 +1691,25 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
 - Roadmap: MASTER-ROADMAP "Audio mixer buses" now 🟡 Phases 1–4 shipped. Box unchecked.
 
 ---
+
+## ✅ P1 — CSS Grid for the UI, Phase 3b: item alignment (unit-verified)
+
+- **New:** `@retro-engine/ui` (ADR-0167). Grid items can align within their cell instead of always
+  stretching. `UiStyle` `justifyItems`/`justifySelf` (inline/horizontal axis, default `stretch`/`auto`,
+  reflected); the existing `alignItems`/`alignSelf` now also drive the block/vertical axis for grid. A
+  `placeInCell` helper resolves size+offset per axis: `stretch` fills the cell, else the item's
+  definite-or-intrinsic size at start/center/end. `.rss` maps `justify-items`/`justify-self` (+ `align-*`)
+  and normalizes CSS grid `start`/`end` → `flex-start`/`flex-end`.
+- **Verified:** `flex-layout.test.ts` (+4): sized item centered on both axes; flex-end on both axes;
+  per-item `justify-self`/`align-self` overriding container defaults; mixed stretch-width + center-height.
+  `rss-resolve.test.ts` (+1): `justify-items: center`, `align-items: end`→flex-end, `justify-self:
+  start`→flex-start, `align-self: stretch`. Full ui gate green: typecheck, lint (0/0), 151 tests, build.
+  Changeset.
+- **HOW to test:** `.grid { display: grid; justify-items: center; align-items: center }` with a
+  fixed-size child → the child sits centered in its cell rather than filling it; add `.child { justify-self:
+  end }` to push just that child to the cell's right edge.
+- **NOTE:** Phase 3c (explicit line placement `1 / 3`, `auto`/`minmax` tracks, grid `justify-content`/
+  `align-content`, auto-rows) remains — tracked in `css-grid-ui.md`.
+- Roadmap: MASTER-ROADMAP "CSS Grid for the UI layout engine" now 🟡 Phases 1–3b shipped. Box unchecked.
+
+---

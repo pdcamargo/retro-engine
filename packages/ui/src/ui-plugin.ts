@@ -68,6 +68,8 @@ export const uiNodeSchema: Schema<UiNode> = {
     ),
     alignItems: t.enum('flex-start', 'flex-end', 'center', 'stretch'),
     alignSelf: t.enum('auto', 'flex-start', 'flex-end', 'center', 'stretch'),
+    justifyItems: t.enum('flex-start', 'flex-end', 'center', 'stretch'),
+    justifySelf: t.enum('auto', 'flex-start', 'flex-end', 'center', 'stretch'),
     flexGrow: t.number,
     flexShrink: t.number,
     flexBasis: t.number.optional(),

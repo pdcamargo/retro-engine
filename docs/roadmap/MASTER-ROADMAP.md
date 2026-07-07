@@ -240,12 +240,16 @@ foundation.**
       `PinchGesture` messages, tunable `TouchGestureConfig`; 8 unit tests);
       (c) **studio binding editor** (Phase 5, BLOCKED — studio) — edit the `ActionMap` live + an MCP command.
       _Links:_ [input-system.md](input-system.md)
-- [ ] **CSS Grid for the UI layout engine** — 🟡 **Phases 1–2b shipped, grid usable** (ADR-0167): (1) pure
+- [ ] **CSS Grid for the UI layout engine** — 🟡 **Phases 1–3b shipped, grid usable** (ADR-0167): (1) pure
       track-sizing + cell-geometry core; (2) `UiStyle` `display`/`gridTemplate*` + `FlexLayoutEngine` grid
       branch placing children into cells; (2b) `.rss` authoring; (3a) **spanning + sparse auto-placement**
       (`placeGridItems` occupancy algorithm, `UiStyle` `gridColumnSpan`/`gridRowSpan`, `.rss`
-      `grid-column`/`grid-row: span N`). Layout + resolver unit-tested. Remaining (Phase 3b): explicit line
-      placement, `auto`/`minmax` tracks, grid alignment, auto-rows. _Links:_ [css-grid-ui.md](css-grid-ui.md) · [ui-system.md](ui-system.md)
+      `grid-column`/`grid-row: span N`); (3b) **item alignment** — `UiStyle` `justifyItems`/`justifySelf`
+      (inline axis) + `alignItems`/`alignSelf` reused for the block axis, a `placeInCell` helper (stretch
+      fills, else start/center/end at definite-or-intrinsic size), `.rss` `justify-items`/`justify-self`
+      (CSS `start`/`end` normalized). Layout + resolver unit-tested. Remaining (Phase 3c): explicit line
+      placement (`grid-column: 1 / 3`), `auto`/`minmax` tracks, grid `justify-content`/`align-content`,
+      auto-rows. _Links:_ [css-grid-ui.md](css-grid-ui.md) · [ui-system.md](ui-system.md)
 - [ ] **In-game UI depth** — 🟡 **Phases 1 (partial) + 2 shipped**: widgets `UiToggle` (checkbox) +
       `UiSlider` (drag→value) reuse the `Interactable`/`UiClicked` foundation with pure, unit-tested logic;
       **focus + spatial navigation** (ADR-0163) — `UiFocus` resource + `Focusable` marker + message-driven

@@ -70,6 +70,19 @@ export interface UiStyle {
   readonly justifyContent: JustifyContent;
   readonly alignItems: AlignItems;
   readonly alignSelf: AlignSelf;
+  /**
+   * Default alignment of grid items along the **inline (column / horizontal)**
+   * axis within their cell (CSS `justify-items`). Used only when {@link display}
+   * is `'grid'`; `alignItems` is the block (row / vertical) axis for grid.
+   * `'stretch'` (the default) fills the cell width; a per-item {@link justifySelf}
+   * overrides it.
+   */
+  readonly justifyItems: AlignItems;
+  /**
+   * This grid item's own inline-axis alignment within its cell (CSS
+   * `justify-self`); `'auto'` defers to the parent's {@link justifyItems}.
+   */
+  readonly justifySelf: AlignSelf;
   /** Share of positive free space this item takes (CSS `flex-grow`). */
   readonly flexGrow: number;
   /** Share of negative free space removed from this item (CSS `flex-shrink`). */
@@ -125,6 +138,8 @@ export const defaultUiStyle = (): UiStyle => ({
   justifyContent: 'flex-start',
   alignItems: 'stretch',
   alignSelf: 'auto',
+  justifyItems: 'stretch',
+  justifySelf: 'auto',
   flexGrow: 0,
   flexShrink: 1,
   flexBasis: undefined,

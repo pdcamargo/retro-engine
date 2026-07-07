@@ -315,11 +315,37 @@ function layoutNode(node: LayoutNode, width: number, height: number): LayoutResu
 }
 
 /**
+ * Resolve a grid item's size + offset along one axis within its cell block:
+ * `stretch` fills the cell, `flex-start` / `center` / `flex-end` place the item
+ * at its own size (a definite style size if given, else its intrinsic size) at
+ * the start / middle / end of the cell. Size is clamped to the item's min/max.
+ */
+function placeInCell(
+  cell: number,
+  definite: number | undefined,
+  intrinsic: number,
+  mode: AlignItems,
+  min: number,
+  max: number | undefined,
+): { size: number; offset: number } {
+  const size =
+    definite !== undefined
+      ? definite
+      : mode === 'stretch'
+        ? clamp(Math.max(0, cell), min, max)
+        : clamp(intrinsic, min, max);
+  const offset = mode === 'center' ? (cell - size) / 2 : mode === 'flex-end' ? cell - size : 0;
+  return { size, offset };
+}
+
+/**
  * Lay out a `display: grid` node's children into template cells (row-major),
- * each child stretched to fill its cell. In-flow children past the last cell get
- * a zero-size result at the content origin (grid auto-rows / overflow are a
- * later phase); absolute children are positioned as usual. The `gap` applies
- * between both columns and rows.
+ * each child aligned within its cell by `justify-items`/`justify-self` (inline /
+ * horizontal axis) and `align-items`/`align-self` (block / vertical axis) —
+ * `stretch` (the default) fills the cell. In-flow children past the last cell get
+ * a zero-size result at the content origin (grid auto-rows / overflow are a later
+ * phase); absolute children are positioned as usual. The `gap` applies between
+ * both columns and rows.
  */
 function layoutGrid(
   node: LayoutNode,
@@ -349,9 +375,25 @@ function layoutGrid(
   const results = new Map<LayoutNode, LayoutResult>();
   inFlow.forEach((child, i) => {
     const rect = placed[i]!;
+    const cs = child.style;
+    // justify* = inline (horizontal) axis; align* = block (vertical) axis.
+    const justify = cs.justifySelf === 'auto' ? s.justifyItems : cs.justifySelf;
+    const align = cs.alignSelf === 'auto' ? s.alignItems : cs.alignSelf;
+    const defW = cs.width !== undefined ? clamp(cs.width, cs.minWidth, cs.maxWidth) : undefined;
+    const defH = cs.height !== undefined ? clamp(cs.height, cs.minHeight, cs.maxHeight) : undefined;
+    // Only measure intrinsic size when a non-stretch axis lacks a definite size.
+    const needMeasure =
+      (defW === undefined && justify !== 'stretch') || (defH === undefined && align !== 'stretch');
+    const m = needMeasure ? measureNode(child, rect.width, rect.height) : { width: 0, height: 0 };
+    const col = placeInCell(rect.width, defW, m.width, justify, cs.minWidth, cs.maxWidth);
+    const rowAxis = placeInCell(rect.height, defH, m.height, align, cs.minHeight, cs.maxHeight);
     results.set(
       child,
-      offsetResult(layoutNode(child, rect.width, rect.height), s.padding.left + rect.x, s.padding.top + rect.y),
+      offsetResult(
+        layoutNode(child, col.size, rowAxis.size),
+        s.padding.left + rect.x + col.offset,
+        s.padding.top + rect.y + rowAxis.offset,
+      ),
     );
   });
 

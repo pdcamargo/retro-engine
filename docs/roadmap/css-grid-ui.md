@@ -31,14 +31,21 @@ unit-tested; the engine half was already tested, so the `.rss` → grid layout c
 is covered end-to-end by composition. Grid is now **usable** (core + layout +
 authoring).
 
-## Phase 3 — placement + `auto`/`minmax` + alignment
+## Phase 3 — placement + alignment + `auto`/`minmax`
 
 - **Spanning + auto-placement ✅** — `placeGridItems` does CSS-style sparse
   auto-placement (occupancy grid; each item dropped at the first free top-left
   cell its `colSpan × rowSpan` block fits), `UiStyle` `gridColumnSpan`/
   `gridRowSpan`, `.rss` `grid-column`/`grid-row: span N`, wired into the layout
   engine. Unit-tested (spanning, wrapping, occupancy skip, gap in span, overflow).
+- **Item alignment ✅** — `UiStyle` `justifyItems`/`justifySelf` (inline axis) +
+  the existing `alignItems`/`alignSelf` reused for the block axis; a `placeInCell`
+  helper sizes + offsets each item within its cell (`stretch` fills, else
+  start/center/end at its definite-or-intrinsic size). `.rss` maps `justify-items`/
+  `justify-self` (+ `align-*`) and normalizes CSS grid `start`/`end` to
+  `flex-start`/`flex-end`. Layout + resolver unit-tested (center, end, per-item
+  self override, mixed stretch/aligned axes).
 - **Remaining:** explicit line placement (`grid-column: 1 / 3`); `auto` /
   `minmax()` tracks (needs the child intrinsic-measure hook); grid-level
-  `justify-items` / `align-items` / `justify-content` / `align-content`; grid
-  auto-rows (implicit tracks for overflow).
+  `justify-content` / `align-content` (distributing whole tracks); grid auto-rows
+  (implicit tracks for overflow).

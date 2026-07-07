@@ -87,6 +87,17 @@ const spanCount = (value: string): number => {
   return Number.isFinite(n) && n >= 1 ? n : 1;
 };
 
+/**
+ * Normalize an item-alignment keyword to the engine's `flex-*` form: the CSS
+ * grid keywords `start` / `end` map to `flex-start` / `flex-end`, while
+ * `flex-start` / `flex-end` / `center` / `stretch` / `auto` pass through. Lets
+ * `.rss` author grid alignment with either spelling.
+ */
+const alignKeyword = (value: string): string => {
+  const v = value.trim();
+  return v === 'start' ? 'flex-start' : v === 'end' ? 'flex-end' : v;
+};
+
 const edges = (value: string): Partial<Edges> => {
   const p = value.split(/\s+/).map(len);
   const top = p[0] ?? 0;
@@ -182,8 +193,10 @@ const mapDeclarations = (props: Record<string, string>): UiStyleInit => {
       case 'grid-row': init.gridRowSpan = spanCount(value); break;
       case 'flex-direction': init.flexDirection = value as FlexDirection; break;
       case 'justify-content': init.justifyContent = value as JustifyContent; break;
-      case 'align-items': init.alignItems = value as AlignItems; break;
-      case 'align-self': init.alignSelf = value as AlignSelf; break;
+      case 'align-items': init.alignItems = alignKeyword(value) as AlignItems; break;
+      case 'align-self': init.alignSelf = alignKeyword(value) as AlignSelf; break;
+      case 'justify-items': init.justifyItems = alignKeyword(value) as AlignItems; break;
+      case 'justify-self': init.justifySelf = alignKeyword(value) as AlignSelf; break;
       case 'flex-grow': init.flexGrow = len(value); break;
       case 'flex-shrink': init.flexShrink = len(value); break;
       case 'flex-basis': init.flexBasis = dim(value); break;

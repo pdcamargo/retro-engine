@@ -247,4 +247,78 @@ describe('FlexLayoutEngine — display: grid', () => {
     expect(r[1]).toEqual({ x: 0, y: 100, width: 100, height: 100 });
     expect(r[2]).toEqual({ x: 100, y: 100, width: 100, height: 100 });
   });
+
+  it('aligns a sized item within its cell via justify-items / align-items (center)', () => {
+    const r = rects(
+      node(
+        {
+          width: 100,
+          height: 100,
+          display: 'grid',
+          gridTemplateColumns: '1fr',
+          gridTemplateRows: '1fr',
+          justifyItems: 'center',
+          alignItems: 'center',
+        },
+        [node({ width: 40, height: 20 })],
+      ),
+    );
+    // 40×20 item centered in the 100×100 cell → offset (30, 40).
+    expect(r[0]).toEqual({ x: 30, y: 40, width: 40, height: 20 });
+  });
+
+  it('places a sized item at the cell end on both axes (flex-end)', () => {
+    const r = rects(
+      node(
+        {
+          width: 100,
+          height: 100,
+          display: 'grid',
+          gridTemplateColumns: '1fr',
+          gridTemplateRows: '1fr',
+          justifyItems: 'flex-end',
+          alignItems: 'flex-end',
+        },
+        [node({ width: 40, height: 20 })],
+      ),
+    );
+    expect(r[0]).toEqual({ x: 60, y: 80, width: 40, height: 20 });
+  });
+
+  it('lets justify-self / align-self override the container defaults per item', () => {
+    const r = rects(
+      node(
+        {
+          width: 100,
+          height: 100,
+          display: 'grid',
+          gridTemplateColumns: '1fr',
+          gridTemplateRows: '1fr',
+          justifyItems: 'flex-start',
+          alignItems: 'flex-start',
+        },
+        [node({ width: 40, height: 20, justifySelf: 'center', alignSelf: 'flex-end' })],
+      ),
+    );
+    // justify-self center → x=30; align-self flex-end → y=80.
+    expect(r[0]).toEqual({ x: 30, y: 80, width: 40, height: 20 });
+  });
+
+  it('mixes a stretched axis with an aligned axis (stretch width, center height)', () => {
+    const r = rects(
+      node(
+        {
+          width: 100,
+          height: 100,
+          display: 'grid',
+          gridTemplateColumns: '1fr',
+          gridTemplateRows: '1fr',
+          alignItems: 'center', // justify-items defaults to stretch
+        },
+        [node({ height: 20 })],
+      ),
+    );
+    // width stretches to the cell (100), height 20 centered vertically → y=40.
+    expect(r[0]).toEqual({ x: 0, y: 40, width: 100, height: 20 });
+  });
 });

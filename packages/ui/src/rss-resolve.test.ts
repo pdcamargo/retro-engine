@@ -95,6 +95,19 @@ describe('resolveUiStyle (declaration mapping)', () => {
     expect(style.gridColumnSpan).toBe(2);
     expect(style.gridRowSpan).toBe(3);
   });
+
+  it('maps justify-items / justify-self, normalizing CSS grid start/end keywords', () => {
+    const rules = parseRss(`
+      .grid { justify-items: center; align-items: end; }
+      .cell { justify-self: start; align-self: stretch; }
+    `);
+    const g = resolveUiStyle(rules, node({ classes: ['grid'] }));
+    expect(g.justifyItems).toBe('center');
+    expect(g.alignItems).toBe('flex-end'); // 'end' → 'flex-end'
+    const c = resolveUiStyle(rules, node({ classes: ['cell'] }));
+    expect(c.justifySelf).toBe('flex-start'); // 'start' → 'flex-start'
+    expect(c.alignSelf).toBe('stretch');
+  });
 });
 
 describe('rss → layout (end to end)', () => {
