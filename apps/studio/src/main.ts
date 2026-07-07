@@ -25,7 +25,8 @@ import {
   uiOverlayPlugin,
   widgets,
 } from '@retro-engine/editor-sdk';
-import { createImGuiOverlay, createWebGPURenderer } from '@retro-engine/renderer-webgpu';
+import { createWebGPURenderer } from '@retro-engine/renderer-webgpu';
+import { createImGuiOverlay } from '@retro-engine/renderer-webgpu/imgui';
 
 import { publishHost } from './host-bridge';
 import { mirrorConsoleToNative } from './platform/native-console';

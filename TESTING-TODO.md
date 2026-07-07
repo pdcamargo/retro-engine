@@ -1907,3 +1907,25 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
 - Roadmap: MASTER-ROADMAP "Windowing" now 🟡 read + cursor + fullscreen. Box unchecked.
 
 ---
+
+## ✅ P1 — Export/Web: jsimgui tree-shaken out of shipped game bundles (build-verified)
+
+- **New:** `@retro-engine/renderer-webgpu` (+ studio/playground import updates). `createImGuiOverlay` (which
+  pulls the editor-only `@mori2003/jsimgui` multi-MB WASM) moved from the package **index** to a
+  `@retro-engine/renderer-webgpu/imgui` **subpath**. The index is on the shipped-game path (`bootWebGame`
+  imports `createWebGPURenderer` from it), so re-exporting imgui there leaked it into every game bundle.
+  Now the index never references imgui-overlay → it's out of the game module graph. `apps/studio/src/main.ts`
+  + `apps/playground/src/imgui-showcase-plugin.ts` updated to import from the subpath.
+- **Verified (build, not just unit):** built the `@retro-engine/sample-game` web export (`bun run build:web`)
+  → `dist/web/main.js` has **0** `imgui` references (any case) — imgui fully excluded. Studio + playground
+  typecheck + bundle green via the subpath (26 turbo tasks). Full repo gate green on push.
+- **BREAKING (pre-0.1.0):** import `createImGuiOverlay` / `ImGuiOverlayOptions` from
+  `@retro-engine/renderer-webgpu/imgui` instead of the package root. Game code using only
+  `createWebGPURenderer` needs no change.
+- **NOTE:** `@retro-engine/renderer-webgl2` has its own imgui-overlay + index re-export (a parallel
+  follow-up) — not in the WebGPU game-bundle path, so left as-is for now; worth the same subpath treatment
+  before WebGL2 export ships. No ADR (packaging hygiene; the "editor-only code shouldn't ship in game
+  bundles" direction is already established).
+- Roadmap: MASTER-ROADMAP "Export — Web follow-ups" now notes jsimgui tree-shaken ✅.
+
+---

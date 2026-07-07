@@ -7,7 +7,7 @@ import {
   type Rgb,
   type Ui,
 } from '@retro-engine/editor-sdk';
-import { createImGuiOverlay } from '@retro-engine/renderer-webgpu';
+import { createImGuiOverlay } from '@retro-engine/renderer-webgpu/imgui';
 
 import { DEFAULT_IMGUI_LAYOUT } from './imgui-default-layout';
 

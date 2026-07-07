@@ -173,7 +173,11 @@ export const createWebGPURenderer = (_canvas: HTMLCanvasElement): Renderer => {
   return renderer;
 };
 
-export { createImGuiOverlay } from './imgui-overlay';
+// `createImGuiOverlay` is intentionally NOT re-exported here: it pulls the
+// editor-only `@mori2003/jsimgui` (a multi-MB WASM lib), and this index is on the
+// shipped-game path (`bootWebGame` imports `createWebGPURenderer` from it). Keeping
+// it out of the module graph means game bundles never include ImGui. Editor / dev
+// hosts import it from the `@retro-engine/renderer-webgpu/imgui` subpath instead.
 
 // The raw `GPUTexture` behind a HAL `Texture`, reachable via the `GPU_TEXTURE`
 // symbol. Exposed so a host that drives an external GPU library directly (e.g.

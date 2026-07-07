@@ -9,6 +9,10 @@
     ".": {
       "types": "./src/index.ts",
       "default": "./src/index.ts"
+    },
+    "./imgui": {
+      "types": "./src/imgui-overlay.ts",
+      "default": "./src/imgui-overlay.ts"
     }
   },
   "publishConfig": {
@@ -20,6 +24,10 @@
       ".": {
         "types": "./dist/index.d.ts",
         "default": "./dist/index.js"
+      },
+      "./imgui": {
+        "types": "./dist/imgui-overlay.d.ts",
+        "default": "./dist/imgui-overlay.js"
       }
     }
   },

@@ -409,9 +409,10 @@ foundation.**
 - [ ] **Export — Web follow-ups** — the remaining slices of the P0 web target (ADR-0151/0153): studio
       "Build → Web" menu (wrap `runWebExport`); pack a project's `assets/` into the `.rpak` + wire the
       runtime `AssetServer` to a `RangeRpakReader` so exported games load real assets; source maps /
-      production polish (phase 6); and **tree-shake `jsimgui` out of shipped web builds** — `bootWebGame`
-      imports `createWebGPURenderer` from `@retro-engine/renderer-webgpu`, whose index re-exports
-      `createImGuiOverlay`, pulling the editor-only imgui/WASM into the game bundle (~5 MB dead weight).
+      production polish (phase 6). **jsimgui tree-shaken out ✅** — `createImGuiOverlay` moved from the
+      `@retro-engine/renderer-webgpu` index to a `/imgui` subpath, so `bootWebGame`'s `createWebGPURenderer`
+      import no longer drags the editor-only imgui/WASM into the game bundle (verified: sample-game export
+      `main.js` has 0 `imgui` references; studio/playground use the subpath).
       _Links:_ [web-build-target.md](web-build-target.md)
 - [ ] **Export — Desktop (Tauri win/mac/linux)** — per-OS bundles via a **CI matrix** (no cross-compile);
       native `.rpak` streaming via a Tauri custom URI-scheme + mmap (one HTTP-Range loader path shared with
