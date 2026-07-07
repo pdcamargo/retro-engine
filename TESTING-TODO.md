@@ -1145,3 +1145,29 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
   Box unchecked pending your confirmation.
 
 ---
+
+## ✅ P1 — Analog gamepad axes as action sources (completes gamepad action-map binding) (unit + data-path verified)
+
+- **New:** `@retro-engine/input` (ADR-0156). Analog sticks/triggers now drive `axis`/`axis2d` actions with
+  their continuous `[-1,1]` value: `gamepadAxis(axis)` source, `.stick(name, src)` / `.stick2d(name, {x,y})`
+  builders, and an optional `analog` field on `.axis`/`.axis2d`. New `analogX`/`analogY` binding roles;
+  `resolveActionState` reads a `gamepadAxes` query and combines analog with the digital legs by
+  **larger magnitude** (keyboard ±1 vs. a partial stick — the dominant input wins), clamped to [-1,1].
+- **Also fixed:** latent reflection gap — `ActionBinding.device` schema now enumerates `'gamepad'` (the prior
+  digital-button slice already produced `device:'gamepad'` but the schema rejected it, so a saved scene with
+  any gamepad binding would have failed enum validation on load).
+- **Verified:** `action-map.test.ts` (+7: stick/stick2d/analog builder shapes; stick reads value directly;
+  keyboard+stick max-magnitude combine; dead-zoned stick leaves keyboard in charge). `gamepad.test.ts` (+2
+  full-data-path: a raw stick snapshot `[0.55,-0.55]` flows through `updateGamepads` → dead-zone → Y-flip →
+  the *exact* `gamepadAxes` query `InputPlugin` builds → `resolveActionState` → `Move = {x:0.5, y:0.5}`,
+  up = +1; a resting stick within the dead zone resolves to 0). `action-reflection.test.ts`: a `.stick2d`
+  gamepad-axis map round-trips through the extended role/device enums. Full input gate green: typecheck,
+  lint (28 files), 73 tests, bench (analog combine on the hot path). Changeset added.
+- **HOW to test:** on a player entity with `InputPlugin`, `new ActionMap().stick2d('Move',
+  { x: gamepadAxis('LeftStickX'), y: gamepadAxis('LeftStickY') })` → `ActionState.axis2d('Move')` tracks the
+  left stick continuously; or `.axis2d('Move', { left, right, up, down, analog: {x, y} })` for WASD-or-stick.
+- Roadmap: MASTER-ROADMAP Input follow-ups (a) gamepad bindings ✅ (buttons + analog both shipped). The Input
+  follow-ups item now has only the studio binding editor (c, BLOCKED — studio) left. Box unchecked pending
+  your confirmation.
+
+---

@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'bun:test';
 
+import { resolveActionState } from './action-resolve';
+import { ActionState } from './action-state';
+import { ActionMap, gamepadAxis } from './action-types';
+import { ButtonInput } from './button-input';
 import { applyDeadZone, Gamepads, updateGamepads } from './gamepad';
+import type { GamepadAxis, GamepadButton } from './gamepad-mapping';
 import { LEFT_TRIGGER_BUTTON, RIGHT_TRIGGER_BUTTON, STANDARD_BUTTONS } from './gamepad-mapping';
-import type { GamepadButton } from './gamepad-mapping';
 import type { GamepadSnapshot, GamepadSource } from './gamepad-source';
 
 class StubSource implements GamepadSource {
@@ -161,5 +165,55 @@ describe('Gamepads — multi-pad', () => {
     updateGamepads(pads, src);
     expect(pads.connectedIndices()).toEqual([1]);
     expect(pads.first()?.index).toBe(1);
+  });
+});
+
+describe('analog stick → action value (full data path)', () => {
+  // Reproduces InputPlugin's action-update wiring: poll the source, then build
+  // the same `gamepadAxes` query it hands the resolver from the first pad's
+  // dead-zoned axes. Verifies snapshot → dead zone → Y-flip → axis value.
+  const resolveFromPad = (map: ActionMap, state: ActionState, pads: Gamepads): void => {
+    const pad = pads.first();
+    resolveActionState(map, state, {
+      keyboard: new ButtonInput(),
+      mouse: new ButtonInput(),
+      gamepad: { pressed: (b: GamepadButton) => pad?.buttons.pressed(b) ?? false },
+      gamepadAxes: { value: (a: GamepadAxis) => pad?.axes.getOrZero(a) ?? 0 },
+    });
+  };
+
+  it('drives a stick2d Move from raw stick axes (dead-zoned, Y up = +1)', () => {
+    const pads = new Gamepads();
+    const src = new StubSource();
+    // Raw axes: X = 0.55 (→ ~0.5 after 0.1 dead zone), Y = -0.55 (API up is
+    // negative → flips to +0.55 raw → ~+0.5 after dead zone).
+    src.snapshots = [std(0, { axes: [0.55, -0.55, 0, 0] })];
+    updateGamepads(pads, src);
+
+    const map = new ActionMap().stick2d('Move', {
+      x: gamepadAxis('LeftStickX'),
+      y: gamepadAxis('LeftStickY'),
+    });
+    const state = new ActionState();
+    resolveFromPad(map, state, pads);
+
+    const move = state.axis2d('Move');
+    expect(move.x).toBeCloseTo(0.5, 5);
+    expect(move.y).toBeCloseTo(0.5, 5); // up is +1
+    expect(state.pressed('Move')).toBe(true);
+  });
+
+  it('a resting stick (within the dead zone) resolves to zero', () => {
+    const pads = new Gamepads();
+    const src = new StubSource();
+    src.snapshots = [std(0, { axes: [0.05, -0.05, 0, 0] })];
+    updateGamepads(pads, src);
+
+    const map = new ActionMap().stick('MoveX', gamepadAxis('LeftStickX'));
+    const state = new ActionState();
+    resolveFromPad(map, state, pads);
+
+    expect(state.axis('MoveX')).toBe(0);
+    expect(state.pressed('MoveX')).toBe(false);
   });
 });

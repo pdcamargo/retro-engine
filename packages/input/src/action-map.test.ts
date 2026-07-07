@@ -2,9 +2,10 @@ import { describe, expect, it } from 'bun:test';
 
 import { resolveActionState } from './action-resolve';
 import { ActionState } from './action-state';
-import { ActionMap, gamepadButton, key, mouseButton } from './action-types';
+import { ActionMap, gamepadAxis, gamepadButton, key, mouseButton } from './action-types';
+import { Axis } from './axis';
 import { ButtonInput } from './button-input';
-import type { GamepadButton } from './gamepad-mapping';
+import type { GamepadAxis, GamepadButton } from './gamepad-mapping';
 import { KeyboardInput } from './keyboard';
 import { MouseButtonInput } from './mouse';
 
@@ -14,6 +15,7 @@ interface Harness {
   readonly keyboard: KeyboardInput;
   readonly mouse: MouseButtonInput;
   readonly gamepad: ButtonInput<GamepadButton>;
+  readonly axes: Axis<GamepadAxis>;
   resolve(): void;
 }
 
@@ -22,16 +24,23 @@ const harness = (map: ActionMap): Harness => {
   const keyboard = new KeyboardInput();
   const mouse = new MouseButtonInput();
   const gamepad = new ButtonInput<GamepadButton>();
+  const axes = new Axis<GamepadAxis>();
   return {
     map,
     state,
     keyboard,
     mouse,
     gamepad,
+    axes,
     resolve() {
       // The plugin clears device transitions each frame; the action layer only
       // reads `pressed`, so held state is what matters here.
-      resolveActionState(map, state, { keyboard, mouse, gamepad });
+      resolveActionState(map, state, {
+        keyboard,
+        mouse,
+        gamepad,
+        gamepadAxes: { value: (a) => axes.getOrZero(a) },
+      });
     },
   };
 };
@@ -68,6 +77,53 @@ describe('ActionMap builder', () => {
       'positiveX',
       'positiveY',
       'negativeY',
+    ]);
+  });
+
+  it('stick() records a single analogX binding to a gamepad axis', () => {
+    const map = new ActionMap().stick('Throttle', gamepadAxis('RightTrigger'));
+    const def = map.get('Throttle');
+    expect(def?.kind).toBe('axis');
+    expect(def?.bindings).toEqual([{ role: 'analogX', device: 'gamepad', code: 'RightTrigger' }]);
+  });
+
+  it('stick2d() records analogX + analogY bindings', () => {
+    const map = new ActionMap().stick2d('Move', {
+      x: gamepadAxis('LeftStickX'),
+      y: gamepadAxis('LeftStickY'),
+    });
+    expect(map.get('Move')?.bindings.map((b) => [b.role, b.code])).toEqual([
+      ['analogX', 'LeftStickX'],
+      ['analogY', 'LeftStickY'],
+    ]);
+  });
+
+  it('axis()/axis2d() append analog bindings after the digital legs', () => {
+    const move1 = new ActionMap().axis('MoveX', {
+      negative: key('KeyA'),
+      positive: key('KeyD'),
+      analog: gamepadAxis('LeftStickX'),
+    });
+    expect(move1.get('MoveX')?.bindings.map((b) => b.role)).toEqual([
+      'negativeX',
+      'positiveX',
+      'analogX',
+    ]);
+
+    const move2 = new ActionMap().axis2d('Move', {
+      left: key('KeyA'),
+      right: key('KeyD'),
+      up: key('KeyW'),
+      down: key('KeyS'),
+      analog: { x: gamepadAxis('LeftStickX'), y: gamepadAxis('LeftStickY') },
+    });
+    expect(move2.get('Move')?.bindings.map((b) => b.role)).toEqual([
+      'negativeX',
+      'positiveX',
+      'positiveY',
+      'negativeY',
+      'analogX',
+      'analogY',
     ]);
   });
 });
@@ -201,5 +257,69 @@ describe('resolveActionState — axis2d', () => {
     h.gamepad.press('DPadUp');
     h.resolve();
     expect(h.state.axis2d('Move')).toEqual({ x: 1, y: 1 });
+  });
+});
+
+describe('resolveActionState — analog axes', () => {
+  it('stick() reads the analog axis value directly (partial deflection)', () => {
+    const h = harness(new ActionMap().stick('Throttle', gamepadAxis('RightTrigger')));
+    h.axes.set('RightTrigger', 0.4);
+    h.resolve();
+    expect(h.state.axis('Throttle')).toBeCloseTo(0.4, 5);
+    expect(h.state.pressed('Throttle')).toBe(true);
+  });
+
+  it('stick2d() reads both axes as the { x, y }', () => {
+    const h = harness(
+      new ActionMap().stick2d('Move', { x: gamepadAxis('LeftStickX'), y: gamepadAxis('LeftStickY') }),
+    );
+    h.axes.set('LeftStickX', -0.5);
+    h.axes.set('LeftStickY', 0.75);
+    h.resolve();
+    const move = h.state.axis2d('Move');
+    expect(move.x).toBeCloseTo(-0.5, 5);
+    expect(move.y).toBeCloseTo(0.75, 5);
+  });
+
+  it('combines keyboard + stick by larger magnitude', () => {
+    const h = harness(
+      new ActionMap().axis('MoveX', {
+        negative: key('KeyA'),
+        positive: key('KeyD'),
+        analog: gamepadAxis('LeftStickX'),
+      }),
+    );
+
+    // Stick alone → its value.
+    h.axes.set('LeftStickX', 0.3);
+    h.resolve();
+    expect(h.state.axis('MoveX')).toBeCloseTo(0.3, 5);
+
+    // Key fully pressed (±1) beats a partial stick → 1.
+    h.keyboard.press('KeyD');
+    h.resolve();
+    expect(h.state.axis('MoveX')).toBe(1);
+
+    // Key released, stick pushed the other way → the stick wins.
+    h.keyboard.release('KeyD');
+    h.axes.set('LeftStickX', -0.8);
+    h.resolve();
+    expect(h.state.axis('MoveX')).toBeCloseTo(-0.8, 5);
+  });
+
+  it('a dead-zoned (zero) stick leaves the digital legs in charge', () => {
+    const h = harness(
+      new ActionMap().axis2d('Move', {
+        left: key('KeyA'),
+        right: key('KeyD'),
+        up: key('KeyW'),
+        down: key('KeyS'),
+        analog: { x: gamepadAxis('LeftStickX'), y: gamepadAxis('LeftStickY') },
+      }),
+    );
+    // Stick resting at 0 (dead zone); keyboard drives up.
+    h.keyboard.press('KeyW');
+    h.resolve();
+    expect(h.state.axis2d('Move')).toEqual({ x: 0, y: 1 });
   });
 });

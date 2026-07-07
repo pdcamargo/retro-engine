@@ -5,7 +5,7 @@ import type { DecodeEnv, EncodeEnv } from '@retro-engine/reflect';
 import { decodeComponent, encodeComponent, TypeRegistry } from '@retro-engine/reflect';
 import type { RegisteredType } from '@retro-engine/reflect';
 
-import { ActionBinding, ActionDef, ActionMap, key, mouseButton } from './action-types';
+import { ActionBinding, ActionDef, ActionMap, gamepadAxis, key, mouseButton } from './action-types';
 
 // The schema InputPlugin.build registers, exercised directly against a fresh
 // registry so the serialization round-trip is verified without an App.
@@ -14,8 +14,8 @@ const makeRegistry = (): { reg: TypeRegistry; entry: RegisteredType<ActionMap> }
   reg.registerType(
     ActionBinding,
     {
-      role: t.enum('trigger', 'positiveX', 'negativeX', 'positiveY', 'negativeY'),
-      device: t.enum('key', 'mouse'),
+      role: t.enum('trigger', 'positiveX', 'negativeX', 'positiveY', 'negativeY', 'analogX', 'analogY'),
+      device: t.enum('key', 'mouse', 'gamepad'),
       code: t.string,
     },
     { name: 'ActionBinding', make: () => new ActionBinding() },
@@ -61,19 +61,25 @@ describe('ActionMap reflection round-trip', () => {
       .button('Jump', key('Space'))
       .button('Fire', key('KeyF'), mouseButton('Left'))
       .axis('MoveX', { negative: key('KeyA'), positive: key('KeyD') })
-      .axis2d('Move', { left: key('KeyA'), right: key('KeyD'), up: key('KeyW'), down: key('KeyS') });
+      .axis2d('Move', { left: key('KeyA'), right: key('KeyD'), up: key('KeyW'), down: key('KeyS') })
+      .stick2d('Look', { x: gamepadAxis('RightStickX'), y: gamepadAxis('RightStickY') });
 
     const serialized = encodeComponent(entry, map, encEnv(reg));
     const back = decodeComponent(entry, serialized, decEnv(reg)) as ActionMap;
 
     expect(back).toBeInstanceOf(ActionMap);
-    expect(back.defs).toHaveLength(4);
+    expect(back.defs).toHaveLength(5);
     expect(back.get('Fire')?.bindings).toEqual([
       { role: 'trigger', device: 'key', code: 'KeyF' },
       { role: 'trigger', device: 'mouse', code: 'Left' },
     ]);
     expect(back.get('Move')?.kind).toBe('axis2d');
     expect(back.get('MoveX')?.bindings.map((b) => b.role)).toEqual(['negativeX', 'positiveX']);
+    // Analog gamepad-axis bindings round-trip through the extended role/device enums.
+    expect(back.get('Look')?.bindings).toEqual([
+      { role: 'analogX', device: 'gamepad', code: 'RightStickX' },
+      { role: 'analogY', device: 'gamepad', code: 'RightStickY' },
+    ]);
     // Nested value types reconstruct as their real classes, not plain objects.
     expect(back.get('Jump')?.bindings[0]).toBeInstanceOf(ActionBinding);
     expect(back.defs[0]).toBeInstanceOf(ActionDef);

@@ -25,7 +25,15 @@ export {
 } from './touch-gestures';
 export { TouchGesturePlugin } from './touch-gesture-plugin';
 export type { ActionKind, ActionSource, BindingRole, InputDevice } from './action-types';
-export { ActionBinding, ActionDef, ActionMap, gamepadButton, key, mouseButton } from './action-types';
+export {
+  ActionBinding,
+  ActionDef,
+  ActionMap,
+  gamepadAxis,
+  gamepadButton,
+  key,
+  mouseButton,
+} from './action-types';
 export type { Axis2dValue } from './action-state';
 export { ActionState } from './action-state';
 export type { ActionInputs } from './action-resolve';

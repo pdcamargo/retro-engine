@@ -229,10 +229,13 @@ foundation.**
 ## Engine
 
 - [ ] **Input follow-ups** — three additive extensions on the shipped `@retro-engine/input`
-      (ADR-0144/0145/0146): (a) **gamepad bindings in the action map** — 🟡 **buttons shipped**
-      (`gamepadButton()` source + `'gamepad'` device; works in `.button`/`.axis2d`/mixed via the existing
-      builders, read from the first connected pad; `resolveActionState` now takes an `ActionInputs` bundle;
-      unit-tested). Analog stick axes as action sources remain; (b) **touch gesture recognizers** — ✅ **tap/swipe/pan/pinch
+      (ADR-0144/0145/0146): (a) **gamepad bindings in the action map** — ✅ **buttons + analog shipped**
+      (ADR-0156): digital `gamepadButton()` source (`.button`/`.axis2d`/mixed) plus analog `gamepadAxis()`
+      source via new `analogX`/`analogY` roles — `.stick()`/`.stick2d()` shorthands and an `analog` option on
+      `.axis`/`.axis2d`, larger-magnitude of the digital legs vs. the stick wins; read from the first
+      connected pad's dead-zoned axes; `resolveActionState` takes an `ActionInputs` bundle (now incl.
+      `gamepadAxes`); `ActionBinding` reflection enums extended (incl. the `'gamepad'` device fix);
+      unit + full-data-path tested; (b) **touch gesture recognizers** — ✅ **tap/swipe/pan/pinch
       shipped** (`recognizeGestures` + `TouchGesturePlugin` emitting `TapGesture`/`SwipeGesture`/`PanGesture`/
       `PinchGesture` messages, tunable `TouchGestureConfig`; 8 unit tests);
       (c) **studio binding editor** (Phase 5, BLOCKED — studio) — edit the `ActionMap` live + an MCP command.

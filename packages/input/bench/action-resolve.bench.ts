@@ -6,15 +6,23 @@ import { bench, summary } from 'mitata';
 
 import { resolveActionState } from '../src/action-resolve';
 import { ActionState } from '../src/action-state';
-import { ActionMap, key, mouseButton } from '../src/action-types';
+import { ActionMap, gamepadAxis, key, mouseButton } from '../src/action-types';
+import { Axis } from '../src/axis';
 import { ButtonInput } from '../src/button-input';
-import type { GamepadButton } from '../src/gamepad-mapping';
+import type { GamepadAxis, GamepadButton } from '../src/gamepad-mapping';
 import { KeyboardInput } from '../src/keyboard';
 import { MouseButtonInput } from '../src/mouse';
 
 const makeMap = (buttons: number): ActionMap => {
   const map = new ActionMap()
-    .axis2d('Move', { left: key('KeyA'), right: key('KeyD'), up: key('KeyW'), down: key('KeyS') })
+    // A stick-plus-keyboard Move exercises the analog combine path per component.
+    .axis2d('Move', {
+      left: key('KeyA'),
+      right: key('KeyD'),
+      up: key('KeyW'),
+      down: key('KeyS'),
+      analog: { x: gamepadAxis('LeftStickX'), y: gamepadAxis('LeftStickY') },
+    })
     .axis('Look', { negative: key('KeyQ'), positive: key('KeyE') })
     .button('Fire', key('KeyF'), mouseButton('Left'));
   for (let i = 0; i < buttons; i += 1) map.button(`Action${i}`, key(`Key${i}`));
@@ -29,11 +37,14 @@ for (const buttons of [4, 16, 64]) {
       const keyboard = new KeyboardInput();
       const mouse = new MouseButtonInput();
       const gamepad = new ButtonInput<GamepadButton>();
+      const axes = new Axis<GamepadAxis>();
       // A realistic mix of held inputs.
       keyboard.press('KeyW');
       keyboard.press('KeyD');
       mouse.press('Left');
-      yield () => resolveActionState(map, state, { keyboard, mouse, gamepad });
+      axes.set('LeftStickX', 0.6);
+      const gamepadAxes = { value: (a: GamepadAxis): number => axes.getOrZero(a) };
+      yield () => resolveActionState(map, state, { keyboard, mouse, gamepad, gamepadAxes });
     });
   });
 }

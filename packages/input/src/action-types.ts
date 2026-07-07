@@ -1,4 +1,4 @@
-import type { GamepadButton } from './gamepad-mapping';
+import type { GamepadAxis, GamepadButton } from './gamepad-mapping';
 import { ActionState } from './action-state';
 import type { KeyCode } from './keyboard';
 import type { MouseButton } from './mouse';
@@ -12,8 +12,17 @@ export type InputDevice = 'key' | 'mouse' | 'gamepad';
  * - `'positiveX'` / `'negativeX'` — the +1 / −1 legs of an `axis` (and the X of
  *   an `axis2d`).
  * - `'positiveY'` / `'negativeY'` — the +1 / −1 legs of an `axis2d`'s Y.
+ * - `'analogX'` / `'analogY'` — a continuous analog source (a gamepad stick axis)
+ *   feeding the X / Y of an `axis` / `axis2d` directly, rather than a discrete leg.
  */
-export type BindingRole = 'trigger' | 'positiveX' | 'negativeX' | 'positiveY' | 'negativeY';
+export type BindingRole =
+  | 'trigger'
+  | 'positiveX'
+  | 'negativeX'
+  | 'positiveY'
+  | 'negativeY'
+  | 'analogX'
+  | 'analogY';
 
 /**
  * The shape of an action's resolved value:
@@ -41,6 +50,15 @@ export const mouseButton = (button: MouseButton): ActionSource => ({ device: 'mo
  * axes are a separate follow-up.
  */
 export const gamepadButton = (button: GamepadButton): ActionSource => ({ device: 'gamepad', code: button });
+
+/**
+ * A gamepad analog-axis source for an `axis` / `axis2d` binding — the continuous
+ * `[-1, 1]` reading of one stick axis (or `[0, 1]` for a trigger), read from the
+ * first connected pad. Bind it through the `analog` option of {@link ActionMap.axis} /
+ * {@link ActionMap.axis2d}, or the {@link ActionMap.stick} / {@link ActionMap.stick2d}
+ * shorthands. Stick Y is oriented so up is `+1`.
+ */
+export const gamepadAxis = (axis: GamepadAxis): ActionSource => ({ device: 'gamepad', code: axis });
 
 /**
  * One physical input mapped into an action, in a specific {@link BindingRole}.
@@ -127,34 +145,71 @@ export class ActionMap {
 
   /**
    * Define a 1D axis whose value is `+1` while `positive` is held, `-1` while
-   * `negative` is held, `0` otherwise (both held cancels). Chainable.
+   * `negative` is held, `0` otherwise (both held cancels). Pass `analog` to also
+   * drive it from a continuous gamepad axis (via {@link gamepadAxis}); the
+   * larger-magnitude of the digital legs and the analog value wins. Chainable.
    */
-  axis(name: string, legs: { negative: ActionSource; positive: ActionSource }): this {
-    this.defs.push(
-      new ActionDef(name, 'axis', [
-        binding('negativeX', legs.negative),
-        binding('positiveX', legs.positive),
-      ]),
-    );
+  axis(
+    name: string,
+    legs: { negative: ActionSource; positive: ActionSource; analog?: ActionSource },
+  ): this {
+    const bindings = [binding('negativeX', legs.negative), binding('positiveX', legs.positive)];
+    if (legs.analog !== undefined) bindings.push(binding('analogX', legs.analog));
+    this.defs.push(new ActionDef(name, 'axis', bindings));
     return this;
   }
 
   /**
    * Define a 2D axis (a virtual D-pad) whose `{ x, y }` is composed from four
    * directional buttons. `+y` is up. Diagonals are raw (magnitude up to √2);
-   * normalize if you want unit-speed diagonals. Chainable.
+   * normalize if you want unit-speed diagonals. Pass `analog` to also drive each
+   * component from a continuous gamepad axis (via {@link gamepadAxis}); per
+   * component the larger-magnitude of the digital legs and the analog value wins.
+   * Chainable.
    */
   axis2d(
     name: string,
-    dirs: { left: ActionSource; right: ActionSource; up: ActionSource; down: ActionSource },
+    dirs: {
+      left: ActionSource;
+      right: ActionSource;
+      up: ActionSource;
+      down: ActionSource;
+      analog?: { x: ActionSource; y: ActionSource };
+    },
   ): this {
+    const bindings = [
+      binding('negativeX', dirs.left),
+      binding('positiveX', dirs.right),
+      binding('positiveY', dirs.up),
+      binding('negativeY', dirs.down),
+    ];
+    if (dirs.analog !== undefined) {
+      bindings.push(binding('analogX', dirs.analog.x), binding('analogY', dirs.analog.y));
+    }
+    this.defs.push(new ActionDef(name, 'axis2d', bindings));
+    return this;
+  }
+
+  /**
+   * Define a 1D axis driven directly by a single continuous analog source (a
+   * gamepad stick axis or trigger, via {@link gamepadAxis}) — its `[-1, 1]`
+   * reading is the axis value. Shorthand for {@link ActionMap.axis} with only an
+   * `analog` binding. Chainable.
+   */
+  stick(name: string, source: ActionSource): this {
+    this.defs.push(new ActionDef(name, 'axis', [binding('analogX', source)]));
+    return this;
+  }
+
+  /**
+   * Define a 2D axis driven directly by two continuous analog sources (a gamepad
+   * stick's X/Y axes, via {@link gamepadAxis}) — their `[-1, 1]` readings are the
+   * `{ x, y }`. `+y` is up (stick Y is oriented on ingest). Shorthand for
+   * {@link ActionMap.axis2d} with only `analog` bindings. Chainable.
+   */
+  stick2d(name: string, axes: { x: ActionSource; y: ActionSource }): this {
     this.defs.push(
-      new ActionDef(name, 'axis2d', [
-        binding('negativeX', dirs.left),
-        binding('positiveX', dirs.right),
-        binding('positiveY', dirs.up),
-        binding('negativeY', dirs.down),
-      ]),
+      new ActionDef(name, 'axis2d', [binding('analogX', axes.x), binding('analogY', axes.y)]),
     );
     return this;
   }

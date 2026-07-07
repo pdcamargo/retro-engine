@@ -8,7 +8,7 @@ import { ActionBinding, ActionDef, ActionMap } from './action-types';
 import { DomInputBackend, HeadlessInputBackend } from './dom-backend';
 import type { DomInputBackendOptions } from './dom-backend';
 import { Gamepads, updateGamepads } from './gamepad';
-import type { GamepadButton } from './gamepad-mapping';
+import type { GamepadAxis, GamepadButton } from './gamepad-mapping';
 import { NavigatorGamepadSource } from './gamepad-source';
 import type { GamepadSource } from './gamepad-source';
 import { KeyboardInput } from './keyboard';
@@ -133,8 +133,8 @@ export class InputPlugin implements PluginObject {
     app.registerType(
       ActionBinding,
       {
-        role: t.enum('trigger', 'positiveX', 'negativeX', 'positiveY', 'negativeY'),
-        device: t.enum('key', 'mouse'),
+        role: t.enum('trigger', 'positiveX', 'negativeX', 'positiveY', 'negativeY', 'analogX', 'analogY'),
+        device: t.enum('key', 'mouse', 'gamepad'),
         code: t.string,
       },
       { name: 'ActionBinding', make: () => new ActionBinding() },
@@ -160,11 +160,13 @@ export class InputPlugin implements PluginObject {
       'preUpdate',
       [Query([ActionMap, ActionState]), Res(KeyboardInput), Res(MouseButtonInput), Res(Gamepads)],
       (rows, keyboard, mouseButtons, gamepads) => {
-        // Gamepad bindings read the first connected pad (single-player convenience).
+        // Gamepad bindings read the first connected pad (single-player convenience):
+        // digital buttons and, for analog bindings, the dead-zoned stick/trigger axes.
         const pad = (gamepads as Gamepads).first();
         const gamepad = { pressed: (b: GamepadButton): boolean => pad?.buttons.pressed(b) ?? false };
+        const gamepadAxes = { value: (a: GamepadAxis): number => pad?.axes.getOrZero(a) ?? 0 };
         for (const [map, state] of rows) {
-          resolveActionState(map, state, { keyboard, mouse: mouseButtons, gamepad });
+          resolveActionState(map, state, { keyboard, mouse: mouseButtons, gamepad, gamepadAxes });
         }
       },
       { name: 'action-update', after: ['input'] },
