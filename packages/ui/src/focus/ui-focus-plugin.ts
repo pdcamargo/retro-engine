@@ -1,10 +1,12 @@
 import type { Entity } from '@retro-engine/ecs';
 import type { App, PluginObject } from '@retro-engine/engine';
-import { MessageReader, Query, ResMut } from '@retro-engine/engine';
+import { MessageReader, MessageWriter, Query, Res, ResMut } from '@retro-engine/engine';
 
+import { UiClicked } from '../interaction/ui-clicked';
 import { ComputedLayout } from '../ui-node';
 
 import { type FocusNode, spatialNavigate, tabNavigate } from './focus-nav';
+import { shouldActivateFocused, UiActivate } from './ui-activate';
 import { Focusable, UiFocus, UiNavigate } from './ui-focus';
 
 /**
@@ -25,6 +27,10 @@ export class UiFocusPlugin implements PluginObject {
   build(app: App): void {
     if (app.getResource(UiFocus) === undefined) app.insertResource(new UiFocus());
     app.addMessage(UiNavigate);
+    app.addMessage(UiActivate);
+    // Idempotent if UiInteractionPlugin already registered it; ensures the
+    // activation system can always write a UiClicked even without that plugin.
+    app.addMessage(UiClicked);
     app.registerComponent(Focusable, {}, { name: 'Focusable', make: () => new Focusable() });
 
     app.addSystem(
@@ -64,6 +70,20 @@ export class UiFocusPlugin implements PluginObject {
         }
       },
       { label: 'ui-focus', after: ['input'] },
+    );
+
+    // Activate the focused node: turn a UiActivate into a UiClicked on the focused
+    // entity, so keyboard/gamepad activation drives the same click path as the
+    // pointer. Runs after focus moves this frame, before click consumers (toggle).
+    app.addSystem(
+      'preUpdate',
+      [MessageReader(UiActivate), Res(UiFocus), MessageWriter(UiClicked)],
+      (activates, focus, clicked) => {
+        const activated = [...(activates as Iterable<UiActivate>)].length > 0;
+        const target = shouldActivateFocused(activated, (focus as UiFocus).current);
+        if (target !== null) (clicked as { write(m: UiClicked): void }).write(new UiClicked(target));
+      },
+      { label: 'ui-activate', after: ['ui-focus'], before: ['ui-toggle'] },
     );
   }
 }

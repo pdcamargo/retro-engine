@@ -92,4 +92,5 @@ export { DiagnosticsOverlayPlugin, DiagnosticsText, formatDiagnostics } from './
 export type { FocusNode, NavDirection } from './focus/focus-nav';
 export { spatialNavigate, tabNavigate } from './focus/focus-nav';
 export { Focusable, UiFocus, UiNavigate } from './focus/ui-focus';
+export { shouldActivateFocused, UiActivate } from './focus/ui-activate';
 export { UiFocusPlugin } from './focus/ui-focus-plugin';

@@ -1439,3 +1439,22 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
   only needs focus activation (Enter/South → click the focused widget). Box unchecked pending confirmation.
 
 ---
+
+## ✅ P1 — In-game UI depth, Phase 2 complete: focus activation (unit-verified)
+
+- **New:** `@retro-engine/ui`. `UiActivate` message → the focus system emits a `UiClicked` on
+  `UiFocus.current`, so Enter/Space/gamepad-South drives the same click path as the pointer (buttons,
+  toggles, and any `UiClicked` reader respond identically). Runs `after: ['ui-focus'], before:
+  ['ui-toggle']` so the synthetic click is seen the same frame; `UiFocusPlugin` defensively `addMessage`s
+  `UiClicked` so activation works even without `UiInteractionPlugin`. Decision is a pure
+  `shouldActivateFocused(activated, focused)`.
+- **Verified:** `ui-activate.test.ts` (+4): targets the focused entity when activated; no-op without an
+  activation / with nothing focused; bare-message check. Full ui gate green: typecheck, lint, 125 tests,
+  build. Changeset added.
+- **HOW to test:** with `UiFocusPlugin`, map Enter (or gamepad South) → `MessageWriter(UiActivate).write(new
+  UiActivate())`; the focused button/toggle reacts as if clicked (e.g. a focused `UiToggle` flips).
+- Roadmap: MASTER-ROADMAP "In-game UI depth" — **focus complete** (navigate + ring + activate). Remaining:
+  text-input, scrollview, dropdown/tabs, data binding, virtualized views, screens. Box unchecked pending
+  your confirmation.
+
+---

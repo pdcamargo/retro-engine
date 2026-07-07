@@ -248,8 +248,10 @@ foundation.**
       `UiNavigate` (tab order via paint order; directional via a pure nearest-neighbour cost), device-
       agnostic + stale-focus clearing; **`:focused`/`:checked` `.rss` pseudo-classes now driven by live
       state** (`UiFocus` / `UiToggle`), so a focus ring is authored in `.rss` (`*:focus`, `Toggle:checked`)
-      with no hardcoded border code. Remaining widgets: text-input, scrollview, dropdown/tabs; focus
-      activation (Enter/South → click, 2b); data binding; virtualized list/tree views; screen management.
+      with no hardcoded border code; **focus activation** (`UiActivate` → `UiClicked` on the focused node,
+      so Enter/South drives the click path). Focus is complete (navigate + ring + activate). Remaining
+      widgets: text-input, scrollview, dropdown/tabs; data binding; virtualized list/tree views; screen
+      management.
       _Links:_ [in-game-ui-depth.md](in-game-ui-depth.md) · [ui-system.md](ui-system.md)
 - [ ] **Audio mixer buses** — 🟡 **Phases 1–2 shipped** (ADR-0159, ADR-0162): (1) named buses + per-bus
       volume (`PlayOptions.bus`, `Audio.setBusVolume`/`busVolume`, `AudioSource.bus`; `voice.gain → bus →

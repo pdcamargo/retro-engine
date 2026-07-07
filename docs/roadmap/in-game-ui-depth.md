@@ -38,8 +38,10 @@ ring is authored purely in `.rss` — `*:focus { border-color: … }`, `Toggle:c
 { … }` — with no hardcoded border code. Wired through `resolveUiStyles`'
 `focusedEntity` param (the `ui-style` system soft-reads `UiFocus`).
 
-**Remaining (2b):** activate the focused widget (Enter/Space/South → click it),
-building on `UiFocus`.
+**Activation ✅:** `UiActivate` message → the focus system emits a `UiClicked` on
+`UiFocus.current`, so Enter/Space/gamepad-South drives the same click path as the
+pointer (buttons, toggles, etc. all respond). Pure `shouldActivateFocused` +
+unit tests. Phase 2 is complete: navigate + ring + activate.
 
 ## Phase 3 — Data binding
 
