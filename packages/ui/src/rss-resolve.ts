@@ -5,6 +5,7 @@ import {
   type AlignItems,
   type AlignSelf,
   type Dimension,
+  type Display,
   type Edges,
   type FlexDirection,
   type JustifyContent,
@@ -163,6 +164,9 @@ const mapDeclarations = (props: Record<string, string>): UiStyleInit => {
   for (const [property, raw] of Object.entries(props)) {
     const value = raw.trim();
     switch (property) {
+      case 'display': init.display = value as Display; break;
+      case 'grid-template-columns': init.gridTemplateColumns = value; break;
+      case 'grid-template-rows': init.gridTemplateRows = value; break;
       case 'flex-direction': init.flexDirection = value as FlexDirection; break;
       case 'justify-content': init.justifyContent = value as JustifyContent; break;
       case 'align-items': init.alignItems = value as AlignItems; break;

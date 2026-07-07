@@ -1630,3 +1630,22 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
 - Roadmap: MASTER-ROADMAP "CSS Grid for the UI layout engine" now 🟡 Phases 1–2 shipped. Box unchecked.
 
 ---
+
+## ✅ P1 — CSS Grid for the UI, Phase 2b: `.rss` grid authoring (unit-verified)
+
+- **New:** `@retro-engine/ui` (ADR-0167). The `.rss` style resolver (`mapDeclarations`) now maps
+  `display: grid`, `grid-template-columns`, `grid-template-rows` → `UiStyle` (template values kept as CSS
+  strings, parsed at layout time → no new reflection needed). Grid is now authorable from a stylesheet, not
+  just `UiNode` init.
+- **Verified:** `rss-resolve.test.ts` (+1): a `.grid { display: grid; grid-template-columns: 1fr 2fr 40px;
+  grid-template-rows: 1fr 1fr }` rule resolves to `display:'grid'` + the exact template strings. The
+  engine half (placing children into cells) was tested in Phase 2, so the `.rss` → grid-layout chain is
+  covered end-to-end by composition. Full ui gate green: typecheck, lint, 139 tests, build. Changeset.
+- **HOW to test:** author a `.rss` rule `display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;` on a
+  `UiClass` node → its children tile in a 3-column grid.
+- **NOTE:** grid is now usable end to end (core → layout → `.rss`). Phase 3 (explicit placement/spanning,
+  `auto`/`minmax` tracks, grid alignment, auto-rows) remains — tracked in `css-grid-ui.md`.
+- Roadmap: MASTER-ROADMAP "CSS Grid for the UI layout engine" now 🟡 Phases 1–2b shipped (grid usable). Box
+  unchecked pending your confirmation.
+
+---

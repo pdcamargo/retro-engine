@@ -240,12 +240,11 @@ foundation.**
       `PinchGesture` messages, tunable `TouchGestureConfig`; 8 unit tests);
       (c) **studio binding editor** (Phase 5, BLOCKED — studio) — edit the `ActionMap` live + an MCP command.
       _Links:_ [input-system.md](input-system.md)
-- [ ] **CSS Grid for the UI layout engine** — 🟡 **Phases 1–2 shipped** (ADR-0167): (1) pure track-sizing +
-      cell-geometry core (`GridTrack` px/fr, `resolveGridTracks`, `computeGridLayout`); (2) `UiStyle`
-      `display: 'flex'|'grid'` + `gridTemplateColumns`/`gridTemplateRows` (CSS-string, `parseGridTemplate`,
-      reflected) + `FlexLayoutEngine` grid branch placing children into cells (row-major, stretched); layout
-      unit-tested. Remaining: `.rss` grid authoring (Phase 2b); explicit placement/spanning, `auto`/`minmax`,
-      grid alignment, auto-rows (Phase 3). _Links:_ [css-grid-ui.md](css-grid-ui.md) · [ui-system.md](ui-system.md)
+- [ ] **CSS Grid for the UI layout engine** — 🟡 **Phases 1–2b shipped, grid usable** (ADR-0167): (1) pure
+      track-sizing + cell-geometry core; (2) `UiStyle` `display`/`gridTemplate*` + `FlexLayoutEngine` grid
+      branch placing children into cells; (2b) `.rss` authoring (`display: grid`, `grid-template-columns/rows`
+      in the style resolver). Layout + resolver unit-tested. Remaining (Phase 3): explicit placement/spanning,
+      `auto`/`minmax` tracks, grid alignment, auto-rows. _Links:_ [css-grid-ui.md](css-grid-ui.md) · [ui-system.md](ui-system.md)
 - [ ] **In-game UI depth** — 🟡 **Phases 1 (partial) + 2 shipped**: widgets `UiToggle` (checkbox) +
       `UiSlider` (drag→value) reuse the `Interactable`/`UiClicked` foundation with pure, unit-tested logic;
       **focus + spatial navigation** (ADR-0163) — `UiFocus` resource + `Focusable` marker + message-driven

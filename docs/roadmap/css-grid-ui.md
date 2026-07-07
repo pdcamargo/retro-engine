@@ -22,9 +22,14 @@ zero-size rect — auto-rows are Phase 3). Children recurse normally into their
 subtree. Reflection-registered. Layout unit-tested (2×2 fr; px+fr+gap+padding;
 overflow).
 
-**Remaining (2b):** `.rss` authoring — parse `display: grid` /
-`grid-template-columns` / `grid-template-rows` in the style resolver so grid is
-authorable from a stylesheet (today it is set via `UiNode` init).
+## Phase 2b — `.rss` grid authoring ✅ (ADR-0167)
+
+The style resolver maps `display: grid`, `grid-template-columns`, and
+`grid-template-rows` (values kept as CSS strings, parsed at layout time), so grid
+is authorable from a `.rss` stylesheet, not just `UiNode` init. Resolver
+unit-tested; the engine half was already tested, so the `.rss` → grid layout chain
+is covered end-to-end by composition. Grid is now **usable** (core + layout +
+authoring).
 
 ## Phase 3 — placement + `auto`/`minmax` + alignment
 

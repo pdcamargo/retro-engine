@@ -74,6 +74,20 @@ describe('resolveUiStyle (declaration mapping)', () => {
     const style = resolveUiStyle(rules, node({ classes: ['x'] }), { width: 500 });
     expect(style.width).toBe(500);
   });
+
+  it('maps display + grid-template columns/rows (values kept as CSS strings)', () => {
+    const rules = parseRss(`
+      .grid {
+        display: grid;
+        grid-template-columns: 1fr 2fr 40px;
+        grid-template-rows: 1fr 1fr;
+      }
+    `);
+    const style = resolveUiStyle(rules, node({ classes: ['grid'] }));
+    expect(style.display).toBe('grid');
+    expect(style.gridTemplateColumns).toBe('1fr 2fr 40px');
+    expect(style.gridTemplateRows).toBe('1fr 1fr');
+  });
 });
 
 describe('rss → layout (end to end)', () => {
