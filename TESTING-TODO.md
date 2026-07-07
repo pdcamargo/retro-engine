@@ -1611,3 +1611,22 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
 - Roadmap: MASTER-ROADMAP "CSS Grid for the UI layout engine" now 🟡 Phase 1 shipped. Box unchecked.
 
 ---
+
+## ✅ P1 — CSS Grid for the UI, Phase 2: display:grid layout integration (unit-verified)
+
+- **New:** `@retro-engine/ui` (ADR-0167). `UiStyle` gains `display: 'flex'|'grid'` +
+  `gridTemplateColumns`/`gridTemplateRows` (CSS-syntax strings; `parseGridTemplate` → GridTrack[]; `gap`
+  used for both axes). `FlexLayoutEngine` branches on `display:'grid'`: computes the grid for the content
+  box, lays each in-flow child into its cell (row-major, stretched to fill); children past the last cell get
+  a zero-size rect (auto-rows = Phase 3). `uiNodeSchema` reflects display (enum) + the two template strings.
+- **Verified:** `grid-layout.test.ts` (+3 parseGridTemplate: fr/px/bare, whitespace/empty, skip malformed);
+  `flex-layout.test.ts` (+3): 2×2 fr grid tiles children; px+fr+gap+padding offsets; overflow child → 0×0.
+  Full ui gate green: typecheck, lint, 138 tests, build. Changeset.
+- **HOW to test:** `new UiNode({ display:'grid', gridTemplateColumns:'1fr 1fr', gridTemplateRows:'1fr 1fr',
+  gap:8 })` with 4 children → children tile the content box in a 2×2 grid.
+- **NOTE:** grid is set via `UiNode` init (+ reflected) and applied by the layout engine. `.rss` grid
+  authoring (Phase 2b) + explicit placement/spanning/`auto`/`minmax`/alignment (Phase 3) remain — tracked in
+  `css-grid-ui.md`.
+- Roadmap: MASTER-ROADMAP "CSS Grid for the UI layout engine" now 🟡 Phases 1–2 shipped. Box unchecked.
+
+---

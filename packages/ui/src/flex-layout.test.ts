@@ -186,3 +186,52 @@ describe('FlexLayoutEngine — nesting', () => {
     expect(outer.children[1]!.rect.y).toBe(25);
   });
 });
+
+describe('FlexLayoutEngine — display: grid', () => {
+  it('places children into a 2×2 fr grid, row-major, filling cells', () => {
+    const r = rects(
+      node({ width: 200, height: 200, display: 'grid', gridTemplateColumns: '1fr 1fr', gridTemplateRows: '1fr 1fr' }, [
+        node({}),
+        node({}),
+        node({}),
+        node({}),
+      ]),
+    );
+    expect(r[0]).toEqual({ x: 0, y: 0, width: 100, height: 100 });
+    expect(r[1]).toEqual({ x: 100, y: 0, width: 100, height: 100 });
+    expect(r[2]).toEqual({ x: 0, y: 100, width: 100, height: 100 });
+    expect(r[3]).toEqual({ x: 100, y: 100, width: 100, height: 100 });
+  });
+
+  it('honors gap and mixed px/fr tracks, and offsets by the container padding', () => {
+    const r = rects(
+      node(
+        {
+          width: 200,
+          height: 100,
+          padding: 10,
+          gap: 10,
+          display: 'grid',
+          gridTemplateColumns: '40px 1fr',
+          gridTemplateRows: '1fr',
+        },
+        [node({}), node({})],
+      ),
+    );
+    // content box: 180×80 after padding 10. columns: 40 + gap 10 + fr(180-40-10=130).
+    expect(r[0]).toEqual({ x: 10, y: 10, width: 40, height: 80 });
+    expect(r[1]).toEqual({ x: 10 + 40 + 10, y: 10, width: 130, height: 80 });
+  });
+
+  it('gives a child past the last cell a zero-size rect (no auto-rows yet)', () => {
+    const r = rects(
+      node({ width: 100, height: 100, display: 'grid', gridTemplateColumns: '1fr', gridTemplateRows: '1fr' }, [
+        node({}),
+        node({}),
+      ]),
+    );
+    expect(r[0]).toEqual({ x: 0, y: 0, width: 100, height: 100 });
+    expect(r[1]!.width).toBe(0);
+    expect(r[1]!.height).toBe(0);
+  });
+});

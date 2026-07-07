@@ -18,6 +18,14 @@ export type AlignItems = 'flex-start' | 'flex-end' | 'center' | 'stretch';
 /** Per-item cross-axis alignment; `'auto'` defers to the parent's `alignItems`. */
 export type AlignSelf = 'auto' | AlignItems;
 
+/**
+ * A node's layout mode for its in-flow children:
+ * - `'flex'` — flexbox (the default).
+ * - `'grid'` — CSS grid, sized by {@link UiStyle.gridTemplateColumns} /
+ *   {@link UiStyle.gridTemplateRows}; children fill cells row-major.
+ */
+export type Display = 'flex' | 'grid';
+
 /** In-flow (`'relative'`) or taken out of flow and positioned by insets. */
 export type PositionType = 'relative' | 'absolute';
 
@@ -44,6 +52,16 @@ export interface Edges {
  * always sees the complete struct so it never has to guess a default.
  */
 export interface UiStyle {
+  /** Layout mode for in-flow children. Default `'flex'`. */
+  readonly display: Display;
+  /**
+   * Grid column tracks as a CSS-like template (e.g. `"1fr 2fr 40px"`), parsed at
+   * layout time. Empty means no columns. Used only when {@link display} is
+   * `'grid'`; the `gap` applies between both grid columns and rows.
+   */
+  readonly gridTemplateColumns: string;
+  /** Grid row tracks, same syntax as {@link gridTemplateColumns}. */
+  readonly gridTemplateRows: string;
   readonly flexDirection: FlexDirection;
   readonly justifyContent: JustifyContent;
   readonly alignItems: AlignItems;
@@ -94,6 +112,9 @@ const ZERO_EDGES: Edges = { left: 0, right: 0, top: 0, bottom: 0 };
 
 /** A fresh, fully-defaulted {@link UiStyle} matching CSS flex-item defaults. */
 export const defaultUiStyle = (): UiStyle => ({
+  display: 'flex',
+  gridTemplateColumns: '',
+  gridTemplateRows: '',
   flexDirection: 'row',
   justifyContent: 'flex-start',
   alignItems: 'stretch',

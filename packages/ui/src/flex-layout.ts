@@ -4,6 +4,7 @@ import type {
   LayoutNode,
   LayoutResult,
 } from './layout-engine';
+import { computeGridLayout, parseGridTemplate } from './grid-layout';
 import { type AlignItems, isReverse, isRow, type UiStyle } from './ui-style';
 
 const clamp = (v: number, min: number, max: number | undefined): number =>
@@ -179,6 +180,10 @@ function layoutNode(node: LayoutNode, width: number, height: number): LayoutResu
 
   const inFlow = node.children.filter((c) => c.style.position !== 'absolute');
 
+  if (s.display === 'grid') {
+    return layoutGrid(node, width, height, contentW, contentH, inFlow);
+  }
+
   const items: FlexItem[] = inFlow.map((child) => {
     const cs = child.style;
     const mainMargin = row
@@ -292,6 +297,61 @@ function layoutNode(node: LayoutNode, width: number, height: number): LayoutResu
     results.set(it.child, offsetResult(layoutNode(it.child, childW, childH), childX, childY));
     mainPos += it.mainSize + it.mainMargin + between;
   }
+
+  for (const child of node.children) {
+    if (child.style.position === 'absolute') {
+      results.set(child, layoutAbsolute(child, contentW, contentH, s));
+    }
+  }
+
+  const children = node.children.map((c) => results.get(c) as LayoutResult);
+  return {
+    rect: { x: 0, y: 0, width, height },
+    contentWidth: contentW,
+    contentHeight: contentH,
+    children,
+    ...(node.key !== undefined ? { key: node.key } : {}),
+  };
+}
+
+/**
+ * Lay out a `display: grid` node's children into template cells (row-major),
+ * each child stretched to fill its cell. In-flow children past the last cell get
+ * a zero-size result at the content origin (grid auto-rows / overflow are a
+ * later phase); absolute children are positioned as usual. The `gap` applies
+ * between both columns and rows.
+ */
+function layoutGrid(
+  node: LayoutNode,
+  width: number,
+  height: number,
+  contentW: number,
+  contentH: number,
+  inFlow: readonly LayoutNode[],
+): LayoutResult {
+  const s = node.style;
+  const grid = computeGridLayout(
+    {
+      columns: parseGridTemplate(s.gridTemplateColumns),
+      rows: parseGridTemplate(s.gridTemplateRows),
+      columnGap: s.gap,
+      rowGap: s.gap,
+    },
+    { width: contentW, height: contentH },
+  );
+
+  const results = new Map<LayoutNode, LayoutResult>();
+  inFlow.forEach((child, i) => {
+    const cell = grid.cells[i];
+    if (cell === undefined) {
+      results.set(child, offsetResult(layoutNode(child, 0, 0), s.padding.left, s.padding.top));
+      return;
+    }
+    results.set(
+      child,
+      offsetResult(layoutNode(child, cell.width, cell.height), s.padding.left + cell.x, s.padding.top + cell.y),
+    );
+  });
 
   for (const child of node.children) {
     if (child.style.position === 'absolute') {

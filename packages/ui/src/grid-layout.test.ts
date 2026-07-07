@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 
-import { computeGridLayout, resolveGridTracks, type GridTrack } from './grid-layout';
+import { computeGridLayout, parseGridTemplate, resolveGridTracks, type GridTrack } from './grid-layout';
 
 const px = (value: number): GridTrack => ({ kind: 'px', value });
 const fr = (value: number): GridTrack => ({ kind: 'fr', value });
@@ -28,6 +28,36 @@ describe('resolveGridTracks', () => {
 
   it('leaves fr tracks at zero when there are no fractions to size against', () => {
     expect(resolveGridTracks([], 100, 0)).toEqual([]);
+  });
+});
+
+describe('parseGridTemplate', () => {
+  it('parses fr and px (and bare-number) tokens', () => {
+    expect(parseGridTemplate('1fr 2fr 40px')).toEqual([
+      { kind: 'fr', value: 1 },
+      { kind: 'fr', value: 2 },
+      { kind: 'px', value: 40 },
+    ]);
+    expect(parseGridTemplate('32 1fr')).toEqual([
+      { kind: 'px', value: 32 },
+      { kind: 'fr', value: 1 },
+    ]);
+  });
+
+  it('handles extra whitespace and yields nothing for an empty template', () => {
+    expect(parseGridTemplate('   ')).toEqual([]);
+    expect(parseGridTemplate('')).toEqual([]);
+    expect(parseGridTemplate('  1fr   2fr ')).toEqual([
+      { kind: 'fr', value: 1 },
+      { kind: 'fr', value: 2 },
+    ]);
+  });
+
+  it('skips malformed tokens', () => {
+    expect(parseGridTemplate('1fr auto 2fr')).toEqual([
+      { kind: 'fr', value: 1 },
+      { kind: 'fr', value: 2 },
+    ]);
   });
 });
 

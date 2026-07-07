@@ -52,6 +52,9 @@ const EDGES_STRUCT = t.struct({
  */
 export const uiNodeSchema: Schema<UiNode> = {
   style: t.struct({
+    display: t.enum('flex', 'grid'),
+    gridTemplateColumns: t.string,
+    gridTemplateRows: t.string,
     flexDirection: t.enum('row', 'row-reverse', 'column', 'column-reverse'),
     justifyContent: t.enum(
       'flex-start',

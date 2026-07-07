@@ -10,6 +10,27 @@ import type { LayoutRect } from './layout-engine';
  */
 export type GridTrack = { readonly kind: 'px'; readonly value: number } | { readonly kind: 'fr'; readonly value: number };
 
+/**
+ * Parse a CSS-like track template into {@link GridTrack}s: whitespace-separated
+ * tokens where `<n>fr` is a fraction and `<n>px` / a bare `<n>` is a fixed pixel
+ * size (e.g. `"1fr 2fr 40px"` → `[fr 1, fr 2, px 40]`). Unrecognized tokens are
+ * skipped, so an empty or malformed template yields no tracks. Pure.
+ */
+export const parseGridTemplate = (template: string): GridTrack[] => {
+  const out: GridTrack[] = [];
+  for (const token of template.trim().split(/\s+/)) {
+    if (token === '') continue;
+    if (token.endsWith('fr')) {
+      const v = Number.parseFloat(token.slice(0, -2));
+      if (Number.isFinite(v)) out.push({ kind: 'fr', value: v });
+    } else {
+      const v = Number.parseFloat(token.endsWith('px') ? token.slice(0, -2) : token);
+      if (Number.isFinite(v)) out.push({ kind: 'px', value: v });
+    }
+  }
+  return out;
+};
+
 /** A grid template: column + row tracks and the gaps between them (pixels). */
 export interface GridSpec {
   readonly columns: readonly GridTrack[];
