@@ -84,3 +84,5 @@ export { pickTopmost, UiPointer, updateUiInteraction } from './interaction/picki
 export { UiInteractionPlugin } from './interaction/ui-interaction-plugin';
 export type { UiButtonOptions } from './interaction/ui-button';
 export { Disabled, UiButton } from './interaction/ui-button';
+export type { UiToggleOptions } from './interaction/ui-toggle';
+export { applyToggleClicks, UiToggle, UiToggled } from './interaction/ui-toggle';

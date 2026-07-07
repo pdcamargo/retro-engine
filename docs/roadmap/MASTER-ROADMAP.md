@@ -242,9 +242,11 @@ foundation.**
       _Links:_ [input-system.md](input-system.md)
 - [ ] **CSS Grid for the UI layout engine** — pure-TS grid behind the `LayoutEngine` interface (Taffy-WASM
       only as a fallback escape hatch). _Links:_ [ui-system.md](ui-system.md)
-- [ ] **In-game UI depth** — virtualized list/tree views, data binding, more widgets
-      (toggle/slider/scrollview/text-input/dropdown/tabs), spatial navigation, screen management.
-      _Links:_ [ui-system.md](ui-system.md)
+- [ ] **In-game UI depth** — 🟡 **Phase 1 started**: `UiToggle` (checkbox) shipped — flips `checked` on
+      click, emits `UiToggled`, drives its background from state (pure `applyToggleClicks` + unit tests),
+      reusing the `Interactable`/`UiClicked` foundation. Remaining widgets: slider, text-input, scrollview,
+      dropdown/tabs; then focus + spatial navigation, data binding, virtualized list/tree views, screen
+      management. _Links:_ [in-game-ui-depth.md](in-game-ui-depth.md) · [ui-system.md](ui-system.md)
 - [ ] **Audio mixer buses** — 🟡 **Phase 1 shipped** (ADR-0159): named buses + per-bus volume
       (`PlayOptions.bus`, `Audio.setBusVolume`/`busVolume`, `AudioSource.bus`; `voice.gain → bus → master`,
       string-keyed + lazily created, headless parity, reflection schema updated; unit + stub-context tested).

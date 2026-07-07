@@ -1298,3 +1298,25 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
   detection (blocked on per-param access metadata), Phase 5b teardown-last. Box unchecked pending confirmation.
 
 ---
+
+## ✅ P1 — In-game UI depth, Phase 1: UiToggle (checkbox) widget (unit-verified; visual/interaction check pending)
+
+- **New:** `@retro-engine/ui` (roadmap `in-game-ui-depth.md`). `UiToggle` two-state widget: flips `checked`
+  on each click, emits `UiToggled { entity, checked }`, and a built-in system drives its `backgroundColor`
+  from `checked` (+ `Disabled`). Reuses the existing `Interactable`/`UiClicked` foundation (`requires =
+  [UiNode, Interactable]`). Flip logic is a pure `applyToggleClicks`; the plugin runs it `after:
+  ['ui-interaction']` so this frame's `UiClicked` messages are visible (per the frame-buffered message
+  contract). Reflection schema registered (`checked`/`on`/`off`/`disabled`).
+- **Verified:** `ui-toggle.test.ts` (+8): defaults/overrides/requires; `applyToggleClicks` flips + emits
+  UiToggled (true then false on second click), ignores non-toggle entities, skips `Disabled`, batches
+  multiple clicks. Full ui gate green: typecheck, lint (52 files), 100 tests, build. Changeset added.
+  NOTE: the pure flip logic is fully unit-tested; the plugin message-plumbing follows the codebase's
+  pure-function pattern (like `reconcileAudio`/`updateUiInteraction`) but a live click→visual check in the
+  studio/export is still worth an eyeball (studio relay is down).
+- **HOW to test:** `cmd.spawn(new UiToggle({ checked: false }))` with `UiPlugin` + `UiInteractionPlugin` +
+  `InputPlugin`; click the node → its background switches on/off and `MessageReader(UiToggled)` reports the
+  new state.
+- Roadmap: MASTER-ROADMAP "In-game UI depth" now 🟡 Phase 1 started (toggle done; slider/text-input/
+  scrollview/dropdown/tabs + focus/nav/data-binding/virtualized-views/screens remain). Box unchecked.
+
+---

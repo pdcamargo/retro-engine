@@ -1,6 +1,6 @@
 import type { Entity } from '@retro-engine/ecs';
 import type { App, PluginObject } from '@retro-engine/engine';
-import { MessageWriter, Query, ResMut } from '@retro-engine/engine';
+import { MessageReader, MessageWriter, Query, ResMut } from '@retro-engine/engine';
 import { t } from '@retro-engine/reflect';
 import { CursorPosition, MouseButtonInput } from '@retro-engine/input';
 
@@ -10,6 +10,7 @@ import { type InteractionNode, updateUiInteraction, UiPointer } from './picking'
 import { Disabled, UiButton } from './ui-button';
 import { UiClicked } from './ui-clicked';
 import { Interactable, UiInteraction } from './ui-interaction';
+import { applyToggleClicks, UiToggle, UiToggled } from './ui-toggle';
 
 /**
  * Drives UI pointer interaction: hit-tests {@link Interactable} nodes against the
@@ -33,6 +34,12 @@ export class UiInteractionPlugin implements PluginObject {
       UiButton,
       { normal: t.vec4, hovered: t.vec4, pressed: t.vec4, disabled: t.vec4 },
       { name: 'UiButton', make: () => new UiButton() },
+    );
+    app.addMessage(UiToggled);
+    app.registerComponent(
+      UiToggle,
+      { checked: t.boolean, on: t.vec4, off: t.vec4, disabled: t.vec4 },
+      { name: 'UiToggle', make: () => new UiToggle() },
     );
     if (app.getResource(UiPointer) === undefined) app.insertResource(new UiPointer());
 
@@ -89,6 +96,47 @@ export class UiInteractionPlugin implements PluginObject {
         }
       },
       { label: 'ui-button-style', after: ['ui-interaction'] },
+    );
+
+    // Flip a UiToggle each time its node is clicked, emitting UiToggled. Runs
+    // after the picking system so this frame's UiClicked messages are visible.
+    app.addSystem(
+      'preUpdate',
+      [MessageReader(UiClicked), MessageWriter(UiToggled)],
+      (clicks, toggled) => {
+        const entities: Entity[] = [];
+        for (const click of clicks as Iterable<UiClicked>) entities.push(click.entity);
+        if (entities.length === 0) return;
+        applyToggleClicks(
+          entities,
+          (entity) => app.world.getComponent(entity, UiToggle),
+          (entity) => app.world.getComponent(entity, Disabled) !== undefined,
+          (entity) => app.world.markChanged(entity, UiToggle),
+          (t2) => (toggled as { write(m: UiToggled): void }).write(t2),
+        );
+      },
+      { label: 'ui-toggle', after: ['ui-interaction'] },
+    );
+
+    // Drive each UiToggle's background from its checked state (built-in).
+    app.addSystem(
+      'preUpdate',
+      [Query([UiNode, UiToggle])],
+      (togglesQuery) => {
+        for (const row of (togglesQuery as { entries(): Iterable<readonly unknown[]> }).entries()) {
+          const entity = row[0] as Entity;
+          const node = row[1] as UiNode;
+          const toggle = row[2] as UiToggle;
+          const color =
+            app.world.getComponent(entity, Disabled) !== undefined
+              ? toggle.disabled
+              : toggle.checked
+                ? toggle.on
+                : toggle.off;
+          setUiBackground(node, color);
+        }
+      },
+      { label: 'ui-toggle-style', after: ['ui-toggle'] },
     );
   }
 }
