@@ -478,7 +478,10 @@ workflow. Production-polish tails of the P0 work (source maps / minification) li
 - [ ] **MCP `entity.despawn` dropped by a later `scene.save`.** _Links:_ [`../bugs/mcp-entity-despawn-not-reflected-in-scene-save.md`](../bugs/mcp-entity-despawn-not-reflected-in-scene-save.md)
 - [ ] **MCP `component.set` corrupts entity-ref + vec3 fields.** _Links:_ [`../bugs/studio-mcp-component-set-entity-and-vec3.md`](../bugs/studio-mcp-component-set-entity-and-vec3.md)
 - [ ] **`MaterialPlugin.queueMaterials3d` lacks a camera sub-graph filter.** _Links:_ [`../bugs/material-plugin-camera-subgraph-filter.md`](../bugs/material-plugin-camera-subgraph-filter.md)
-- [ ] **Inspector transform fields round small values to 0** (FBX→glTF cm→m scales). _Links:_ [`../bugs/inspector-transform-fields-round-small-values-to-zero.md`](../bugs/inspector-transform-fields-round-small-values-to-zero.md)
+- [x] **Inspector transform fields round small values to 0** (FBX→glTF cm→m scales) — ✅ fixed. The
+      number widget now picks decimals via `adaptiveDecimals` (editor-sdk): a small non-zero magnitude
+      widens to its first significant place (capped at 6), so a `0.01` scale reads `0.0100`, not `0.0`.
+      MCP-verified (Armature scale `0.01` shows `0.0100` in the inspector). Bug file deleted.
 - [ ] **OBJ base mesh swaps NORMAL/UV attribute order.** _Links:_ [`../bugs/obj-base-mesh-normal-uv-attribute-order.md`](../bugs/obj-base-mesh-normal-uv-attribute-order.md)
 
 ---

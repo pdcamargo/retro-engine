@@ -2235,3 +2235,20 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
   walked `node_modules` and minted a stray `.meta` in `packages/gltf` fixtures — cleaned up, tracked).
 
 ---
+
+## ✅ P1 bug — inspector no longer renders a small non-zero value as 0 (MCP-verified)
+
+- **What changed:** `@retro-engine/editor-sdk` — `dragNumber` derives its decimal places from the value via
+  a new pure `adaptiveDecimals(value, step)` (`number-format.ts`): zero and magnitudes ≥ 1 keep the base
+  precision (1 decimal), a small non-zero magnitude widens to its first significant place +1 (capped at 6).
+  Previously a fixed `%.1f` collapsed e.g. a cm→m `0.01` scale to `"0.0"` (data was intact — display only).
+- **Verified END-TO-END via the retro-studio MCP:** selected the sample GLB's `Armature` (local scale
+  `0.01`); the inspector Transform → Scale now reads `0.0100 0.0100 0.0100` (screenshot
+  `inspector-small-scale-fixed2.png`); previously `0.0 0.0 0.0`. +4 unit tests on `adaptiveDecimals`.
+  Full editor-sdk typecheck/lint/test green.
+- **HOW to test:** open the studio, select any entity with a small Transform scale (e.g. a glTF Armature at
+  0.01), inspector Scale shows `0.0100` not `0.0`.
+- **Bug file `inspector-transform-fields-round-small-values-to-zero.md` deleted** (MCP-verified). Changeset:
+  editor-sdk patch. Roadmap P1 stabilization box checked.
+
+---

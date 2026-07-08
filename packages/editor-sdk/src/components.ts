@@ -27,6 +27,7 @@ import { applyItemDnd, type ItemDnd } from './dnd/item-dnd';
 import { Draw } from './draw';
 import { drawIcon } from './icon-shapes';
 import { type IconName } from './icons';
+import { adaptiveDecimals } from './number-format';
 import { type Axis, axisColor, getActivePalette, srgbU32, type Tone, toneColors } from './palette';
 import { Keys, ui } from './ui';
 import type { Rgba, Srgb8 } from './units';
@@ -553,7 +554,7 @@ export const widgets: Widgets = {
         ui.dummy([chipW, ui.frameHeight()]);
         ImGui.SameLine(0, 0); // field sits flush against the chip
       }
-      const fmt = `%.${options?.step !== undefined && options.step < 1 ? (options.step <= 0.01 ? 2 : 1) : 0}f${
+      const fmt = `%.${adaptiveDecimals(value, options?.step)}f${
         options?.suffix !== undefined ? ` ${options.suffix}` : ''
       }`;
       const w = options?.width ?? ui.contentAvail()[0];
