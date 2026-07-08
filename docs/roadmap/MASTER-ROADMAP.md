@@ -43,10 +43,11 @@ not a capability ceiling).
 
 ## North star
 
-The renderer and ECS are deep. Input, audio, and physics now exist (`@retro-engine/input` ✅,
-`@retro-engine/audio` ✅, `@retro-engine/physics-core`/`-rapier` ✅), but you still can't ship a
-complete game: no engine text, in-game UI, or game export yet. **P0 is exactly that shippable-game
-foundation.**
+The renderer and ECS are deep. Input ✅, audio ✅, physics ✅, **engine text (MSDF) ✅**, **in-game UI ✅**,
+and studio **play mode ✅** now all exist and are verified. The one remaining **P0** gap to a shippable
+game is **game export**: the web target already runs end-to-end from the `retro build` CLI (WebGPU +
+MSDF text + UI + `.rpak` assets, browser-verified) — what's left is the studio **"Build → Web" menu** and
+production polish (source maps / minification).
 
 ---
 
@@ -84,7 +85,7 @@ foundation.**
       _AC:_ contract + components + reflection ✅; fixed-timestep bridge ✅; rapier 2D+3D + real sim ✅;
       falling demo ✅; ECS collision events ✅; character controller ✅; joints ✅. (Studio integration → P1/P2.)
       _Links:_ [physics.md](physics.md)
-- [ ] **In-game UI (core) — "Retro CSS"** — 🟡 `@retro-engine/ui`; **Phases 1a+1b shipped**: the pure-TS
+- [x] **In-game UI (core) — "Retro CSS"** — ✅ `@retro-engine/ui`; **Phases 1a+1b shipped**: the pure-TS
       **flexbox `LayoutEngine`** (`FlexLayoutEngine` — §9.7 grow/shrink with min/max freezing, justify/align,
       gap, padding/margin, absolute insets) behind a swappable interface + text-measure callback, plus
       `UiNode` (reflection-registered) / `ComputedLayout` (derived) + a `UiPlugin` `postUpdate` layout system
@@ -136,7 +137,7 @@ foundation.**
 
 ## Renderer
 
-- [ ] **Engine text rendering (MSDF)** — 🟡 Phases 1–2c shipped under `packages/engine/src/text/`:
+- [x] **Engine text rendering (MSDF)** — ✅ Phases 1–2c shipped under `packages/engine/src/text/`:
       `MsdfFont`/`parseMsdfFont`, `layoutText`/`measureText`, `Font` asset + `.font` loader, `Text2d`
       (reflection round-trips), full glyph render pipeline (shader + `TextPipeline`/`TextInstanceBuffer`/
       `packGlyphInstance` + `text-prepare`/`text-queue` through the transparent 2D phase), a built-in

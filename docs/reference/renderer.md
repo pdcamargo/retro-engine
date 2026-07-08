@@ -109,16 +109,18 @@ no clustered lighting, no bloom/DoF/SSR/volumetrics/atmospheric sky, and no engi
 
 - ✅ **Sprites** (`engine/src/sprite/`, ADR-0031/0032/0033/0034/0036) — sprite component + pipeline,
   **Z-aware batching**, instanced buffers, **texture atlas layout**, **atlas animation**, **9-slice**.
-- 🟡 **Engine-facing text (MSDF/SDF)** (`engine/src/text/`, ADR-0149) — Phases 1–2c shipped: font data +
+- ✅ **Engine-facing text (MSDF/SDF)** (`engine/src/text/`, ADR-0149/0155) — Phases 1–3 shipped: font data +
   layout engine (`MsdfFont`/`parseMsdfFont`; `layoutText`/`measureText`), the `Font` asset + `.font` loader
   (linear atlas sub-asset), the `Text2d` component (reflection round-trips), a full **glyph render
   pipeline** (`retro_engine::text` median-of-RGB shader, `TextPipeline`/`TextInstanceBuffer`,
   `packGlyphInstance`, `text-prepare`/`text-queue` drawing through the transparent 2D phase), plus a
   **built-in pure-JS SDF default font** (`generateSdfFont` / `installDefaultFont`) and a `?mode=text`
   playground sample. Verified end-to-end via the capturing renderer; benched. **On-screen confirmed** — the
-  `sample-game` web export renders crisp MSDF text in a real browser (Playwright). `measureText` is now
-  wired into the in-game UI layout (`@retro-engine/ui` `UiText`/`makeTextMeasure`). Remaining: world-space
-  `Text` (Phase 3) + an optional true-MSDF atlas via `msdf-atlas-gen` (the `.font` importer already loads one).
+  `sample-game` web export renders crisp MSDF text in a real browser (Playwright: `window.__text`
+  reports 27 world-space `Text2d` glyph instances drawing, plus crisp screen-space `UiText` labels).
+  `measureText` is wired into the in-game UI layout (`@retro-engine/ui` `UiText`/`makeTextMeasure`).
+  World-space `Text` (Phase 3, ADR-0155) shipped + depth-tested + browser pixel-verified. Optional remaining:
+  a true-MSDF atlas via `msdf-atlas-gen` (the `.font` importer already loads one); rich-text runs + billboard flag.
 - ✅ **glTF/GLB import** (`packages/gltf`, ADR-0057/0059) — GLB+glTF parse, scene instantiation, animation
   mapping, image decode, auto-retarget on import. (See [`assets.md`](assets.md).)
 - ✅ **GPU skinning & morph** — see [`animation.md`](animation.md) (ADR-0114/0115/0129).

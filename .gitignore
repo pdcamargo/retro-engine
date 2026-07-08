@@ -57,3 +57,6 @@ save-showcase.png
 # MCP editor screenshots (scratch — delete before commit)
 screenshots/
 .screenshots/
+
+# Playwright/export verification screenshots (root-level, transient)
+/export-*.png

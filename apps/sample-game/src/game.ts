@@ -14,6 +14,7 @@ import {
   Query,
   ResMut,
   Text2d,
+  TextInstanceBuffer,
   TextPlugin,
   Time,
   Transform,
@@ -346,6 +347,21 @@ class HelloTextPlugin implements PluginObject {
         };
       },
       { label: 'rss-report' },
+    );
+
+    // Report the world-space Text2d glyph-instance count the text render prepare
+    // emitted this frame, so a browser test can confirm the MSDF text pipeline is
+    // actually drawing (the three Text2d titles) and not merely present.
+    app.addSystem(
+      'update',
+      [],
+      () => {
+        if (typeof window === 'undefined') return;
+        (window as unknown as { __text: unknown }).__text = {
+          glyphInstances: app.getResource(TextInstanceBuffer)?.count ?? 0,
+        };
+      },
+      { label: 'text-report' },
     );
 
     app.addSystem(

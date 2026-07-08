@@ -2146,3 +2146,29 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
   clears selection); that's a tracked follow-up. Play-mode.md "Inspector behavior while playing" → ✅.
 
 ---
+
+## ✅ P0 — In-game UI (core) + Engine text (MSDF): re-verified in a real browser, boxes checked
+
+- **What:** Re-verified the two "AC-met, pending confirmation" P0 items end-to-end in a real browser
+  (Playwright) via the `sample-game` web export (`retro build --target web`, served over HTTP, WebGPU),
+  then checked both MASTER-ROADMAP boxes and flipped the renderer.md text tag 🟡→✅.
+- **In-game UI (core) — verified:** `window.__rss` shows the `.rss` cascade fully resolved — `.chip` blue
+  via `var(--accent)`, `.chip.alt` orange (compound selector), `.chip.nested` green (inherited `--accent`
+  inside `.themed`), `imageInstances:1` (textured image widget drew). `window.__menu` shows the 3-button
+  menu with `LOAD (SOON)` `disabled:true` (UiButton + Disabled). Screenshot: flexbox layout (chips row
+  top-left, menu centered, HUD anchored bottom-right), node borders, button hover/disabled tinting, the
+  magenta/cyan checker image chip — all correct.
+- **Engine text (MSDF) — verified:** added a `text-report` probe to the sample game; `window.__text`
+  reports `glyphInstances:27` = exactly the three world-space `Text2d` titles (RETRO ENGINE 11 + WEB EXPORT
+  OK 11 + SPIN! 5), confirming the MSDF text render pipeline is actively drawing (not just present). The
+  screenshot shows crisp screen-space `UiText` glyphs (menu/HUD labels). World-space `Text` (3D) + Text3d
+  were pixel-verified in a prior playground pass.
+- **HOW to test:** `bun packages/build/src/cli.ts --project apps/sample-game --target web`, serve
+  `apps/sample-game/dist/web` (a Range-capable server, e.g. `python3 -m http.server`), open in a
+  WebGPU browser → crisp title + menu + HUD text, styled chips, `window.__text.glyphInstances === 27`,
+  `window.__rss.imageInstances === 1`, `window.__game.credits` = the packed credits string.
+- **NOTE:** No changeset (apps/ + docs only; the probe lives in `apps/sample-game/src/game.ts` alongside
+  the existing `__rss`/`__menu` hooks). Non-AC UI/text polish (corner radius, z-index/clipping, rich-text
+  runs, true-MSDF atlas) remains tracked under P1/P2. Roadmap north star updated.
+
+---
