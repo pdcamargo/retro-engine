@@ -2119,3 +2119,30 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
 - Roadmap: MASTER-ROADMAP "Audio mixer buses" 3D positional now includes source cones ✅.
 
 ---
+
+## ✅ P0 — Play mode: inspector live + editable during play (MCP-verified) — **Play-mode P0 AC complete**
+
+- **What changed:** `apps/studio/src/panels-inspector.ts`. The entity inspector no longer goes read-only
+  during play. Component fields stay live (they already re-read the world each frame) **and are now
+  editable while playing**, but play-time writes route through a **direct (no-history) emitter**
+  (`createDirectEmitter`) instead of the undo history. Because Stop's snapshot/restore already reverts the
+  whole authored world, every play-time tweak is discarded on Stop — so it never leaks into the saved scene
+  and never corrupts the edit-world undo stack. Structural **Add Component is disabled while playing**
+  (a structural edit would be reverted on Stop or corrupt undo). In Edit mode nothing changes (writes stay
+  undoable). Asset editors stay read-only during play (assets aren't part of world snapshot/restore).
+- **Verified END-TO-END via the retro-studio MCP** (not tests): opened the dev project, selected `Hero`
+  (has a `Health {current, max}` + a regen system). Edit mode → inspector shows `Current 110.0`, all fields
+  full-opacity, Add Component enabled. Pressed Play → inspector showed `Current 150.0` **live** as the regen
+  ran, fields full-opacity (editable), **Add Component greyed/disabled** (screenshots
+  `inspector-edit-mode.png` / `inspector-play-mode.png`). Pressed Stop → `Health.current` reverted to `110`
+  (world respawned, restore discards play-time state). Full repo gate green (lint 0/0, typecheck, 69 tests,
+  build, bench).
+- **HOW to test:** open the studio on the sample project, select `Hero`, press Play → the Health `Current`
+  field ticks up live in the inspector and the fields are editable (Add Component is greyed); press Stop →
+  the value snaps back to its authored 110.
+- **NOTE:** No ADR/changeset (studio-only, apps/*). Completes the last ❌ AC of the **Play mode P0 item**
+  (MASTER-ROADMAP box now checked). **Backlog `studio-playmode-snapshot-restore.md` intentionally KEPT** —
+  its stricter acceptance ("selection survives the round-trip") is still open (restore remaps entity ids +
+  clears selection); that's a tracked follow-up. Play-mode.md "Inspector behavior while playing" → ✅.
+
+---

@@ -163,7 +163,7 @@ foundation.**
 
 ## Editor / Studio
 
-- [ ] **Play mode (snapshot / restore / step)** — 🟡 `SimState` + **snapshot/restore core shipped**
+- [x] **Play mode (snapshot / restore / step)** — ✅ `SimState` + **snapshot/restore core shipped**
       (`@retro-engine/editor-sdk`, ADR-0152): `captureSnapshot`/`restoreSnapshot` (World-level, renderer-free,
       excludes editor infra via a `keep` filter, returns the id-remap map) + `installPlayModeSnapshot`
       (capture on `onExit(Edit)`, restore on `onEnter(Edit)`). Gating policy formalized (user systems run
@@ -174,12 +174,18 @@ foundation.**
       on restore. **Step shipped + MCP-verified** — `SimStep`/`installSimStep` + gate
       `inState(Play).or(simStepActive())`, wired to the toolbar Step button + `studio.step` MCP; advances
       gameplay exactly one frame while paused without leaving `Paused` (verified: a paused `Health` regen
-      froze, then stepped +1/frame linearly). Remaining: true selection *survival* + inspector-during-play
-      (+ a fixed-timestep follow-up, see play-mode.md).
+      froze, then stepped +1/frame linearly). **Inspector during play** ✅ — the inspector stays live **and
+      editable** during play, but field writes bypass the undo history via a direct emitter, so Stop's
+      snapshot/restore discards every play-time tweak (no leak into the authored scene, no undo-stack
+      corruption); structural Add-Component is disabled while playing. MCP-verified: `Health.current`
+      updated 110→150 live in the inspector as the regen system ran, then reverted to 110 on Stop. Remaining
+      (non-AC follow-ups): true selection *survival* across restore + a fixed-timestep step guard (see
+      play-mode.md). **All AC met.**
       _AC:_ snapshot the authored scene on Play (serialize world) ✅, restore it exactly on Stop (no leaked
       play-time edits) ✅; **Step** advances exactly one frame while paused ✅; systems gate correctly by
-      `SimState` ✅; inspector shows live values during play ❌.
-      _Links:_ [play-mode.md](play-mode.md) · [`../backlog/studio-playmode-snapshot-restore.md`](../backlog/studio-playmode-snapshot-restore.md)
+      `SimState` ✅; inspector shows live values during play ✅ (also editable; play-time edits bypass undo,
+      discarded on Stop).
+      _Links:_ [play-mode.md](play-mode.md)
 
 ## Platform / Tooling
 

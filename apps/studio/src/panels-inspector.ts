@@ -3,9 +3,11 @@ import {
   type AssetSelection,
   ASSET_TYPES,
   createAssetHistoryEmitter,
+  createDirectEmitter,
   createHistoryEmitter,
   Draw,
   drawIcon,
+  type EditEmitter,
   type EditorContext,
   getActivePalette,
   type History,
@@ -147,6 +149,17 @@ export const inspectorPanel = (
         ui.textDisabled('No entity selected.');
         return;
       }
+
+      // During play the inspector stays live AND editable, but field writes bypass
+      // the undo history and apply straight to the running world via a direct
+      // emitter — Stop's snapshot/restore discards every play-time tweak, so it
+      // never leaks into the authored scene or corrupts the edit-world undo stack.
+      // In Edit mode writes are undoable as usual.
+      const entityEmitter = (componentName: string): EditEmitter =>
+        state.playing
+          ? createDirectEmitter({ world: app.world, registry }, selected, componentName)
+          : createHistoryEmitter(history, selected, componentName);
+
       const name = app.world.getComponent(selected, Name)?.value ?? `Entity ${String(selected)}`;
 
       // Entity header: accent icon + name + a debug toggle, vertically centered.
@@ -190,17 +203,22 @@ export const inspectorPanel = (
             inspector,
             instance,
             registered: reg,
-            readonly: state.playing,
-            edit: createHistoryEmitter(history, selected, reg.name),
+            readonly: false,
+            edit: entityEmitter(reg.name),
           });
         }
       }
 
-      // Add Component — opens the picker for the selected entity.
+      // Add Component — opens the picker for the selected entity. Structural edits
+      // stay edit-time only: adding a component during play would either corrupt the
+      // undo stack or be silently reverted on Stop, so the action is disabled while
+      // playing (field tweaking above still applies live).
       ui.spacing();
-      if (widgets.button('Add Component', { variant: 'secondary', icon: 'plus', block: true })) {
-        openComposer(state.composer, 'add', { target: selected });
-      }
+      ui.withDisabled(state.playing, () => {
+        if (widgets.button('Add Component', { variant: 'secondary', icon: 'plus', block: true })) {
+          openComposer(state.composer, 'add', { target: selected });
+        }
+      });
 
       // Derived / non-serializable components — recomputed by systems, not
       // authored — revealed only in debug mode.

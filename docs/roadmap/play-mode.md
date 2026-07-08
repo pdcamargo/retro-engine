@@ -46,6 +46,18 @@ Snapshot/restore core + gating policy shipped 2026-07-06 (ADR-0152). See below.
     ordinary pause→resume). Latent today (the sample has no `fixedUpdate`
     gameplay); revisit by freezing the fixed accumulator while not playing.
 
-- **Inspector behavior while playing.** Today the inspector goes read-only in Play
-  (a mirror of `state.playing`); revisit once gating + snapshot exist (live-edit of
-  the play world vs the edit world).
+- **Inspector behavior while playing.** ✅ **Shipped + MCP-verified (2026-07-08).**
+  The inspector stays **live and editable** during play. Field values refresh every
+  frame (immediate-mode read of the live component), so a value a system mutates —
+  e.g. a `Health` regen — is seen updating in real time. Play-time field writes go
+  through a **direct (no-history) emitter** instead of the undo history, so Stop's
+  snapshot/restore cleanly discards them: a play-time tweak never leaks into the
+  authored scene and never corrupts the edit-world undo stack. Structural edits
+  (Add Component) are disabled while playing — they would either be reverted on Stop
+  or corrupt the undo stack. In Edit mode nothing changes: writes remain undoable.
+  Verified end-to-end via the MCP: selecting `Hero`, entering Play, watching
+  `Health.current` climb 110→150 in the inspector as the regen ran, then Stop
+  reverting it to 110.
+  - **Follow-up (selection survival).** Restore still remaps entity ids and clears
+    the selection; surviving the selection across a Play→Stop cycle (remap via a
+    persistent identity, not the compact snapshot ids) is a separate slice.
