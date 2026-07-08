@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import { Aabb, vec3 } from '@retro-engine/math';
 
-import { App, Camera2d, GlobalTransform, RenderLayers, Transform } from '../index';
+import { App, Camera2d, GlobalTransform, RenderLayers, Skeleton, Transform } from '../index';
 import { makeRenderingRenderer, makeStubCanvas } from '../test-utils';
 import { NoFrustumCulling, Visibility, ViewVisibility } from './visibility';
 
@@ -72,6 +72,21 @@ describe('checkVisibility (postUpdate, per-entity ViewVisibility write)', () => 
       new Aabb(vec3.create(0, 0, 0), vec3.create(1, 1, 1)),
       new Transform(vec3.create(10000, 0, 0)),
       new NoFrustumCulling(),
+    );
+    await app.run();
+    expect(app.world.getComponent(e, ViewVisibility)?.visible).toBe(true);
+  });
+
+  it('a skinned mesh (has Skeleton) skips frustum culling even far outside the bind-pose AABB', async () => {
+    const app = makeApp();
+    app.world.spawn(...Camera2d());
+    // The bind-pose AABB sits far outside the frustum, but a skinned mesh deforms
+    // with its skeleton beyond that box, so it must not be culled by it (ADR-0173).
+    const e = app.world.spawn(
+      new Visibility('Visible'),
+      new Aabb(vec3.create(0, 0, 0), vec3.create(1, 1, 1)),
+      new Transform(vec3.create(10000, 0, 0)),
+      new Skeleton(),
     );
     await app.run();
     expect(app.world.getComponent(e, ViewVisibility)?.visible).toBe(true);

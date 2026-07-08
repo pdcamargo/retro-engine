@@ -7,6 +7,7 @@ import { createWebGPURenderer } from '@retro-engine/renderer-webgpu';
 
 import type { CanvasTarget } from './resolve-canvas';
 import { resolveCanvas } from './resolve-canvas';
+import { installGameRuntime, loadAndSpawnScene } from './game-runtime';
 import { httpRangeFetch, RpakAssetSource } from './rpak-asset-source';
 
 /** Where an exported game's packed assets + manifest live, relative to the page. */
@@ -53,6 +54,14 @@ export interface BootWebGameOptions {
    * before the project's plugins so their loaders resolve GUIDs from the archive.
    */
   readonly assets?: WebAssetsConfig;
+  /**
+   * GUID of the project's startup scene. When set, the game-runtime baseline
+   * (render + scene/asset stack) is installed and the scene is loaded + spawned
+   * before the run loop — so a scene-driven project boots with its authored
+   * world, not an empty one (ADR-0173). Requires {@link assets} so the scene and
+   * its referenced content resolve from the `.rpak`.
+   */
+  readonly startupScene?: string;
 }
 
 /**
@@ -90,7 +99,37 @@ export const bootWebGame = async (
   // in `build` / via `whenResource(AssetServer)`) resolve GUIDs from the `.rpak`.
   if (options.assets !== undefined) await wireAssets(app, options.assets);
 
+  const startupScene = options.startupScene;
+  // A startup scene needs an asset source to stream from (the `.rpak`); without
+  // one there is nothing to load, so require `assets` to have been wired.
+  const loadsScene =
+    startupScene !== undefined && startupScene.length > 0 && app.getResource(AssetServer) !== undefined;
+  if (startupScene !== undefined && startupScene.length > 0 && !loadsScene && typeof console !== 'undefined') {
+    console.warn('[retro] startupScene set but no packed assets wired — skipping scene load');
+  }
+
+  // A scene-driven project declares only game logic; install the render + scene
+  // baseline the studio host would otherwise supply, before the project's plugins
+  // so it can yield to any the project composes itself (ADR-0173).
+  if (loadsScene) installGameRuntime(app);
+
   for (const plugin of definition.plugins) app.addPlugin(plugin);
+
+  // Load + spawn the authored world once every plugin (engine, baseline, project)
+  // has registered its components + loaders.
+  if (loadsScene) {
+    const ok = await loadAndSpawnScene(app, startupScene);
+    if (!ok && typeof console !== 'undefined') {
+      console.warn(`[retro] startup scene ${startupScene} did not resolve — booting an empty world`);
+    }
+  }
+
+  // Expose the running App for debugging a web export (parity with the studio's
+  // verification hooks) — inspect the world, resources, and renderer from the
+  // console. Dev affordance only; nothing in the runtime reads it.
+  if (typeof window !== 'undefined') {
+    (window as unknown as { __retro?: { app: App } }).__retro = { app };
+  }
 
   if (options.autoRun !== false) await app.run();
   return app;

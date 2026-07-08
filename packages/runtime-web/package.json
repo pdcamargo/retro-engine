@@ -37,6 +37,8 @@
     "@retro-engine/assets": "workspace:*",
     "@retro-engine/build": "workspace:*",
     "@retro-engine/engine": "workspace:*",
+    "@retro-engine/gltf": "workspace:*",
+    "@retro-engine/math": "workspace:*",
     "@retro-engine/project": "workspace:*",
     "@retro-engine/renderer-core": "workspace:*",
     "@retro-engine/renderer-webgpu": "workspace:*"

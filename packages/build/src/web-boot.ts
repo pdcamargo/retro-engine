@@ -13,6 +13,11 @@ export interface WebBootOptions {
   readonly clearColor?: { r: number; g: number; b: number; a: number };
   /** Packed-asset delivery URLs, forwarded to `bootWebGame` when the export packs a `.rpak`. */
   readonly assets?: { rpakUrl: string; manifestUrl: string };
+  /**
+   * GUID of the project's startup scene, forwarded to `bootWebGame` so a
+   * scene-driven project boots with its authored world (ADR-0173).
+   */
+  readonly startupScene?: string;
 }
 
 /**
@@ -28,6 +33,9 @@ export const emitWebBoot = (options: WebBootOptions): string => {
   const bootOptions: Record<string, unknown> = { canvas: canvasId };
   if (options.clearColor !== undefined) bootOptions.clearColor = options.clearColor;
   if (options.assets !== undefined) bootOptions.assets = options.assets;
+  if (options.startupScene !== undefined && options.startupScene.length > 0) {
+    bootOptions.startupScene = options.startupScene;
+  }
   return `import definition from ${JSON.stringify(options.userEntry)};
 import { bootWebGame } from '@retro-engine/runtime-web';
 

@@ -33,6 +33,11 @@ export interface WebExportConfig {
   readonly rpakName?: string;
   /** Swapchain clear color forwarded to the runtime. */
   readonly clearColor?: { r: number; g: number; b: number; a: number };
+  /**
+   * GUID of the project's startup scene, forwarded to the generated boot entry
+   * so a scene-driven project boots with its authored world (ADR-0173).
+   */
+  readonly startupScene?: string;
 }
 
 // A hidden file written into the project root: the generated boot entry.
@@ -80,6 +85,7 @@ export class WebExportTarget implements ExportTarget {
           : `./${userEntrySpecifier}`,
         ...(this.config.clearColor !== undefined ? { clearColor: this.config.clearColor } : {}),
         ...(packsAssets ? { assets: { rpakUrl: rpakName, manifestUrl: 'manifest.json' } } : {}),
+        ...(this.config.startupScene !== undefined ? { startupScene: this.config.startupScene } : {}),
       }),
     );
 

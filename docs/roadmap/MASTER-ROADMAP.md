@@ -43,11 +43,12 @@ not a capability ceiling).
 
 ## North star
 
-The renderer and ECS are deep. Input ✅, audio ✅, physics ✅, **engine text (MSDF) ✅**, **in-game UI ✅**,
-and studio **play mode ✅** now all exist and are verified. The one remaining **P0** gap to a shippable
-game is **game export**: the web target already runs end-to-end from the `retro build` CLI (WebGPU +
-MSDF text + UI + `.rpak` assets, browser-verified) — what's left is the studio **"Build → Web" menu** and
-production polish (source maps / minification).
+**The entire P0 tier is complete** ✅ — input, audio, physics, engine text (MSDF), in-game UI, studio play
+mode, the two engine-freezer bug fixes, and **game export** (a scene-driven project exports from the CLI or
+the studio "Build → Web" menu and runs in a browser — WebGPU, MSDF text, UI, `.rpak` assets, and the
+authored scene incl. skinned characters, all browser-verified). You can now ship a complete game. The
+focus is now **P1** — real depth, quality, platform reach (WebGL2 for non-WebGPU targets), and authoring
+workflow. Production-polish tails of the P0 work (source maps / minification) live under P1 follow-ups.
 
 ---
 
@@ -190,7 +191,7 @@ production polish (source maps / minification).
 
 ## Platform / Tooling
 
-- [ ] **Export — Web target + `.rpak` foundation** — 🟡 `@retro-engine/build` + `@retro-engine/runtime-web`;
+- [x] **Export — Web target + `.rpak` foundation** — ✅ `@retro-engine/build` + `@retro-engine/runtime-web`;
       **Phases 1–3 shipped**: the `.rpak` v1 format (`writeRpak` gzip+integrity, `RpakReader`,
       `RangeRpakReader` HTTP-Range streaming), the `ExportTarget`/`ExportRegistry` interface, the **web
       adapter** (`bundleUserCode`, `emitIndexHtml`, `WebExportTarget`), **and now the runtime host + CLI**:
@@ -209,12 +210,13 @@ production polish (source maps / minification).
       item wraps a Tauri `project_export_web` command (bun sidecar runs the bundled `build-web-export.js` →
       `runWebExport`); MCP-verified end-to-end (the full frontend→command→sidecar path produced
       `main.js`/`assets.rpak`/`manifest.json`/`index.html`, and the artifact boots in a browser with WebGPU
-      + 0 errors). Fixing it surfaced two real gaps, now tracked: (1) scaffolded projects lacked
-      `@retro-engine/runtime-web` (fixed in `create-project` + linked into the studio's sample project);
-      (2) **the web runtime does not load the project's startup scene** — a scene-driven project exports but
-      boots to an empty world (see the new follow-up under P1). Remaining before check-off: **runtime
-      startup-scene loading** (the real blocker for scene-driven games) + source maps / production polish.
-      (ADR-0151/0153.)
+      + 0 errors). **Runtime startup-scene loading shipped** ✅ (ADR-0173) — a scene-driven project now
+      exports and renders its authored world (`bootWebGame` installs a game-runtime baseline + loads/spawns
+      `descriptor.startupScene`); browser-verified end-to-end with `retro-game-sample` (skinned character +
+      cubes + skybox all draw from the scene's Main Camera). Fixing the pipeline also fixed a skinned-mesh
+      frustum-culling bug and the FBX→GLB convert skill's rig-scale handling (see the P1 item). **AC met.**
+      Non-AC remaining (→ P1): source maps / production polish; pack a project's `assets/` more broadly.
+      (ADR-0151/0153/0173.)
       _AC:_ `packages/build` (Bun/Node-only) with an `ExportTarget` interface + registry and a shared Bun
       bundler for user code (engine externalized appropriately); a **web adapter** emitting a static site
       (engine + user bundle + `.rpak`) that runs in a browser; a **`.rpak` writer** (magic+version header →
@@ -440,14 +442,22 @@ production polish (source maps / minification).
 
 ## Platform / Tooling
 
-- [ ] **Export — Web runtime: load the project's startup scene** — 🔴 **blocker for scene-driven exports.**
-      `bootWebGame` runs the project's plugins but never loads `descriptor.startupScene`, so a project whose
-      content lives in a `.rescene` (the studio's normal workflow) exports and boots to an **empty world**
-      (black screen, 0 errors) — only code-driven projects (spawn in `startup` systems, e.g. `apps/sample-game`)
-      render. Fix: pack the startup `.rescene` into the `.rpak`, thread its GUID through `emitWebBoot`, and
-      have `bootWebGame` load + spawn it via the `AssetServer` before the run loop. Found while verifying the
-      studio "Build → Web" menu against the real (scene-driven) sample project.
-      _Links:_ [web-build-target.md](web-build-target.md)
+- [x] **Export — Web runtime: load the project's startup scene** — ✅ **shipped (ADR-0173).** `bootWebGame`
+      gains a `startupScene` option; when set it installs a game-runtime baseline (`installGameRuntime` —
+      render stack + scene/asset/glTF loaders, all guarded) and loads + spawns the scene
+      (`loadAndSpawnScene`) before the run loop. The export threads `descriptor.startupScene` through
+      `emitWebBoot`; the startup `.rescene` packs into the `.rpak` via the existing `.meta` scan. Fixing this
+      exposed + fixed **two more bugs**: (a) engine frustum culling dropped **skinned meshes** (culled by the
+      mesh bind-pose AABB a posed skeleton deforms beyond — masked in the multi-camera editor, fatal in the
+      single-camera export); skinned meshes now skip the bind-pose frustum test. (b) The **FBX→GLB convert
+      skill** reset the FBX root's unit scale post-export, which breaks *rigged* models (skeleton 100× the
+      mesh → giant, then culled) — it now skips that reset for GLBs with `skins`. Verified end-to-end in a
+      browser: a scene-driven project (`retro-game-sample`) exports and renders its authored world — the
+      skinned character (human-sized, next to the cubes), skybox, and meshes all draw from the scene's Main
+      Camera. **Follow-ups:** joint-derived skinned-mesh bounds (proper cull, not skip); the studio asset
+      indexer walks `node_modules` + mints stray `.meta` (it should ignore `node_modules`); source-map /
+      production polish.
+      _Links:_ [web-game-runtime.md](web-game-runtime.md) · [web-build-target.md](web-build-target.md) · [ADR-0173](../adr/ADR-0173-web-game-runtime-baseline-and-scene-loading.md)
 - [ ] **Export — Web follow-ups** — the remaining slices of the P0 web target (ADR-0151/0153): **studio
       "Build → Web" menu ✅** (a `Build ▸ Web…` menu → Tauri `project_export_web` command → bun sidecar →
       `runWebExport`; MCP-verified end-to-end); pack a project's `assets/` into the `.rpak` + wire the

@@ -7,6 +7,7 @@ import { RemovedComponents } from '../change-detection';
 import { Parent } from '../hierarchy';
 import type { App } from '../index';
 import type { PluginObject } from '../plugin';
+import { Skeleton } from '../skinning/skeleton';
 import { Query, ResMut } from '../system-param';
 import { GlobalTransform } from '../transform';
 import { checkVisibilitySystem } from './check-visibility';
@@ -93,7 +94,7 @@ export class VisibilityPlugin implements PluginObject {
       'postUpdate',
       [
         Query([Camera, Frustum]),
-        Query([InheritedVisibility, ViewVisibility], { has: [NoFrustumCulling] }),
+        Query([InheritedVisibility, ViewVisibility], { has: [NoFrustumCulling, Skeleton] }),
         ResMut(CheckVisibilityState),
         Query([InheritedVisibility, ViewVisibility], { changed: [GlobalTransform] }),
         Query([InheritedVisibility, ViewVisibility], { changed: [Aabb] }),

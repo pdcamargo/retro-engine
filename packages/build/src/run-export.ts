@@ -68,6 +68,9 @@ export const runWebExport = async (
     ...(descriptor.name.length > 0 ? { title: descriptor.name } : {}),
     ...(options.external !== undefined ? { external: options.external } : {}),
     ...(scanned.inputs.length > 0 ? { assets: scanned.inputs, manifest: scanned.manifest } : {}),
+    ...(descriptor.startupScene !== null && descriptor.startupScene.length > 0
+      ? { startupScene: descriptor.startupScene }
+      : {}),
   });
 
   const result = await target.export({

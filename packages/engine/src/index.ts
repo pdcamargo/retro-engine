@@ -1369,6 +1369,16 @@ export class App {
   }
 
   /**
+   * Whether a plugin with the given `name()` has been registered. Lets a host
+   * add a baseline plugin only when the project has not already supplied its
+   * own — e.g. a runtime that installs a default material/light stack but yields
+   * to a project that composes a different one.
+   */
+  hasPlugin(name: string): boolean {
+    return this.pluginNameIndex.has(name);
+  }
+
+  /**
    * Register a plugin. Accepts either an object implementing the
    * {@link PluginObject} interface or a {@link PluginFn} callback — function
    * plugins are auto-wrapped (named functions are unique by `fn.name`;

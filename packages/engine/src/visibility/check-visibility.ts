@@ -3,6 +3,7 @@ import { Aabb, Frustum, frustumIntersectsAabb } from '@retro-engine/math';
 
 import { Camera } from '../camera/camera';
 import { RenderLayers } from '../camera/render-layers';
+import { Skeleton } from '../skinning/skeleton';
 import { GlobalTransform } from '../transform';
 import { CheckVisibilityState, FLOATS_PER_CAMERA } from './cull-state';
 import { InheritedVisibility, NoFrustumCulling, ViewVisibility } from './visibility';
@@ -10,7 +11,7 @@ import { InheritedVisibility, NoFrustumCulling, ViewVisibility } from './visibil
 type CamerasQuery = QueryHandle<readonly [typeof Camera, typeof Frustum]>;
 type RenderablesQuery = QueryHandle<
   readonly [typeof InheritedVisibility, typeof ViewVisibility],
-  { has: readonly (typeof NoFrustumCulling)[] }
+  { has: readonly (typeof NoFrustumCulling | typeof Skeleton)[] }
 >;
 /**
  * A renderable query gated on one changed component. `changed` does not alter
@@ -39,16 +40,16 @@ const evaluateViewVisible = (
   world: World,
   entity: Entity,
   inherited: InheritedVisibility,
-  hasNoFrustumCulling: boolean,
+  skipFrustumCulling: boolean,
   active: readonly ActiveCameraCullingInfo[],
 ): boolean => {
   if (!inherited.visible) return false;
 
   const entityLayers = world.getComponent(entity, RenderLayers);
   const entityLayerMask = entityLayers?.mask ?? RenderLayers.DEFAULT_MASK;
-  const localAabb = hasNoFrustumCulling ? undefined : world.getComponent(entity, Aabb);
-  const transform = hasNoFrustumCulling ? undefined : world.getComponent(entity, GlobalTransform);
-  const skipFrustum = hasNoFrustumCulling || localAabb === undefined || transform === undefined;
+  const localAabb = skipFrustumCulling ? undefined : world.getComponent(entity, Aabb);
+  const transform = skipFrustumCulling ? undefined : world.getComponent(entity, GlobalTransform);
+  const skipFrustum = skipFrustumCulling || localAabb === undefined || transform === undefined;
 
   for (const cam of active) {
     if ((entityLayerMask & cam.layerMask) === 0) continue;
@@ -164,8 +165,11 @@ export const checkVisibilitySystem = (
       const entity = entry[0] as Entity;
       const inherited = entry[1] as InheritedVisibility;
       const view = entry[2] as ViewVisibility;
-      const hasNoFrustumCulling = entry[3] as boolean;
-      const visible = active.length === 0 ? false : evaluateViewVisible(world, entity, inherited, hasNoFrustumCulling, active);
+      // A skinned mesh deforms with its skeleton beyond the mesh's bind-pose AABB,
+      // so frustum-testing that stale box would wrongly cull posed characters
+      // (ADR-0173); skip the frustum test for them, like NoFrustumCulling.
+      const skipFrustum = (entry[3] as boolean) || (entry[4] as boolean);
+      const visible = active.length === 0 ? false : evaluateViewVisible(world, entity, inherited, skipFrustum, active);
       writeVisibility(world, entity, view, visible);
     });
     return;
@@ -188,8 +192,10 @@ export const checkVisibilitySystem = (
     if (view === undefined) continue; // despawned or no longer a renderable
     const inherited = world.getComponent(entity, InheritedVisibility);
     if (inherited === undefined) continue;
-    const hasNoFrustumCulling = world.getComponent(entity, NoFrustumCulling) !== undefined;
-    const visible = evaluateViewVisible(world, entity, inherited, hasNoFrustumCulling, active);
+    const skipFrustum =
+      world.getComponent(entity, NoFrustumCulling) !== undefined ||
+      world.getComponent(entity, Skeleton) !== undefined;
+    const visible = evaluateViewVisible(world, entity, inherited, skipFrustum, active);
     writeVisibility(world, entity, view, visible);
   }
 };

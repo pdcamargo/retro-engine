@@ -2202,3 +2202,36 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
      reason (scene-driven exports don't run yet).
 
 ---
+
+## ✅ P0 COMPLETE — Web runtime loads + renders the startup scene (ADR-0173); Export P0 done
+
+- **What changed:** `bootWebGame` (`@retro-engine/runtime-web`) gains a `startupScene` option. When set it
+  installs a **game-runtime baseline** (`installGameRuntime`: prepass/StandardMaterial/lights/skybox +
+  scene/asset runtime with mesh/image/material/glTF loaders — all guarded via the new `App.hasPlugin`) then
+  `loadAndSpawnScene` before the run loop. The export threads `descriptor.startupScene` (`runWebExport` →
+  `WebExportTarget` → `emitWebBoot`); the startup `.rescene` packs into the `.rpak` via the `.meta` scan.
+  Added `window.__retro = { app }` debug hook in the web runtime (parity with studio probes).
+- **Two bugs fixed while getting a real scene to render:**
+  1. **Engine skinned-mesh frustum culling** (`packages/engine/src/visibility/check-visibility.ts` +
+     `visibility-plugin.ts`): skinned meshes were culled by their mesh **bind-pose** AABB, which a posed
+     skeleton deforms beyond — so a character wrongly vanished under a single camera (it only showed in the
+     editor because a second camera framed the bind box). Entities with a `Skeleton` now skip the bind-pose
+     frustum test (like `NoFrustumCulling`). +1 unit test. Follow-up backlog: joint-derived bounds
+     (`docs/backlog/skinned-mesh-joint-bounds.md`).
+  2. **FBX→GLB convert skill** (`~/.claude/skills/fbx-to-glb/convert.py`, NOT in this repo): its post-export
+     root-scale reset broke **rigged** models (skeleton left 100× the mesh → giant character, then culled).
+     Now skips the reset when the GLB has `skins`. Re-converted `city characters/FBX/Character.fbx` →
+     `retro-game-sample/assets/glb/Character.glb`; character is now human-sized.
+- **Verified END-TO-END in a real browser** (Playwright + `window.__retro` probe): exported
+  `retro-game-sample` (scene-driven, 77 entities) → the authored world renders — skinned `PunkGirl`
+  character (human-sized, standing among the metal cubes), skybox, and meshes all draw from the scene's
+  Main Camera. Screenshots: `export-skinned-cull-fixed.png` (culling fix), `export-scale-fixed.png` (scale
+  fix, character ~cube height). Engine unit tests + typecheck green.
+- **HOW to test:** `bun packages/build/src/cli.ts --project <scene-driven project> --target web`, serve
+  `dist/web`, open in a WebGPU browser → the project's startup scene renders (not an empty world). For a
+  rigged glTF, re-convert its FBX with the fixed skill first so it's human-sized.
+- **Completes the Export P0 item** (box checked) → **the entire P0 tier is now complete.** Changeset bumps
+  runtime-web/build/engine (minor). New backlog: `asset-indexer-ignores-node-modules.md` (the studio indexer
+  walked `node_modules` and minted a stray `.meta` in `packages/gltf` fixtures — cleaned up, tracked).
+
+---
