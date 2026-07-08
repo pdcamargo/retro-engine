@@ -97,6 +97,20 @@ Bun.serve({
         return new Response(String(err), { status: 500 });
       }
     },
+    // Export a project to a deployable static web build (browser path; the Tauri
+    // `project_export_web` command runs the same `runWebExport` natively).
+    '/project/export-web': async (req) => {
+      const params = new URL(req.url).searchParams;
+      const dir = params.get('dir');
+      if (dir === null || dir.length === 0) return new Response('missing dir', { status: 400 });
+      const { runWebExport } = await import('@retro-engine/build');
+      try {
+        const result = await runWebExport({ projectRoot: dir, production: params.get('production') !== null });
+        return Response.json({ outDir: result.outDir, outputs: result.outputs });
+      } catch (err) {
+        return new Response(err instanceof Error ? err.message : String(err), { status: 500 });
+      }
+    },
   },
 });
 

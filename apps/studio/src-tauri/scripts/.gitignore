@@ -1,2 +1,4 @@
 # Bundled from apps/studio/scripts/build-project-cli.ts by `bun run build:project-script`.
 build-project.js
+# Bundled from apps/studio/scripts/build-web-export-cli.ts by `bun run build:web-export-script`.
+build-web-export.js

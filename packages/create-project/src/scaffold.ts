@@ -18,7 +18,14 @@ export interface ScaffoldOptions {
   readonly dependencySpec?: string;
 }
 
-const RETRO_DEPS = ['@retro-engine/engine', '@retro-engine/project'] as const;
+const RETRO_DEPS = [
+  '@retro-engine/engine',
+  '@retro-engine/project',
+  // The web-export runtime host (`bootWebGame`). The generated web-export boot
+  // entry imports it, and the export bundles from the project tree — so a project
+  // needs it as a dependency to build a runnable web target.
+  '@retro-engine/runtime-web',
+] as const;
 const RETRO_DEV_DEPS = ['@retro-engine/editor-sdk', '@retro-engine/tsconfig'] as const;
 
 const depMap = (names: readonly string[], spec: string): Record<string, string> =>

@@ -31,6 +31,7 @@ import { createImGuiOverlay } from '@retro-engine/renderer-webgpu/imgui';
 import { publishHost } from './host-bridge';
 import { mirrorConsoleToNative } from './platform/native-console';
 import { createProjectBuilder } from './project/project-builder';
+import { exportProjectWeb } from './project/project-exporter';
 import { applyProject, buildEditorExtensions, buildProjectModule } from './project/load-project';
 import { currentProjectDir, setCurrentProjectDir } from './project/current-project';
 import { buildCodeIndex, captureBaseline, type CodeIndex, parseProjectDescriptor } from './project/project-index';
@@ -631,10 +632,14 @@ const composerControl: ComposerControl = {
 let openProjectAction: () => void = () => {};
 let saveSceneAction: () => void = () => {};
 let canSaveSceneFn: () => boolean = () => false;
+let exportWebAction: () => void = () => {};
+let canExportWebFn: () => boolean = () => false;
 for (const menu of menus(state, history, {
   openProject: () => openProjectAction(),
   saveScene: () => saveSceneAction(),
   canSaveScene: () => canSaveSceneFn(),
+  exportWeb: () => exportWebAction(),
+  canExportWeb: () => canExportWebFn(),
 })) {
   editor.addMenu(menu);
 }
@@ -789,6 +794,33 @@ void (async (): Promise<void> => {
     } catch (err) {
       console.error('[studio] could not read project.retroengine', err);
     }
+
+    // Build ▸ Web — export the open project to a deployable static web bundle
+    // (<project>/dist/web). Independent of the scene / play state; it re-bundles the
+    // project source from disk. Guarded so a second click can't start a concurrent
+    // export while one is running.
+    let exportingWeb = false;
+    canExportWebFn = (): boolean => !exportingWeb;
+    exportWebAction = (): void => {
+      if (exportingWeb) return;
+      exportingWeb = true;
+      pushConsole('cmd', 'Building web export…', projectDir);
+      void (async (): Promise<void> => {
+        try {
+          const result = await exportProjectWeb(projectDir);
+          pushConsole('cmd', `Web export ready → ${result.outDir}`, `${result.outputs.length} files`);
+        } catch (err) {
+          notifyStudioError('Web export failed', err instanceof Error ? err.message : String(err));
+        } finally {
+          exportingWeb = false;
+        }
+      })();
+    };
+    // Test/probe hook mirroring `__studioOpenProject`: runs the real export through
+    // the same path the Build ▸ Web menu uses and resolves to its result, so an MCP
+    // client can drive + assert the export (jsimgui ignores synthetic menu clicks).
+    (window as unknown as { __studioExportWeb: (production?: boolean) => Promise<unknown> }).__studioExportWeb =
+      (production = false) => exportProjectWeb(projectDir, production);
   }
   const projectId = descriptor !== null && descriptor.projectId.length > 0 ? descriptor.projectId : null;
   const layoutKey = projectId !== null ? projectStateKey(projectId, 'layout') : LAYOUT_KEY;

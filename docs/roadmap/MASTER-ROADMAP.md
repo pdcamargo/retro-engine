@@ -205,8 +205,16 @@ production polish (source maps / minification).
       `.rpak`-backed source to the App's `AssetServer`. **Asset delivery A+B+C complete + browser-verified**:
       the sample export packs `credits.txt`, and at runtime it `loadByGuid`s it — the value streams from the
       `.rpak` over HTTP and is consumed by game code (`window.__game.credits` matches the file exactly; UI
-      shows "CREDITS: LOADED"). Remaining before check-off: **studio "Build → Web" menu** (studio-side) +
-      source maps / production polish. (ADR-0151/0153.)
+      shows "CREDITS: LOADED"). **Studio "Build → Web" menu shipped** ✅ — a `Build` menu with a `Web…`
+      item wraps a Tauri `project_export_web` command (bun sidecar runs the bundled `build-web-export.js` →
+      `runWebExport`); MCP-verified end-to-end (the full frontend→command→sidecar path produced
+      `main.js`/`assets.rpak`/`manifest.json`/`index.html`, and the artifact boots in a browser with WebGPU
+      + 0 errors). Fixing it surfaced two real gaps, now tracked: (1) scaffolded projects lacked
+      `@retro-engine/runtime-web` (fixed in `create-project` + linked into the studio's sample project);
+      (2) **the web runtime does not load the project's startup scene** — a scene-driven project exports but
+      boots to an empty world (see the new follow-up under P1). Remaining before check-off: **runtime
+      startup-scene loading** (the real blocker for scene-driven games) + source maps / production polish.
+      (ADR-0151/0153.)
       _AC:_ `packages/build` (Bun/Node-only) with an `ExportTarget` interface + registry and a shared Bun
       bundler for user code (engine externalized appropriately); a **web adapter** emitting a static site
       (engine + user bundle + `.rpak`) that runs in a browser; a **`.rpak` writer** (magic+version header →
@@ -432,8 +440,17 @@ production polish (source maps / minification).
 
 ## Platform / Tooling
 
-- [ ] **Export — Web follow-ups** — the remaining slices of the P0 web target (ADR-0151/0153): studio
-      "Build → Web" menu (wrap `runWebExport`); pack a project's `assets/` into the `.rpak` + wire the
+- [ ] **Export — Web runtime: load the project's startup scene** — 🔴 **blocker for scene-driven exports.**
+      `bootWebGame` runs the project's plugins but never loads `descriptor.startupScene`, so a project whose
+      content lives in a `.rescene` (the studio's normal workflow) exports and boots to an **empty world**
+      (black screen, 0 errors) — only code-driven projects (spawn in `startup` systems, e.g. `apps/sample-game`)
+      render. Fix: pack the startup `.rescene` into the `.rpak`, thread its GUID through `emitWebBoot`, and
+      have `bootWebGame` load + spawn it via the `AssetServer` before the run loop. Found while verifying the
+      studio "Build → Web" menu against the real (scene-driven) sample project.
+      _Links:_ [web-build-target.md](web-build-target.md)
+- [ ] **Export — Web follow-ups** — the remaining slices of the P0 web target (ADR-0151/0153): **studio
+      "Build → Web" menu ✅** (a `Build ▸ Web…` menu → Tauri `project_export_web` command → bun sidecar →
+      `runWebExport`; MCP-verified end-to-end); pack a project's `assets/` into the `.rpak` + wire the
       runtime `AssetServer` to a `RangeRpakReader` so exported games load real assets; source maps /
       production polish (phase 6). **jsimgui tree-shaken out ✅** — `createImGuiOverlay` moved from the
       `@retro-engine/renderer-webgpu` index to a `/imgui` subpath, so `bootWebGame`'s `createWebGPURenderer`

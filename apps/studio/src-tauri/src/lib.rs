@@ -267,6 +267,79 @@ async fn project_build(
     Ok(bundle)
 }
 
+// Export the open project to a deployable static web build. Runs the bundled Bun
+// export script (`bun install` for the project's deps, then `runWebExport` via the
+// script), which writes `index.html` + `main.js` + `assets.rpak` + `manifest.json`
+// into `<project>/dist/web`. Returns the script's JSON summary `{ outDir, outputs }`.
+#[tauri::command]
+async fn project_export_web(
+    app: tauri::AppHandle,
+    project_dir: String,
+    production: Option<bool>,
+) -> Result<String, String> {
+    use tauri::path::BaseDirectory;
+    use tauri_plugin_shell::ShellExt;
+
+    // Same resolution as `project_build`: the bundled resource in a shipped app,
+    // else the script built into src-tauri/scripts by the beforeDevCommand.
+    let script = app
+        .path()
+        .resolve("scripts/build-web-export.js", BaseDirectory::Resource)
+        .ok()
+        .filter(|p| p.exists())
+        .or_else(|| std::env::current_dir().ok().map(|d| d.join("scripts/build-web-export.js")))
+        .filter(|p| p.exists())
+        .ok_or_else(|| "web export script not found (run `bun run build:web-export-script`)".to_string())?;
+
+    log::info!(
+        "project_export_web: bun install + export {project_dir} (script {})",
+        script.display()
+    );
+
+    let install = app
+        .shell()
+        .sidecar("bun")
+        .map_err(|e| e.to_string())?
+        .args(["install"])
+        .current_dir(PathBuf::from(project_dir.clone()))
+        .output()
+        .await
+        .map_err(|e| e.to_string())?;
+    if !install.status.success() {
+        return Err(format!(
+            "bun install failed: {}",
+            String::from_utf8_lossy(&install.stderr)
+        ));
+    }
+
+    let mut export_args = vec![
+        script.to_string_lossy().to_string(),
+        "--project".to_string(),
+        project_dir.clone(),
+    ];
+    if production.unwrap_or(false) {
+        export_args.push("--production".to_string());
+    }
+    let export = app
+        .shell()
+        .sidecar("bun")
+        .map_err(|e| e.to_string())?
+        .args(export_args)
+        .current_dir(PathBuf::from(project_dir))
+        .output()
+        .await
+        .map_err(|e| e.to_string())?;
+    if !export.status.success() {
+        return Err(format!(
+            "web export failed: {}",
+            String::from_utf8_lossy(&export.stderr)
+        ));
+    }
+    let summary = String::from_utf8_lossy(&export.stdout).into_owned();
+    log::info!("project_export_web: ok, {summary}");
+    Ok(summary)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
@@ -290,6 +363,7 @@ pub fn run() {
       pref_set,
       pref_remove,
       project_build,
+      project_export_web,
       set_project_root,
       project_read_file,
       project_write_file,

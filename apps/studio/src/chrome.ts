@@ -44,6 +44,10 @@ export interface MenuActions {
   saveScene(): void;
   /** Whether there is an open scene that can be saved (a project with a resolved startup scene). */
   canSaveScene(): boolean;
+  /** Export the open project to a deployable static web build (`<project>/dist/web`). */
+  exportWeb(): void;
+  /** Whether a project is open and no export is already running. */
+  canExportWeb(): boolean;
 }
 
 /** The menu bar definitions — File / Edit / Entity / Component / Run / Help. */
@@ -111,6 +115,18 @@ export const menus = (state: StudioState, history: History, actions: MenuActions
         label: 'New Bundle…',
         icon: 'package',
         onClick: () => openComposer(state.composer, 'bundle'),
+      },
+    ],
+  },
+  {
+    id: '/build',
+    label: 'Build',
+    items: () => [
+      {
+        label: 'Web…',
+        icon: 'globe',
+        disabled: !actions.canExportWeb(),
+        onClick: () => actions.exportWeb(),
       },
     ],
   },

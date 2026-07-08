@@ -9,7 +9,9 @@
     "dev:web": "bun --hot dev-server.ts",
     "build": "bun build index.html --outdir dist --minify-whitespace --minify-syntax --target=browser",
     "build:project-script": "bun build scripts/build-project-cli.ts --target=bun --outfile=src-tauri/scripts/build-project.js",
-    "build:tauri": "bun run build && bun run build:project-script",
+    "build:web-export-script": "bun build scripts/build-web-export-cli.ts --target=bun --outfile=src-tauri/scripts/build-web-export.js",
+    "build:scripts": "bun run build:project-script && bun run build:web-export-script",
+    "build:tauri": "bun run build && bun run build:scripts",
     "lint": "oxlint .",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
@@ -20,6 +22,7 @@
   "dependencies": {
     "@mori2003/jsimgui": "latest",
     "@retro-engine/assets": "workspace:*",
+    "@retro-engine/build": "workspace:*",
     "@retro-engine/ecs": "workspace:*",
     "@retro-engine/editor-mcp": "workspace:*",
     "@retro-engine/editor-platform": "workspace:*",

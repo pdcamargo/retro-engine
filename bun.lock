@@ -58,6 +58,7 @@
       "dependencies": {
         "@mori2003/jsimgui": "latest",
         "@retro-engine/assets": "workspace:*",
+        "@retro-engine/build": "workspace:*",
         "@retro-engine/ecs": "workspace:*",
         "@retro-engine/editor-mcp": "workspace:*",
         "@retro-engine/editor-platform": "workspace:*",

@@ -26,3 +26,5 @@ export type { ScannedAssets } from './asset-scan';
 export { parseMetaEntry, scanProjectAssets } from './asset-scan';
 export type { WebExportConfig } from './web-export-target';
 export { WebExportTarget } from './web-export-target';
+export type { RunWebExportOptions, RunWebExportResult } from './run-export';
+export { runWebExport } from './run-export';

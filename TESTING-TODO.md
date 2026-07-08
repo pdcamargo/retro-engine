@@ -2172,3 +2172,33 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
   runs, true-MSDF atlas) remains tracked under P1/P2. Roadmap north star updated.
 
 ---
+
+## ✅ P0 — Studio "Build → Web" menu (MCP-verified end-to-end) + two export gaps found
+
+- **What changed:** A `Build` menu with a `Web…` item in the studio menu bar. It runs a new Tauri
+  `project_export_web` command (`apps/studio/src-tauri/src/lib.rs`) that `bun install`s the project then
+  runs a bundled sidecar (`apps/studio/scripts/build-web-export-cli.ts` → `src-tauri/scripts/build-web-export.js`)
+  which calls `runWebExport`. Frontend seam: `apps/studio/src/project/project-exporter.ts` (Tauri invoke /
+  browser dev-server `/project/export-web` route), wired through `MenuActions.exportWeb`/`canExportWeb`
+  (`chrome.ts` + `main.ts`), with a `window.__studioExportWeb` probe hook. `runWebExport` promoted to public
+  API in `@retro-engine/build` (changeset). `beforeDevCommand` now builds both sidecar scripts.
+- **Verified END-TO-END via the retro-studio MCP** (eval-driven, since jsimgui ignores synthetic menu
+  clicks): `window.__studioExportWeb()` drove the full frontend → Tauri command → bun sidecar →
+  `runWebExport` path and produced `main.js` + `assets.rpak` + `manifest.json` + `index.html` in the studio
+  project's `dist/web`; the `Build` menu is visible in the menu bar (screenshot `build-menu-bar.png`); the
+  produced artifact boots in a real browser (canvas + WebGPU + 0 console errors). Full gate green.
+- **HOW to test:** open the studio (it opens `/Users/pdcamargo/dev/ts/retro-game-sample`), menu **Build ▸
+  Web…** → the console logs `Web export ready → …/dist/web` and the four files appear there.
+- **TWO GAPS FOUND + handled:**
+  1. **Fixed:** scaffolded projects had no `@retro-engine/runtime-web` dep, so the export's boot entry
+     couldn't resolve it. Added it to the `create-project` scaffold (+ test + changeset), globally
+     `bun link`ed `runtime-web`, and linked it into `retro-game-sample` (its `package.json` now lists it).
+     After this, the studio export succeeds.
+  2. **NOT fixed (logged as the next P1 item):** `bootWebGame` does **not** load the project's
+     `startupScene`, so a scene-driven project (like `retro-game-sample`, whose entities live in a
+     `.rescene`) exports and boots to an **empty world** (black screen, 0 errors). Only code-driven
+     projects render. This is now the real remaining blocker for the Export P0 box — added under P1
+     "Export — Web runtime: load the project's startup scene". **Export P0 box left unchecked** for this
+     reason (scene-driven exports don't run yet).
+
+---

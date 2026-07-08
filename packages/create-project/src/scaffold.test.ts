@@ -37,6 +37,7 @@ describe('scaffoldProject', () => {
     const pkg = JSON.parse(scaffoldProject(opts).get('package.json')!);
     expect(pkg.dependencies['@retro-engine/engine']).toBe('^0.5.0');
     expect(pkg.dependencies['@retro-engine/project']).toBe('^0.5.0');
+    expect(pkg.dependencies['@retro-engine/runtime-web']).toBe('^0.5.0');
     expect(pkg.devDependencies['@retro-engine/tsconfig']).toBe('^0.5.0');
   });
 
