@@ -454,9 +454,9 @@ workflow. Production-polish tails of the P0 work (source maps / minification) li
       mesh → giant, then culled) — it now skips that reset for GLBs with `skins`. Verified end-to-end in a
       browser: a scene-driven project (`retro-game-sample`) exports and renders its authored world — the
       skinned character (human-sized, next to the cubes), skybox, and meshes all draw from the scene's Main
-      Camera. **Follow-ups:** joint-derived skinned-mesh bounds (proper cull, not skip); the studio asset
-      indexer walks `node_modules` + mints stray `.meta` (it should ignore `node_modules`); source-map /
-      production polish.
+      Camera. **Follow-ups:** joint-derived skinned-mesh bounds (proper cull, not skip); source-map /
+      production polish. (The studio asset indexer walking `node_modules` + minting stray `.meta` — surfaced
+      here — is **fixed**: the native walk + `listProjectFiles` skip `node_modules`/`.git`/`dist`/`.re`/`target`.)
       _Links:_ [web-game-runtime.md](web-game-runtime.md) · [web-build-target.md](web-build-target.md) · [ADR-0173](../adr/ADR-0173-web-game-runtime-baseline-and-scene-loading.md)
 - [ ] **Export — Web follow-ups** — the remaining slices of the P0 web target (ADR-0151/0153): **studio
       "Build → Web" menu ✅** (a `Build ▸ Web…` menu → Tauri `project_export_web` command → bun sidecar →

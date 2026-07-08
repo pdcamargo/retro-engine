@@ -2252,3 +2252,17 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
   editor-sdk patch. Roadmap P1 stabilization box checked.
 
 ---
+
+## ✅ Studio asset indexer no longer walks `node_modules` (verified via studio launch)
+
+- **What changed:** `apps/studio` — the native recursive file walk (`walk_files` in `src-tauri/src/lib.rs`)
+  and the host-agnostic `listProjectFiles` now skip `node_modules`, `.git`, `dist`, `.re`, `target`. The
+  indexer was descending into a project's `node_modules` (and through the `runtime-web → gltf` symlink into
+  the engine repo), surfacing a linked package's `__fixtures__` as project assets — minting a stray
+  `Clover_1.gltf.meta` inside `packages/gltf` and logging 403 asset-load errors on every studio open.
+- **Verified:** a fresh studio launch on `retro-game-sample` boots clean — no "minted sidecar" line, no
+  `node_modules`/Clover load errors, and no stray `.meta` re-created. Studio typecheck + lint green.
+- **Fixes** a regression introduced by the runtime-web→gltf dependency (ADR-0173). No changeset (apps/ only).
+  Backlog `asset-indexer-ignores-node-modules.md` deleted.
+
+---

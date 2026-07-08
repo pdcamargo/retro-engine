@@ -31,11 +31,22 @@ fn project_root_path(state: &tauri::State<ProjectRoot>) -> Result<PathBuf, Strin
         .ok_or_else(|| "no project root set".to_string())
 }
 
+// Directories that never hold authored project assets — dependency trees, VCS
+// metadata, and build/cache output. Skipped by the recursive walk so the asset
+// indexer never descends into (or through symlinks in) `node_modules`, which
+// would surface a linked package's fixtures as project assets and mint stray
+// `.meta` sidecars inside them.
+const IGNORED_DIRS: &[&str] = &["node_modules", ".git", "dist", ".re", "target"];
+
 fn walk_files(dir: &Path, base: &Path, out: &mut Vec<String>) -> Result<(), String> {
     for entry in fs::read_dir(dir).map_err(|e| e.to_string())? {
         let entry = entry.map_err(|e| e.to_string())?;
         let path = entry.path();
         if path.is_dir() {
+            let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            if IGNORED_DIRS.contains(&name) {
+                continue;
+            }
             walk_files(&path, base, out)?;
         } else if let Ok(rel) = path.strip_prefix(base) {
             out.push(rel.to_string_lossy().replace('\\', "/"));
