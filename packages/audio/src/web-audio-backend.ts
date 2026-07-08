@@ -284,6 +284,11 @@ export class WebAudioBackend implements AudioBackend {
       if (effect.q !== undefined) f.Q.value = effect.q;
       return f;
     }
+    if (effect.kind === 'reverb') {
+      const conv = this.ctx.createConvolver();
+      conv.buffer = this.makeReverbIR(effect.seconds ?? 1.5, effect.decay ?? 3, effect.wet ?? 0.3);
+      return conv;
+    }
     const c = this.ctx.createDynamicsCompressor();
     if (effect.threshold !== undefined) c.threshold.value = effect.threshold;
     if (effect.knee !== undefined) c.knee.value = effect.knee;
@@ -291,6 +296,27 @@ export class WebAudioBackend implements AudioBackend {
     if (effect.attack !== undefined) c.attack.value = effect.attack;
     if (effect.release !== undefined) c.release.value = effect.release;
     return c;
+  }
+
+  /**
+   * Synthesize a stereo convolution impulse response: sample 0 is a unit impulse
+   * (so the dry signal passes through — convolving with a leading delta is
+   * identity), followed by a decaying-noise tail at level `wet`. No IR asset
+   * needed; a self-contained wet/dry reverb in one {@link ConvolverNode}.
+   */
+  private makeReverbIR(seconds: number, decay: number, wet: number): AudioBuffer {
+    const rate = this.ctx.sampleRate;
+    const length = Math.max(1, Math.floor(seconds * rate));
+    const ir = this.ctx.createBuffer(2, length, rate);
+    for (let ch = 0; ch < 2; ch++) {
+      const data = ir.getChannelData(ch);
+      data[0] = 1; // dry (unit impulse)
+      for (let i = 1; i < length; i++) {
+        const t = i / length;
+        data[i] = wet * (Math.random() * 2 - 1) * Math.pow(1 - t, decay);
+      }
+    }
+    return ir;
   }
 
   private startVoice(id: VoiceId, voice: Voice, buffer: AudioBuffer): void {

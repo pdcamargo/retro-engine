@@ -326,8 +326,11 @@ workflow. Production-polish tails of the P0 work (source maps / minification) li
       derived from the `AudioListener`'s transform (pure `listenerAxes`) → `setListenerOrientation`, so 3D
       panning tracks camera rotation. **Source cones** ✅ — `AudioSource.coneInnerAngle`/`coneOuterAngle`/
       `coneOuterGain` (default omnidirectional) make a 3D source directional; `setSourceOrientation` drives
-      the panner's facing from the source's transform. Unit-tested. Remaining: reverb (`ConvolverNode`),
-      sidechain (Doppler is deprecated in Web Audio). 3D spatial audio is otherwise complete.
+      the panner's facing from the source's transform. Unit-tested. **Reverb** ✅ — a `reverb` `BusEffect`
+      (`setBusEffect(bus, { kind: 'reverb', seconds?, decay?, wet? })`) builds a `ConvolverNode` with a
+      synthesized IR (leading unit impulse for the dry pass-through + decaying-noise tail), so it's a
+      self-contained wet/dry insert with no IR asset; composes with submix routing, null backend no-ops.
+      Unit-tested (stub-context IR shape + chain). Remaining: sidechain (Doppler is deprecated in Web Audio).
       _Links:_ [audio-mixer-buses.md](audio-mixer-buses.md) · [audio.md](audio.md)
 - [ ] **Windowing** — 🟡 **read side + cursor control shipped**: `Window` resource (logical + physical size +
       dpr, mirrored from the surface) + `WindowResized` event + `syncWindow` + opt-in `WindowPlugin`

@@ -35,6 +35,11 @@ export interface PannerConfig {
  *   optional resonance `q`. The staple "muffle everything on this bus" effect.
  * - `compressor` — a dynamics compressor; all fields optional (Web Audio
  *   defaults apply). Tames peaks / glues a submix.
+ * - `reverb` — a convolution reverb with a synthesized impulse response (no IR
+ *   asset needed): a decaying-noise tail whose length is `seconds`, steepness is
+ *   `decay`, and level relative to the dry signal is `wet`. The dry signal passes
+ *   through (the IR leads with a unit impulse), so this is a self-contained
+ *   wet/dry insert in a single node. "Put this bus in a room."
  */
 export type BusEffect =
   | {
@@ -50,6 +55,15 @@ export type BusEffect =
       readonly ratio?: number;
       readonly attack?: number;
       readonly release?: number;
+    }
+  | {
+      readonly kind: 'reverb';
+      /** Tail length in seconds. Default `1.5`. */
+      readonly seconds?: number;
+      /** Exponential decay steepness of the tail (higher = shorter-sounding). Default `3`. */
+      readonly decay?: number;
+      /** Wet tail level relative to the dry signal. Default `0.3`. */
+      readonly wet?: number;
     };
 
 /**

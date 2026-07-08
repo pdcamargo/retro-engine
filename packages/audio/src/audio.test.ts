@@ -341,11 +341,36 @@ class StubAudioListener {
   readonly upY = new StubParam(1);
   readonly upZ = new StubParam(0);
 }
+class StubAudioBuffer {
+  readonly channels: Float32Array[];
+  constructor(
+    readonly numberOfChannels: number,
+    readonly length: number,
+    readonly sampleRate: number,
+  ) {
+    this.channels = Array.from({ length: numberOfChannels }, () => new Float32Array(length));
+  }
+  getChannelData(ch: number): Float32Array {
+    return this.channels[ch]!;
+  }
+}
+class StubConvolverNode {
+  buffer: StubAudioBuffer | null = null;
+  readonly outputs: object[] = [];
+  connect(target: object): void {
+    this.outputs.push(target);
+  }
+  disconnect(): void {
+    this.outputs.length = 0;
+  }
+}
 class StubAudioContext {
   state = 'running';
+  readonly sampleRate = 48000;
   readonly destination = { id: 'destination' };
   readonly created: StubGainNode[] = [];
   readonly filters: StubFilterNode[] = [];
+  readonly convolvers: StubConvolverNode[] = [];
   readonly panners: StubPannerNode[] = [];
   readonly panners3d: StubPannerNode3d[] = [];
   readonly listener = new StubAudioListener();
@@ -374,6 +399,14 @@ class StubAudioContext {
   }
   createDynamicsCompressor(): StubCompressorNode {
     return new StubCompressorNode();
+  }
+  createConvolver(): StubConvolverNode {
+    const c = new StubConvolverNode();
+    this.convolvers.push(c);
+    return c;
+  }
+  createBuffer(channels: number, length: number, rate: number): StubAudioBuffer {
+    return new StubAudioBuffer(channels, length, rate);
   }
   decodeAudioData(): Promise<unknown> {
     return Promise.resolve({});
@@ -459,6 +492,30 @@ describe('WebAudioBackend — mixer buses', () => {
     backend.setBusEffect('music', null);
     expect(musicBus.outputs).toContain(master);
     expect(musicBus.outputs).not.toContain(filter);
+  });
+
+  it('inserts a reverb convolver with a synthesized IR (dry impulse + wet tail)', () => {
+    const ctx = new StubAudioContext();
+    const backend = new WebAudioBackend(ctx as unknown as AudioContext);
+    const master = ctx.created[0]!;
+    backend.setBusVolume('music', 1);
+    const musicBus = ctx.created[ctx.created.length - 1]!;
+
+    backend.setBusEffect('music', { kind: 'reverb', seconds: 0.5, decay: 2, wet: 0.4 });
+    const conv = ctx.convolvers[ctx.convolvers.length - 1]!;
+    // Chain is gain → convolver → master.
+    expect(musicBus.outputs).toContain(conv);
+    expect(musicBus.outputs).not.toContain(master);
+    expect(conv.outputs).toContain(master);
+    // IR: 0.5s @ 48k = 24000 samples, stereo; sample 0 is the dry unit impulse,
+    // the tail is bounded by the wet level.
+    const ir = conv.buffer!;
+    expect(ir.length).toBe(24000);
+    expect(ir.numberOfChannels).toBe(2);
+    const data = ir.getChannelData(0);
+    expect(data[0]).toBe(1);
+    expect(data.slice(1).every((v) => Math.abs(v) <= 0.4)).toBe(true);
+    expect(data.slice(1).some((v) => v !== 0)).toBe(true);
   });
 
   it('keeps the effect in the chain across a submix reroute (gain → effect → target)', () => {

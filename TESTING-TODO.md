@@ -2266,3 +2266,22 @@ Every P0 acceptance criterion is now met **except one blocked item**. Nothing un
   Backlog `asset-indexer-ignores-node-modules.md` deleted.
 
 ---
+
+## P1 — Audio: convolution reverb bus effect (unit-verified)
+
+- **What changed:** `@retro-engine/audio` — a `reverb` `BusEffect` alongside `filter`/`compressor`.
+  `setBusEffect(bus, { kind: 'reverb', seconds?, decay?, wet? })`; the WebAudio backend builds a
+  `ConvolverNode` whose IR is synthesized (a leading unit impulse so the dry signal passes through, then a
+  decaying-noise tail at level `wet`) — a self-contained wet/dry reverb in one node, no IR asset needed.
+  Composes with submix routing; null backend no-ops. Facade unchanged (generic effect store/forward).
+- **Verified:** unit tests (49 audio tests, +1): the backend creates a `ConvolverNode`, wires it
+  `gain → convolver → out`, and its IR buffer is `seconds×sampleRate` samples with `ir[0] === 1` (dry) and
+  a bounded non-zero tail. Repo typecheck/lint green.
+- **Why no MCP verification:** hearing reverb needs a real browser + ear; the studio has no audio-graph
+  probe. Unit-tested for the wiring + IR shape (same bar as the existing filter/compressor inserts).
+- **HOW to test (manual):** on a bus with a looping sound, `audio.setBusEffect('music', { kind: 'reverb',
+  seconds: 2, wet: 0.5 })` in a browser build → the bus gains an audible room tail; `setBusEffect(bus, null)`
+  removes it. **Confirm by ear.**
+- **NOTE:** changeset (audio minor). Roadmap "Audio mixer buses" reverb ✅ (sidechain still remaining).
+
+---
