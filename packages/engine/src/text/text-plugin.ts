@@ -17,6 +17,7 @@ import { GlobalTransform } from '../transform';
 import { ViewVisibility } from '../visibility/visibility';
 
 import { TEXT3D_WGSL } from './text-3d.wgsl';
+import { DefaultFont, installDefaultFont } from './default-font';
 import type { Font } from './font-asset';
 import { createFontImporter } from './font-importer';
 import { Fonts } from './fonts';
@@ -86,41 +87,15 @@ export class TextPlugin implements PluginObject {
       server.registerLoader('font', fonts, createFontImporter(images));
     });
 
-    // Every authored field persists: the string, the font handle, and its visual
-    // styling. No derived state, so the whole component is serialized.
-    app.registerComponent(
-      Text2d,
-      {
-        text: t.string,
-        font: t.handle<Font>(ASSET_TYPE.font).optional(),
-        fontSize: t.number,
-        color: t.vec4,
-        align: t.enum('left', 'center', 'right'),
-        lineHeight: t.number.optional(),
-        maxWidth: t.number.optional(),
-        letterSpacing: t.number,
-        anchor: t.vec2,
-      },
-      { name: 'Text2d', make: () => new Text2d() },
-    );
+    registerTextComponents(app);
 
-    // World-space (3D) text — same authored fields as Text2d; the difference is
-    // the render path (3D camera + depth), not the data.
-    app.registerComponent(
-      Text,
-      {
-        text: t.string,
-        font: t.handle<Font>(ASSET_TYPE.font).optional(),
-        fontSize: t.number,
-        color: t.vec4,
-        align: t.enum('left', 'center', 'right'),
-        lineHeight: t.number.optional(),
-        maxWidth: t.number.optional(),
-        letterSpacing: t.number,
-        anchor: t.vec2,
-      },
-      { name: 'Text', make: () => new Text() },
-    );
+    // Install the engine's built-in default font so `UiText` / `Text` render with
+    // no font asset on disk (the UI text layer falls back to it). Needs Images
+    // (from ImagePlugin, part of CorePlugin); skipped in a headless setup without
+    // it. Idempotent, so an explicit installDefaultFont() call reuses this one.
+    if (app.getResource(Images) !== undefined && app.getResource(DefaultFont) === undefined) {
+      installDefaultFont(app);
+    }
 
     // ---- Render layer ----
     const registry = app.getResource(ShaderRegistry);
@@ -247,3 +222,51 @@ export class TextPlugin implements PluginObject {
     );
   }
 }
+
+/**
+ * Register the reflection schemas for the text components: {@link Text2d}
+ * (screen-space) and {@link Text} (world-space 3D) — without installing the text
+ * render pipeline or systems. Every authored field persists (string, font handle,
+ * and visual styling); there is no derived state, so the whole component is
+ * serialized.
+ *
+ * {@link TextPlugin} calls this during `build`; tools that need the text
+ * component types available for authoring or serialization (e.g. an editor's
+ * component palette) can call it directly to register the types without the
+ * renderer.
+ */
+export const registerTextComponents = (app: App): void => {
+  app.registerComponent(
+    Text2d,
+    {
+      text: t.string,
+      font: t.handle<Font>(ASSET_TYPE.font).optional(),
+      fontSize: t.number,
+      color: t.vec4,
+      align: t.enum('left', 'center', 'right'),
+      lineHeight: t.number.optional(),
+      maxWidth: t.number.optional(),
+      letterSpacing: t.number,
+      anchor: t.vec2,
+    },
+    { name: 'Text2d', make: () => new Text2d() },
+  );
+
+  // World-space (3D) text — same authored fields as Text2d; the difference is
+  // the render path (3D camera + depth), not the data.
+  app.registerComponent(
+    Text,
+    {
+      text: t.string,
+      font: t.handle<Font>(ASSET_TYPE.font).optional(),
+      fontSize: t.number,
+      color: t.vec4,
+      align: t.enum('left', 'center', 'right'),
+      lineHeight: t.number.optional(),
+      maxWidth: t.number.optional(),
+      letterSpacing: t.number,
+      anchor: t.vec2,
+    },
+    { name: 'Text', make: () => new Text() },
+  );
+};

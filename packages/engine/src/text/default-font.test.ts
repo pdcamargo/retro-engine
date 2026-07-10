@@ -3,7 +3,7 @@ import { describe, expect, it } from 'bun:test';
 import { App, Camera2d, Text2d } from '../index';
 import { makeCapturingRenderer, makeStubCanvas } from '../test-utils';
 
-import { generateDefaultFontAtlas, installDefaultFont } from './default-font';
+import { DefaultFont, generateDefaultFontAtlas, installDefaultFont } from './default-font';
 import { layoutText } from './text-layout';
 import { TextInstanceBuffer } from './text-instance-buffer';
 import { TextPlugin } from './text-plugin';
@@ -56,5 +56,16 @@ describe('installDefaultFont (integration)', () => {
     expect(draws).toHaveLength(1);
     expect(draws[0]!.drawIndexed!.instanceCount).toBe(5);
     expect(app.getResource(TextInstanceBuffer)!.count).toBe(5);
+  });
+
+  it('is auto-installed by TextPlugin (Images present via CorePlugin) and is idempotent', () => {
+    const { renderer } = makeCapturingRenderer();
+    const app = new App({ renderer, canvas: makeStubCanvas() });
+    app.addPlugin(new TextPlugin());
+
+    const auto = app.getResource(DefaultFont);
+    expect(auto).toBeDefined();
+    // An explicit call reuses the auto-installed font rather than installing a second one.
+    expect(installDefaultFont(app)).toBe(auto!.handle);
   });
 });

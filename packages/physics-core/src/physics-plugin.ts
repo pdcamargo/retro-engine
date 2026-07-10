@@ -69,7 +69,7 @@ export class PhysicsPlugin implements PluginObject {
     app.insertResource(new Physics(this.backend));
     app.messageRegistry.register(CollisionEvent);
 
-    this.registerComponents(app);
+    registerPhysicsComponents(app);
 
     const backend = this.backend;
     app.addSystem(
@@ -260,84 +260,95 @@ export class PhysicsPlugin implements PluginObject {
     };
   }
 
-  private registerComponents(app: App): void {
-    app.registerComponent(RigidBody2d, { bodyType: t.enum(...BODY_TYPE) }, { name: 'RigidBody2d', make: () => new RigidBody2d() });
-    app.registerComponent(
-      Collider2d,
-      { shape: t.enum('circle', 'rectangle', 'capsule'), radius: t.number, halfExtents: t.vec2, halfHeight: t.number },
-      { name: 'Collider2d', make: () => new Collider2d() },
-    );
-    app.registerComponent(LinearVelocity2d, { value: t.vec2 }, { name: 'LinearVelocity2d', make: () => new LinearVelocity2d() });
-    app.registerComponent(AngularVelocity2d, { value: t.number }, { name: 'AngularVelocity2d', make: () => new AngularVelocity2d() });
-    app.registerComponent(ExternalForce2d, { value: t.vec2 }, { name: 'ExternalForce2d', make: () => new ExternalForce2d() });
-
-    app.registerComponent(RigidBody3d, { bodyType: t.enum(...BODY_TYPE) }, { name: 'RigidBody3d', make: () => new RigidBody3d() });
-    app.registerComponent(
-      Collider3d,
-      { shape: t.enum('sphere', 'cuboid', 'capsule'), radius: t.number, halfExtents: t.vec3, halfHeight: t.number },
-      { name: 'Collider3d', make: () => new Collider3d() },
-    );
-    app.registerComponent(LinearVelocity3d, { value: t.vec3 }, { name: 'LinearVelocity3d', make: () => new LinearVelocity3d() });
-    app.registerComponent(AngularVelocity3d, { value: t.vec3 }, { name: 'AngularVelocity3d', make: () => new AngularVelocity3d() });
-    app.registerComponent(ExternalForce3d, { value: t.vec3 }, { name: 'ExternalForce3d', make: () => new ExternalForce3d() });
-
-    app.registerComponent(Restitution, { coefficient: t.number }, { name: 'Restitution', make: () => new Restitution() });
-    app.registerComponent(Friction, { coefficient: t.number }, { name: 'Friction', make: () => new Friction() });
-    app.registerComponent(GravityScale, { value: t.number }, { name: 'GravityScale', make: () => new GravityScale() });
-    app.registerComponent(Sensor, {}, { name: 'Sensor', make: () => new Sensor() });
-
-    app.registerComponent(
-      CharacterController2d,
-      {
-        offset: t.number,
-        up: t.vec2,
-        maxSlopeClimbAngle: t.number,
-        minSlopeSlideAngle: t.number,
-        autostepHeight: t.number,
-        autostepMinWidth: t.number,
-        snapToGroundDistance: t.number,
-        desiredTranslation: t.vec2.skip(),
-        grounded: t.boolean.skip(),
-      },
-      { name: 'CharacterController2d', make: () => new CharacterController2d() },
-    );
-    app.registerComponent(
-      CharacterController3d,
-      {
-        offset: t.number,
-        up: t.vec3,
-        maxSlopeClimbAngle: t.number,
-        minSlopeSlideAngle: t.number,
-        autostepHeight: t.number,
-        autostepMinWidth: t.number,
-        snapToGroundDistance: t.number,
-        desiredTranslation: t.vec3.skip(),
-        grounded: t.boolean.skip(),
-      },
-      { name: 'CharacterController3d', make: () => new CharacterController3d() },
-    );
-
-    app.registerComponent(
-      Joint2d,
-      {
-        target: t.entity(),
-        jointType: t.enum('fixed', 'revolute', 'prismatic'),
-        localAnchorA: t.vec2,
-        localAnchorB: t.vec2,
-        axis: t.vec2,
-      },
-      { name: 'Joint2d', make: () => new Joint2d() },
-    );
-    app.registerComponent(
-      Joint3d,
-      {
-        target: t.entity(),
-        jointType: t.enum('fixed', 'spherical', 'revolute', 'prismatic'),
-        localAnchorA: t.vec3,
-        localAnchorB: t.vec3,
-        axis: t.vec3,
-      },
-      { name: 'Joint3d', make: () => new Joint3d() },
-    );
-  }
 }
+
+/**
+ * Register the reflection schemas for every physics component (2D and 3D bodies,
+ * colliders, velocities, forces, materials, character controllers, and joints)
+ * against the App's type registry — without installing the simulation systems.
+ *
+ * {@link PhysicsPlugin} calls this during `build`; tools that need the physics
+ * component types available for authoring or serialization (e.g. an editor's
+ * component palette) can call it directly to register the types without stepping
+ * a backend.
+ */
+export const registerPhysicsComponents = (app: App): void => {
+  app.registerComponent(RigidBody2d, { bodyType: t.enum(...BODY_TYPE) }, { name: 'RigidBody2d', make: () => new RigidBody2d() });
+  app.registerComponent(
+    Collider2d,
+    { shape: t.enum('circle', 'rectangle', 'capsule'), radius: t.number, halfExtents: t.vec2, halfHeight: t.number },
+    { name: 'Collider2d', make: () => new Collider2d() },
+  );
+  app.registerComponent(LinearVelocity2d, { value: t.vec2 }, { name: 'LinearVelocity2d', make: () => new LinearVelocity2d() });
+  app.registerComponent(AngularVelocity2d, { value: t.number }, { name: 'AngularVelocity2d', make: () => new AngularVelocity2d() });
+  app.registerComponent(ExternalForce2d, { value: t.vec2 }, { name: 'ExternalForce2d', make: () => new ExternalForce2d() });
+
+  app.registerComponent(RigidBody3d, { bodyType: t.enum(...BODY_TYPE) }, { name: 'RigidBody3d', make: () => new RigidBody3d() });
+  app.registerComponent(
+    Collider3d,
+    { shape: t.enum('sphere', 'cuboid', 'capsule'), radius: t.number, halfExtents: t.vec3, halfHeight: t.number },
+    { name: 'Collider3d', make: () => new Collider3d() },
+  );
+  app.registerComponent(LinearVelocity3d, { value: t.vec3 }, { name: 'LinearVelocity3d', make: () => new LinearVelocity3d() });
+  app.registerComponent(AngularVelocity3d, { value: t.vec3 }, { name: 'AngularVelocity3d', make: () => new AngularVelocity3d() });
+  app.registerComponent(ExternalForce3d, { value: t.vec3 }, { name: 'ExternalForce3d', make: () => new ExternalForce3d() });
+
+  app.registerComponent(Restitution, { coefficient: t.number }, { name: 'Restitution', make: () => new Restitution() });
+  app.registerComponent(Friction, { coefficient: t.number }, { name: 'Friction', make: () => new Friction() });
+  app.registerComponent(GravityScale, { value: t.number }, { name: 'GravityScale', make: () => new GravityScale() });
+  app.registerComponent(Sensor, {}, { name: 'Sensor', make: () => new Sensor() });
+
+  app.registerComponent(
+    CharacterController2d,
+    {
+      offset: t.number,
+      up: t.vec2,
+      maxSlopeClimbAngle: t.number,
+      minSlopeSlideAngle: t.number,
+      autostepHeight: t.number,
+      autostepMinWidth: t.number,
+      snapToGroundDistance: t.number,
+      desiredTranslation: t.vec2.skip(),
+      grounded: t.boolean.skip(),
+    },
+    { name: 'CharacterController2d', make: () => new CharacterController2d() },
+  );
+  app.registerComponent(
+    CharacterController3d,
+    {
+      offset: t.number,
+      up: t.vec3,
+      maxSlopeClimbAngle: t.number,
+      minSlopeSlideAngle: t.number,
+      autostepHeight: t.number,
+      autostepMinWidth: t.number,
+      snapToGroundDistance: t.number,
+      desiredTranslation: t.vec3.skip(),
+      grounded: t.boolean.skip(),
+    },
+    { name: 'CharacterController3d', make: () => new CharacterController3d() },
+  );
+
+  app.registerComponent(
+    Joint2d,
+    {
+      target: t.entity(),
+      jointType: t.enum('fixed', 'revolute', 'prismatic'),
+      localAnchorA: t.vec2,
+      localAnchorB: t.vec2,
+      axis: t.vec2,
+    },
+    { name: 'Joint2d', make: () => new Joint2d() },
+  );
+  app.registerComponent(
+    Joint3d,
+    {
+      target: t.entity(),
+      jointType: t.enum('fixed', 'spherical', 'revolute', 'prismatic'),
+      localAnchorA: t.vec3,
+      localAnchorB: t.vec3,
+      axis: t.vec3,
+    },
+    { name: 'Joint3d', make: () => new Joint3d() },
+  );
+};

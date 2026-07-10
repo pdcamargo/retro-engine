@@ -28,6 +28,13 @@ export type { UiImageOptions } from './ui-image';
 export { UiImage } from './ui-image';
 export { makeTextMeasure } from './text-measure';
 export { runUiLayout, UiLayout, uiImageSchema, uiNodeSchema, UiPlugin, uiTextSchema, UiViewport } from './ui-plugin';
+export {
+  registerUiComponents,
+  uiButtonSchema,
+  uiSliderSchema,
+  uiTextInputSchema,
+  uiToggleSchema,
+} from './register-components';
 export type { RssDeclaration, RssRule, RssSelector } from './rss-parser';
 export { parseRss, parseSelector } from './rss-parser';
 export type { StyleNode } from './rss-resolve';
@@ -51,7 +58,10 @@ export {
   UiStyleSheet,
   UiTheme,
 } from './rss-style';
+export { UiCamera } from './ui-camera';
+export type { UiRenderPluginOptions } from './render/ui-render-plugin';
 export { UiRenderPlugin } from './render/ui-render-plugin';
+export { pickUiCameraView, uiTargetView, UiRenderTargetState } from './render/ui-render-target';
 export { UiPipeline } from './render/ui-pipeline';
 export { makeUiPassNode, UiPassLabel } from './render/ui-pass-node';
 export type { BorderEdges, ClipRect, EdgeRect, UiQuadQuery } from './render/ui-prepare';

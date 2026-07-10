@@ -691,6 +691,7 @@ export {
   SpriteInstanceBuffer,
   SpritePipeline,
   SpritePlugin,
+  registerSpriteComponents,
   SpritePreparedBatches,
   TextureAtlas,
   TextureAtlasLayout,
@@ -723,6 +724,7 @@ export type {
 export {
   createFontImporter,
   DEFAULT_FONT_OPTIONS,
+  DefaultFont,
   Font,
   Fonts,
   generateDefaultFontAtlas,
@@ -752,6 +754,7 @@ export {
   TextInstanceBuffer,
   TextPipeline,
   TextPlugin,
+  registerTextComponents,
   TextPreparedBatches,
 } from './text';
 export type {
@@ -786,6 +789,7 @@ export {
   Light2dNormalState,
   Light2dPipeline,
   Light2dPlugin,
+  registerLight2dComponents,
   Light2dPreparedBatches,
   Light2dSettings,
   Light2dShadowState,

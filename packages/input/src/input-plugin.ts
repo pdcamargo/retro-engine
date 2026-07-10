@@ -131,31 +131,7 @@ export class InputPlugin implements PluginObject {
       { name: 'gamepad-update', after: ['input'] },
     );
 
-    // Action map (ADR-0145). Value types first, then the authored component;
-    // ActionState is derived, so it is never registered.
-    app.registerType(
-      ActionBinding,
-      {
-        role: t.enum('trigger', 'positiveX', 'negativeX', 'positiveY', 'negativeY', 'analogX', 'analogY'),
-        device: t.enum('key', 'mouse', 'gamepad'),
-        code: t.string,
-      },
-      { name: 'ActionBinding', make: () => new ActionBinding() },
-    );
-    app.registerType(
-      ActionDef,
-      {
-        name: t.string,
-        kind: t.enum('button', 'axis', 'axis2d'),
-        bindings: t.array(t.type(ActionBinding)),
-      },
-      { name: 'ActionDef', make: () => new ActionDef() },
-    );
-    app.registerComponent(
-      ActionMap,
-      { defs: t.array(t.type(ActionDef)) },
-      { name: 'ActionMap' },
-    );
+    registerInputComponents(app);
 
     // Resolve each entity's ActionState from its ActionMap, after the raw
     // device update this frame so the action layer reads fresh input.
@@ -189,6 +165,39 @@ export class InputPlugin implements PluginObject {
     return this.gamepadSource;
   }
 }
+
+/**
+ * Register the reflection schemas for the action-map input types
+ * ({@link ActionBinding} and {@link ActionDef} as value types, {@link ActionMap}
+ * as the authored component) against the App's type registry — without installing
+ * the device-polling or action-resolution systems. `ActionState` is derived and
+ * never registered.
+ *
+ * {@link InputPlugin} calls this during `build`; tools that need the input
+ * component types available for authoring or serialization (e.g. an editor's
+ * component palette) can call it directly.
+ */
+export const registerInputComponents = (app: App): void => {
+  app.registerType(
+    ActionBinding,
+    {
+      role: t.enum('trigger', 'positiveX', 'negativeX', 'positiveY', 'negativeY', 'analogX', 'analogY'),
+      device: t.enum('key', 'mouse', 'gamepad'),
+      code: t.string,
+    },
+    { name: 'ActionBinding', make: () => new ActionBinding() },
+  );
+  app.registerType(
+    ActionDef,
+    {
+      name: t.string,
+      kind: t.enum('button', 'axis', 'axis2d'),
+      bindings: t.array(t.type(ActionBinding)),
+    },
+    { name: 'ActionDef', make: () => new ActionDef() },
+  );
+  app.registerComponent(ActionMap, { defs: t.array(t.type(ActionDef)) }, { name: 'ActionMap' });
+};
 
 /**
  * Advance input state by one frame: drop the previous frame's transient button

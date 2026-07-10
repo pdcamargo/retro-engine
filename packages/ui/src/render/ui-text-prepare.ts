@@ -1,5 +1,6 @@
 import type { Query as QueryHandle } from '@retro-engine/ecs';
 import type { App, Font, Fonts, Handle, Image, RenderImages, TextLayoutOptions } from '@retro-engine/engine';
+import type { TextureFormat } from '@retro-engine/renderer-core';
 
 import { ComputedLayout, UiNode } from '../ui-node';
 import type { UiViewport } from '../ui-plugin';
@@ -48,6 +49,8 @@ export const prepareUiText = (
   fonts: Fonts,
   renderImages: RenderImages,
   pipeline: UiTextPipeline,
+  targetFormat: TextureFormat,
+  defaultFont?: Handle<Font>,
 ): void => {
   pipeline.count = 0;
   pipeline.batches.length = 0;
@@ -61,8 +64,9 @@ export const prepareUiText = (
     const node = row[1] as UiNode;
     const layout = row[2] as ComputedLayout;
     const text = row[3] as UiText;
-    if (text.text.length === 0 || text.font === undefined) continue;
-    const font: Font | undefined = fonts.get(text.font);
+    const handle = text.font ?? defaultFont;
+    if (text.text.length === 0 || handle === undefined) continue;
+    const font: Font | undefined = fonts.get(handle);
     if (font === undefined) continue;
     if (renderImages.get(font.atlas) === undefined) continue;
 
@@ -102,7 +106,7 @@ export const prepareUiText = (
   if (total === 0) return;
 
   const renderer = app.renderer;
-  pipeline.ensureInitialised(renderer, surface.format);
+  pipeline.ensureInitialised(renderer, targetFormat);
   pipeline.ensureCapacity(renderer, total);
 
   const f32 = pipeline.scratchF32;

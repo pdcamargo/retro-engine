@@ -1,9 +1,9 @@
 import type { Entity } from '@retro-engine/ecs';
 import type { App, PluginObject } from '@retro-engine/engine';
 import { MessageReader, MessageWriter, Query, Res, ResMut } from '@retro-engine/engine';
-import { t } from '@retro-engine/reflect';
 import { CursorPosition, MouseButtonInput } from '@retro-engine/input';
 
+import { uiButtonSchema, uiSliderSchema, uiToggleSchema } from '../register-components';
 import { ComputedLayout, setUiBackground, UiNode } from '../ui-node';
 
 import { type InteractionNode, updateUiInteraction, UiPointer } from './picking';
@@ -31,23 +31,11 @@ export class UiInteractionPlugin implements PluginObject {
     app.addMessage(UiClicked);
     app.registerComponent(Interactable, {}, { name: 'Interactable', make: () => new Interactable() });
     app.registerComponent(Disabled, {}, { name: 'Disabled', make: () => new Disabled() });
-    app.registerComponent(
-      UiButton,
-      { normal: t.vec4, hovered: t.vec4, pressed: t.vec4, disabled: t.vec4 },
-      { name: 'UiButton', make: () => new UiButton() },
-    );
+    app.registerComponent(UiButton, uiButtonSchema, { name: 'UiButton', make: () => new UiButton() });
     app.addMessage(UiToggled);
-    app.registerComponent(
-      UiToggle,
-      { checked: t.boolean, on: t.vec4, off: t.vec4, disabled: t.vec4 },
-      { name: 'UiToggle', make: () => new UiToggle() },
-    );
+    app.registerComponent(UiToggle, uiToggleSchema, { name: 'UiToggle', make: () => new UiToggle() });
     app.addMessage(UiSliderChanged);
-    app.registerComponent(
-      UiSlider,
-      { value: t.number, min: t.number, max: t.number },
-      { name: 'UiSlider', make: () => new UiSlider() },
-    );
+    app.registerComponent(UiSlider, uiSliderSchema, { name: 'UiSlider', make: () => new UiSlider() });
     if (app.getResource(UiPointer) === undefined) app.insertResource(new UiPointer());
 
     app.addSystem(

@@ -47,4 +47,4 @@ export {
   snapshot3d,
 } from './bridge';
 export type { PhysicsPluginOptions } from './physics-plugin';
-export { PhysicsPlugin } from './physics-plugin';
+export { PhysicsPlugin, registerPhysicsComponents } from './physics-plugin';

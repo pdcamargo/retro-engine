@@ -53,4 +53,4 @@ export { applyDeadZone, Gamepads, GamepadState, updateGamepads } from './gamepad
 export type { DomInputBackendOptions } from './dom-backend';
 export { DomInputBackend, HeadlessInputBackend } from './dom-backend';
 export type { InputPluginOptions } from './input-plugin';
-export { applyInputFrame, InputPlugin } from './input-plugin';
+export { applyInputFrame, InputPlugin, registerInputComponents } from './input-plugin';

@@ -85,37 +85,7 @@ export class AudioPlugin implements PluginObject {
 
     // ECS-driven playback (ADR-0147 Phase 2).
     app.insertResource(new AudioVoices());
-    app.registerComponent(
-      AudioSource,
-      {
-        clip: t.handle(AUDIO_CLIP_ASSET_KIND),
-        volume: t.number,
-        pitch: t.number,
-        loop: t.boolean,
-        playOnAdd: t.boolean,
-        despawnOnEnd: t.boolean,
-        bus: t.string,
-        spatial: t.boolean,
-        panWidth: t.number,
-        refDistance: t.number,
-        maxDistance: t.number,
-        rolloff: t.number,
-        distanceModel: t.enum('linear', 'inverse', 'exponential'),
-        spatialMode: t.enum('2d', '3d'),
-        coneInnerAngle: t.number,
-        coneOuterAngle: t.number,
-        coneOuterGain: t.number,
-        playRequested: t.boolean.skip(),
-        stopRequested: t.boolean.skip(),
-        started: t.boolean.skip(),
-      },
-      { name: 'AudioSource', make: () => new AudioSource() },
-    );
-    app.registerComponent(
-      AudioListener,
-      { volume: t.number },
-      { name: 'AudioListener', make: () => new AudioListener() },
-    );
+    registerAudioComponents(app);
 
     // The (first) listener's volume drives the master gain; runs before playback
     // so voices started this frame see the current master.
@@ -204,3 +174,46 @@ export class AudioPlugin implements PluginObject {
     return this.backend;
   }
 }
+
+/**
+ * Register the reflection schemas for {@link AudioSource} and
+ * {@link AudioListener} against the App's type registry — without installing the
+ * audio backend or playback systems.
+ *
+ * {@link AudioPlugin} calls this during `build`; tools that need the audio
+ * component types available for authoring or serialization (e.g. an editor's
+ * component palette) can call it directly.
+ */
+export const registerAudioComponents = (app: App): void => {
+  app.registerComponent(
+    AudioSource,
+    {
+      clip: t.handle(AUDIO_CLIP_ASSET_KIND),
+      volume: t.number,
+      pitch: t.number,
+      loop: t.boolean,
+      playOnAdd: t.boolean,
+      despawnOnEnd: t.boolean,
+      bus: t.string,
+      spatial: t.boolean,
+      panWidth: t.number,
+      refDistance: t.number,
+      maxDistance: t.number,
+      rolloff: t.number,
+      distanceModel: t.enum('linear', 'inverse', 'exponential'),
+      spatialMode: t.enum('2d', '3d'),
+      coneInnerAngle: t.number,
+      coneOuterAngle: t.number,
+      coneOuterGain: t.number,
+      playRequested: t.boolean.skip(),
+      stopRequested: t.boolean.skip(),
+      started: t.boolean.skip(),
+    },
+    { name: 'AudioSource', make: () => new AudioSource() },
+  );
+  app.registerComponent(
+    AudioListener,
+    { volume: t.number },
+    { name: 'AudioListener', make: () => new AudioListener() },
+  );
+};

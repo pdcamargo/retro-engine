@@ -135,76 +135,7 @@ export class SpritePlugin implements PluginObject {
       category: 'sprite',
     });
 
-    // Reflection schemas. Texture handles, tint, footprint, anchor, and the
-    // 9-slice descriptor are authored; AtlasAnimation.elapsedSec is recomputed by
-    // the animator each frame. The 9-slice TextureSlicer + BorderRect register as
-    // nested value types so Sprite.imageMode can embed them.
-    app.registerType(
-      BorderRect,
-      { left: t.number, right: t.number, top: t.number, bottom: t.number },
-      { name: 'BorderRect', make: () => new BorderRect(0, 0, 0, 0) },
-    );
-    app.registerType(
-      TextureSlicer,
-      {
-        border: t.type(BorderRect),
-        centerScaleMode: t.enum('stretch'),
-        sidesScaleMode: t.enum('stretch'),
-        maxCornerScale: t.number.optional(),
-      },
-      {
-        name: 'TextureSlicer',
-        make: () => new TextureSlicer({ border: new BorderRect(0, 0, 0, 0) }),
-      },
-    );
-    app.registerComponent(
-      Sprite,
-      {
-        image: t.handle<Image>(ASSET_TYPE.image).optional(),
-        normalMap: t.handle<Image>(ASSET_TYPE.image).optional(),
-        color: t.vec4,
-        customSize: t.vec2.optional(),
-        rect: t.struct({ min: t.vec2, max: t.vec2 }).optional(),
-        anchor: t.variant(
-          'kind',
-          {
-            center: {},
-            topLeft: {},
-            topRight: {},
-            bottomLeft: {},
-            bottomRight: {},
-            custom: { x: t.number, y: t.number },
-          },
-          { stringArms: true },
-        ),
-        flipX: t.boolean,
-        flipY: t.boolean,
-        imageMode: t
-          .variant('kind', { auto: {}, sliced: { slicer: t.type(TextureSlicer) } })
-          .optional(),
-      },
-      { name: 'Sprite', make: () => new Sprite() },
-    );
-    app.registerComponent(
-      TextureAtlas,
-      { layout: t.handle<TextureAtlasLayout>(ASSET_TYPE.textureAtlasLayout), index: t.number },
-      { name: 'TextureAtlas', make: () => new TextureAtlas(makeHandle(asAssetIndex(0))) },
-    );
-    app.registerComponent(
-      AtlasAnimation,
-      {
-        firstIndex: t.number,
-        lastIndex: t.number,
-        fps: t.number,
-        mode: t.enum('loop', 'once', 'pingPong'),
-        paused: t.boolean,
-        elapsedSec: t.number.skip(),
-      },
-      {
-        name: 'AtlasAnimation',
-        make: () => new AtlasAnimation({ firstIndex: 0, lastIndex: 0, fps: 0 }),
-      },
-    );
+    registerSpriteComponents(app);
 
     // `'postUpdate'` chain for atlas-driven sprites:
     //   atlas-animation advances TextureAtlas.index over time
@@ -403,6 +334,91 @@ export class SpritePlugin implements PluginObject {
     );
   }
 }
+
+/**
+ * Register the reflection schemas for the sprite components ({@link Sprite},
+ * {@link TextureAtlas}, {@link AtlasAnimation}) and their nested value types
+ * ({@link BorderRect}, {@link TextureSlicer}) against the App's type registry —
+ * without installing the sprite render pipeline or systems.
+ *
+ * Texture handles, tint, footprint, anchor, and the 9-slice descriptor are
+ * authored; `AtlasAnimation.elapsedSec` is recomputed by the animator each frame.
+ * The 9-slice `TextureSlicer` + `BorderRect` register as nested value types so
+ * `Sprite.imageMode` can embed them.
+ *
+ * {@link SpritePlugin} calls this during `build`; tools that need the sprite
+ * component types available for authoring or serialization (e.g. an editor's
+ * component palette) can call it directly to register the types without the
+ * renderer.
+ */
+export const registerSpriteComponents = (app: App): void => {
+  app.registerType(
+    BorderRect,
+    { left: t.number, right: t.number, top: t.number, bottom: t.number },
+    { name: 'BorderRect', make: () => new BorderRect(0, 0, 0, 0) },
+  );
+  app.registerType(
+    TextureSlicer,
+    {
+      border: t.type(BorderRect),
+      centerScaleMode: t.enum('stretch'),
+      sidesScaleMode: t.enum('stretch'),
+      maxCornerScale: t.number.optional(),
+    },
+    {
+      name: 'TextureSlicer',
+      make: () => new TextureSlicer({ border: new BorderRect(0, 0, 0, 0) }),
+    },
+  );
+  app.registerComponent(
+    Sprite,
+    {
+      image: t.handle<Image>(ASSET_TYPE.image).optional(),
+      normalMap: t.handle<Image>(ASSET_TYPE.image).optional(),
+      color: t.vec4,
+      customSize: t.vec2.optional(),
+      rect: t.struct({ min: t.vec2, max: t.vec2 }).optional(),
+      anchor: t.variant(
+        'kind',
+        {
+          center: {},
+          topLeft: {},
+          topRight: {},
+          bottomLeft: {},
+          bottomRight: {},
+          custom: { x: t.number, y: t.number },
+        },
+        { stringArms: true },
+      ),
+      flipX: t.boolean,
+      flipY: t.boolean,
+      imageMode: t
+        .variant('kind', { auto: {}, sliced: { slicer: t.type(TextureSlicer) } })
+        .optional(),
+    },
+    { name: 'Sprite', make: () => new Sprite() },
+  );
+  app.registerComponent(
+    TextureAtlas,
+    { layout: t.handle<TextureAtlasLayout>(ASSET_TYPE.textureAtlasLayout), index: t.number },
+    { name: 'TextureAtlas', make: () => new TextureAtlas(makeHandle(asAssetIndex(0))) },
+  );
+  app.registerComponent(
+    AtlasAnimation,
+    {
+      firstIndex: t.number,
+      lastIndex: t.number,
+      fps: t.number,
+      mode: t.enum('loop', 'once', 'pingPong'),
+      paused: t.boolean,
+      elapsedSec: t.number.skip(),
+    },
+    {
+      name: 'AtlasAnimation',
+      make: () => new AtlasAnimation({ firstIndex: 0, lastIndex: 0, fps: 0 }),
+    },
+  );
+};
 
 const prepareSprites = (
   app: App,

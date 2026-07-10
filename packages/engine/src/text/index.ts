@@ -22,7 +22,7 @@ export type { Text2dOptions } from './text2d';
 export { Text2d } from './text2d';
 export type { TextOptions } from './text3d';
 export { Text } from './text3d';
-export { TextPlugin } from './text-plugin';
+export { registerTextComponents, TextPlugin } from './text-plugin';
 export type { TextBatch } from './text-batch';
 export { TextPreparedBatches } from './text-batch';
 export type { Text3dBatch } from './text-batch-3d';
@@ -53,6 +53,7 @@ export type { SdfFontOptions, StrokeGlyph, StrokeSegment } from './sdf-generator
 export { generateSdfFont } from './sdf-generator';
 export {
   DEFAULT_FONT_OPTIONS,
+  DefaultFont,
   generateDefaultFontAtlas,
   installDefaultFont,
 } from './default-font';

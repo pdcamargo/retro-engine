@@ -39,6 +39,6 @@ export type { Light2dCameraTargets } from './light-2d-targets';
 export { prepareLight2dTargets, ViewLight2dTargets } from './light-2d-targets';
 export type { Light2dCompositeKey } from './light-2d-pipeline';
 export { LIGHT2D_ACCUM_FORMAT, Light2dPipeline } from './light-2d-pipeline';
-export { Light2dPlugin } from './light-2d-plugin';
+export { Light2dPlugin, registerLight2dComponents } from './light-2d-plugin';
 export { LIGHT2D_ACCUMULATION_WGSL } from './light-2d-accumulation.wgsl';
 export { LIGHT2D_COMPOSITE_WGSL } from './light-2d-composite.wgsl';

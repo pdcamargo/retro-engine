@@ -24,7 +24,7 @@ export { SpriteInstanceBuffer } from './sprite-instance-buffer';
 export { RetainedSpriteBuffer } from './sprite-prepare-retained';
 export type { SpriteKey, SpriteSpecializeContext } from './sprite-pipeline';
 export { SpritePipeline } from './sprite-pipeline';
-export { SpritePlugin } from './sprite-plugin';
+export { registerSpriteComponents, SpritePlugin } from './sprite-plugin';
 export { SPRITE_WGSL } from './sprite.wgsl';
 export { TextureAtlas } from './texture-atlas';
 export type {

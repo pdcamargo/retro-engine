@@ -15,4 +15,4 @@ export { AudioListener, AudioSource, AudioVoices } from './audio-source';
 export type { AudioController } from './audio-playback';
 export { reconcileAudio } from './audio-playback';
 export type { AudioPluginOptions } from './audio-plugin';
-export { AudioClips, AudioPlugin } from './audio-plugin';
+export { AudioClips, AudioPlugin, registerAudioComponents } from './audio-plugin';

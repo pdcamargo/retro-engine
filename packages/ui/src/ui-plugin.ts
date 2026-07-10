@@ -1,6 +1,6 @@
 import type { Entity, Query as QueryHandle, World } from '@retro-engine/ecs';
-import type { App, Font, Fonts, Image, PluginObject } from '@retro-engine/engine';
-import { ASSET_TYPE, Children, Fonts as FontsResource, Parent, Query, Res } from '@retro-engine/engine';
+import type { App, Font, Fonts, Handle, Image, PluginObject } from '@retro-engine/engine';
+import { ASSET_TYPE, Children, DefaultFont, Fonts as FontsResource, Parent, Query, Res } from '@retro-engine/engine';
 import { FieldType, type Schema, t } from '@retro-engine/reflect';
 
 import { UiFocus } from './focus/ui-focus';
@@ -192,6 +192,8 @@ export class UiPlugin implements PluginObject {
           (layout as UiLayout).engine,
           // Text sizing needs the font store; absent (no TextPlugin) → nodes size by style alone.
           app.getResource(FontsResource),
+          // Fall back to the engine's built-in font for text nodes with no explicit font.
+          app.getResource(DefaultFont)?.handle,
         );
       },
       { label: 'ui-layout' },
@@ -210,6 +212,7 @@ export const runUiLayout = (
   viewport: UiViewport,
   engine: LayoutEngine,
   fonts?: Fonts,
+  defaultFont?: Handle<Font>,
 ): void => {
   const uiSet = new Set<Entity>();
   for (const row of nodes.entries()) uiSet.add(row[0] as Entity);
@@ -219,7 +222,7 @@ export const runUiLayout = (
   for (const entity of uiSet) {
     const parent = world.getComponent(entity, Parent);
     if (parent !== undefined && uiSet.has(parent.entity)) continue; // not a root
-    const tree = buildLayoutNode(world, entity, uiSet, fonts);
+    const tree = buildLayoutNode(world, entity, uiSet, fonts, defaultFont);
     const result = engine.compute(tree, { width: viewport.width, height: viewport.height });
     writeLayout(world, result, 0, 0, order);
   }
@@ -236,17 +239,18 @@ const buildLayoutNode = (
   entity: Entity,
   uiSet: Set<Entity>,
   fonts: Fonts | undefined,
+  defaultFont: Handle<Font> | undefined,
 ): LayoutNode => {
   const node = world.getComponent(entity, UiNode);
   const children = world.getComponent(entity, Children);
   const kids: LayoutNode[] = [];
   if (children !== undefined) {
     for (const child of children.entities) {
-      if (uiSet.has(child)) kids.push(buildLayoutNode(world, child, uiSet, fonts));
+      if (uiSet.has(child)) kids.push(buildLayoutNode(world, child, uiSet, fonts, defaultFont));
     }
   }
   const uiText = fonts !== undefined ? world.getComponent(entity, UiText) : undefined;
-  const measure = uiText !== undefined ? makeTextMeasure(uiText, fonts!) : undefined;
+  const measure = uiText !== undefined ? makeTextMeasure(uiText, fonts!, defaultFont) : undefined;
   return {
     style: node!.style,
     children: kids,

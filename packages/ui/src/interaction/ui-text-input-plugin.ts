@@ -2,8 +2,8 @@ import type { Entity } from '@retro-engine/ecs';
 import type { App, PluginObject } from '@retro-engine/engine';
 import { MessageReader, MessageWriter, Query } from '@retro-engine/engine';
 import { KeyboardInput, ReceivedCharacters } from '@retro-engine/input';
-import { t } from '@retro-engine/reflect';
 
+import { uiTextInputSchema } from '../register-components';
 import { UiFocus } from '../focus/ui-focus';
 import { UiText } from '../ui-text';
 
@@ -45,11 +45,7 @@ export class UiTextInputPlugin implements PluginObject {
 
   build(app: App): void {
     app.addMessage(UiTextChanged);
-    app.registerComponent(
-      UiTextInput,
-      { value: t.string, maxLength: t.number, placeholder: t.string, cursor: t.number.skip() },
-      { name: 'UiTextInput', make: () => new UiTextInput() },
-    );
+    app.registerComponent(UiTextInput, uiTextInputSchema, { name: 'UiTextInput', make: () => new UiTextInput() });
 
     // Click-to-focus + edit the focused field from this frame's text + caret keys.
     app.addSystem(

@@ -6,6 +6,7 @@ import { type FieldPath, pathKeyOf } from '../edit/field-path';
 import type { Widgets } from '../components';
 import type { Ui } from '../ui';
 import { resolveMeta } from './amendments';
+import { defaultValueFor } from './renderers-bridge';
 import type { InspectorRegistry } from './inspector-registry';
 import type { PropertyContext } from './property-types';
 import { labeledRow } from './renderers-support';
@@ -53,12 +54,29 @@ export const renderPropertyField = (req: PropertyFieldRequest): void => {
   if (meta.hidden) return;
 
   // A nullish value (an unset optional/nullable field) has nothing to feed a
-  // typed widget — render it read-only rather than crash a numeric widget on
-  // `undefined`. Reference kinds are exempt: an asset handle renderer owns its
-  // own empty state (an unset slot still needs an "assign" affordance, not a
-  // dead `(unset)` row), so it is dispatched even when nullish.
+  // typed widget — don't hand `undefined` to a numeric widget. Reference kinds
+  // are exempt: an asset handle renderer owns its own empty state (an unset slot
+  // needs an "assign" affordance), so it is dispatched even when nullish.
+  //
+  // For a genuinely optional/nullable field we still offer a "Set" button that
+  // gives it a default value, so authored-but-omitted fields (e.g. a UiNode's
+  // backgroundColor / width) can be filled in from the inspector instead of
+  // dead-ending at "(unset)". `defaultValueFor` returns `undefined` only for
+  // kinds we can't synthesize (nested type / variant), which fall back to the
+  // plain label.
   if ((req.value === undefined || req.value === null) && req.type.kind !== 'handle') {
-    labeledRow(req.ui, meta.label, req.labelWidth, () => req.ui.textDisabled(req.value === null ? '(null)' : '(unset)'));
+    const editable = !req.readonly && !req.type.isSkipped && !meta.forcedReadonly;
+    const settable = editable && (req.type.isOptional || req.type.isNullable);
+    const fresh = settable ? defaultValueFor(req.type) : undefined;
+    labeledRow(req.ui, meta.label, req.labelWidth, () => {
+      if (fresh !== undefined) {
+        if (req.ui.button(`Set##set:${req.componentName}:${pathKeyOf(req.path)}`)) {
+          req.edit.scalar(req.path, req.value).commit(fresh);
+        }
+      } else {
+        req.ui.textDisabled(req.value === null ? '(null)' : '(unset)');
+      }
+    });
     return;
   }
 

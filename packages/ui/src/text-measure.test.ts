@@ -24,8 +24,14 @@ describe('makeTextMeasure', () => {
     expect(makeTextMeasure(new UiText({ text: '', font: fontHandle }), fakeFonts(fakeFont()))).toBeUndefined();
   });
 
-  it('returns undefined when no font handle is set', () => {
+  it('returns undefined when no font handle is set and no default font is available', () => {
     expect(makeTextMeasure(new UiText({ text: 'hi' }), fakeFonts(fakeFont()))).toBeUndefined();
+  });
+
+  it('falls back to the default font when the node has no explicit font', () => {
+    const measure = makeTextMeasure(new UiText({ text: 'hi', fontSize: 10 }), fakeFonts(fakeFont()), fontHandle);
+    expect(measure).toBeDefined();
+    expect(measure!(Infinity, Infinity).width).toBe(20); // 2 chars × 10, measured via the default font
   });
 
   it('returns undefined when the font is not loaded yet', () => {

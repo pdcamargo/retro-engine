@@ -121,12 +121,30 @@ export const generateDefaultFontAtlas = (): { image: Image; data: import('./font
 };
 
 /**
+ * Holds a handle to the engine's built-in default {@link Font} so text can render
+ * with no font asset on disk. Installed by `TextPlugin` (when `ImagePlugin` is
+ * present) and consumed as the fallback for a `UiText` / `Text` with no explicit
+ * font. Runtime handle to a procedurally generated font — not serialized.
+ */
+export class DefaultFont {
+  constructor(
+    /** Handle to the built-in default font, registered in {@link Fonts}. */
+    readonly handle: Handle<Font>,
+  ) {}
+}
+
+/**
  * Generate, register, and return a handle to the built-in default {@link Font}:
  * the atlas image is added to {@link Images} (and uploaded by `ImagePlugin`), the
- * font is added to {@link Fonts}. Requires `TextPlugin` (and `ImagePlugin`) to
- * have run. A one-call way to get drawable text with no font asset on disk.
+ * font is added to {@link Fonts}, and a {@link DefaultFont} resource is inserted
+ * so consumers (e.g. the UI text layer) can fall back to it. Idempotent — returns
+ * the existing default font if one is already installed. Requires `TextPlugin`
+ * (and `ImagePlugin`) to have run. A one-call way to get drawable text with no
+ * font asset on disk.
  */
 export const installDefaultFont = (app: App): Handle<Font> => {
+  const existing = app.getResource(DefaultFont);
+  if (existing !== undefined) return existing.handle;
   const images = app.getResource(Images);
   const fonts = app.getResource(Fonts);
   if (images === undefined || fonts === undefined) {
@@ -134,5 +152,7 @@ export const installDefaultFont = (app: App): Handle<Font> => {
   }
   const { image, data } = generateDefaultFontAtlas();
   const atlas = images.add(image);
-  return fonts.add(new Font(data, atlas));
+  const handle = fonts.add(new Font(data, atlas));
+  app.insertResource(new DefaultFont(handle));
+  return handle;
 };

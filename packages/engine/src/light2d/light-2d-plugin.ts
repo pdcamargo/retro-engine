@@ -152,41 +152,7 @@ export class Light2dPlugin implements PluginObject {
       { name: 'Light2dSettings' },
     );
 
-    // AmbientLight2d is a per-entity component (regional or global pool), unlike the
-    // 3D AmbientLight resource.
-    app.registerComponent(
-      PointLight2d,
-      { color: t.vec3, intensity: t.number, range: t.number, radius: t.number },
-      { name: 'PointLight2d' },
-    );
-    app.registerComponent(
-      SpotLight2d,
-      {
-        color: t.vec3,
-        intensity: t.number,
-        range: t.number,
-        radius: t.number,
-        direction: t.vec2,
-        innerAngle: t.number,
-        outerAngle: t.number,
-      },
-      { name: 'SpotLight2d' },
-    );
-    app.registerComponent(
-      DirectionalLight2d,
-      { color: t.vec3, intensity: t.number, direction: t.vec2 },
-      { name: 'DirectionalLight2d' },
-    );
-    app.registerComponent(
-      AmbientLight2d,
-      { color: t.vec3, intensity: t.number, halfExtents: t.vec2.optional() },
-      { name: 'AmbientLight2d' },
-    );
-    app.registerComponent(
-      LightOccluder2d,
-      { segments: t.array(t.tuple(t.vec2, t.vec2)) },
-      { name: 'LightOccluder2d', make: () => new LightOccluder2d() },
-    );
+    registerLight2dComponents(app);
 
     const graph = app.getResource(RenderGraph);
     if (graph === undefined) {
@@ -292,6 +258,55 @@ export class Light2dPlugin implements PluginObject {
     );
   }
 }
+
+/**
+ * Register the reflection schemas for the 2D light components
+ * ({@link PointLight2d}, {@link SpotLight2d}, {@link DirectionalLight2d},
+ * {@link AmbientLight2d}, {@link LightOccluder2d}) against the App's type registry
+ * — without installing the 2D lighting render passes or systems. `AmbientLight2d`
+ * is a per-entity component (regional or global pool), unlike the 3D
+ * `AmbientLight` resource.
+ *
+ * {@link Light2dPlugin} calls this during `build`; tools that need the 2D light
+ * component types available for authoring or serialization (e.g. an editor's
+ * component palette) can call it directly to register the types without the
+ * lighting pipeline (which requires the Core2d render sub-graph).
+ */
+export const registerLight2dComponents = (app: App): void => {
+  app.registerComponent(
+    PointLight2d,
+    { color: t.vec3, intensity: t.number, range: t.number, radius: t.number },
+    { name: 'PointLight2d' },
+  );
+  app.registerComponent(
+    SpotLight2d,
+    {
+      color: t.vec3,
+      intensity: t.number,
+      range: t.number,
+      radius: t.number,
+      direction: t.vec2,
+      innerAngle: t.number,
+      outerAngle: t.number,
+    },
+    { name: 'SpotLight2d' },
+  );
+  app.registerComponent(
+    DirectionalLight2d,
+    { color: t.vec3, intensity: t.number, direction: t.vec2 },
+    { name: 'DirectionalLight2d' },
+  );
+  app.registerComponent(
+    AmbientLight2d,
+    { color: t.vec3, intensity: t.number, halfExtents: t.vec2.optional() },
+    { name: 'AmbientLight2d' },
+  );
+  app.registerComponent(
+    LightOccluder2d,
+    { segments: t.array(t.tuple(t.vec2, t.vec2)) },
+    { name: 'LightOccluder2d', make: () => new LightOccluder2d() },
+  );
+};
 
 type LightQuery<Ctor extends ComponentType> = QueryHandle<
   readonly [Ctor, typeof GlobalTransform, typeof ViewVisibility]

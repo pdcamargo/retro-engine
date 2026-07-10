@@ -2,15 +2,17 @@ import { createLabel, type RenderLabel, type RenderNode } from '@retro-engine/en
 import type { ColorAttachment, RenderPassDescriptor } from '@retro-engine/renderer-core';
 
 import { UiPipeline } from './ui-pipeline';
+import { uiTargetView } from './ui-render-target';
 
 /** Render-graph label for the in-game UI overlay pass. */
 export const UiPassLabel: RenderLabel = createLabel('retro_ui::ui_pass');
 
 /**
- * Build the top-level UI overlay {@link RenderNode}. It runs once per frame
- * (after every camera sub-graph has submitted), owns its own command encoder,
- * and draws the prepared UI quads onto the swapchain with `loadOp: 'load'` so
- * they composite over the rendered scene.
+ * Build the top-level UI {@link RenderNode}. It runs once per frame (after every
+ * camera sub-graph has submitted), owns its own command encoder, and draws the
+ * prepared UI quads into the UI camera's render target with `loadOp: 'load'` so
+ * they composite over the rendered scene (falling back to the swapchain when no
+ * UI camera is set and the overlay fallback is enabled).
  */
 export const makeUiPassNode = (): RenderNode => ({
   label: UiPassLabel,
@@ -19,8 +21,8 @@ export const makeUiPassNode = (): RenderNode => ({
   run: (ctx) => {
     const pipeline = ctx.app.getResource(UiPipeline);
     if (pipeline === undefined || pipeline.count === 0) return;
-    const surface = ctx.app.getSurface();
-    if (surface === undefined) return;
+    const targetView = uiTargetView(ctx.app);
+    if (targetView === undefined) return;
     const { pipeline: renderPipeline, quadVertexBuffer, quadIndexBuffer, instanceBuffer } = pipeline;
     if (
       renderPipeline === undefined ||
@@ -34,7 +36,7 @@ export const makeUiPassNode = (): RenderNode => ({
     const renderer = ctx.app.renderer;
     const encoder = renderer.createCommandEncoder('ui-overlay');
     const colorAttachment: ColorAttachment = {
-      view: surface.getCurrentTextureView(),
+      view: targetView,
       loadOp: 'load',
       storeOp: 'store',
     };

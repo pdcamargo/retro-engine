@@ -2,15 +2,16 @@ import { createLabel, type RenderLabel, type RenderNode, RenderImages } from '@r
 import type { ColorAttachment, RenderPassDescriptor } from '@retro-engine/renderer-core';
 
 import { UiImagePipeline } from './ui-image-pipeline';
+import { uiTargetView } from './ui-render-target';
 
 /** Render-graph label for the in-game UI image overlay pass. */
 export const UiImagePassLabel: RenderLabel = createLabel('retro_ui::ui_image_pass');
 
 /**
- * Build the UI image overlay {@link RenderNode}. Ordered after the UI quad pass
- * (so images composite over backgrounds) and before the text pass (so labels
- * draw over images); owns its encoder and draws the prepared image batches (one
- * per source texture) onto the swapchain with `loadOp: 'load'`.
+ * Build the UI image {@link RenderNode}. Ordered after the UI quad pass (so images
+ * composite over backgrounds) and before the text pass (so labels draw over
+ * images); owns its encoder and draws the prepared image batches (one per source
+ * texture) into the UI camera's render target with `loadOp: 'load'`.
  */
 export const makeUiImagePassNode = (): RenderNode => ({
   label: UiImagePassLabel,
@@ -19,8 +20,8 @@ export const makeUiImagePassNode = (): RenderNode => ({
   run: (ctx) => {
     const pipeline = ctx.app.getResource(UiImagePipeline);
     if (pipeline === undefined || pipeline.count === 0) return;
-    const surface = ctx.app.getSurface();
-    if (surface === undefined) return;
+    const targetView = uiTargetView(ctx.app);
+    if (targetView === undefined) return;
     const renderImages = ctx.app.getResource(RenderImages);
     if (renderImages === undefined) return;
     const { pipeline: renderPipeline, quadVertexBuffer, quadIndexBuffer, instanceBuffer } = pipeline;
@@ -36,7 +37,7 @@ export const makeUiImagePassNode = (): RenderNode => ({
     const renderer = ctx.app.renderer;
     const encoder = renderer.createCommandEncoder('ui-image');
     const colorAttachment: ColorAttachment = {
-      view: surface.getCurrentTextureView(),
+      view: targetView,
       loadOp: 'load',
       storeOp: 'store',
     };

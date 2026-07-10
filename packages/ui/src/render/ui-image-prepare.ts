@@ -1,5 +1,6 @@
 import type { Query as QueryHandle } from '@retro-engine/ecs';
 import type { App, Handle, Image, RenderImages } from '@retro-engine/engine';
+import type { TextureFormat } from '@retro-engine/renderer-core';
 
 import { ComputedLayout, UiNode } from '../ui-node';
 import type { UiViewport } from '../ui-plugin';
@@ -38,6 +39,7 @@ export const prepareUiImages = (
   viewport: UiViewport,
   renderImages: RenderImages,
   pipeline: UiImagePipeline,
+  targetFormat: TextureFormat,
 ): void => {
   pipeline.count = 0;
   pipeline.batches.length = 0;
@@ -76,7 +78,7 @@ export const prepareUiImages = (
   if (total === 0) return;
 
   const renderer = app.renderer;
-  pipeline.ensureInitialised(renderer, surface.format);
+  pipeline.ensureInitialised(renderer, targetFormat);
   pipeline.ensureCapacity(renderer, total);
 
   const f32 = pipeline.scratchF32;

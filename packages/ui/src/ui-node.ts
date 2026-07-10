@@ -48,11 +48,26 @@ export class ComputedLayout {
  * ```
  */
 export class UiNode {
-  /** The node's resolved layout style. Mutate and the next layout pass reflows. */
-  style: UiStyle;
+  #style: UiStyle;
 
   constructor(init: UiStyleInit = {}) {
-    this.style = makeStyle(init);
+    this.#style = makeStyle(init);
+  }
+
+  /** The node's resolved layout style. Mutate a field and the next layout pass reflows. */
+  get style(): UiStyle {
+    return this.#style;
+  }
+
+  /**
+   * Assigning a style normalizes it through {@link makeStyle}, so a partial style
+   * — e.g. one produced by scene/reflection decode or built by hand — is filled
+   * out with every default. The layout engine always sees a fully-specified
+   * style, so a node authored with only a few fields (say `width` + a
+   * `backgroundColor`) still lays out and renders.
+   */
+  set style(value: UiStyleInit) {
+    this.#style = makeStyle(value);
   }
 
   static readonly requires = [ComputedLayout];

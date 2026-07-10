@@ -1,5 +1,6 @@
 import type { Query as QueryHandle } from '@retro-engine/ecs';
 import type { App } from '@retro-engine/engine';
+import type { TextureFormat } from '@retro-engine/renderer-core';
 
 import { ComputedLayout, UiNode } from '../ui-node';
 import type { UiViewport } from '../ui-plugin';
@@ -86,6 +87,7 @@ export const prepareUiQuads = (
   nodes: UiQuadQuery,
   viewport: UiViewport,
   pipeline: UiPipeline,
+  targetFormat: TextureFormat,
 ): void => {
   pipeline.count = 0;
   const surface = app.getSurface();
@@ -125,7 +127,7 @@ export const prepareUiQuads = (
   quads.sort((a, b) => a.order - b.order);
 
   const renderer = app.renderer;
-  pipeline.ensureInitialised(renderer, surface.format);
+  pipeline.ensureInitialised(renderer, targetFormat);
   pipeline.ensureCapacity(renderer, quads.length);
 
   const f32 = pipeline.scratchF32;
