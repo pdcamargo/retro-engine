@@ -1,26 +1,34 @@
 import * as assets from '@retro-engine/assets';
+import * as audio from '@retro-engine/audio';
 import * as ecs from '@retro-engine/ecs';
 import * as editorSdk from '@retro-engine/editor-sdk';
 import * as engine from '@retro-engine/engine';
+import * as input from '@retro-engine/input';
 import * as math from '@retro-engine/math';
+import * as physicsCore from '@retro-engine/physics-core';
 import * as project from '@retro-engine/project';
 import * as projectEditor from '@retro-engine/project/editor';
 import * as reflect from '@retro-engine/reflect';
 import * as rendererCore from '@retro-engine/renderer-core';
+import * as ui from '@retro-engine/ui';
 
 /** The studio's loaded engine packages, keyed by import specifier. */
 export type RetroHost = Readonly<Record<string, Readonly<Record<string, unknown>>>>;
 
 const PACKAGES: RetroHost = {
   '@retro-engine/assets': assets,
+  '@retro-engine/audio': audio,
   '@retro-engine/ecs': ecs,
   '@retro-engine/editor-sdk': editorSdk,
   '@retro-engine/engine': engine,
+  '@retro-engine/input': input,
   '@retro-engine/math': math,
+  '@retro-engine/physics-core': physicsCore,
   '@retro-engine/project': project,
   '@retro-engine/project/editor': projectEditor,
   '@retro-engine/reflect': reflect,
   '@retro-engine/renderer-core': rendererCore,
+  '@retro-engine/ui': ui,
 };
 
 /**

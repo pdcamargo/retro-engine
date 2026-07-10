@@ -89,13 +89,14 @@ import { createPlatformHost } from './platform/create-platform-host';
 import { SceneDrop } from './scene-drop';
 import { ScenePicker } from './scene-picker';
 import { createScene } from './scene-data';
-import { setupViewportScene } from './scene-bootstrap';
+import { installUiPreview, setupViewportScene } from './scene-bootstrap';
 import { inMemorySceneSource } from './scene-source';
 import { SceneOrientationGizmo } from './viewport-gizmo-wiring';
 import { handleHistoryShortcuts, handleSaveShortcut } from './shortcuts';
 import { installShowcaseScene, SHOWCASE_SCENE } from './showcase-scene';
 import { type ComposerHooks } from './composer/composer-modal';
 import { registerDefaultBundles } from './composer/default-bundles';
+import { registerStandardComponentTypes } from './composer/standard-component-types';
 import { loadBundleIntoComposer, loadComposerPrefs, openComposer, saveComposerPrefs } from './composer/composer-state';
 import { createState } from './state';
 import { ViewportTarget } from './viewport';
@@ -1227,6 +1228,16 @@ void (async (): Promise<void> => {
       },
     }),
   );
+
+  // Render the project's in-game UI into the Game tab (adds UiPlugin +
+  // UiRenderPlugin unless the project already did, and marks the Main Camera as
+  // the UI host). After project load so a UI-using project's own plugins win.
+  installUiPreview(app);
+
+  // Register the engine's standard authoring component types (UI, physics, audio,
+  // input, sprites, 2D lights, text) so they always appear in the composer, even
+  // for a project that doesn't add those feature plugins. Types only — no systems.
+  registerStandardComponentTypes(app);
 
   // Editor-defined convenience bundles (camera, light, mesh), now that every
   // plugin (engine + project) has built and its components are registered.

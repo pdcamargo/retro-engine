@@ -102,7 +102,15 @@ export const createModelSubAssetService = (app: App): ModelSubAssetService => {
 
       let handle = handles.get(model.guid);
       if (handle === undefined) {
-        handle = server.loadByGuid<Gltf>(model.guid as AssetGuid);
+        // The guid may not be resolvable yet — no manifest set (e.g. before a
+        // project loads), or a placeholder/demo entry not in the manifest.
+        // loadByGuid throws in those cases; treat it as "no subassets to show"
+        // rather than letting it crash the whole editor draw.
+        try {
+          handle = server.loadByGuid<Gltf>(model.guid as AssetGuid);
+        } catch {
+          return undefined;
+        }
         handles.set(model.guid, handle);
       }
       const gltf = gltfs.get(handle);

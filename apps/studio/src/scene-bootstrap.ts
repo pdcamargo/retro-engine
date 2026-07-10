@@ -17,9 +17,11 @@ import {
   SkyboxPlugin,
   StandardMaterial,
   StandardMaterialPlugin,
+  TextPlugin,
 } from '@retro-engine/engine';
 import { vec3 } from '@retro-engine/math';
 import { type Renderer } from '@retro-engine/renderer-core';
+import { UiCamera, UiPlugin, UiRenderPlugin, UiRenderTargetState } from '@retro-engine/ui';
 
 import { defaultEditorTransform, spawnEditorCamera } from './editor-camera';
 import { EditorOnly } from './editor-markers';
@@ -137,5 +139,40 @@ export const setupViewportScene = (
       if (best !== null) cmd.entity(best.entity).insert(new MainCamera());
     },
     { name: 'editor-ensure-main-camera' },
+  );
+};
+
+/**
+ * Render the project's in-game UI into the Game tab. Adds `UiPlugin` (layout) and
+ * `UiRenderPlugin` (draw) unless the loaded project already provides them, and
+ * marks the game "Main Camera" as the UI host so the UI renders into the Game
+ * tab's texture (that camera is redirected there each frame by
+ * {@link setupViewportScene}). Call after the project's plugins have been applied,
+ * while the App is still building.
+ *
+ * `overlayWhenNoCamera` is forced off (even if the project's own `UiRenderPlugin`
+ * left it on): in the editor the UI must never fall back to a full-window overlay
+ * behind the ImGui chrome — it only draws into a UI camera's target.
+ */
+export const installUiPreview = (app: App): void => {
+  // TextPlugin provides the Fonts store + installs the engine's built-in default
+  // font, so UiText renders without the user supplying a font asset.
+  if (!app.hasPlugin('TextPlugin')) app.addPlugin(new TextPlugin());
+  if (!app.hasPlugin('UiPlugin')) app.addPlugin(new UiPlugin());
+  if (!app.hasPlugin('UiRenderPlugin')) {
+    app.addPlugin(new UiRenderPlugin({ overlayWhenNoCamera: false }));
+  }
+  const uiTarget = app.getResource(UiRenderTargetState);
+  if (uiTarget !== undefined) uiTarget.overlayFallback = false;
+
+  // Mark the game Main Camera as the UI host (idempotent). The Main Camera is
+  // redirected into the Game tab's texture each frame, so the UI follows it there.
+  app.addSystem(
+    'update',
+    [Commands, Query([MainCamera], { without: [UiCamera] })],
+    (cmd, cameras) => {
+      for (const row of cameras.entries()) cmd.entity(row[0] as Entity).insert(new UiCamera());
+    },
+    { name: 'editor-ensure-ui-camera' },
   );
 };
