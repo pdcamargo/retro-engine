@@ -1,6 +1,6 @@
 {
   "name": "@retro-engine/mcp-protocol",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Wire protocol + skill doc shared by the studio MCP bridge (browser) and the studio-mcp-server relay (node). Zero runtime dependencies.",
   "type": "module",
   "main": "./src/index.ts",

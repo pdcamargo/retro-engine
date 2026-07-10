@@ -1,6 +1,6 @@
 {
   "name": "@retro-engine/graph-editor",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Reusable immediate-mode node-graph editing toolkit for the Retro Engine studio. Renders and edits any node graph (dataflow, exec-flow, state machines, context stacks, subgraphs) with typed pins, bezier wires, reroute weight-points, and embedded fields. Browser/webview-safe.",
   "type": "module",
   "main": "./src/index.ts",

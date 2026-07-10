@@ -1,6 +1,6 @@
 {
   "name": "@retro-engine/renderer-webgpu",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "WebGPU implementation of the Retro Engine renderer HAL.",
   "type": "module",
   "main": "./src/index.ts",

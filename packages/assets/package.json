@@ -1,6 +1,6 @@
 {
   "name": "@retro-engine/assets",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Asset identity and storage primitives for Retro Engine. Handles, ids, the generic store, and registry/source types.",
   "type": "module",
   "main": "./src/index.ts",

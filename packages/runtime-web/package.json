@@ -1,6 +1,6 @@
 {
   "name": "@retro-engine/runtime-web",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Browser runtime host for Retro Engine: boots a ProjectDefinition into a running App with a WebGPU backend.",
   "type": "module",
   "main": "./src/index.ts",

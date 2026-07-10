@@ -1,6 +1,6 @@
 {
   "name": "@retro-engine/studio-mcp-server",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "MCP relay for the Retro Engine studio: a localhost WebSocket bridge + stdio MCP server an AI client launches to drive the live editor. Run via `npx @retro-engine/studio-mcp-server`.",
   "type": "module",
   "bin": {

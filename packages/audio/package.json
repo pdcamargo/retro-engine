@@ -1,6 +1,6 @@
 {
   "name": "@retro-engine/audio",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Audio (Web Audio backend) for Retro Engine — clips, playback, listeners.",
   "type": "module",
   "main": "./src/index.ts",

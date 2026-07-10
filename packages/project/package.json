@@ -1,6 +1,6 @@
 {
   "name": "@retro-engine/project",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "description": "Entry-point contract for a Retro Engine game project: defineProject (game runtime) and defineEditorExtensions (studio-only authoring extensions).",
   "type": "module",
   "main": "./src/index.ts",

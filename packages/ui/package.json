@@ -1,6 +1,6 @@
 {
   "name": "@retro-engine/ui",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Retained ECS-driven in-game UI (flexbox layout + Retro CSS) for Retro Engine.",
   "type": "module",
   "main": "./src/index.ts",

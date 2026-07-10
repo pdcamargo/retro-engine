@@ -1,6 +1,6 @@
 {
   "name": "@retro-engine/editor-sdk",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Normalized, tokenized immediate-mode UI surface for building Retro Engine editors. Wraps Dear ImGui; consumers never touch the raw binding.",
   "type": "module",
   "main": "./src/index.ts",

@@ -1,6 +1,6 @@
 {
   "name": "@retro-engine/gltf",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "In-house glTF 2.0 / GLB parser for Retro Engine. GLB container reader, glTF JSON schema types, and accessor decoder — no runtime parsing dependency.",
   "type": "module",
   "main": "./src/index.ts",

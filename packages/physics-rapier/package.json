@@ -1,6 +1,6 @@
 {
   "name": "@retro-engine/physics-rapier",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Rapier backend for Retro Engine physics (@dimforge/rapier2d-compat).",
   "type": "module",
   "main": "./src/index.ts",

@@ -1,6 +1,6 @@
 {
   "name": "@retro-engine/tsconfig",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Shared TypeScript base config for Retro Engine game projects.",
   "type": "module",
   "exports": {

@@ -1,6 +1,6 @@
 {
   "name": "@retro-engine/sample-game",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "description": "Asset-free sample game used as the smoke test for the web export pipeline.",

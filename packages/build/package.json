@@ -1,6 +1,6 @@
 {
   "name": "@retro-engine/build",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Retro Engine export pipeline: export targets + the .rpak asset package format.",
   "type": "module",
   "main": "./src/index.ts",
